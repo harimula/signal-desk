@@ -431,8 +431,10 @@ async function refreshAll(auto) {
   const total = syms.length + cids.length; let done = 0, fail = 0, firstErr = '';
   const newest = {US: 0, IN: 0}; const tick = () => { msg.textContent = 'Refreshing ' + done + ' of ' + total + '…'; };
   tick();
+  let LJ = null; try { const lr = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (lr.ok) LJ = await lr.json(); } catch (e) {}
+  if (LJ && LJ.rows) { const ageMin = Math.round((Date.now() - LJ.at) / 60000); msg.dataset.src = 'Server snapshot (' + ageMin + ' min old)'; }
   const jobs = syms.map(s => async () => {
-    try { const r = await pullSym(s); DATA.rows[s] = r.rec.concat([r.closes]); BASE_PX[s] = r.rec[1]; const mk = mktOf(s); if (r.liveAt > newest[mk]) newest[mk] = r.liveAt; }
+    try { const r = (LJ && LJ.rows && LJ.rows[s]) ? {rec: LJ.rows[s].slice(0, 27), closes: LJ.rows[s][27], liveAt: LJ.liveAt[mktOf(s)] || 0} : await pullSym(s); DATA.rows[s] = r.rec.concat([r.closes]); BASE_PX[s] = r.rec[1]; const mk = mktOf(s); if (r.liveAt > newest[mk]) newest[mk] = r.liveAt; }
     catch (e) { fail++; if (!firstErr) firstErr = e.message || String(e); }
     done++; if (done % 5 === 0) tick();
   }).concat(cids.map(id => async () => {
@@ -450,7 +452,7 @@ async function refreshAll(auto) {
   rfBusy = false; btn.disabled = false; lastRefresh = Date.now();
   analyzeAll(); renderAll();
   if (fail >= total) { msg.textContent = 'Could not reach Yahoo Finance from this page (' + firstErr + '). Open "Data source" and add a proxy URL (see README).'; $('#pxBox').open = true; }
-  else msg.textContent = 'Refreshed ' + (total - fail) + ' of ' + total + ' symbols at ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) + (fail ? '. ' + fail + ' failed.' : '.');
+  else msg.textContent = (msg.dataset.src ? msg.dataset.src + '. ' : '') + 'Refreshed ' + (total - fail) + ' of ' + total + ' symbols at ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) + (fail ? '. ' + fail + ' failed.' : '.');
 }
 $('#rfBtn').addEventListener('click', () => refreshAll(false));
 $('#pxIn').value = proxy;

@@ -1,0 +1,21 @@
+name: refresh-prices
+on:
+  schedule:
+    - cron: '*/10 13-21 * * 1-5'   # every 10 min, US market hours (UTC)
+    - cron: '*/30 3-10 * * 1-5'    # India session
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node fetch.mjs
+      - run: |
+          git config user.name "signal-desk-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add live.json
+          git diff --cached --quiet || (git commit -m "Refresh prices" && git push)
