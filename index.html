@@ -594,7 +594,17 @@ async function refreshAll(auto) {
     done++;
   }));
   await pool(jobs, 6);
-  if (useLJ && LJ.dates) { if (LJ.dates.US) DATA.dates.US = LJ.dates.US; if (LJ.dates.IN) DATA.dates.IN = LJ.dates.IN; }
+  let snapNote = useLJ ? 'Server snapshot. ' : '';
+  if (fail >= total && total && LJ && LJ.rows) {
+    // Yahoo unreachable from this browser: fall back to the scheduled server snapshot, whatever its age.
+    let got = 0;
+    for (const sy of syms) { const w2 = LJ.rows[sy]; if (!w2 || w2.length < 28) continue;
+      DATA.rows[sy] = w2.slice(0, 27).concat([w2[27], w2[28] || (DATA.rows[sy] && DATA.rows[sy][28]) || null]);
+      BASE_PX[sy] = w2[1]; got++;
+      const mk3 = mktOf(sy); const la = (LJ.liveAt && LJ.liveAt[mk3]) || 0; if (la > newest[mk3]) newest[mk3] = la; }
+    if (got) { fail = total - got; snapNote = 'Yahoo is blocked by your browser, so this is the server snapshot from ' + ageText(Date.now() - LJ.at) + ' ago (it updates on a schedule while markets are open). For one-click live quotes, add a proxy under "Data source". '; }
+  }
+  if ((useLJ || fail < total) && LJ && LJ.dates) { if (LJ.dates.US) DATA.dates.US = LJ.dates.US; if (LJ.dates.IN) DATA.dates.IN = LJ.dates.IN; }
   for (const code of ['US', 'IN']) if (newest[code] > BASE_STAMP[code].liveAt) {
     BASE_STAMP[code].liveAt = newest[code];
     BASE_STAMP[code].liveLocal = tzFmt(newest[code] * 1000, DATA.markets[code].tz, code === 'US' ? 'ET' : 'IST');
@@ -603,8 +613,8 @@ async function refreshAll(auto) {
   save('sd-my', custom);
   rfBusy = false; btn.disabled = false; lastRefresh = Date.now();
   analyzeAll(); renderAll(); syncRecs();
-  if (fail >= total && total) { msg.textContent = 'Could not reach Yahoo Finance from this page (' + firstErr + '). Open "Data source" under the header and add a free proxy URL (see the README).'; const px2 = $('#pxBox'); if (px2) px2.open = true; }
-  else msg.textContent = (useLJ ? 'Server snapshot. ' : '') + 'Refreshed ' + (total - fail) + ' of ' + total + ' symbols at ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) + (fail ? '. ' + fail + ' failed.' : '.');
+  if (fail >= total && total) { msg.textContent = 'Could not reach Yahoo Finance from this page (' + firstErr + '), and no server snapshot is available. Open "Data source" under the header and add a free proxy URL (see the README).'; const px2 = $('#pxBox'); if (px2) px2.open = true; }
+  else msg.textContent = snapNote + 'Refreshed ' + (total - fail) + ' of ' + total + ' symbols at ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) + (fail ? '. ' + fail + ' failed.' : '.');
 }
 $('#rfBtn').addEventListener('click', () => refreshAll(false));
 $('#pxIn').value = proxy;
