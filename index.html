@@ -478,7 +478,11 @@ function analyzeAll() {
   }
 }
 analyzeAll();
-const TABS = [['US', 'USA stocks'], ['IN', 'India stocks'], ['PF', 'Portfolio'], ['MY', 'My tickers'], ['RULES', 'Rules']];
+const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
+let pfolios = [{id: 'p1', name: 'Portfolio'}];
+const pfOf = k => (typeof k === 'string' && k.startsWith('PF:')) ? k.slice(3) : null;
+const pfName = id => { const p = pfolios.find(x => x.id === id); return p ? p.name : 'Portfolio'; };
+const tabsList = () => TABS0.concat(pfolios.map(p => ['PF:' + p.id, p.name]), TABS1);
 
 // ---------- state ----------
 let tab = 'US', maN = 50, maT = 'SMA', sortKey = 'score', sortDir = -1, onlyWl = false, q = '', fr = '', fi = '';
@@ -492,7 +496,7 @@ let tf = load('sd-tf', '3M');
 let cstyle = load('sd-cs', 'candle');
 let pf = {};
 const TFN = {'1M': 22, '3M': 66, 'Max': 999};
-maN = load('sd-man', 50); maT = load('sd-mat', 'SMA'); tab = load('sd-tab', 'US');
+maN = load('sd-man', 50); maT = load('sd-mat', 'SMA'); tab = load('sd-tab', 'US'); if (tab === 'PF') tab = 'PF:p1';
 if (!MK[tab] && tab !== 'MY' && tab !== 'RULES' && tab !== 'PF') tab = 'US';
 $('#maN').value = maN; $('#maT').value = maT;
 
@@ -517,12 +521,12 @@ function fresh(m) {
   return {age, open, level};
 }
 function chrome() {
-  const m = MK[(tab === 'MY' || tab === 'RULES' || tab === 'PF') ? 'US' : tab], f = fresh(m);
+  const m = MK[(tab === 'MY' || tab === 'RULES' || pfOf(tab)) ? 'US' : tab], f = fresh(m);
   $('#mdots').innerHTML = ['US', 'IN'].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
-  $('#asof').innerHTML = (tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'PF' ? 'Your holdings, valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
-  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'PF') ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
+  $('#asof').innerHTML = (tab === 'RULES' ? 'Every rule this page uses, in plain words' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
+  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
   let h = '';
-  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'PF') {
+  if (tab !== 'MY' && tab !== 'RULES' && !pfOf(tab)) {
     if (f.level === 'stale') h += `<div class="banner warn"><b>Stale data. Entry zones are for reference only.</b> This snapshot is ${ageText(f.age)} old and prices have likely moved. Press ↻ Refresh prices.</div>`;
     else if (f.level === 'aging') h += `<div class="banner warn"><b>Snapshot is ageing.</b> Pulled ${ageText(f.age)} ago. Press ↻ Refresh prices.</div>`;
     h += `<div class="banner info">${esc(m.stamp.note)} Prices update when you press ↻ Refresh prices or on the auto-refresh schedule you pick (Yahoo data can lag ~15 minutes). Signals are rule-based readouts, not advice. The page places no orders.</div>`;
@@ -667,9 +671,12 @@ if (fhKey) fhConnect();
 
 // ---------- tabs ----------
 function renderTabs() {
-  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button class="tab" role="tab" data-t="${k}" aria-selected="${k === tab}">${l}</button>`).join('');
+  if (pfOf(tab) && !pfolios.find(p => p.id === pfOf(tab))) tab = 'PF:' + pfolios[0].id;
+  $('#tabs').innerHTML = tabsList().map(([k, l]) => `<button class="tab" role="tab" data-t="${k}" aria-selected="${k === tab}">${esc(l)}</button>`).join('') + `<button class="tab" id="pfAdd" type="button" title="New portfolio" aria-label="New portfolio">+</button>`;
 }
-$('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; tab = b.dataset.t; save('sd-tab', tab); resetFilters(); renderAll(); });
+$('#tabs').addEventListener('click', e => {
+  if (e.target.closest('#pfAdd')) { addPortfolio(); return; }
+  const b = e.target.closest('[data-t]'); if (!b) return; tab = b.dataset.t; save('sd-tab', tab); resetFilters(); renderAll(); });
 function resetFilters() { q = ''; fr = ''; fi = ''; onlyWl = false; }
 
 // ---------- MA inputs ----------
@@ -696,7 +703,7 @@ function analyseCustom() {
   }
   return out;
 }
-(() => { dbState = 'local'; reqs = load('sd-reqs', {}); custom = load('sd-my', {}); pf = load('sd-pf', {}); recsDocs = load('sd-recs', {}); recsReady = true; })();
+(() => { dbState = 'local'; reqs = load('sd-reqs', {}); custom = load('sd-my', {}); pf = load('sd-pf', {}); pfolios = load('sd-pfs', pfolios); recsDocs = load('sd-recs', {}); recsReady = true; })();
 async function addTicker(sym, market) {
   sym = sym.trim().toUpperCase().replace(/\s+/g, '');
   if (!/^[A-Z0-9.\-^=&]{1,20}$/.test(sym)) return 'Enter a valid symbol, for example AAPL or TCS.NS';
@@ -748,7 +755,7 @@ async function addHolding(sym, market, qty, cost) {
   qty = parseFloat(qty); cost = parseFloat(cost);
   if (!(qty > 0)) return 'Enter how many shares you hold.';
   const id = idOf(sym);
-  const doc = {sym, market, qty, cost: cost > 0 ? cost : 0, at: Date.now()};
+  const doc = {sym, market, qty, cost: cost > 0 ? cost : 0, at: Date.now(), pfid: pfOf(tab) || pfolios[0].id};
   pf[id] = doc; save('sd-pf', pf);
   if (!DATA.rows[sym] && !custom[id]) {
     reqs[id] = {sym, market, at: Date.now()}; save('sd-reqs', reqs);
@@ -760,8 +767,32 @@ async function addHolding(sym, market, qty, cost) {
 async function rmHolding(id) {
   delete pf[id]; save('sd-pf', pf); renderAll();
 }
-function pfRows() {
-  return Object.entries(pf).map(([id, h]) => {
+async function savePfs() {
+  if (db) { try { await db.doc('meta/pfs').set({list: pfolios}); } catch (e) {} }
+  else save('sd-pfs', pfolios);
+}
+async function addPortfolio() {
+  let i = pfolios.length + 1, name = 'Portfolio ' + i;
+  while (pfolios.find(p => p.name === name)) { i++; name = 'Portfolio ' + i; }
+  const id = 'p' + Date.now().toString(36);
+  pfolios.push({id, name});
+  await savePfs();
+  tab = 'PF:' + id; save('sd-tab', tab); resetFilters(); renderAll();
+}
+async function renamePortfolio(id, name) {
+  name = (name || '').trim().slice(0, 24);
+  const p = pfolios.find(x => x.id === id);
+  if (!p || !name || name === p.name) return;
+  p.name = name; await savePfs(); renderAll();
+}
+async function deletePortfolio(id) {
+  if (pfolios.length < 2) return;
+  pfolios = pfolios.filter(x => x.id !== id);
+  await savePfs();
+  tab = 'PF:' + pfolios[0].id; save('sd-tab', tab); renderAll();
+}
+function pfRows(pfid) {
+  return Object.entries(pf).filter(([id, h]) => (h.pfid || 'p1') === pfid).map(([id, h]) => {
     const mk = MK[h.market === 'IN' ? 'IN' : 'US'];
     let s = null;
     if (DATA.rows[h.sym]) { s = mkRec(h.sym, DATA.rows[h.sym], F); s.market = mk.code; s.cur = mk.cur; s.industry = 'Portfolio'; rateOne(s, mk.bench, mk.bench); }
@@ -771,8 +802,8 @@ function pfRows() {
     return {id, h, s, val, cost, pl: h.cost ? val - cost : null, day: val - val / (1 + s.chg / 100)};
   }).sort((x, y) => y.val - x.val);
 }
-function pfView() {
-  const list = pfRows();
+function pfView(pfid) {
+  const list = pfRows(pfid);
   const note = `<div class="banner info">Your portfolio is saved in this browser.</div>`;
   const form = `<div class="card addrow">
 <label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Ticker<input id="pfSym" placeholder="AAPL or TCS" maxlength="20" autocapitalize="characters" style="width:120px"></label>
@@ -797,7 +828,12 @@ ${pl != null ? `<div class="kv"><span>Cost basis</span><b>${c}${fmt(cost, 0)}</b
     return `<tr data-s="${esc(s.sym)}" data-m="${s.market}"><td><b>${esc(showSym(s.sym))}</b> <span class="mut">${esc((s.name || '').slice(0, 18))}</span></td><td>${pill(s.rating)}</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>${c}${fmt(s.px)}</td><td>${c}${fmt(r.val, 0)}</td><td class="${s.chg >= 0 ? 'pos' : 'neg'}">${sgn(s.chg)}%</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null ? '–' : sgn(r.pl)}</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null || !r.cost ? '–' : sgn(r.pl / r.cost * 100) + '%'}</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
   }).join('');
   const tbl = list.length ? `<div class="tw card" style="margin-top:12px"><table id="pftab"><thead><tr><th>Holding</th><th>Rating</th><th>Shares</th><th>Avg cost</th><th>Price</th><th>Value</th><th>Day %</th><th>P&amp;L</th><th>P&amp;L %</th><th></th></tr></thead><tbody>${trs}</tbody></table></div>` : '<div class="card empty">No holdings yet. Add your first one above: ticker, how many shares, and what you paid on average.</div>';
-  return `<h2>Your portfolio</h2>${note}${form}${tiles ? `<div class="grid regime" style="margin-top:4px">${tiles}</div>` : ''}${tbl}
+  return `<h2>${esc(pfName(pfid))}</h2>${note}${form}${tiles ? `<div class="grid regime" style="margin-top:4px">${tiles}</div>` : ''}${tbl}
+<div class="card addrow" style="margin-top:12px">
+<label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Portfolio name<input id="pfNm" value="${esc(pfName(pfid))}" maxlength="24" style="width:170px"></label>
+<button class="btn ghost" id="pfRen" type="button">Rename</button>
+${pfolios.length > 1 ? '<button class="btn ghost" id="pfDel" type="button">Delete this portfolio</button>' : ''}
+<span class="mut" id="pfMsg2" style="font-size:12px">Use the <b>+</b> next to the tabs to add another portfolio.</span></div>
 <div class="mut" style="font-size:12px;margin-top:10px">Holdings are saved in this browser. New symbols download as soon as you add them; press ↻ Refresh prices for fresh quotes. Tap any row for the full drill-down. Not advice; the page places no orders.</div>`;
 }
 
@@ -966,9 +1002,9 @@ function bindBoard() {
 }
 function renderAll() {
   renderTabs(); chrome();
-  $('#tools').style.display = (tab === 'RULES' || tab === 'PF' || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
+  $('#tools').style.display = (tab === 'RULES' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
   const view = $('#view');
-  view.innerHTML = tab === 'RULES' ? rulesView() : tab === 'PF' ? pfView() : tab === 'MY' ? myView() : marketView(tab);
+  view.innerHTML = tab === 'RULES' ? rulesView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab);
   document.querySelectorAll('[data-list]').forEach(l => {
     l.addEventListener('click', e => { const li = e.target.closest('[data-s]'); if (li) openDetail(li.dataset.s, li.dataset.m); });
     l.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('[data-s]'); if (li) { e.preventDefault(); openDetail(li.dataset.s, li.dataset.m); } } });
@@ -997,7 +1033,7 @@ function renderAll() {
       $('#view').addEventListener('click', async e => { const b = e.target.closest('[data-rm]'); if (b) { await removeTicker(b.dataset.rm); renderAll(); } }, {once: true});
       bindBoard();
     }
-  } else if (tab === 'PF') {
+  } else if (pfOf(tab)) {
     const go = async () => { $('#pfMsg').textContent = 'Saving…'; const msg = await addHolding($('#pfSym').value, $('#pfMk').value, $('#pfQty').value, $('#pfCost').value); $('#pfMsg').textContent = msg || 'Added.'; if (!msg && !db) renderAll(); };
     if ($('#pfBtn')) {
       $('#pfBtn').addEventListener('click', go);
@@ -1008,6 +1044,13 @@ function renderAll() {
       const rm = e.target.closest('[data-rmpf]');
       if (rm) { e.stopPropagation(); await rmHolding(rm.dataset.rmpf); return; }
       const tr = e.target.closest('tr[data-s]'); if (tr) openDetail(tr.dataset.s, tr.dataset.m);
+    });
+    if ($('#pfRen')) $('#pfRen').addEventListener('click', () => renamePortfolio(pfOf(tab), $('#pfNm').value));
+    if ($('#pfNm')) $('#pfNm').addEventListener('keydown', e => { if (e.key === 'Enter') renamePortfolio(pfOf(tab), $('#pfNm').value); });
+    if ($('#pfDel')) $('#pfDel').addEventListener('click', async () => {
+      const id = pfOf(tab);
+      if (Object.values(pf).some(h => (h.pfid || 'p1') === id)) { $('#pfMsg2').textContent = 'Remove its holdings first (× on each row), then delete.'; return; }
+      await deletePortfolio(id);
     });
   } else if (tab !== 'RULES' && view2 === 'screen') {
     board(currentStocks()); bindBoard();
