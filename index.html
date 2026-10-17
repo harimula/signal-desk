@@ -105,7 +105,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 <div class="wrap">
 <header>
   <div><h1>Signal Desk</h1><div class="asof" id="asof"></div></div>
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="asof" id="clock"></div><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button><details id="pxBox" style="font-size:12px"><summary class="mut" style="cursor:pointer">Data source</summary><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="pxIn" placeholder="Optional proxy URL (https://…workers.dev)" style="min-width:230px"><button class="btn ghost" id="pxSave" type="button">Save</button></div></details></div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div class="asof" id="clock"></div><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button><label class="mut" style="font-size:12px;display:flex;align-items:center;gap:6px">Auto-refresh <select id="arSel" aria-label="Auto-refresh interval"><option value="0">Off</option><option value="5">Every 5 min</option><option value="10">Every 10 min</option><option value="15">Every 15 min</option><option value="30">Every 30 min</option></select></label><details id="pxBox" style="font-size:12px"><summary class="mut" style="cursor:pointer">Data source</summary><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="pxIn" placeholder="Optional proxy URL (https://…workers.dev)" style="min-width:230px"><button class="btn ghost" id="pxSave" type="button">Save</button></div></details></div>
 </header>
 <div class="mut" id="rfMsg" style="font-size:12px;text-align:right;min-height:16px"></div>
 <div id="banners"></div>
@@ -722,7 +722,16 @@ $('#dlg').addEventListener('click', e => { if (e.target.id === 'dlg') e.target.c
 $('#foot').innerHTML = `<b>How scoring works.</b> Each stock gets a −100…+100 score from six readings of daily data: trend (price vs 20/50/100/200-day averages), momentum (MACD, 60-day return), RSI regime, relative strength (vs its market index and sector index), position (distance from 52-week high, 20-day breakouts) and volume confirmation, minus a penalty when price is stretched above its 20-day average. Top Buy ≥ 60, Buy 25–59, Hold −24…24, Sell −59…−25, Top Sell ≤ −60. Stops are about 2× ATR below entry (never more than 3×); targets are 1.5R and 3R. Industry score blends the average of its stocks (60%) with the sector index's own trend (40%). For Indian sectors where Yahoo has no usable sector index (Energy, Auto, FMCG, Metals), the average of the stocks is used alone. The rules are a transparent screen, not a forecast, and have not been back-tested. This is not financial advice, and the page cannot place trades.`;
 renderAll(); refreshInfo();
 setInterval(chrome, 60000);
-refreshAll(true);
+
+// ---------- optional auto-refresh (off by default) ----------
+let arMin = +load('sd-ar', 0) || 0, arTimer = null;
+function setAuto(min) {
+  arMin = min; save('sd-ar', min); $('#arSel').value = String(min);
+  if (arTimer) { clearInterval(arTimer); arTimer = null; }
+  if (min > 0) arTimer = setInterval(() => { if (!document.hidden && (mOpen(MK.US) || mOpen(MK.IN))) refreshAll(true); }, min * 60000);
+}
+$('#arSel').addEventListener('change', e => setAuto(+e.target.value));
+setAuto(arMin);
 </script>
 </body>
 </html>
