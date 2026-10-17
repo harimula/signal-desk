@@ -194,8 +194,8 @@ ul.why{margin:6px 0 0;padding-left:18px}
   <div class="brand"><h1>Signal Desk</h1><div class="dots" id="mdots"></div></div>
   <div class="hright"><div class="asof" id="clock"></div><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="0">Auto: off</option><option value="5">Auto: 5 min</option><option value="10">Auto: 10 min</option><option value="30">Auto: 30 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
 </header>
-<div class="subhead"><div class="asof" id="asof"></div><div id="rfMsg"></div></div>
-<div class="wrap"><details id="pxBox" style="font-size:12px;margin:2px 0 4px"><summary class="mut" style="cursor:pointer">Data source</summary><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="pxIn" placeholder="Optional proxy URL (https://…workers.dev)" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="pxSave" type="button">Save</button></div><div class="mut" style="margin-top:4px">Prices come straight from Yahoo Finance. If your browser blocks that, deploy the free worker.js from this repo on Cloudflare and paste its URL here.</div></details></div>
+<div class="subhead"><div class="asof" id="asof"></div><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
+<div class="wrap"><details id="pxBox" style="font-size:12px;margin:2px 0 4px"><summary class="mut" style="cursor:pointer">Data source</summary><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="pxIn" placeholder="Optional proxy URL (https://…workers.dev)" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="pxSave" type="button">Save</button></div><div class="mut" style="margin-top:4px">Prices come straight from Yahoo Finance. If your browser blocks that, deploy the free worker.js from this repo on Cloudflare and paste its URL here.</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><input id="fhIn" placeholder="Optional Finnhub API key — streams live US prices" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="fhSave" type="button">Save</button></div><div class="mut" id="fhSt" style="margin-top:4px">Free key at finnhub.io — US stocks tick live while the page is open. India stays on Yahoo.</div></details></div>
 <div id="banners"></div>
 
 <div class="tabs" role="tablist" id="tabs"></div>
@@ -628,6 +628,42 @@ function setAuto(min) {
 $('#arSel').addEventListener('change', e => setAuto(+e.target.value));
 setAuto(arMin);
 setInterval(refreshInfo, 60000);
+
+// ---------- Finnhub live streaming (optional, US stocks) ----------
+let fhKey = load('sd-fh', ''), fhWS = null, fhPend = {};
+function fhStatus(t) { const el = $('#fhSt'); if (el && t) el.textContent = t; }
+function fhBadge(on) { const el = $('#fhLive'); if (el) el.style.display = on ? '' : 'none'; }
+function fhConnect() {
+  if (fhWS) { try { fhWS.onclose = null; fhWS.close(); } catch (e) {} fhWS = null; }
+  fhBadge(false);
+  if (!fhKey) return;
+  let ws;
+  try { ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(fhKey)); } catch (e) { fhStatus('Could not open stream: ' + (e.message || e)); return; }
+  fhWS = ws;
+  fhStatus('Connecting to Finnhub\u2026');
+  ws.onopen = () => {
+    fhStatus('Streaming live US trades.');
+    fhBadge(true);
+    const us = Object.keys(DATA.rows).filter(k => mktOf(k) === 'US' && !k.startsWith('^'));
+    us.slice(0, 48).forEach(sym => ws.send(JSON.stringify({type: 'subscribe', symbol: sym})));
+  };
+  ws.onmessage = ev => {
+    try { const m = JSON.parse(ev.data); if (m.type === 'trade' && m.data) for (const t of m.data) fhPend[t.s] = t.p; } catch (e) {}
+  };
+  ws.onclose = () => { fhBadge(false); if (fhKey) { fhStatus('Stream closed. Reconnecting\u2026'); setTimeout(fhConnect, 15000); } };
+  ws.onerror = () => { fhStatus('Stream error \u2014 check the key.'); };
+}
+setInterval(() => {
+  const ks = Object.keys(fhPend); if (!ks.length || rfBusy) return;
+  const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) return;
+  for (const sym of ks) { const px = fhPend[sym]; if (DATA.rows[sym] && px > 0) { DATA.rows[sym][1] = r2n(px); BASE_PX[sym] = r2n(px); } }
+  fhPend = {};
+  const nowS = Math.floor(Date.now() / 1000);
+  if (nowS > BASE_STAMP.US.liveAt) { BASE_STAMP.US.liveAt = nowS; BASE_STAMP.US.liveLocal = tzFmt(Date.now(), DATA.markets.US.tz, 'ET') + ' (live)'; BASE_STAMP.US.note = 'US prices are streaming live from Finnhub; indicators use daily bars through the last completed session.'; }
+  analyzeAll(); renderAll(); syncRecs();
+}, 2500);
+const fhi = $('#fhIn'); if (fhi) { fhi.value = fhKey; $('#fhSave').addEventListener('click', () => { fhKey = $('#fhIn').value.trim(); save('sd-fh', fhKey); fhStatus(fhKey ? 'Key saved.' : 'Key cleared.'); fhConnect(); }); }
+if (fhKey) fhConnect();
 
 // ---------- tabs ----------
 function renderTabs() {
