@@ -2,7 +2,7 @@ name: refresh-prices
 on:
   schedule:
     - cron: '*/10 13-21 * * 1-5'   # every 10 min, US market hours (UTC)
-    - cron: '*/30 3-10 * * 1-5'    # India session
+    - cron: '*/15 3-10 * * 1-5'    # India session
   workflow_dispatch:
 permissions:
   contents: write
