@@ -118,6 +118,9 @@ input,select,button{font:inherit;color:var(--text)}
 .toolbar input{flex:1;min-width:140px}
 .toolbar button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .tw{overflow-x:auto;border-radius:8px}
+.tw:has(#tb),.tw:has(#dttab),.tw:has(#pftab){max-height:76vh;overflow:auto}
+#tb thead th,#dttab thead th,#pftab thead th{position:sticky;top:0;background:var(--surface);z-index:3}
+#tb thead th:nth-child(1),#tb thead th:nth-child(2),#dttab thead th:first-child,#pftab thead th:first-child{z-index:5}
 table{border-collapse:separate;border-spacing:0;width:100%;min-width:1280px;background:var(--surface);font-size:12.5px}
 th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
 th:nth-child(1),td:nth-child(1),th:nth-child(2),td:nth-child(2){text-align:left}
@@ -196,6 +199,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 </header>
 <div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
 <div class="wrap"><details id="pxBox" style="font-size:12px;margin:2px 0 4px"><summary class="mut" style="cursor:pointer">Live data settings (optional)</summary><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="pxIn" placeholder="Optional proxy URL (https://…workers.dev)" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="pxSave" type="button">Save</button></div><div class="mut" style="margin-top:4px">Nothing to set up: when you press ↻ Refresh, the page finds a free route to live Yahoo prices on its own and the badge above shows ● LIVE. For the most reliable private route, deploy the free worker.js from this repo on Cloudflare and paste its URL above.</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><input id="fhIn" placeholder="Optional Finnhub API key — streams live US prices" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="fhSave" type="button">Save</button></div><div class="mut" id="fhSt" style="margin-top:4px">Free key at finnhub.io — US prices tick live, trade by trade, while the page is open.</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><input id="fmpIn" placeholder="Financial Modeling Prep key — live quotes on refresh" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="fmpSave" type="button">Save</button></div><div class="mut" id="fmpSt" style="margin-top:4px">Free key at financialmodelingprep.com — every ↻ Refresh pulls live prices for all stocks.</div></details></div>
+<div class="wrap" id="upbar" style="display:none"><div class="banner warn" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><b>A newer version of this page is ready.</b><button class="btn" id="upbtn" type="button">Update now</button></div></div>
 <div id="banners"></div>
 
 <div class="tabs" role="tablist" id="tabs"></div>
@@ -695,6 +699,16 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (mOpen(MK.US) || mOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
+const BUILD_V = '1792418622';
+async function verCheck() {
+  try {
+    const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
+    const v = (await r.text()).trim();
+    if (v && /^\d+$/.test(v) && BUILD_V !== '__BUILD' + 'V__' && v !== BUILD_V) $('#upbar').style.display = '';
+  } catch (e) {}
+}
+$('#upbtn').addEventListener('click', () => { try { location.replace(location.pathname + '?u=' + Date.now()); } catch (e) { location.reload(); } });
+setInterval(verCheck, 180000); setTimeout(verCheck, 3000);
 setInterval(() => {
   const el = $('#cdown'); if (!el) return;
   if (!(arMin > 0)) { el.textContent = ''; return; }
