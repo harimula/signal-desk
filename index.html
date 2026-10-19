@@ -572,7 +572,7 @@ async function pickRoute() {
 async function pullSym(sym) {
   if (!feedRoute) await pickRoute();
   if (!feedRoute) throw new Error('no route to Yahoo');
-  const j = await tryJson(feedRoute.url(sym), 20000);
+  const j = await tryJson(feedRoute.url(sym), 12000);
   const res = j.chart && j.chart.result && j.chart.result[0]; if (!res) throw new Error('No data for ' + sym);
   const m = res.meta, q = res.indicators.quote[0], ts = res.timestamp, b = [];
   ts.forEach((t, i) => { if (q.close[i] != null && q.high[i] != null) b.push({t, o: q.open[i] != null ? q.open[i] : q.close[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] || 0}); });
@@ -609,7 +609,8 @@ async function refreshAll(auto) {
   let LJ = null;
   try { const lr = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (lr.ok) LJ = await lr.json(); } catch (e) {}
   await pickRoute();
-  const useLJ = !feedRoute && !!(LJ && LJ.rows);
+  const slowRelay = feedRoute && feedRoute.name === 'a free relay';
+  const useLJ = (!feedRoute || slowRelay) && !!(LJ && LJ.rows);
   tick();
   const jobs = syms.map(sy => async () => {
     try {
@@ -686,7 +687,7 @@ async function refreshAll(auto) {
   const now2 = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
   const feed = $('#feed');
   if (fail >= total && total) { msg.textContent = 'No price feed is reachable right now (' + firstErr + '). Showing the newest saved prices.'; if (feed) feed.innerHTML = ''; }
-  else if (useLJ || snapNote) { msg.textContent = (snapNote || 'Saved prices (updated on a schedule). ') + 'Loaded ' + (total - fail) + ' of ' + total + ' at ' + now2 + '.' + (fhLiveN ? ' Plus live quotes for ' + fhLiveN + ' stocks via ' + qSrc + '.' : ''); if (feed) feed.innerHTML = fhLiveN ? '<span style="color:var(--tb)">● LIVE quotes (' + qSrc + ') · ' + now2 + '</span>' : '<span style="color:var(--muted)">● Snapshot prices</span>'; }
+  else if (useLJ || snapNote) { msg.textContent = (fhLiveN ? 'Live quotes for ' + fhLiveN + ' stocks via ' + qSrc + ', the rest from the scheduled snapshot. ' : (snapNote || 'Prices from the scheduled snapshot (rebuilt every 10 min in market hours). ')) + 'Loaded ' + (total - fail) + ' of ' + total + ' at ' + now2 + '.'; if (feed) feed.innerHTML = fhLiveN ? '<span style="color:var(--tb)">● LIVE quotes (' + qSrc + ') · ' + now2 + '</span>' : '<span style="color:var(--muted)">● Snapshot · ' + now2 + '</span>'; }
   else { msg.textContent = 'Live prices · ' + (total - fail - snapFill) + ' of ' + total + ' updated at ' + now2 + (snapFill ? ' (' + snapFill + ' from the latest snapshot)' : '') + (fail ? ' (' + fail + ' failed)' : '') + (fhLiveN && qSrc === 'FMP' ? ' · live quotes stamped on all ' + fhLiveN + ' via FMP' : '') + '.'; if (feed) feed.innerHTML = '<span style="color:var(--tb)">● LIVE · ' + now2 + '</span>'; }
 }
 $('#rfBtn').addEventListener('click', () => refreshAll(false));
@@ -705,7 +706,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (mOpen(MK.US) || mOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792419815';
+const BUILD_V = '1792419978';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
