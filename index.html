@@ -194,8 +194,8 @@ ul.why{margin:6px 0 0;padding-left:18px}
   <div class="brand"><h1>Signal Desk</h1><div class="dots" id="mdots"></div></div>
   <div class="hright"><div class="asof" id="clock"></div><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="0">Auto: off</option><option value="5">Auto: 5 min</option><option value="10">Auto: 10 min</option><option value="30">Auto: 30 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
 </header>
-<div class="subhead"><div class="asof" id="asof"></div><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
-<div class="wrap"><details id="pxBox" style="font-size:12px;margin:2px 0 4px"><summary class="mut" style="cursor:pointer">Data source</summary><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="pxIn" placeholder="Optional proxy URL (https://…workers.dev)" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="pxSave" type="button">Save</button></div><div class="mut" style="margin-top:4px">Prices come straight from Yahoo Finance. If your browser blocks that, deploy the free worker.js from this repo on Cloudflare and paste its URL here.</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><input id="fhIn" placeholder="Optional Finnhub API key — streams live US prices" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="fhSave" type="button">Save</button></div><div class="mut" id="fhSt" style="margin-top:4px">Free key at finnhub.io — US stocks tick live while the page is open. India stays on Yahoo.</div></details></div>
+<div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
+<div class="wrap"><details id="pxBox" style="font-size:12px;margin:2px 0 4px"><summary class="mut" style="cursor:pointer">Live data settings (optional)</summary><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="pxIn" placeholder="Optional proxy URL (https://…workers.dev)" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="pxSave" type="button">Save</button></div><div class="mut" style="margin-top:4px">Nothing to set up: when you press ↻ Refresh, the page finds a free route to live Yahoo prices on its own and the badge above shows ● LIVE. For the most reliable private route, deploy the free worker.js from this repo on Cloudflare and paste its URL above.</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><input id="fhIn" placeholder="Optional Finnhub API key — streams live US prices" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="fhSave" type="button">Save</button></div><div class="mut" id="fhSt" style="margin-top:4px">Free key at finnhub.io — US stocks tick live while the page is open. India stays on Yahoo.</div></details></div>
 <div id="banners"></div>
 
 <div class="tabs" role="tablist" id="tabs"></div>
@@ -544,11 +544,32 @@ function emaArr(c, n) { const o = new Array(c.length).fill(null); if (c.length <
 const smaL = (a, k) => { const w = a.slice(-k); return w.reduce((s, x) => s + x, 0) / w.length; };
 function rsiF(c, n = 14) { let g = 0, l = 0; for (let i = 1; i <= n; i++) { const d = c[i] - c[i - 1]; if (d >= 0) g += d; else l -= d; } g /= n; l /= n; for (let i = n + 1; i < c.length; i++) { const d = c[i] - c[i - 1]; g = (g * (n - 1) + Math.max(d, 0)) / n; l = (l * (n - 1) + Math.max(-d, 0)) / n; } return l === 0 ? 100 : 100 - 100 / (1 + g / l); }
 function atrF(b, n = 14) { const tr = []; for (let i = 1; i < b.length; i++) tr.push(Math.max(b[i].h - b[i].l, Math.abs(b[i].h - b[i - 1].c), Math.abs(b[i].l - b[i - 1].c))); let a = tr.slice(0, n).reduce((s, x) => s + x, 0) / n; for (let i = n; i < tr.length; i++) a = (a * (n - 1) + tr[i]) / n; return a; }
+const yURL = sym => 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?range=1y&interval=1d&includePrePost=false';
+const ROUTES = () => {
+  const r = [];
+  if (proxy) r.push({name: 'your proxy', url: sym => proxy.replace(/\/+$/, '') + '/?sym=' + encodeURIComponent(sym)});
+  r.push({name: 'Yahoo directly', url: yURL});
+  r.push({name: 'a free relay', url: sym => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(yURL(sym))});
+  r.push({name: 'a free relay', url: sym => 'https://corsproxy.io/?url=' + encodeURIComponent(yURL(sym))});
+  return r;
+};
+let feedRoute = null;
+async function tryJson(u, ms) {
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), ms);
+  try { const r = await fetch(u, {signal: ctl.signal}); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+  finally { clearTimeout(tm); }
+}
+async function pickRoute() {
+  for (const rt of ROUTES()) {
+    try { const j = await tryJson(rt.url('SPY'), 8000); if (j && j.chart && j.chart.result && j.chart.result[0]) { feedRoute = rt; return rt; } } catch (e) {}
+  }
+  feedRoute = null; return null;
+}
 async function pullSym(sym) {
-  const enc = encodeURIComponent(sym);
-  const u = proxy ? proxy.replace(/\/+$/, '') + '/?sym=' + enc : 'https://query1.finance.yahoo.com/v8/finance/chart/' + enc + '?range=1y&interval=1d&includePrePost=false';
-  const resp = await fetch(u); if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  const j = await resp.json(); const res = j.chart && j.chart.result && j.chart.result[0]; if (!res) throw new Error('No data for ' + sym);
+  if (!feedRoute) await pickRoute();
+  if (!feedRoute) throw new Error('no route to Yahoo');
+  const j = await tryJson(feedRoute.url(sym), 20000);
+  const res = j.chart && j.chart.result && j.chart.result[0]; if (!res) throw new Error('No data for ' + sym);
   const m = res.meta, q = res.indicators.quote[0], ts = res.timestamp, b = [];
   ts.forEach((t, i) => { if (q.close[i] != null && q.high[i] != null) b.push({t, o: q.open[i] != null ? q.open[i] : q.close[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] || 0}); });
   if (b.length < 60) throw new Error('Not enough history for ' + sym);
@@ -576,11 +597,13 @@ async function refreshAll(auto) {
   const syms = Object.keys(DATA.rows), cids = Object.keys(custom);
   const total = syms.length + cids.length; let done = 0, fail = 0, firstErr = '';
   const newest = {US: 0, IN: 0};
-  const tick = () => { msg.textContent = 'Refreshing ' + done + ' of ' + total + '…'; };
-  tick();
+  const tick = () => { msg.textContent = 'Getting live prices… ' + done + ' of ' + total; };
+  msg.textContent = 'Finding a live price feed…';
   let LJ = null;
   try { const lr = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (lr.ok) LJ = await lr.json(); } catch (e) {}
-  const useLJ = !!(LJ && LJ.rows && (Date.now() - LJ.at) < 45 * 60000);
+  await pickRoute();
+  const useLJ = !feedRoute && !!(LJ && LJ.rows);
+  tick();
   const jobs = syms.map(sy => async () => {
     try {
       let r;
@@ -618,8 +641,11 @@ async function refreshAll(auto) {
   save('sd-my', custom);
   rfBusy = false; btn.disabled = false; lastRefresh = Date.now();
   analyzeAll(); renderAll(); syncRecs();
-  if (fail >= total && total) { msg.textContent = 'Could not reach Yahoo Finance from this page (' + firstErr + '), and no server snapshot is available. Open "Data source" under the header and add a free proxy URL (see the README).'; const px2 = $('#pxBox'); if (px2) px2.open = true; }
-  else msg.textContent = snapNote + 'Refreshed ' + (total - fail) + ' of ' + total + ' symbols at ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) + (fail ? '. ' + fail + ' failed.' : '.');
+  const now2 = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  const feed = $('#feed');
+  if (fail >= total && total) { msg.textContent = 'No price feed is reachable right now (' + firstErr + '). Showing the newest saved prices.'; if (feed) feed.innerHTML = ''; }
+  else if (useLJ || snapNote) { msg.textContent = (snapNote || 'Saved prices (updated on a schedule). ') + 'Loaded ' + (total - fail) + ' of ' + total + ' at ' + now2 + '.'; if (feed) feed.innerHTML = '<span style="color:var(--muted)">● Snapshot prices</span>'; }
+  else { msg.textContent = 'Live prices · ' + (total - fail) + ' of ' + total + ' updated at ' + now2 + (fail ? ' (' + fail + ' failed)' : '') + '.'; if (feed) feed.innerHTML = '<span style="color:var(--tb)">● LIVE · ' + now2 + '</span>'; }
 }
 $('#rfBtn').addEventListener('click', () => refreshAll(false));
 $('#pxIn').value = proxy;
