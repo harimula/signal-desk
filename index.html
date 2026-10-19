@@ -128,7 +128,7 @@ th.sorted::after{content:attr(data-dir)}
 #tb td:nth-child(2),#tb th:nth-child(2){position:sticky;left:38px;background:var(--surface);z-index:2;box-shadow:6px 0 6px -6px rgba(10,14,22,.3)}
 #tb th:nth-child(1),#tb th:nth-child(2){z-index:4}
 #tb td:nth-child(2) b{font-weight:800}
-#pftab{min-width:900px}
+#pftab{min-width:900px}#dttab{min-width:1020px}#dttab td:first-child,#dttab th:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:2}#dttab td,#dttab th{text-align:right}#dttab .lt{text-align:left}
 #pftab td:first-child,#pftab th:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:2}
 tbody tr{cursor:pointer}
 tbody tr:hover td{background:var(--surface2)}
@@ -177,7 +177,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 .rules h3{font-size:14px;margin:0 0 10px;font-weight:800}
 .rules ul{margin:6px 0;padding-left:18px}
 @media (max-width:700px){
-  #pftab{min-width:700px}
+  #pftab{min-width:700px}#dttab{min-width:860px}
   #tb th:nth-child(7),#tb td:nth-child(7),#tb th:nth-child(11),#tb td:nth-child(11),#tb th:nth-child(12),#tb td:nth-child(12),#tb th:nth-child(13),#tb td:nth-child(13),#tb th:nth-child(14),#tb td:nth-child(14),#tb th:nth-child(15),#tb td:nth-child(15),#tb th:nth-child(16),#tb td:nth-child(16),#tb th:nth-child(17),#tb td:nth-child(17),#tb th:nth-child(20),#tb td:nth-child(20){display:none}
   table{min-width:760px}
 }
@@ -478,7 +478,7 @@ function analyzeAll() {
   }
 }
 analyzeAll();
-const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
+const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
 let pfolios = [{id: 'p1', name: 'Portfolio'}];
 const pfOf = k => (typeof k === 'string' && k.startsWith('PF:')) ? k.slice(3) : null;
 const pfName = id => { const p = pfolios.find(x => x.id === id); return p ? p.name : 'Portfolio'; };
@@ -521,12 +521,12 @@ function fresh(m) {
   return {age, open, level};
 }
 function chrome() {
-  const m = MK[(tab === 'MY' || tab === 'RULES' || pfOf(tab)) ? 'US' : tab], f = fresh(m);
+  const m = MK[(tab === 'MY' || tab === 'RULES' || tab === 'DT' || pfOf(tab)) ? 'US' : tab], f = fresh(m);
   $('#mdots').innerHTML = ['US', 'IN'].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
-  $('#asof').innerHTML = (tab === 'RULES' ? 'Every rule this page uses, in plain words' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
+  $('#asof').innerHTML = (tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
   $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
   let h = '';
-  if (tab !== 'MY' && tab !== 'RULES' && !pfOf(tab)) {
+  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && !pfOf(tab)) {
     if (f.level === 'stale') h += `<div class="banner warn"><b>Stale data. Entry zones are for reference only.</b> This snapshot is ${ageText(f.age)} old and prices have likely moved. Press ↻ Refresh prices.</div>`;
     else if (f.level === 'aging') h += `<div class="banner warn"><b>Snapshot is ageing.</b> Pulled ${ageText(f.age)} ago. Press ↻ Refresh prices.</div>`;
     h += `<div class="banner info">${esc(m.stamp.note)} Prices update when you press ↻ Refresh prices or on the auto-refresh schedule you pick (Yahoo data can lag ~15 minutes). Signals are rule-based readouts, not advice. The page places no orders.</div>`;
@@ -837,6 +837,80 @@ ${pfolios.length > 1 ? '<button class="btn ghost" id="pfDel" type="button">Delet
 <div class="mut" style="font-size:12px;margin-top:10px">Holdings are saved in this browser. New symbols download as soon as you add them; press ↻ Refresh prices for fresh quotes. Tap any row for the full drill-down. Not advice; the page places no orders.</div>`;
 }
 
+// ---------- day trading (US): floor pivots + Camarilla + RSI(2) pullbacks ----------
+function rsi2Of(cl) {
+  const n = 2; if (!cl || cl.length < n + 3) return null;
+  let g = 0, l = 0;
+  for (let i = 1; i <= n; i++) { const d = cl[i] - cl[i - 1]; if (d >= 0) g += d; else l -= d; }
+  g /= n; l /= n;
+  for (let i = n + 1; i < cl.length; i++) { const d = cl[i] - cl[i - 1]; g = (g * (n - 1) + Math.max(d, 0)) / n; l = (l * (n - 1) + Math.max(-d, 0)) / n; }
+  return l === 0 ? 100 : 100 - 100 / (1 + g / l);
+}
+function dtOne(s) {
+  if (!s.bars || s.bars.length < 8 || !s.closes || s.closes.length < 20) return null;
+  const nb = Math.floor(s.bars.length / 4);
+  const H = s.bars[(nb - 1) * 4 + 1], L = s.bars[(nb - 1) * 4 + 2], C = s.closes[s.closes.length - 1];
+  const rng = H - L; if (!(rng > 0) || !(C > 0)) return null;
+  const px = s.px, atr = s.atr || rng;
+  const P = (H + L + C) / 3, R1 = 2 * P - H, S1 = 2 * P - L, R2 = P + rng, S2 = P - rng;
+  const R3 = C + rng * 1.1 / 4, S3 = C - rng * 1.1 / 4, R4 = C + rng * 1.1 / 2, S4 = C - rng * 1.1 / 2;
+  const atrPct = atr / C * 100, rv = s.avgVol20 ? (s.lastVol / s.avgVol20) : 1, dvol = (s.avgVol20 || 0) * C;
+  const rsi2 = rsi2Of(s.closes), bias = s.score || 0;
+  const liquid = dvol >= 25e6 && C >= 5, volOK = atrPct >= 1 && atrPct <= 8;
+  let rt = 'Skip', side = 0, why = '';
+  if (!liquid) why = 'Too thin for day trades: needs $25M+ traded per day and a $5+ price.';
+  else if (!volOK) why = atrPct < 1 ? 'Average day range under 1% — too little movement to pay for the trade.' : 'Average day range over 8% — gap risk too high for fixed levels.';
+  else if (bias >= 25 && rsi2 != null && rsi2 <= 15) { rt = 'Strong Buy'; side = 1; why = 'Uptrend (swing ' + bias + ') washed out short term (RSI-2 ' + Math.round(rsi2) + '): buy the dip at support.'; }
+  else if (bias >= 25 && rsi2 != null && rsi2 <= 40) { rt = 'Buy'; side = 1; why = 'Uptrend (swing ' + bias + ') pulling back (RSI-2 ' + Math.round(rsi2) + '): buy near support.'; }
+  else if (bias <= -25 && rsi2 != null && rsi2 >= 85) { rt = 'Strong Sell'; side = -1; why = 'Downtrend (swing ' + bias + ') stretched up (RSI-2 ' + Math.round(rsi2) + '): exit/avoid into resistance.'; }
+  else if (bias <= -25 && rsi2 != null && rsi2 >= 60) { rt = 'Sell'; side = -1; why = 'Downtrend (swing ' + bias + ') bouncing (RSI-2 ' + Math.round(rsi2) + '): exit/avoid near resistance.'; }
+  else why = (bias > -25 && bias < 25) ? 'No trend edge today: swing score ' + bias + ' is neutral.' : 'Trend (' + bias + ') and short-term stretch (RSI-2 ' + (rsi2 == null ? '?' : Math.round(rsi2)) + ') do not line up today.';
+  let entry = null, target = null, stop = null, rr = null;
+  if (side === 1) {
+    entry = px > S3 ? S3 : (px > S1 ? S1 : S2);
+    stop = Math.min(S4, entry - 0.5 * atr);
+    target = px > S3 ? R1 : P;
+    if (target <= entry) target = entry + atr;
+    rr = (target - entry) / (entry - stop);
+  } else if (side === -1) {
+    entry = px < R3 ? R3 : (px < R1 ? R1 : R2);
+    stop = Math.max(R4, entry + 0.5 * atr);
+    target = px < R3 ? S1 : P;
+    if (target >= entry) target = entry - atr;
+    rr = (entry - target) / (stop - entry);
+  }
+  let sc = Math.min(30, Math.max(0, 30 - Math.abs(atrPct - 3) * 10));
+  sc += dvol >= 1e9 ? 25 : dvol >= 2e8 ? 18 : dvol >= 5e7 ? 10 : 3;
+  sc += rv >= 1.5 ? 20 : rv >= 1.1 ? 12 : rv >= 0.8 ? 5 : 0;
+  let edge = Math.abs(bias) / 4;
+  if (side === 1 && rsi2 != null) edge += (40 - rsi2) / 2;
+  if (side === -1 && rsi2 != null) edge += (rsi2 - 60) / 2;
+  sc += Math.min(25, Math.max(0, Math.round(edge)));
+  sc = Math.round(Math.min(100, sc));
+  return {s, rt, side, why, entry, target, stop, rr, atrPct, rv, dvol, rsi2, P, R1, S1, R2, S2, R3, S3, R4, S4, sc};
+}
+function dtRows() {
+  const m = MK.US, list = m.stocks.slice();
+  for (const bsym of ['SPY', 'QQQ']) if (DATA.rows[bsym]) { const t = mkRec(bsym, DATA.rows[bsym], F); t.market = 'US'; t.industry = 'Index / ETF'; rateOne(t, m.bench, m.bench); list.push(t); }
+  return list.map(dtOne).filter(Boolean).sort((a, b) => ((b.rt !== 'Skip') - (a.rt !== 'Skip')) || b.sc - a.sc);
+}
+function dtView() {
+  const rows = dtRows(), act = rows.filter(r => r.rt !== 'Skip');
+  const dtp = r => `<span class="pill ${r === 'Strong Buy' ? 'r-Top-Buy' : r === 'Buy' ? 'r-Buy' : r === 'Sell' ? 'r-Sell' : r === 'Strong Sell' ? 'r-Top-Sell' : 'r-Hold'}">${r}</span>`;
+  const f2 = x => x == null ? '–' : fmt(x);
+  const trs = rows.map(r => {
+    const s = r.s;
+    const ttl = 'Yesterday: P ' + fmt(r.P) + ' · R1 ' + fmt(r.R1) + ' · S1 ' + fmt(r.S1) + ' · R3 ' + fmt(r.R3) + ' · S3 ' + fmt(r.S3) + ' · R4 ' + fmt(r.R4) + ' · S4 ' + fmt(r.S4);
+    const lv = r.side ? `<td><b>${f2(r.entry)}</b></td><td><b>${f2(r.target)}</b></td><td>${f2(r.stop)}</td><td>${r.rr ? fmt(r.rr, 1) + ':1' : '–'}</td>` : '<td>–</td><td>–</td><td>–</td><td>–</td>';
+    return `<tr data-s="${esc(s.sym)}" data-m="US" title="${ttl}"><td class="lt"><b>${esc(s.sym)}</b> <span class="mut">${esc((s.name || '').slice(0, 14))}</span></td><td class="lt">${dtp(r.rt)}</td><td class="lt mut" style="max-width:250px;white-space:normal;font-size:11.5px">${esc(r.why)}</td><td>$${fmt(s.px)}</td>${lv}<td>${fmt(r.atrPct, 1)}%</td><td>${fmt(r.rv, 1)}×</td><td>${r.rsi2 == null ? '–' : Math.round(r.rsi2)}</td><td>${s.score}</td></tr>`;
+  }).join('');
+  return `<h2>Day trading — USA</h2>
+<div class="banner warn"><b>Read first.</b> Levels are built from the <b>last completed session</b> — press ↻ Refresh prices before the 9:30 ET open so they use yesterday's bar. Robinhood's pattern-day-trader rule: 4+ round-trip day trades in 5 business days locks day trading in a margin account under $25,000 equity. Most day traders lose money after costs — size small and honour the stop. Not advice; the page places no orders.</div>
+<div class="banner info"><b>How to use with limit orders:</b> on a <b>Buy</b> row, set a limit <b>buy at Entry</b>, a limit <b>sell at Target</b>, and a stop-loss at Stop — cancel anything unfilled by the close (day trades do not stay overnight). <b>Sell</b> rows are exit/avoid levels for stock you hold — this page stays long-only and Robinhood cash accounts cannot short. Hover a row for all of yesterday's pivot and Camarilla levels; tap it for the full drill-down.</div>
+<div class="mut" style="font-size:12.5px;margin:2px 0 8px"><b>${act.length}</b> setup${act.length === 1 ? '' : 's'} today out of ${rows.length} screened · ranked by tradability (range, liquidity, volume) + edge (trend, RSI-2 stretch) · formulas in the Rules tab</div>
+<div class="tw card" data-list><table id="dttab"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th class="lt">Setup</th><th>Price</th><th>Entry</th><th>Target</th><th>Stop</th><th>R:R</th><th>Range</th><th>Rel vol</th><th>RSI-2</th><th>Swing</th></tr></thead><tbody>${trs}</tbody></table></div>`;
+}
+
 // ---------- Wall Street analyst consensus (Yahoo Finance) ----------
 function anx() { return Object.assign({}, DATA.an || {}, (liveDocs.AN && liveDocs.AN.an) || {}); }
 const AN_KEYS = [[1.5, 'Strong buy'], [2.5, 'Buy'], [3.5, 'Hold'], [4.5, 'Sell'], [9, 'Strong sell']];
@@ -1002,9 +1076,9 @@ function bindBoard() {
 }
 function renderAll() {
   renderTabs(); chrome();
-  $('#tools').style.display = (tab === 'RULES' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
+  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
   const view = $('#view');
-  view.innerHTML = tab === 'RULES' ? rulesView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab);
+  view.innerHTML = tab === 'RULES' ? rulesView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab);
   document.querySelectorAll('[data-list]').forEach(l => {
     l.addEventListener('click', e => { const li = e.target.closest('[data-s]'); if (li) openDetail(li.dataset.s, li.dataset.m); });
     l.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('[data-s]'); if (li) { e.preventDefault(); openDetail(li.dataset.s, li.dataset.m); } } });
@@ -1109,7 +1183,16 @@ Type any number of days (2–${DATA.maxN}) and pick SMA (simple average) or EMA 
 The <b>Portfolio</b> tab stores your actual holdings — ticker, share count and average buy price — in this browser. <b>My tickers</b> is the lighter watchlist: symbols you follow without owning. A portfolio symbol outside the tracked universe is downloaded on the next refresh.</div>
 <div class="card"><h3>10 · Where these rules come from</h3>
 The rule set follows the most widely taught momentum methods rather than anything invented here: Mark Minervini’s stage-2 trend template (the 8-point checklist above), Stan Weinstein’s stage analysis (the market-regime and long-average rules), William O’Neil’s volume-confirmation principles (breakouts need volume), and the tight-consolidation breakout tactics popularised by Kristjan “Qullamaggie” Kullamagi — coiled ranges near highs, stops near the breakout low, risk kept to a few percent. Entry zones, 2× ATR stops and 1.5R/3R targets are standard swing-trading risk practice. These are disciplines, not predictions.</div>
-<div class="card"><h3>11 · What this page deliberately does not do</h3>
+<div class="card"><h3>11 · Day-trading tab (USA)</h3>
+Everything is computed from the last completed session's high H, low L and close C — the same published formulas most trading platforms use:
+<ul><li><b>Floor pivots</b> — P=(H+L+C)/3, R1=2P−H, S1=2P−L, R2=P+(H−L), S2=P−(H−L).</li>
+<li><b>Camarilla bands</b> — S3/R3 = C ∓ 1.1×(H−L)/4, the classic intraday mean-reversion entries; S4/R4 = C ∓ 1.1×(H−L)/2, the breakout/stop lines.</li>
+<li><b>Direction</b> — day trades only go with the swing engine: score ≥ +25 for Buy setups, ≤ −25 for the sell side. Following Larry Connors' RSI(2) pullback research, an uptrend is bought when RSI(2) is washed out (≤ 40; Strong Buy ≤ 15) and a downtrend is sold/avoided when RSI(2) is stretched up (≥ 60; Strong Sell ≥ 85).</li>
+<li><b>The plan</b> — Buy rows: limit buy at S3 (S1 if price already broke below it), limit sell at R1 (the pivot for deeper entries), stop at S4 or half an ATR under entry, whichever is lower; cancel unfilled orders by the close. Sell rows mirror at R3/R4 and are exit/avoid levels — the page stays long-only.</li>
+<li><b>Tradability screen</b> — $25M+ average daily dollar volume, price ≥ $5, average day range 1–8% of price. Anything else is marked Skip with the reason.</li>
+<li><b>Ranking</b> — tradability (day range near 3%, dollar volume, relative volume) plus edge (trend strength and RSI-2 stretch).</li></ul>
+Levels assume yesterday's bar, so refresh before the 9:30 ET open. <b>Robinhood PDT rule:</b> 4+ round-trip day trades within 5 business days marks the account a pattern day trader; in a margin account under $25,000 that blocks further day trades. Studies consistently find most day traders lose money after costs — these are levels for discipline, not predictions.</div>
+<div class="card"><h3>12 · What this page deliberately does not do</h3>
 <ul><li>The score itself uses no fundamentals, earnings dates or news — price, volume and trend only. Analyst consensus is shown beside it as an independent view, never mixed into the score.</li>
 <li>Long-biased: Sell means “avoid / exit”, not a short-selling plan.</li>
 <li>The rules are a transparent screen, <b>not back-tested</b> and not a forecast; Yahoo’s free feed is unofficial and can be delayed ~15 minutes.</li>
