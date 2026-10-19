@@ -18,4 +18,11 @@ jobs:
           git config user.name "signal-desk-bot"
           git config user.email "bot@users.noreply.github.com"
           git add live.json
-          git diff --cached --quiet || (git commit -m "Refresh prices" && git push)
+          git diff --cached --quiet && exit 0
+          git commit -m "Refresh prices"
+          for i in 1 2 3; do
+            git push && exit 0
+            git pull --rebase -X theirs origin main || git rebase --abort
+            sleep 3
+          done
+          git push
