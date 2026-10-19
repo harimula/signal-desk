@@ -931,6 +931,54 @@ function dtRows(mk) {
   if (mk === 'US') for (const bsym of ['SPY', 'QQQ'].concat(DTX)) if (DATA.rows[bsym] && !have[bsym]) { have[bsym] = 1; const t = mkRec(bsym, DATA.rows[bsym], F); t.market = 'US'; t.industry = (bsym === 'SPY' || bsym === 'QQQ' || bsym === 'TQQQ' || bsym === 'SOXL') ? 'Index / ETF' : 'High-volume movers'; rateOne(t, m.bench, m.bench); list.push(t); }
   return list.map(s => dtOne(s, mk)).filter(Boolean).sort((a, b) => ((b.rt !== 'Skip') - (a.rt !== 'Skip')) || b.sc - a.sc);
 }
+// ---------- live tracking: record each day's setups, score them after the session ----------
+function dtTrack(mk, rows) {
+  const dts = DATA.dates[mk] || []; if (!dts.length) return null;
+  const lastTs = dts[dts.length - 1];
+  const log = load('sd-dtlog', {});
+  if (!load('sd-dtstart', 0)) save('sd-dtstart', Date.now());
+  const k = mk + ':' + lastTs;
+  const buys = rows.filter(r => r.side === 1);
+  if (!log[k] && buys.length) { log[k] = {mk, ts: lastTs, tr: buys.map(r => ({sym: r.s.sym, e: r.entry, t: r.target, st: r.stop}))}; save('sd-dtlog', log); }
+  let changed = false;
+  for (const kk of Object.keys(log)) {
+    const en = log[kk];
+    if (en.mk !== mk || en.res) continue;
+    const idx = dts.indexOf(en.ts);
+    if (idx < 0) { if (en.ts < dts[0]) { en.res = {gone: true, pls: []}; changed = true; } continue; }
+    if (idx + 1 >= dts.length) continue;
+    const pls = [];
+    for (const t3 of en.tr) {
+      const row = DATA.rows[t3.sym]; if (!row || !row[28]) continue;
+      const bars = row[28], closes = row[27], nb2 = bars.length / 4, bi = idx + 1;
+      if (bi >= nb2) continue;
+      const o = bars[bi * 4], h = bars[bi * 4 + 1], l = bars[bi * 4 + 2], c = closes[closes.length - nb2 + bi];
+      if (o == null || h == null || c == null) continue;
+      const fill = o < t3.e ? o : (l <= t3.e ? t3.e : null);
+      if (fill == null) { pls.push({sym: t3.sym, pl: null}); continue; }
+      let exit;
+      if (fill <= t3.st) exit = c;
+      else if (l <= t3.st) exit = t3.st;
+      else if (h >= t3.t) exit = Math.max(t3.t, fill);
+      else exit = c;
+      pls.push({sym: t3.sym, pl: Math.round((exit - fill) / fill * 10000) / 100});
+    }
+    en.res = {pls};
+    changed = true;
+  }
+  if (changed) save('sd-dtlog', log);
+  const ents = Object.values(log).filter(e2 => e2.mk === mk).sort((a2, b2) => a2.ts - b2.ts);
+  let cum2 = 0, days = 0, lastDay = null;
+  for (const e2 of ents) {
+    if (!e2.res || !e2.res.pls) continue;
+    const got = e2.res.pls.filter(x2 => x2.pl != null);
+    if (!got.length) continue;
+    const avg2 = got.reduce((t2, x2) => t2 + x2.pl, 0) / got.length;
+    cum2 += avg2; days++; lastDay = {avg: avg2, ts: e2.ts, n: got.length};
+  }
+  const pend = ents.filter(e2 => !e2.res).reduce((t2, e2) => t2 + e2.tr.length, 0);
+  return {cum: cum2, days, lastDay, pend, start: load('sd-dtstart', Date.now())};
+}
 function eqSvg(eq, amt, cu) {
   const w = 560, h = 130, pad = 8, padR = 10;
   const vs = eq.map(e2 => e2.v); let lo = Math.min(...vs, amt), hi = Math.max(...vs, amt);
@@ -970,6 +1018,8 @@ function dtView() {
     const lastArr = dayIdx.length ? dayMap[dayIdx[dayIdx.length - 1]] : null;
     return {net: cum, w: w.length, n: allPl.length, winRate: allPl.length ? w.length / allPl.length * 100 : 0, pf: gl > 0 ? gw / gl : null, maxDD: dd, lastAvg: lastArr ? lastArr.reduce((t2, x2) => t2 + x2, 0) / lastArr.length : null};
   })();
+  const live = dtTrack(dtMk, rows);
+  const dFmt2 = ms => new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short'}).format(new Date(ms));
   const eqDate = di => { const t2 = (DATA.dates[dtMk] || [])[di]; return t2 ? new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short'}).format(new Date(t2 * 1000)) : ''; };
   let totRisk = 0;
   const cards = buys.map(r => {
@@ -998,8 +1048,16 @@ ${x && x.trades ? `<div class="kv" style="margin-top:6px;border-top:1px solid va
 <div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-dtm="${k}" aria-selected="${dtMk === k}">${l}</button>`).join('')}</div>
 <div class="mut" style="font-size:12.5px;margin:8px 0 12px">Press ↻ Refresh prices ${dtMk === 'US' ? 'before the 9:30 ET open' : 'after the NSE close'} for fresh levels. Tap any stock for the full picture. Rule-based levels, not advice.</div>
 <div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Money to trade with (${cu})</b><input id="dtAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="dtSplit" type="button">Split it</button><span class="mut" style="font-size:12px">divided across today's buys, strongest setup gets most</span></div></div>
+${live ? `<div class="card" style="padding:14px 16px;margin-bottom:14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><b style="font-size:14px">Your tracking — since ${dFmt2(live.start)}</b><span class="mut" style="font-size:11.5px">each day's setups are saved here and scored after that session closes</span></div>
+<div class="lv" style="margin:10px 0 0">
+${lvBox('Day P/L · last scored day', live.lastDay ? `<span class="${live.lastDay.avg >= 0 ? 'pos' : 'neg'}">${sgn(live.lastDay.avg)}% · ${live.lastDay.avg >= 0 ? '+' : '−'}${cu}${fmt(Math.abs(amt * live.lastDay.avg / 100), 2)}</span>` : 'nothing scored yet')}
+${lvBox('Overall P/L since you started', live.days ? `<span class="${live.cum >= 0 ? 'pos' : 'neg'}">${sgn(live.cum)}% · ${live.cum >= 0 ? '+' : '−'}${cu}${fmt(Math.abs(amt * live.cum / 100), 2)}</span>` : '– · scores after the first close')}
+${lvBox('Days scored', String(live.days))}
+${lvBox('Working now', live.pend ? live.pend + ' setup' + (live.pend === 1 ? '' : 's') + ' — scored after the close + a refresh' : 'none recorded')}
+</div></div>` : ''}
 <div class="card" style="padding:14px 16px;margin-bottom:14px">
-<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><b style="font-size:14px">If ${cu}${fmt(amt, 0)} had followed these rules — last ~45 sessions</b><span class="mut" style="font-size:11.5px">paper replay, split across each day's trades · not your account</span></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><b style="font-size:14px">Backtest — the same rules replayed on the ~45 sessions before you started</b><span class="mut" style="font-size:11.5px">history, not your results · ${cu}${fmt(amt, 0)} paper-traded, no slippage</span></div>
 ${eq.length > 1 ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;align-items:stretch">
 <div style="flex:1.5;min-width:250px;display:flex;flex-direction:column;justify-content:center">${eqSvg(eq, amt, cu)}
 <div style="display:flex;justify-content:space-between" class="mut"><span style="font-size:10.5px">${eqDate(eq[0].i)}</span><span style="font-size:10.5px">${eqDate(eq[eq.length - 1].i)}</span></div></div>
