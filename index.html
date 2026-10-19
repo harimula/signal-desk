@@ -1001,10 +1001,6 @@ function dtView() {
   const dtp = r => `<span class="pill ${r === 'Strong Buy' ? 'r-Top-Buy' : r === 'Buy' ? 'r-Buy' : r === 'Sell' ? 'r-Sell' : r === 'Strong Sell' ? 'r-Top-Sell' : 'r-Hold'}">${r}</span>`;
   let amt = parseFloat(load('sd-dtamt-' + dtMk, dtMk === 'IN' ? 50000 : load('sd-dtamt', 1000))) || (dtMk === 'IN' ? 50000 : 1000);
   const wsum = buys.reduce((t, r) => t + r.sc, 0) || 1;
-  const sims = rows.map(r => r.sim).filter(x => x && x.trades);
-  const lasts = sims.filter(x => x.last != null);
-  const dayAvg = lasts.length ? lasts.reduce((t, x) => t + x.last, 0) / lasts.length : null;
-  const ovAvg = sims.length ? sims.reduce((t, x) => t + x.tot, 0) / sims.length : null;
   const dayMap = {};
   rows.forEach(r => { const x = r.sim; if (x && x.list) x.list.forEach(t2 => { (dayMap[t2.i] = dayMap[t2.i] || []).push(t2.pl); }); });
   const dayIdx = Object.keys(dayMap).map(Number).sort((q, z) => q - z);
@@ -1015,28 +1011,27 @@ function dtView() {
     const w = allPl.filter(x2 => x2 > 0), lzz = allPl.filter(x2 => x2 <= 0);
     const gw = w.reduce((t2, x2) => t2 + x2, 0), gl = -lzz.reduce((t2, x2) => t2 + x2, 0);
     let peak = amt, dd = 0; for (const e2 of eq) { if (e2.v > peak) peak = e2.v; dd = Math.max(dd, (peak - e2.v) / peak * 100); }
-    const lastArr = dayIdx.length ? dayMap[dayIdx[dayIdx.length - 1]] : null;
-    return {net: cum, w: w.length, n: allPl.length, winRate: allPl.length ? w.length / allPl.length * 100 : 0, pf: gl > 0 ? gw / gl : null, maxDD: dd, lastAvg: lastArr ? lastArr.reduce((t2, x2) => t2 + x2, 0) / lastArr.length : null};
+    return {net: cum, w: w.length, n: allPl.length, pf: gl > 0 ? gw / gl : null, maxDD: dd};
   })();
   const live = dtTrack(dtMk, rows);
   const dFmt2 = ms => new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short'}).format(new Date(ms));
-  const eqDate = di => { const t2 = (DATA.dates[dtMk] || [])[di]; return t2 ? new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short'}).format(new Date(t2 * 1000)) : ''; };
+  const eqDate = di => { const t2 = (DATA.dates[dtMk] || [])[di]; return t2 ? dFmt2(t2 * 1000) : ''; };
   let totRisk = 0;
   const cards = buys.map(r => {
     const s = r.s, d = amt * r.sc / wsum, sh = d / r.entry, risk = sh * (r.entry - r.stop);
     totRisk += risk;
     const x = r.sim;
+    const upP = (r.target - r.entry) / r.entry * 100, dnP = (r.entry - r.stop) / r.entry * 100;
     return `<div class="card mt" data-s="${esc(s.sym)}" data-m="${dtMk}" role="button" tabindex="0" style="cursor:pointer">
 <div class="mth"><span class="msym">${esc(showSym(s.sym))}</span>${dtp(r.rt)}</div>
 <div class="mut" style="font-size:12px">${esc((s.name || '').slice(0, 26))}</div>
-<div class="mpx" style="margin-top:6px">${cu}${fmt(d, 0)}</div>
-<div class="mut" style="font-size:11.5px">to put in · ≈ ${fmt(sh, sh < 10 ? 2 : 1)} shares</div>
-<div class="kv" style="margin-top:8px"><span>Limit buy at</span><b>${cu}${fmt(r.entry)}</b></div>
-<div class="kv"><span>Limit sell at</span><b class="pos">${cu}${fmt(r.target)} <span style="font-weight:400;font-size:11px">+${fmt((r.target - r.entry) / r.entry * 100, 1)}%</span></b></div>
-<div class="kv"><span>Stop-loss at</span><b class="neg">${cu}${fmt(r.stop)} <span style="font-weight:400;font-size:11px">−${fmt((r.entry - r.stop) / r.entry * 100, 1)}%</span></b></div>
-<div class="kv"><span>If stopped, you lose</span><b class="neg">${cu}${fmt(risk, risk < 10 ? 2 : 0)}</b></div>
-${x && x.trades ? `<div class="kv" style="margin-top:6px;border-top:1px solid var(--line);padding-top:6px"><span>Day P/L</span><b class="${(x.last || 0) >= 0 ? 'pos' : 'neg'}">${x.last == null ? 'no trade' : sgn(x.last) + '%'}</b></div>
-<div class="kv"><span>Overall P/L (45d)</span><b class="${x.tot >= 0 ? 'pos' : 'neg'}">${sgn(x.tot)}% · ${Math.round(x.wins / x.trades * 100)}% wins</b></div>` : ''}
+<div style="margin-top:9px;font-size:15px"><b>Put in ${cu}${fmt(d, 0)}</b> <span class="mut" style="font-size:12px">≈ ${fmt(sh, sh < 10 ? 2 : 1)} shares</span></div>
+<div class="lv" style="margin:8px 0 0;grid-template-columns:repeat(3,1fr);gap:6px">
+<div><small>Buy at</small><b>${fmt(r.entry)}</b></div>
+<div><small>Sell at</small><b class="pos">${fmt(r.target)}</b><small style="color:var(--tb)">+${fmt(upP, 1)}%</small></div>
+<div><small>Stop at</small><b class="neg">${fmt(r.stop)}</b><small style="color:var(--ts)">−${fmt(dnP, 1)}%</small></div>
+</div>
+<div class="mut" style="font-size:11.5px;margin-top:8px">Worst case: lose ${cu}${fmt(risk, risk < 10 ? 2 : 0)}${x && x.trades ? ` · 45-day record <b class="${x.tot >= 0 ? 'pos' : 'neg'}">${sgn(x.tot)}%</b>` : ''}</div>
 </div>`;
   }).join('');
   const sellRows = sells.map(r => `<tr data-s="${esc(r.s.sym)}" data-m="${dtMk}" style="cursor:pointer"><td class="lt"><b>${esc(showSym(r.s.sym))}</b></td><td class="lt">${dtp(r.rt)}</td><td>${cu}${fmt(r.s.px)}</td><td><b>${cu}${fmt(r.entry)}</b></td><td>${(x => x && x.trades ? `<span class="${x.tot >= 0 ? 'pos' : 'neg'}">${sgn(x.tot)}%</span>` : '–')(r.sim)}</td></tr>`).join('');
@@ -1044,42 +1039,43 @@ ${x && x.trades ? `<div class="kv" style="margin-top:6px;border-top:1px solid va
   const allRows = rows.map(r => { const s = r.s, x = r.sim;
     return `<tr data-s="${esc(s.sym)}" data-m="${dtMk}" title="${esc(r.why)}" style="cursor:pointer"><td class="lt"><b>${esc(showSym(s.sym))}</b></td><td class="lt">${dtp(r.rt)}</td><td>${cu}${fmt(s.px)}</td><td>${f2(r.entry)}</td><td>${f2(r.target)}</td><td>${f2(r.stop)}</td>${x && x.trades ? `<td class="${(x.last || 0) >= 0 ? 'pos' : 'neg'}">${x.last == null ? '–' : sgn(x.last) + '%'}</td><td class="${x.tot >= 0 ? 'pos' : 'neg'}"><b>${sgn(x.tot)}%</b></td>` : '<td>–</td><td>–</td>'}</tr>`;
   }).join('');
+  const money = v => (v >= 0 ? '+' : '−') + cu + fmt(Math.abs(amt * v / 100), 2);
   return `<h2 style="margin-bottom:6px">Day trading — ${dtMk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
 <div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-dtm="${k}" aria-selected="${dtMk === k}">${l}</button>`).join('')}</div>
-<div class="mut" style="font-size:12.5px;margin:8px 0 12px">Press ↻ Refresh prices ${dtMk === 'US' ? 'before the 9:30 ET open' : 'after the NSE close'} for fresh levels. Tap any stock for the full picture. Rule-based levels, not advice.</div>
-<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Money to trade with (${cu})</b><input id="dtAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="dtSplit" type="button">Split it</button><span class="mut" style="font-size:12px">divided across today's buys, strongest setup gets most</span></div></div>
+<div class="mut" style="font-size:12.5px;margin:8px 0 12px">Press ↻ Refresh prices ${dtMk === 'US' ? 'before the market opens (9:30 ET)' : 'after the market closes'} to get today's numbers. Tap any stock for details. Not advice.</div>
+<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Money to trade with (${cu})</b><input id="dtAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="dtSplit" type="button">Split it</button><span class="mut" style="font-size:12px">divided across today's buys — the strongest one gets the most</span></div></div>
 ${live ? `<div class="card" style="padding:14px 16px;margin-bottom:14px">
-<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><b style="font-size:14px">Your tracking — since ${dFmt2(live.start)}</b><span class="mut" style="font-size:11.5px">each day's setups are saved here and scored after that session closes</span></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><b style="font-size:14px">Your P/L — started ${dFmt2(live.start)}</b><span class="mut" style="font-size:11.5px">scored from real prices after each trading day ends</span></div>
 <div class="lv" style="margin:10px 0 0">
-${lvBox('Day P/L · last scored day', live.lastDay ? `<span class="${live.lastDay.avg >= 0 ? 'pos' : 'neg'}">${sgn(live.lastDay.avg)}% · ${live.lastDay.avg >= 0 ? '+' : '−'}${cu}${fmt(Math.abs(amt * live.lastDay.avg / 100), 2)}</span>` : 'nothing scored yet')}
-${lvBox('Overall P/L since you started', live.days ? `<span class="${live.cum >= 0 ? 'pos' : 'neg'}">${sgn(live.cum)}% · ${live.cum >= 0 ? '+' : '−'}${cu}${fmt(Math.abs(amt * live.cum / 100), 2)}</span>` : '– · scores after the first close')}
-${lvBox('Days scored', String(live.days))}
-${lvBox('Working now', live.pend ? live.pend + ' setup' + (live.pend === 1 ? '' : 's') + ' — scored after the close + a refresh' : 'none recorded')}
+${lvBox('Last trading day', live.lastDay ? `<span class="${live.lastDay.avg >= 0 ? 'pos' : 'neg'}">${sgn(live.lastDay.avg)}% · ${money(live.lastDay.avg)}</span>` : 'nothing scored yet')}
+${lvBox('Total since you started', live.days ? `<span class="${live.cum >= 0 ? 'pos' : 'neg'}">${sgn(live.cum)}% · ${money(live.cum)}</span>` : 'first score after the close')}
+${lvBox('Days counted', String(live.days))}
+${lvBox('Working today', live.pend ? live.pend + ' trade' + (live.pend === 1 ? '' : 's') : 'none')}
 </div></div>` : ''}
-<div class="card" style="padding:14px 16px;margin-bottom:14px">
-<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><b style="font-size:14px">Backtest — the same rules replayed on the ~45 sessions before you started</b><span class="mut" style="font-size:11.5px">history, not your results · ${cu}${fmt(amt, 0)} paper-traded, no slippage</span></div>
-${eq.length > 1 ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;align-items:stretch">
+<h3 style="margin:0 0 8px">Buy today <span class="mut" style="font-weight:400;font-size:13px">· ${buys.length} trade${buys.length === 1 ? '' : 's'}</span></h3>
+${buys.length ? `<div class="grid regime">${cards}</div>
+<div class="mut" style="font-size:12px;margin-top:8px">If every trade hits its stop today, you lose <b class="neg">${cu}${fmt(totRisk, totRisk < 10 ? 2 : 0)}</b> of your ${cu}${fmt(amt, 0)} (${fmt(totRisk / (amt || 1) * 100, 1)}%). Cancel orders that have not filled by the close.</div>` : `<div class="card empty">Nothing worth buying today by these rules — that is a signal too. Check again after the next refresh.</div>`}
+${sells.length ? `<h3 style="margin:18px 0 8px">If you own these, consider selling <span class="mut" style="font-weight:400;font-size:13px">· ${sells.length}</span></h3>
+<div class="tw card"><table id="dtsell" style="min-width:380px"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th>Price</th><th>Sell near</th><th>Track record</th></tr></thead><tbody>${sellRows}</tbody></table></div>` : ''}
+${eq.length > 1 ? `<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:700;font-size:14px">Proof: how these rules did on the 45 days before you started · <span class="${st.net >= 0 ? 'pos' : 'neg'}">${sgn(st.net)}%</span></summary>
+<div class="card" style="padding:14px 16px;margin-top:8px">
+<div class="mut" style="font-size:12px">A test on old prices (${eqDate(eq[0].i)} – ${eqDate(eq[eq.length - 1].i)}): ${cu}${fmt(amt, 0)} followed the same rules every day. No broker fees counted.</div>
+<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;align-items:stretch">
 <div style="flex:1.5;min-width:250px;display:flex;flex-direction:column;justify-content:center">${eqSvg(eq, amt, cu)}
 <div style="display:flex;justify-content:space-between" class="mut"><span style="font-size:10.5px">${eqDate(eq[0].i)}</span><span style="font-size:10.5px">${eqDate(eq[eq.length - 1].i)}</span></div></div>
 <div style="flex:1.6;min-width:240px"><div class="lv" style="margin:0">
-${lvBox('Ends at', cu + fmt(eq[eq.length - 1].v, 2))}
-${lvBox('Net P/L', `<span class="${st.net >= 0 ? 'pos' : 'neg'}">${sgn(st.net)}% · ${st.net >= 0 ? '+' : '−'}${cu}${fmt(Math.abs(amt * st.net / 100), 2)}</span>`)}
-${lvBox('Day P/L (last session)', st.lastAvg == null ? 'no trades' : `<span class="${st.lastAvg >= 0 ? 'pos' : 'neg'}">${sgn(st.lastAvg)}% · ${st.lastAvg >= 0 ? '+' : '−'}${cu}${fmt(Math.abs(amt * st.lastAvg / 100), 2)}</span>`)}
-${lvBox('Win rate', fmt(st.winRate, 0) + '% (' + st.w + ' of ' + st.n + ')')}
-${lvBox('Profit factor', st.pf == null ? '∞' : fmt(st.pf, 2))}
-${lvBox('Max drawdown', `<span class="neg">−${fmt(st.maxDD, 1)}%</span>`)}
-</div></div></div>` : '<div class="mut" style="margin-top:8px">Not enough replay history yet.</div>'}
-</div>
-<h3 style="margin:0 0 8px">Buy today <span class="mut" style="font-weight:400;font-size:13px">· ${buys.length} setup${buys.length === 1 ? '' : 's'}</span></h3>
-${buys.length ? `<div class="grid regime">${cards}</div>
-<div class="mut" style="font-size:12px;margin-top:8px">Worst case — every stop hits: <b class="neg">−${cu}${fmt(totRisk, totRisk < 10 ? 2 : 0)}</b> of your ${cu}${fmt(amt, 0)} (${fmt(totRisk / (amt || 1) * 100, 1)}%). Cancel unfilled orders by the close.</div>` : `<div class="card empty">No buy setups right now — the rules found nothing worth buying today. That is a signal too. Check again after the next refresh.</div>`}
-${sells.length ? `<h3 style="margin:18px 0 8px">If you hold these, exit into strength <span class="mut" style="font-weight:400;font-size:13px">· ${sells.length}</span></h3>
-<div class="tw card"><table id="dtsell" style="min-width:380px"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th>Price</th><th>Exit near</th><th>Overall P/L</th></tr></thead><tbody>${sellRows}</tbody></table></div>` : ''}
-<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:700;font-size:14px">Every stock screened (${rows.length}) — with day P/L and overall P/L</summary>
-<div class="mut" style="font-size:12px;margin:8px 0">The P/L columns replay these exact rules on each stock's last ~45 sessions — how the strategy would have done. Tap a row for why it qualified or was skipped.</div>
-<div class="tw card"><table id="dttab"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th>Price</th><th>Entry</th><th>Target</th><th>Stop</th><th>Day P/L</th><th>Overall P/L</th></tr></thead><tbody>${allRows}</tbody></table></div></details>
-<details style="margin-top:10px"><summary class="mut" style="cursor:pointer;font-size:13px">Read first — how to use this, and the fine print</summary>
-<div class="banner info" style="margin-top:8px">On each Buy card, place three orders together: a limit <b>buy</b>, a limit <b>sell</b>, and a <b>stop-loss</b>, then cancel anything unfilled by the close — day trades do not stay overnight. ${dtMk === 'US' ? "Robinhood's pattern-day-trader rule: 4+ round-trip day trades in 5 business days locks day trading in a margin account under $25,000 equity." : 'Robinhood does not offer NSE stocks — use your Indian broker; most square off intraday (MIS) positions around 3:15 PM IST.'} Buys only fire in stocks the swing engine already rates as uptrends, so if you hold through a miss you are holding a stock the longer-term rules like. Levels are classic floor pivots and Camarilla bands from the last completed session; the record figures are a paper replay (long only, no slippage) — a strict screen, not a promise. Most day traders lose money after costs. Every formula is in the Rules tab.</div></details>`;
+${lvBox('Started with', cu + fmt(amt, 0))}
+${lvBox('Finished with', cu + fmt(eq[eq.length - 1].v, 2))}
+${lvBox('Result', `<span class="${st.net >= 0 ? 'pos' : 'neg'}">${sgn(st.net)}% · ${money(st.net)}</span>`)}
+${lvBox('Trades won', st.w + ' of ' + st.n)}
+${lvBox('For every ' + cu + '1 lost, it won', st.pf == null ? 'all wins' : cu + fmt(st.pf, 2))}
+${lvBox('Worst dip along the way', `<span class="neg">−${fmt(st.maxDD, 1)}%</span>`)}
+</div></div></div></div></details>` : ''}
+<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700;font-size:14px">All ${rows.length} stocks checked today</summary>
+<div class="mut" style="font-size:12px;margin:8px 0">Tap a row to see why it made the cut or was skipped. The last two columns show how these rules did on that stock: the most recent day, and the 45-day total.</div>
+<div class="tw card"><table id="dttab"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th>Price</th><th>Buy at</th><th>Sell at</th><th>Stop</th><th>Last day</th><th>45-day total</th></tr></thead><tbody>${allRows}</tbody></table></div></details>
+<details style="margin-top:10px"><summary class="mut" style="cursor:pointer;font-size:13px">How to place the orders, and the fine print</summary>
+<div class="banner info" style="margin-top:8px">For each Buy card, place three orders in your broker at once: a limit <b>buy</b> at the Buy price, a limit <b>sell</b> at the Sell price, and a <b>stop-loss</b> at the Stop price. If the buy has not filled by the close, cancel it — these trades never stay overnight. ${dtMk === 'US' ? 'Robinhood note: 4 or more same-day round trips within 5 business days needs $25,000+ in a margin account.' : 'Robinhood does not offer Indian stocks — use your Indian broker; intraday positions get squared off around 3:15 PM IST.'} Buys only appear in stocks whose longer trend is up, so if you miss the exit and hold on, you are holding a stock the swing rules like. All records and the proof section are the rules re-played on real past prices, with no broker fees — an honest test, not a promise. Most day traders lose money; keep sizes small and always use the stop. Every formula is in the Rules tab.</div></details>`;
 }
 
 // ---------- Wall Street analyst consensus (Yahoo Finance) ----------
