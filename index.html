@@ -622,6 +622,21 @@ async function refreshAll(auto) {
     done++;
   }));
   await pool(jobs, 6);
+  // When no full chart route works but a Finnhub key is saved, pull live US quotes for the stocks that matter most
+  let fhLiveN = 0;
+  if (!feedRoute && fhKey) {
+    msg.textContent = 'Getting live US quotes via your Finnhub key\u2026';
+    const pri = [];
+    try { dtRows('US').forEach(r2 => { if (r2.rt !== 'Skip') pri.push(r2.s.sym); }); } catch (e) {}
+    ['SPY', 'QQQ'].forEach(s2 => { if (!pri.includes(s2)) pri.push(s2); });
+    Object.values(pf || {}).forEach(h => { if (h.market !== 'IN' && !pri.includes(h.sym) && DATA.rows[h.sym]) pri.push(h.sym); });
+    const list = pri.slice(0, 40);
+    let qi = 0;
+    await Promise.all(Array.from({length: 6}, async () => { while (qi < list.length) { const sy = list[qi++]; try {
+      const q = await tryJson('https://finnhub.io/api/v1/quote?symbol=' + encodeURIComponent(sy) + '&token=' + encodeURIComponent(fhKey), 8000);
+      if (q && q.c > 0 && DATA.rows[sy]) { DATA.rows[sy][1] = r2n(q.c); BASE_PX[sy] = r2n(q.c); fhLiveN++; if (q.t > newest.US) newest.US = q.t; }
+    } catch (e) {} } }));
+  }
   let snapNote = useLJ ? 'Server snapshot. ' : '';
   if (fail >= total && total && LJ && LJ.rows) {
     // Yahoo unreachable from this browser: fall back to the scheduled server snapshot, whatever its age.
@@ -644,7 +659,7 @@ async function refreshAll(auto) {
   const now2 = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
   const feed = $('#feed');
   if (fail >= total && total) { msg.textContent = 'No price feed is reachable right now (' + firstErr + '). Showing the newest saved prices.'; if (feed) feed.innerHTML = ''; }
-  else if (useLJ || snapNote) { msg.textContent = (snapNote || 'Saved prices (updated on a schedule). ') + 'Loaded ' + (total - fail) + ' of ' + total + ' at ' + now2 + '.'; if (feed) feed.innerHTML = '<span style="color:var(--muted)">● Snapshot prices</span>'; }
+  else if (useLJ || snapNote) { msg.textContent = (snapNote || 'Saved prices (updated on a schedule). ') + 'Loaded ' + (total - fail) + ' of ' + total + ' at ' + now2 + '.' + (fhLiveN ? ' Plus live US quotes for ' + fhLiveN + ' key stocks via Finnhub.' : ''); if (feed) feed.innerHTML = fhLiveN ? '<span style="color:var(--tb)">● LIVE US quotes · ' + now2 + '</span>' : '<span style="color:var(--muted)">● Snapshot prices</span>'; }
   else { msg.textContent = 'Live prices · ' + (total - fail) + ' of ' + total + ' updated at ' + now2 + (fail ? ' (' + fail + ' failed)' : '') + '.'; if (feed) feed.innerHTML = '<span style="color:var(--tb)">● LIVE · ' + now2 + '</span>'; }
 }
 $('#rfBtn').addEventListener('click', () => refreshAll(false));
@@ -675,7 +690,9 @@ function fhConnect() {
   ws.onopen = () => {
     fhStatus('Streaming live US trades.');
     fhBadge(true);
-    const us = Object.keys(DATA.rows).filter(k => mktOf(k) === 'US' && !k.startsWith('^'));
+    const us = [];
+    try { dtRows('US').forEach(r2 => { if (r2.rt !== 'Skip') us.push(r2.s.sym); }); } catch (e) {}
+    Object.keys(DATA.rows).filter(k => mktOf(k) === 'US' && !k.startsWith('^')).forEach(k => { if (!us.includes(k)) us.push(k); });
     us.slice(0, 48).forEach(sym => ws.send(JSON.stringify({type: 'subscribe', symbol: sym})));
   };
   ws.onmessage = ev => {
