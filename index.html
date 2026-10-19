@@ -490,6 +490,7 @@ const load = (k, d) => { try { const v = localStorage.getItem(k); return v == nu
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 let wl = new Set(load('sd-wl', []));
 let dlgHist = false;
+let dtMk = load('sd-dtmk', 'US'); if (dtMk !== 'IN') dtMk = 'US';
 let hmBy = load('sd-hm', 'score');
 let view2 = load('sd-v2', 'over');
 let tf = load('sd-tf', '3M');
@@ -521,7 +522,7 @@ function fresh(m) {
   return {age, open, level};
 }
 function chrome() {
-  const m = MK[(tab === 'MY' || tab === 'RULES' || tab === 'DT' || pfOf(tab)) ? 'US' : tab], f = fresh(m);
+  const m = MK[(tab === 'MY' || tab === 'RULES' || pfOf(tab)) ? 'US' : tab === 'DT' ? dtMk : tab], f = fresh(m);
   $('#mdots').innerHTML = ['US', 'IN'].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
   $('#asof').innerHTML = (tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
   $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
@@ -853,6 +854,7 @@ function dtSim(s) {
   if (!nb || !cl || cl.length < 30) return null;
   const off = cl.length - nb;
   let tot = 0, wins = 0, trades = 0, last = null;
+  const lst = [];
   for (let i = Math.max(1, nb - 45); i < nb; i++) {
     if (i === nb - 1) last = null;
     if (off + i - 1 < 21) continue;
@@ -866,18 +868,20 @@ function dtSim(s) {
     const o = s.bars[i * 4], h = s.bars[i * 4 + 1], l = s.bars[i * 4 + 2], c = cl[off + i];
     const fill = o < entry ? o : (l <= entry ? entry : null);
     if (fill == null) continue;
-    let exit;
-    if (fill <= stopL) exit = c;
-    else if (l <= stopL) exit = stopL;
-    else if (h >= tgt) exit = Math.max(tgt, fill);
-    else exit = c;
+    let exit, how;
+    if (fill <= stopL) { exit = c; how = 'gapped through the stop; out at the close'; }
+    else if (l <= stopL) { exit = stopL; how = 'stopped out'; }
+    else if (h >= tgt) { exit = Math.max(tgt, fill); how = 'target hit'; }
+    else { exit = c; how = 'closed out at the bell'; }
     const pl = (exit - fill) / fill * 100;
     trades++; tot += pl; if (pl > 0) wins++;
+    lst.push({i, fill: Math.round(fill * 100) / 100, exit: Math.round(exit * 100) / 100, pl, how});
+    if (lst.length > 10) lst.shift();
     if (i === nb - 1) last = pl;
   }
-  return {last, tot, trades, wins};
+  return {last, tot, trades, wins, list: lst};
 }
-function dtOne(s) {
+function dtOne(s, dmk) {
   if (!s.bars || s.bars.length < 8 || !s.closes || s.closes.length < 20) return null;
   const nb = Math.floor(s.bars.length / 4);
   const H = s.bars[(nb - 1) * 4 + 1], L = s.bars[(nb - 1) * 4 + 2], C = s.closes[s.closes.length - 1];
@@ -887,9 +891,10 @@ function dtOne(s) {
   const R3 = C + rng * 1.1 / 4, S3 = C - rng * 1.1 / 4, R4 = C + rng * 1.1 / 2, S4 = C - rng * 1.1 / 2;
   const atrPct = atr / C * 100, rv = s.avgVol20 ? (s.lastVol / s.avgVol20) : 1, dvol = (s.avgVol20 || 0) * C;
   const rsi2 = rsi2Of(s.closes), bias = s.score || 0;
-  const liquid = dvol >= 25e6 && C >= 5, volOK = atrPct >= 1 && atrPct <= 8;
+  const TH = dmk === 'IN' ? {dv: 2e9, px: 50, txt: '\u20b9200 crore+ traded per day and a \u20b950+ price'} : {dv: 25e6, px: 5, txt: '$25M+ traded per day and a $5+ price'};
+  const liquid = dvol >= TH.dv && C >= TH.px, volOK = atrPct >= 1 && atrPct <= 8;
   let rt = 'Skip', side = 0, why = '';
-  if (!liquid) why = 'Too thin for day trades: needs $25M+ traded per day and a $5+ price.';
+  if (!liquid) why = 'Too thin for day trades: needs ' + TH.txt + '.';
   else if (!volOK) why = atrPct < 1 ? 'Average day range under 1% — too little movement to pay for the trade.' : 'Average day range over 8% — gap risk too high for fixed levels.';
   else if (bias >= 25 && rsi2 != null && rsi2 <= 15) { rt = 'Strong Buy'; side = 1; why = 'Uptrend (swing ' + bias + ') washed out short term (RSI-2 ' + Math.round(rsi2) + '): buy the dip at support.'; }
   else if (bias >= 25 && rsi2 != null && rsi2 <= 40) { rt = 'Buy'; side = 1; why = 'Uptrend (swing ' + bias + ') pulling back (RSI-2 ' + Math.round(rsi2) + '): buy near support.'; }
@@ -920,38 +925,42 @@ function dtOne(s) {
   sc = Math.round(Math.min(100, sc));
   return {s, rt, side, why, entry, target, stop, rr, atrPct, rv, dvol, rsi2, P, R1, S1, R2, S2, R3, S3, R4, S4, sc, sim: dtSim(s)};
 }
-function dtRows() {
-  const m = MK.US, list = m.stocks.slice(), have = {};
+function dtRows(mk) {
+  mk = mk || 'US';
+  const m = MK[mk], list = m.stocks.slice(), have = {};
   list.forEach(s => have[s.sym] = 1);
-  for (const bsym of ['SPY', 'QQQ'].concat(DTX)) if (DATA.rows[bsym] && !have[bsym]) { have[bsym] = 1; const t = mkRec(bsym, DATA.rows[bsym], F); t.market = 'US'; t.industry = (bsym === 'SPY' || bsym === 'QQQ' || bsym === 'TQQQ' || bsym === 'SOXL') ? 'Index / ETF' : 'High-volume movers'; rateOne(t, m.bench, m.bench); list.push(t); }
-  return list.map(dtOne).filter(Boolean).sort((a, b) => ((b.rt !== 'Skip') - (a.rt !== 'Skip')) || b.sc - a.sc);
+  if (mk === 'US') for (const bsym of ['SPY', 'QQQ'].concat(DTX)) if (DATA.rows[bsym] && !have[bsym]) { have[bsym] = 1; const t = mkRec(bsym, DATA.rows[bsym], F); t.market = 'US'; t.industry = (bsym === 'SPY' || bsym === 'QQQ' || bsym === 'TQQQ' || bsym === 'SOXL') ? 'Index / ETF' : 'High-volume movers'; rateOne(t, m.bench, m.bench); list.push(t); }
+  return list.map(s => dtOne(s, mk)).filter(Boolean).sort((a, b) => ((b.rt !== 'Skip') - (a.rt !== 'Skip')) || b.sc - a.sc);
 }
 function dtView() {
-  const rows = dtRows(), act = rows.filter(r => r.rt !== 'Skip');
+  const cu = MK[dtMk].cur;
+  const rows = dtRows(dtMk), act = rows.filter(r => r.rt !== 'Skip');
+  const simAgg = (() => { const xs = rows.map(r => r.sim).filter(x => x && x.trades); if (!xs.length) return null; return {t: xs.reduce((q, x) => q + x.tot, 0) / xs.length, w: xs.reduce((q, x) => q + x.wins, 0), n: xs.reduce((q, x) => q + x.trades, 0)}; })();
   const dtp = r => `<span class="pill ${r === 'Strong Buy' ? 'r-Top-Buy' : r === 'Buy' ? 'r-Buy' : r === 'Sell' ? 'r-Sell' : r === 'Strong Sell' ? 'r-Top-Sell' : 'r-Hold'}">${r}</span>`;
   const f2 = x => x == null ? '–' : fmt(x);
   const trs = rows.map(r => {
     const s = r.s;
     const ttl = 'Yesterday: P ' + fmt(r.P) + ' · R1 ' + fmt(r.R1) + ' · S1 ' + fmt(r.S1) + ' · R3 ' + fmt(r.R3) + ' · S3 ' + fmt(r.S3) + ' · R4 ' + fmt(r.R4) + ' · S4 ' + fmt(r.S4);
     const lv = r.side ? `<td><b>${f2(r.entry)}</b></td><td><b>${f2(r.target)}</b></td><td>${f2(r.stop)}</td><td>${r.rr ? fmt(r.rr, 1) + ':1' : '–'}</td>` : '<td>–</td><td>–</td><td>–</td><td>–</td>';
-    return `<tr data-s="${esc(s.sym)}" data-m="US" title="${ttl}"><td class="lt"><b>${esc(s.sym)}</b> <span class="mut">${esc((s.name || '').slice(0, 14))}</span></td><td class="lt">${dtp(r.rt)}</td><td class="lt mut" style="max-width:250px;white-space:normal;font-size:11.5px">${esc(r.why)}</td><td>$${fmt(s.px)}</td>${lv}${(x => x && x.trades ? `<td class="${(x.last || 0) >= 0 ? 'pos' : 'neg'}">${x.last == null ? '\u2013' : sgn(x.last) + '%'}</td><td class="${x.tot >= 0 ? 'pos' : 'neg'}" title="${x.trades} trades, ${x.wins} wins over ~45 sessions"><b>${sgn(x.tot)}%</b></td>` : '<td>\u2013</td><td>\u2013</td>')(r.sim)}<td>${fmt(r.atrPct, 1)}%</td><td>${fmt(r.rv, 1)}×</td><td>${r.rsi2 == null ? '–' : Math.round(r.rsi2)}</td><td>${s.score}</td></tr>`;
+    return `<tr data-s="${esc(s.sym)}" data-m="${dtMk}" title="${ttl}"><td class="lt"><b>${esc(s.sym)}</b> <span class="mut">${esc((s.name || '').slice(0, 14))}</span></td><td class="lt">${dtp(r.rt)}</td><td class="lt mut" style="max-width:250px;white-space:normal;font-size:11.5px">${esc(r.why)}</td><td>${cu}${fmt(s.px)}</td>${lv}${(x => x && x.trades ? `<td class="${(x.last || 0) >= 0 ? 'pos' : 'neg'}">${x.last == null ? '\u2013' : sgn(x.last) + '%'}</td><td class="${x.tot >= 0 ? 'pos' : 'neg'}" title="${x.trades} trades, ${x.wins} wins over ~45 sessions"><b>${sgn(x.tot)}%</b></td>` : '<td>\u2013</td><td>\u2013</td>')(r.sim)}<td>${fmt(r.atrPct, 1)}%</td><td>${fmt(r.rv, 1)}×</td><td>${r.rsi2 == null ? '–' : Math.round(r.rsi2)}</td><td>${s.score}</td></tr>`;
   }).join('');
-  let amt = parseFloat(load('sd-dtamt', 1000)) || 1000;
+  let amt = parseFloat(load('sd-dtamt-' + dtMk, dtMk === 'IN' ? 50000 : load('sd-dtamt', 1000))) || (dtMk === 'IN' ? 50000 : 1000);
   const buys = rows.filter(r => r.side === 1);
   const wsum = buys.reduce((t, r) => t + r.sc, 0) || 1;
   const arow = buys.map(r => {
     const d = amt * r.sc / wsum, sh = d / r.entry, risk = sh * (r.entry - r.stop);
-    return `<tr data-s="${esc(r.s.sym)}" data-m="US"><td class="lt"><b>${esc(r.s.sym)}</b></td><td class="lt">${dtp(r.rt)}</td><td><b>$${fmt(d, 0)}</b></td><td>${fmt(sh, sh < 10 ? 3 : 1)} sh @ ${fmt(r.entry)}</td><td class="neg">-$${fmt(risk, 2)}</td></tr>`;
+    return `<tr data-s="${esc(r.s.sym)}" data-m="${dtMk}"><td class="lt"><b>${esc(r.s.sym)}</b></td><td class="lt">${dtp(r.rt)}</td><td><b>${cu}${fmt(d, 0)}</b></td><td>${fmt(sh, sh < 10 ? 3 : 1)} sh @ ${fmt(r.entry)}</td><td class="neg">-${cu}${fmt(risk, 2)}</td></tr>`;
   }).join('');
   const trisk = buys.reduce((t, r) => t + (amt * r.sc / wsum / r.entry) * (r.entry - r.stop), 0);
-  const alloc = `<div class="card" style="margin:10px 0;padding:14px 16px"><div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Money to split across today's Buy setups<input id="dtAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:130px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"></label><button class="btn" id="dtSplit" type="button">Split it</button><span class="mut" style="font-size:12px">Split is weighted by each setup's rank score. Robinhood allows fractional shares.</span></div>
-${buys.length ? `<div class="tw" style="margin-top:10px"><table id="dtalloc" style="min-width:560px"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th>Put in</th><th>Limit buy</th><th>Risk if stopped</th></tr></thead><tbody>${arow}</tbody></table></div><div class="mut" style="font-size:12px;margin-top:6px">If every stop hits, the day costs about <b class="neg">$${fmt(trisk, 2)}</b> of your $${fmt(amt, 0)} (${fmt(trisk / (amt || 1) * 100, 1)}%).</div>` : '<div class="mut" style="font-size:12.5px;margin-top:8px">No Buy setups right now, so nothing to split. Setups change daily after a refresh.</div>'}</div>`;
-  return `<h2>Day trading — USA</h2>
-<div class="banner warn"><b>Read first.</b> Levels are built from the <b>last completed session</b> — press ↻ Refresh prices before the 9:30 ET open so they use yesterday's bar. Robinhood's pattern-day-trader rule: 4+ round-trip day trades in 5 business days locks day trading in a margin account under $25,000 equity. Most day traders lose money after costs — size small and honour the stop. Not advice; the page places no orders.</div>
+  const alloc = `<div class="card" style="margin:10px 0;padding:14px 16px"><div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Money to split across today's Buy setups<input id="dtAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:130px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"></label><button class="btn" id="dtSplit" type="button">Split it</button><span class="mut" style="font-size:12px">Split is weighted by each setup's rank score. ${dtMk === 'US' ? 'Robinhood allows fractional shares.' : 'NSE trades whole shares \u2014 round down.'}</span></div>
+${buys.length ? `<div class="tw" style="margin-top:10px"><table id="dtalloc" style="min-width:560px"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th>Put in</th><th>Limit buy</th><th>Risk if stopped</th></tr></thead><tbody>${arow}</tbody></table></div><div class="mut" style="font-size:12px;margin-top:6px">If every stop hits, the day costs about <b class="neg">${cu}${fmt(trisk, 2)}</b> of your ${cu}${fmt(amt, 0)} (${fmt(trisk / (amt || 1) * 100, 1)}%).</div>` : '<div class="mut" style="font-size:12.5px;margin-top:8px">No Buy setups right now, so nothing to split. Setups change daily after a refresh.</div>'}</div>`;
+  return `<h2>Day trading — ${dtMk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
+<div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-dtm="${k}" aria-selected="${dtMk === k}">${l}</button>`).join('')}</div>
+<div class="banner warn"><b>Read first.</b> Levels are built from the <b>last completed session</b> — press ↻ Refresh prices before the 9:30 ET open so they use yesterday's bar. ${dtMk === 'US' ? "Robinhood's pattern-day-trader rule: 4+ round-trip day trades in 5 business days locks day trading in a margin account under $25,000 equity." : 'Robinhood does not offer NSE stocks \u2014 use your Indian broker; most square off intraday (MIS) positions around 3:15\u20133:20 PM IST.'} Most day traders lose money after costs — size small and honour the stop. Not advice; the page places no orders.</div>
 ${alloc}
 <div class="banner info"><b>How to use with limit orders:</b> on a <b>Buy</b> row, set a limit <b>buy at Entry</b>, a limit <b>sell at Target</b>, and a stop-loss at Stop — cancel anything unfilled by the close (day trades do not stay overnight). <b>Sell</b> rows are exit/avoid levels for stock you hold — this page stays long-only and Robinhood cash accounts cannot short. Buy setups are only taken in stocks the swing engine already rates as uptrends — so if a trade goes against you and you choose to hold instead of stopping out, you are holding a stock the longer-term rules like (it becomes a swing position). <b>Last day / Overall P/L</b> replay these exact rules on each stock's past ~45 sessions (fixed stake per trade, long side only) so you can judge them before risking money — a paper replay, not your account. Hover a row for all of yesterday's levels; tap it for the full drill-down.</div>
-<div class="mut" style="font-size:12.5px;margin:2px 0 8px"><b>${act.length}</b> setup${act.length === 1 ? '' : 's'} today out of ${rows.length} screened · ranked by tradability (range, liquidity, volume) + edge (trend, RSI-2 stretch) · formulas in the Rules tab</div>
-<div class="tw card" data-list><table id="dttab"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th class="lt">Setup</th><th>Price</th><th>Entry</th><th>Target</th><th>Stop</th><th>R:R</th><th>Last day P/L</th><th>Overall P/L</th><th>Range</th><th>Rel vol</th><th>RSI-2</th><th>Swing</th></tr></thead><tbody>${trs}</tbody></table></div>`;
+<div class="mut" style="font-size:12.5px;margin:2px 0 8px"><b>${act.length}</b> setup${act.length === 1 ? '' : 's'} today out of ${rows.length} screened · ranked by tradability (range, liquidity, volume) + edge (trend, RSI-2 stretch)${simAgg ? ` · rules replay: <b class="${simAgg.t >= 0 ? 'pos' : 'neg'}">${sgn(simAgg.t)}%</b> avg per stock over ~45 sessions (${simAgg.w}/${simAgg.n} wins)` : ''} · formulas in the Rules tab</div>
+<div class="tw card"><table id="dttab"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th class="lt">Setup</th><th>Price</th><th>Entry</th><th>Target</th><th>Stop</th><th>R:R</th><th>Last day P/L</th><th>Overall P/L</th><th>Range</th><th>Rel vol</th><th>RSI-2</th><th>Swing</th></tr></thead><tbody>${trs}</tbody></table></div>`;
 }
 
 // ---------- Wall Street analyst consensus (Yahoo Finance) ----------
@@ -1151,8 +1160,10 @@ function renderAll() {
       bindBoard();
     }
   } else if (tab === 'DT') {
-    const sv = () => { const v = parseFloat($('#dtAmt').value); if (v >= 0) { save('sd-dtamt', v); renderAll(); } };
+    const sv = () => { const v = parseFloat($('#dtAmt').value); if (v >= 0) { save('sd-dtamt-' + dtMk, v); renderAll(); } };
     if ($('#dtSplit')) { $('#dtSplit').addEventListener('click', sv); $('#dtAmt').addEventListener('keydown', e => { if (e.key === 'Enter') sv(); }); }
+    document.querySelectorAll('[data-dtm]').forEach(el => el.addEventListener('click', () => { dtMk = el.dataset.dtm; save('sd-dtmk', dtMk); renderAll(); }));
+    ['#dttab', '#dtalloc'].forEach(idq => { const t = $(idq); if (t) t.addEventListener('click', e => { const tr = e.target.closest('tr[data-s]'); if (tr) openDT(tr.dataset.s, tr.dataset.m || dtMk); }); });
   } else if (pfOf(tab)) {
     const go = async () => { $('#pfMsg').textContent = 'Saving…'; const msg = await addHolding($('#pfSym').value, $('#pfMk').value, $('#pfQty').value, $('#pfCost').value); $('#pfMsg').textContent = msg || 'Added.'; if (!msg && !db) renderAll(); };
     if ($('#pfBtn')) {
@@ -1237,7 +1248,7 @@ Everything is computed from the last completed session's high H, low L and close
 <li><b>The plan</b> — Buy rows: limit buy at S3 (S1 if price already broke below it), limit sell at R1 (the pivot for deeper entries), stop at S4 or half an ATR under entry, whichever is lower; cancel unfilled orders by the close. Sell rows mirror at R3/R4 and are exit/avoid levels — the page stays long-only.</li>
 <li><b>Tradability screen</b> — $25M+ average daily dollar volume, price ≥ $5, average day range 1–8% of price. Anything else is marked Skip with the reason.</li>
 <li><b>Ranking</b> — tradability (day range near 3%, dollar volume, relative volume) plus edge (trend strength and RSI-2 stretch).</li>
-<li><b>Universe</b> — the swing universe plus ~57 of the most actively day-traded US names (big banks, crypto plays, AI/quantum, EV, airlines, travel, TQQQ/SOXL) — about 100 candidates screened every day.</li>
+<li><b>Universe</b> — the swing universe plus ~57 of the most actively day-traded US names (big banks, crypto plays, AI/quantum, EV, airlines, travel, TQQQ/SOXL) — about 100 candidates screened every day. The <b>India</b> view screens the NSE universe with the same formulas (liquidity bar: ₹200 crore+ a day, ₹50+ price); NSE brokers square off intraday positions around 3:15 PM IST. Tapping any row opens the day-trade drill-down — chart with today's levels drawn on it, the plan, the full pivot ladder and the stock's own replay record — kept separate from the swing drill-down, which is one more tap from there.</li>
 <li><b>P/L columns</b> — a paper replay of these exact rules on each stock's last ~45 sessions: fill at the Camarilla S3 limit (or the open on a gap through it), stop at S4, sell at R1 or the close, long side only, fixed stake per trade, stops checked before targets (the cautious reading of a daily bar). "Last day" is the most recent session's trade; "Overall" is the running total. It ignores slippage and assumes fills at your limits — treat it as a strict screen, not a promise.</li>
 <li><b>Money split</b> — the amount you enter is divided across today's Buy setups in proportion to their rank score, with fractional share counts at each entry and the total cost if every stop hits.</li></ul>
 Levels assume yesterday's bar, so refresh before the 9:30 ET open. <b>Robinhood PDT rule:</b> 4+ round-trip day trades within 5 business days marks the account a pattern day trader; in a margin account under $25,000 that blocks further day trades. Studies consistently find most day traders lose money after costs — these are levels for discipline, not predictions.</div>
@@ -1425,6 +1436,47 @@ ${peers ? `<div style="margin-top:12px"><b>Same industry</b><div class="peers" i
   document.querySelectorAll('[data-tf]').forEach(el => el.addEventListener('click', () => { tf = el.dataset.tf; save('sd-tf', tf); openDetail(sym, code); }));
   document.querySelectorAll('[data-cs]').forEach(el => el.addEventListener('click', () => { cstyle = el.dataset.cs; save('sd-cs', cstyle); openDetail(sym, code); }));
   const pe = $('#peers'); if (pe) pe.addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (b) openDetail(b.dataset.p, code); });
+}
+function openDT(sym, code) {
+  const m = MK[code], cu = m.cur;
+  let s = m.stocks.find(x => x.sym === sym) || (DATA.rows[sym] ? (() => { const t = mkRec(sym, DATA.rows[sym], F); t.market = code; t.cur = cu; t.industry = 'Day-trade list'; rateOne(t, m.bench, m.bench); return t; })() : null);
+  if (!s) return;
+  const r = dtOne(s, code);
+  if (!r) return;
+  const dtp = rr => `<span class="pill ${rr === 'Strong Buy' ? 'r-Top-Buy' : rr === 'Buy' ? 'r-Buy' : rr === 'Sell' ? 'r-Sell' : rr === 'Strong Sell' ? 'r-Top-Sell' : 'r-Hold'}">${rr}</span>`;
+  const extra = [{v: r.P, color: 'currentColor', label: 'P', dash: '1 3'}];
+  if (r.side === 1) extra.push({v: r.entry, color: 'var(--tb)', label: 'entry'}, {v: r.target, color: 'var(--tb)', label: 'target', dash: '2 4'}, {v: r.stop, color: 'var(--ts)', label: 'stop'});
+  else if (r.side === -1) extra.push({v: r.entry, color: 'var(--ts)', label: 'exit'}, {v: r.target, color: 'var(--tb)', label: 'target', dash: '2 4'}, {v: r.stop, color: 'var(--ts)', label: 'stop', dash: '2 4'});
+  else extra.push({v: r.S3, color: 'var(--tb)', label: 'S3', dash: '2 4'}, {v: r.R3, color: 'var(--ts)', label: 'R3', dash: '2 4'});
+  const a2 = ma(s);
+  const ci = s.bars ? candleChart(s, a2, extra, 22, cstyle) : null;
+  const sim = r.sim, dts = DATA.dates[code] || [];
+  const dl = t2 => new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short'}).format(new Date(t2 * 1000));
+  const trows = sim && sim.list && sim.list.length ? sim.list.slice(-8).reverse().map(t2 => `<tr><td class="lt">${dts[t2.i] ? dl(dts[t2.i]) : 'bar ' + t2.i}</td><td style="text-align:right">${fmt(t2.fill)}</td><td style="text-align:right">${fmt(t2.exit)}</td><td style="text-align:right" class="${t2.pl >= 0 ? 'pos' : 'neg'}"><b>${sgn(t2.pl)}%</b></td><td class="lt mut">${t2.how}</td></tr>`).join('') : '';
+  const lv = r.side ? lvBox(r.side === 1 ? 'Limit buy (entry)' : 'Exit / fade level', cu + fmt(r.entry)) + lvBox(r.side === 1 ? 'Limit sell (target)' : 'Cover target', cu + fmt(r.target)) + lvBox('Stop', cu + fmt(r.stop)) + lvBox('Reward : risk', fmt(r.rr, 1) + ':1') + lvBox('Risk per share', cu + fmt(Math.abs(r.entry - r.stop))) + lvBox('Avg day range', fmt(r.atrPct, 1) + '%')
+    : lvBox('Avg day range', fmt(r.atrPct, 1) + '%') + lvBox('Rel volume', fmt(r.rv, 1) + '×') + lvBox('RSI-2', r.rsi2 == null ? '–' : String(Math.round(r.rsi2))) + lvBox('Swing score', String(s.score));
+  const lvls = [['R4 · breakout / short stop', r.R4], ['R3 · fade zone', r.R3], ['R2', r.R2], ['R1 · first target up', r.R1], ['Pivot P', r.P], ['S1 · first support', r.S1], ['S2', r.S2], ['S3 · buy zone', r.S3], ['S4 · long stop', r.S4]];
+  $('#dc').innerHTML = `<div class="dh"><div><div style="font-size:20px;font-weight:700">${esc(showSym(s.sym))} <span class="mut" style="font-size:14px;font-weight:400">${esc(s.name)}</span></div>
+<div style="margin-top:4px">${dtp(r.rt)} <span class="mut">day-trade view · rank ${r.sc} · swing score ${s.score}</span></div>
+<div class="big" style="margin-top:6px">${cu}${fmt(s.px)} <span class="${s.chg >= 0 ? 'pos' : 'neg'}" style="font-size:14px">${sgn(s.chg)}% on the day</span></div></div><button class="x" aria-label="Close" id="cl">×</button></div>
+<div class="dbody">
+<div class="tfrow"><span class="mut" style="font-size:12px">Last 22 sessions, with today's trade levels</span><span style="flex:1"></span><button class="chip ${cstyle === 'candle' ? 'on' : ''}" data-dcs="candle" type="button">Candles</button><button class="chip ${cstyle === 'line' ? 'on' : ''}" data-dcs="line" type="button">Line</button></div>
+<div class="chartwrap" id="cw">${ci ? ci.svg : chart(s, a2, extra)}<div id="ctip"></div></div>
+<div class="plan"><b>${r.side === 1 ? "Today's plan: buy the dip" : r.side === -1 ? "Today's plan: exit / avoid into strength" : 'No day trade today'}</b><div style="margin-top:4px">${esc(r.why)}${r.side === 1 ? ' Place the limit buy, the limit sell and the stop together, and cancel anything unfilled by the close.' : ''}</div><div class="lv">${lv}</div></div>
+<div class="plan"><b>How these rules have paid on ${esc(showSym(s.sym))}</b><div class="mut" style="font-size:12px;margin:2px 0 6px">Paper replay of the day-trade rules on the last ~45 sessions: long side only, fixed stake per trade, stops counted before targets, no slippage.</div>
+${sim && sim.trades ? `<div class="lv">${lvBox('Last day P/L', sim.last == null ? 'no trade' : sgn(sim.last) + '%')}${lvBox('Overall P/L (~45 sessions)', sgn(sim.tot) + '%')}${lvBox('Trades', String(sim.trades))}${lvBox('Win rate', fmt(sim.wins / sim.trades * 100, 0) + '%')}</div>
+${trows ? `<div class="tw" style="margin-top:8px"><table style="min-width:440px;width:100%"><thead><tr><th class="lt">Day</th><th style="text-align:right">Filled</th><th style="text-align:right">Exit</th><th style="text-align:right">P/L</th><th class="lt">How it ended</th></tr></thead><tbody>${trows}</tbody></table></div>` : ''}` : '<div class="mut">No qualifying trades in the replay window.</div>'}</div>
+<div style="margin-top:12px"><b>Levels from the last completed session</b><div class="lv">${lvls.map(x => lvBox(x[0], cu + fmt(x[1]))).join('')}</div></div>
+<button class="btn ghost" id="dtsw" type="button" style="width:100%;margin-top:12px">Open the swing (multi-week) drill-down →</button>
+<div class="mut" style="font-size:12px;margin-top:12px">Built from the last completed session's high, low and close. Not advice; the page places no orders.</div>
+<button class="btn ghost" id="cl2" type="button" style="width:100%;margin-top:8px">← Back to the board</button></div>`;
+  const d = $('#dlg');
+  if (!d.open) { d.showModal(); try { history.pushState({dlg: 1}, ''); dlgHist = true; } catch (e) {} }
+  $('#cl').addEventListener('click', () => d.close());
+  $('#cl2').addEventListener('click', () => d.close());
+  $('#dtsw').addEventListener('click', () => openDetail(sym, code));
+  if (ci) bindChart(ci);
+  document.querySelectorAll('[data-dcs]').forEach(el => el.addEventListener('click', () => { cstyle = el.dataset.dcs; save('sd-cs', cstyle); openDT(sym, code); }));
 }
 $('#dlg').addEventListener('click', e => { if (e.target.id === 'dlg') e.target.close(); });
 $('#dlg').addEventListener('close', () => { if (dlgHist) { dlgHist = false; try { history.back(); } catch (e) {} } });
