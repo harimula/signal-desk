@@ -590,7 +590,12 @@ const mktOf = k => (k.endsWith('.NS') || k.endsWith('.BO') || k.startsWith('^N')
 const curSym = c => c === 'INR' ? '₹' : c === 'USD' ? '$' : (c || '') + ' ';
 async function pool(jobs, nC) { let i = 0; await Promise.all(Array.from({length: nC}, async () => { while (i < jobs.length) { const jb = jobs[i++]; await jb(); } })); }
 let lastRefresh = 0, rfBusy = false;
-function refreshInfo() { const el = $('#rfMsg'); if (!el || rfBusy || !lastRefresh) return; el.textContent = 'Last refreshed ' + ageText(Date.now() - lastRefresh) + ' ago.'; }
+function refreshInfo() {
+  const el = $('#rfMsg'); if (!el || rfBusy) return;
+  let t = lastRefresh ? 'Last refreshed ' + ageText(Date.now() - lastRefresh) + ' ago.' : '';
+  if (arMin > 0) t += (mOpen(MK.US) || mOpen(MK.IN)) ? ' Next auto-refresh in ' + Math.max(1, Math.ceil((arNext - Date.now()) / 60000)) + ' min.' : ' Auto-refresh is paused while both markets are closed.';
+  if (t) el.textContent = t.trim();
+}
 async function refreshAll(auto) {
   if (rfBusy) return; rfBusy = true;
   const btn = $('#rfBtn'), msg = $('#rfMsg'); btn.disabled = true;
@@ -668,6 +673,7 @@ async function refreshAll(auto) {
   }
   save('sd-my', custom);
   rfBusy = false; btn.disabled = false; lastRefresh = Date.now();
+  if (arMin > 0) arNext = Date.now() + arMin * 60000;
   analyzeAll(); renderAll(); syncRecs();
   const now2 = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
   const feed = $('#feed');
@@ -678,15 +684,19 @@ async function refreshAll(auto) {
 $('#rfBtn').addEventListener('click', () => refreshAll(false));
 $('#pxIn').value = proxy;
 $('#pxSave').addEventListener('click', () => { proxy = $('#pxIn').value.trim(); save('sd-proxy', proxy); $('#rfMsg').textContent = proxy ? 'Proxy saved. Press Refresh prices.' : 'Proxy cleared. Using Yahoo directly.'; });
-let arMin = +load('sd-ar', 0) || 0, arTimer = null;
+let arMin = +load('sd-ar', 0) || 0, arTimer = null, arNext = 0;
 function setAuto(min) {
   arMin = min; save('sd-ar', min); const sel = $('#arSel'); if (sel) sel.value = String(min);
   if (arTimer) { clearInterval(arTimer); arTimer = null; }
-  if (min > 0) arTimer = setInterval(() => { if (!document.hidden && (mOpen(MK.US) || mOpen(MK.IN))) refreshAll(true); }, min * 60000);
+  if (min > 0) {
+    arNext = Date.now() + min * 60000;
+    arTimer = setInterval(() => { arNext = Date.now() + min * 60000; if (!document.hidden && (mOpen(MK.US) || mOpen(MK.IN))) refreshAll(true); }, min * 60000);
+  } else arNext = 0;
 }
-$('#arSel').addEventListener('change', e => setAuto(+e.target.value));
+$('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMin > 0 && (mOpen(MK.US) || mOpen(MK.IN))) refreshAll(true); });
 setAuto(arMin);
-setInterval(refreshInfo, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (mOpen(MK.US) || mOpen(MK.IN))) refreshAll(true); });
+setInterval(refreshInfo, 15000);
 
 // ---------- Finnhub live streaming (optional, US stocks) ----------
 let fhKey = load('sd-fh', ''), fhWS = null, fhPend = {};
