@@ -195,7 +195,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
   <div class="hright"><div class="asof" id="clock"></div><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="0">Auto: off</option><option value="5">Auto: 5 min</option><option value="10">Auto: 10 min</option><option value="30">Auto: 30 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
 </header>
 <div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
-<div class="wrap"><details id="pxBox" style="font-size:12px;margin:2px 0 4px"><summary class="mut" style="cursor:pointer">Live data settings (optional)</summary><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="pxIn" placeholder="Optional proxy URL (https://…workers.dev)" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="pxSave" type="button">Save</button></div><div class="mut" style="margin-top:4px">Nothing to set up: when you press ↻ Refresh, the page finds a free route to live Yahoo prices on its own and the badge above shows ● LIVE. For the most reliable private route, deploy the free worker.js from this repo on Cloudflare and paste its URL above.</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><input id="fhIn" placeholder="Optional Finnhub API key — streams live US prices" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="fhSave" type="button">Save</button></div><div class="mut" id="fhSt" style="margin-top:4px">Free key at finnhub.io — US stocks tick live while the page is open. India stays on Yahoo.</div></details></div>
+<div class="wrap"><details id="pxBox" style="font-size:12px;margin:2px 0 4px"><summary class="mut" style="cursor:pointer">Live data settings (optional)</summary><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input id="pxIn" placeholder="Optional proxy URL (https://…workers.dev)" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="pxSave" type="button">Save</button></div><div class="mut" style="margin-top:4px">Nothing to set up: when you press ↻ Refresh, the page finds a free route to live Yahoo prices on its own and the badge above shows ● LIVE. For the most reliable private route, deploy the free worker.js from this repo on Cloudflare and paste its URL above.</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><input id="fhIn" placeholder="Optional Finnhub API key — streams live US prices" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="fhSave" type="button">Save</button></div><div class="mut" id="fhSt" style="margin-top:4px">Free key at finnhub.io — US prices tick live, trade by trade, while the page is open.</div><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><input id="fmpIn" placeholder="Financial Modeling Prep key — live quotes on refresh" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text)"><button class="btn ghost" id="fmpSave" type="button">Save</button></div><div class="mut" id="fmpSt" style="margin-top:4px">Free key at financialmodelingprep.com — every ↻ Refresh pulls live prices for all stocks.</div></details></div>
 <div id="banners"></div>
 
 <div class="tabs" role="tablist" id="tabs"></div>
@@ -622,9 +622,21 @@ async function refreshAll(auto) {
     done++;
   }));
   await pool(jobs, 6);
-  // When no full chart route works but a Finnhub key is saved, pull live US quotes for the stocks that matter most
-  let fhLiveN = 0;
-  if (!feedRoute && fhKey) {
+  // When no full chart route works, saved API keys still deliver live quotes
+  let fhLiveN = 0, qSrc = '';
+  const fmpKey = load('sd-fmp', '');
+  if (!feedRoute && fmpKey) {
+    msg.textContent = 'Getting live quotes via your FMP key\u2026';
+    const all = Object.keys(DATA.rows);
+    for (let ci = 0; ci < all.length; ci += 40) {
+      try {
+        const q = await tryJson('https://financialmodelingprep.com/api/v3/quote/' + all.slice(ci, ci + 40).map(encodeURIComponent).join(',') + '?apikey=' + encodeURIComponent(fmpKey), 15000);
+        if (Array.isArray(q)) for (const it of q) { const sy = it.symbol; if (it.price > 0 && DATA.rows[sy]) { DATA.rows[sy][1] = r2n(it.price); BASE_PX[sy] = r2n(it.price); fhLiveN++; const mk3 = mktOf(sy); if (it.timestamp > newest[mk3]) newest[mk3] = it.timestamp; } }
+      } catch (e) {}
+    }
+    if (fhLiveN) qSrc = 'FMP';
+  }
+  if (!feedRoute && !fhLiveN && fhKey) {
     msg.textContent = 'Getting live US quotes via your Finnhub key\u2026';
     const pri = [];
     try { dtRows('US').forEach(r2 => { if (r2.rt !== 'Skip') pri.push(r2.s.sym); }); } catch (e) {}
@@ -636,6 +648,7 @@ async function refreshAll(auto) {
       const q = await tryJson('https://finnhub.io/api/v1/quote?symbol=' + encodeURIComponent(sy) + '&token=' + encodeURIComponent(fhKey), 8000);
       if (q && q.c > 0 && DATA.rows[sy]) { DATA.rows[sy][1] = r2n(q.c); BASE_PX[sy] = r2n(q.c); fhLiveN++; if (q.t > newest.US) newest.US = q.t; }
     } catch (e) {} } }));
+    if (fhLiveN) qSrc = 'Finnhub';
   }
   let snapNote = useLJ ? 'Server snapshot. ' : '';
   if (fail >= total && total && LJ && LJ.rows) {
@@ -659,7 +672,7 @@ async function refreshAll(auto) {
   const now2 = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
   const feed = $('#feed');
   if (fail >= total && total) { msg.textContent = 'No price feed is reachable right now (' + firstErr + '). Showing the newest saved prices.'; if (feed) feed.innerHTML = ''; }
-  else if (useLJ || snapNote) { msg.textContent = (snapNote || 'Saved prices (updated on a schedule). ') + 'Loaded ' + (total - fail) + ' of ' + total + ' at ' + now2 + '.' + (fhLiveN ? ' Plus live US quotes for ' + fhLiveN + ' key stocks via Finnhub.' : ''); if (feed) feed.innerHTML = fhLiveN ? '<span style="color:var(--tb)">● LIVE US quotes · ' + now2 + '</span>' : '<span style="color:var(--muted)">● Snapshot prices</span>'; }
+  else if (useLJ || snapNote) { msg.textContent = (snapNote || 'Saved prices (updated on a schedule). ') + 'Loaded ' + (total - fail) + ' of ' + total + ' at ' + now2 + '.' + (fhLiveN ? ' Plus live quotes for ' + fhLiveN + ' stocks via ' + qSrc + '.' : ''); if (feed) feed.innerHTML = fhLiveN ? '<span style="color:var(--tb)">● LIVE quotes (' + qSrc + ') · ' + now2 + '</span>' : '<span style="color:var(--muted)">● Snapshot prices</span>'; }
   else { msg.textContent = 'Live prices · ' + (total - fail) + ' of ' + total + ' updated at ' + now2 + (fail ? ' (' + fail + ' failed)' : '') + '.'; if (feed) feed.innerHTML = '<span style="color:var(--tb)">● LIVE · ' + now2 + '</span>'; }
 }
 $('#rfBtn').addEventListener('click', () => refreshAll(false));
@@ -712,6 +725,7 @@ setInterval(() => {
 }, 2500);
 const fhi = $('#fhIn'); if (fhi) { fhi.value = fhKey; $('#fhSave').addEventListener('click', () => { fhKey = $('#fhIn').value.trim(); save('sd-fh', fhKey); fhStatus(fhKey ? 'Key saved.' : 'Key cleared.'); fhConnect(); }); }
 if (fhKey) fhConnect();
+const fmpi = $('#fmpIn'); if (fmpi) { fmpi.value = load('sd-fmp', ''); $('#fmpSave').addEventListener('click', () => { const v = $('#fmpIn').value.trim(); save('sd-fmp', v); $('#fmpSt').textContent = v ? 'FMP key saved. Press \u21bb Refresh prices to get live quotes.' : 'FMP key cleared.'; }); }
 
 // ---------- tabs ----------
 function renderTabs() {
