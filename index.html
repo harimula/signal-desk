@@ -939,6 +939,10 @@ function dtView() {
   const dtp = r => `<span class="pill ${r === 'Strong Buy' ? 'r-Top-Buy' : r === 'Buy' ? 'r-Buy' : r === 'Sell' ? 'r-Sell' : r === 'Strong Sell' ? 'r-Top-Sell' : 'r-Hold'}">${r}</span>`;
   let amt = parseFloat(load('sd-dtamt-' + dtMk, dtMk === 'IN' ? 50000 : load('sd-dtamt', 1000))) || (dtMk === 'IN' ? 50000 : 1000);
   const wsum = buys.reduce((t, r) => t + r.sc, 0) || 1;
+  const sims = rows.map(r => r.sim).filter(x => x && x.trades);
+  const lasts = sims.filter(x => x.last != null);
+  const dayAvg = lasts.length ? lasts.reduce((t, x) => t + x.last, 0) / lasts.length : null;
+  const ovAvg = sims.length ? sims.reduce((t, x) => t + x.tot, 0) / sims.length : null;
   let totRisk = 0;
   const cards = buys.map(r => {
     const s = r.s, d = amt * r.sc / wsum, sh = d / r.entry, risk = sh * (r.entry - r.stop);
@@ -953,10 +957,11 @@ function dtView() {
 <div class="kv"><span>Limit sell at</span><b class="pos">${cu}${fmt(r.target)}</b></div>
 <div class="kv"><span>Stop-loss at</span><b class="neg">${cu}${fmt(r.stop)}</b></div>
 <div class="kv"><span>If stopped, you lose</span><b class="neg">${cu}${fmt(risk, risk < 10 ? 2 : 0)}</b></div>
-${x && x.trades ? `<div class="kv"><span>These rules on ${esc(showSym(s.sym))}, 45d</span><b class="${x.tot >= 0 ? 'pos' : 'neg'}">${sgn(x.tot)}% · ${Math.round(x.wins / x.trades * 100)}% wins</b></div>` : ''}
+${x && x.trades ? `<div class="kv" style="margin-top:6px;border-top:1px solid var(--line);padding-top:6px"><span>Day P/L</span><b class="${(x.last || 0) >= 0 ? 'pos' : 'neg'}">${x.last == null ? 'no trade' : sgn(x.last) + '%'}</b></div>
+<div class="kv"><span>Overall P/L (45d)</span><b class="${x.tot >= 0 ? 'pos' : 'neg'}">${sgn(x.tot)}% · ${Math.round(x.wins / x.trades * 100)}% wins</b></div>` : ''}
 </div>`;
   }).join('');
-  const sellRows = sells.map(r => `<tr data-s="${esc(r.s.sym)}" data-m="${dtMk}" style="cursor:pointer"><td class="lt"><b>${esc(showSym(r.s.sym))}</b></td><td class="lt">${dtp(r.rt)}</td><td>${cu}${fmt(r.s.px)}</td><td><b>${cu}${fmt(r.entry)}</b></td></tr>`).join('');
+  const sellRows = sells.map(r => `<tr data-s="${esc(r.s.sym)}" data-m="${dtMk}" style="cursor:pointer"><td class="lt"><b>${esc(showSym(r.s.sym))}</b></td><td class="lt">${dtp(r.rt)}</td><td>${cu}${fmt(r.s.px)}</td><td><b>${cu}${fmt(r.entry)}</b></td><td>${(x => x && x.trades ? `<span class="${x.tot >= 0 ? 'pos' : 'neg'}">${sgn(x.tot)}%</span>` : '–')(r.sim)}</td></tr>`).join('');
   const f2 = x => x == null ? '–' : fmt(x);
   const allRows = rows.map(r => { const s = r.s, x = r.sim;
     return `<tr data-s="${esc(s.sym)}" data-m="${dtMk}" title="${esc(r.why)}" style="cursor:pointer"><td class="lt"><b>${esc(showSym(s.sym))}</b></td><td class="lt">${dtp(r.rt)}</td><td>${cu}${fmt(s.px)}</td><td>${f2(r.entry)}</td><td>${f2(r.target)}</td><td>${f2(r.stop)}</td>${x && x.trades ? `<td class="${(x.last || 0) >= 0 ? 'pos' : 'neg'}">${x.last == null ? '–' : sgn(x.last) + '%'}</td><td class="${x.tot >= 0 ? 'pos' : 'neg'}"><b>${sgn(x.tot)}%</b></td>` : '<td>–</td><td>–</td>'}</tr>`;
@@ -965,11 +970,19 @@ ${x && x.trades ? `<div class="kv"><span>These rules on ${esc(showSym(s.sym))}, 
 <div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-dtm="${k}" aria-selected="${dtMk === k}">${l}</button>`).join('')}</div>
 <div class="mut" style="font-size:12.5px;margin:8px 0 12px">Press ↻ Refresh prices ${dtMk === 'US' ? 'before the 9:30 ET open' : 'after the NSE close'} for fresh levels. Tap any stock for the full picture. Rule-based levels, not advice.</div>
 <div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Money to trade with (${cu})</b><input id="dtAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="dtSplit" type="button">Split it</button><span class="mut" style="font-size:12px">divided across today's buys, strongest setup gets most</span></div></div>
+<div class="grid regime" style="margin-bottom:14px">
+<div class="card mt"><div class="mth"><span class="msym">Day P/L</span><span class="mut" style="font-size:11px">last session</span></div>
+<div class="mpx ${(dayAvg || 0) >= 0 ? 'pos' : 'neg'}">${dayAvg == null ? '–' : sgn(dayAvg) + '%'}</div>
+<div class="mut" style="font-size:12px">${dayAvg == null ? 'no trades last session' : 'average of ' + lasts.length + ' trade' + (lasts.length === 1 ? '' : 's') + ' · ≈ ' + (dayAvg >= 0 ? '+' : '−') + cu + fmt(Math.abs(amt * dayAvg / 100), 2) + ' on ' + cu + fmt(amt, 0)}</div></div>
+<div class="card mt"><div class="mth"><span class="msym">Overall P/L</span><span class="mut" style="font-size:11px">~45 sessions</span></div>
+<div class="mpx ${(ovAvg || 0) >= 0 ? 'pos' : 'neg'}">${ovAvg == null ? '–' : sgn(ovAvg) + '%'}</div>
+<div class="mut" style="font-size:12px">${ovAvg == null ? 'no history yet' : 'average per stock · ≈ ' + (ovAvg >= 0 ? '+' : '−') + cu + fmt(Math.abs(amt * ovAvg / 100), 2) + ' on ' + cu + fmt(amt, 0)}</div></div>
+</div>
 <h3 style="margin:0 0 8px">Buy today <span class="mut" style="font-weight:400;font-size:13px">· ${buys.length} setup${buys.length === 1 ? '' : 's'}</span></h3>
 ${buys.length ? `<div class="grid regime">${cards}</div>
 <div class="mut" style="font-size:12px;margin-top:8px">Worst case — every stop hits: <b class="neg">−${cu}${fmt(totRisk, totRisk < 10 ? 2 : 0)}</b> of your ${cu}${fmt(amt, 0)} (${fmt(totRisk / (amt || 1) * 100, 1)}%). Cancel unfilled orders by the close.</div>` : `<div class="card empty">No buy setups right now — the rules found nothing worth buying today. That is a signal too. Check again after the next refresh.</div>`}
 ${sells.length ? `<h3 style="margin:18px 0 8px">If you hold these, exit into strength <span class="mut" style="font-weight:400;font-size:13px">· ${sells.length}</span></h3>
-<div class="tw card"><table id="dtsell" style="min-width:380px"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th>Price</th><th>Exit near</th></tr></thead><tbody>${sellRows}</tbody></table></div>` : ''}
+<div class="tw card"><table id="dtsell" style="min-width:380px"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th>Price</th><th>Exit near</th><th>Overall P/L</th></tr></thead><tbody>${sellRows}</tbody></table></div>` : ''}
 <details style="margin-top:18px"><summary style="cursor:pointer;font-weight:700;font-size:14px">Every stock screened (${rows.length}) — with day P/L and overall P/L</summary>
 <div class="mut" style="font-size:12px;margin:8px 0">The P/L columns replay these exact rules on each stock's last ~45 sessions — how the strategy would have done. Tap a row for why it qualified or was skipped.</div>
 <div class="tw card"><table id="dttab"><thead><tr><th class="lt">Stock</th><th class="lt">Signal</th><th>Price</th><th>Entry</th><th>Target</th><th>Stop</th><th>Day P/L</th><th>Overall P/L</th></tr></thead><tbody>${allRows}</tbody></table></div></details>
