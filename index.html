@@ -1083,7 +1083,7 @@ function dtView() {
 <div class="mth"><span class="msym">${esc(showSym(s.sym))}</span>${dtp(r.rt)}</div>
 <div class="mut" style="font-size:12px">${esc((s.name || '').slice(0, 26))}</div>
 <div style="margin-top:9px;font-size:15px"><b>Put in ${cu}${fmt(d, 0)}</b> <span class="mut" style="font-size:12px">≈ ${fmt(sh, sh < 10 ? 2 : 1)} shares</span></div>
-<div class="lv" style="margin:8px 0 0;grid-template-columns:repeat(4,1fr);gap:6px">
+<div class="lv" style="margin:8px 0 0;grid-template-columns:repeat(2,1fr);gap:6px">
 <div><small>Now</small><b>${fmt(s.px)}</b><small class="${s.chg >= 0 ? 'pos' : 'neg'}" style="color:inherit">${sgn(s.chg)}%</small></div>
 <div><small>Buy at</small><b>${fmt(r.entry)}</b></div>
 <div><small>Sell at</small><b class="pos">${fmt(r.target)}</b><small style="color:var(--tb)">+${fmt(upP, 1)}%</small></div>
