@@ -760,7 +760,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792442136';
+const BUILD_V = '1792442309';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1371,7 +1371,7 @@ function board(stocks) {
     const x = a ? `<span class="${a.above ? 'pos' : 'neg'}">${a.above ? '▲' : '▼'} ${sgn(a.diff)}%</span>${a.crossed ? `<span class="tag">${a.crossed === 'up' ? 'crossed up' : 'crossed down'}</span>` : ''}` : '–';
     return `<tr data-s="${esc(s.sym)}" data-m="${s.market}"${s.custom ? ' data-c="1"' : ''}><td><button class="star ${wl.has(s.sym) ? 'on' : ''}" data-star="${esc(s.sym)}" aria-label="Watch ${esc(s.sym)}">${wl.has(s.sym) ? '★' : '☆'}</button></td>
 <td><b>${esc(showSym(s.sym))}</b> <span class="mut">${esc((s.name || '').slice(0, 26))}</span></td><td>${pill(s.rating)}</td><td class="${s.score >= 0 ? 'pos' : 'neg'}">${s.score}</td>
-<td>${c}${fmt(s.px)}</td><td class="${s.chg >= 0 ? 'pos' : 'neg'}">${sgn(s.chg)}</td><td>${rcP}</td><td>${rcC}</td><td>${an && an.key ? esc(an.key) + ' <span class="mut">' + an.n + '</span>' : '–'}</td><td class="${an && an.up >= 0 ? 'pos' : 'neg'}">${an && an.up != null ? sgn(an.up) + '%' : '–'}</td><td class="spc">${spark(s.closes, 84, 24, 60)}</td><td>${fmt(s.rsi, 0)}</td>
+${(si => si.phase === 'after' || si.phase === 'pre' ? `<td>${c}${fmt(s.lastClose)}<div class="${(si.extPct || 0) >= 0 ? 'pos' : 'neg'}" style="font-size:10.5px;white-space:nowrap;line-height:1.3">${si.phase === 'after' ? '\u263e' : '\u2600\ufe0e'} ${fmt(s.px)} ${sgn(si.extPct)}%</div></td><td class="${(si.dayPct || 0) >= 0 ? 'pos' : 'neg'}">${sgn(si.dayPct)}</td>` : `<td>${c}${fmt(s.px)}</td><td class="${s.chg >= 0 ? 'pos' : 'neg'}">${sgn(s.chg)}</td>`)(sessInfo(s))}<td>${rcP}</td><td>${rcC}</td><td>${an && an.key ? esc(an.key) + ' <span class="mut">' + an.n + '</span>' : '–'}</td><td class="${an && an.up >= 0 ? 'pos' : 'neg'}">${an && an.up != null ? sgn(an.up) + '%' : '–'}</td><td class="spc">${spark(s.closes, 84, 24, 60)}</td><td>${fmt(s.rsi, 0)}</td>
 <td>${a ? fmt(a.v) : '–'}</td><td>${x}</td>
 <td class="${s.r20 >= 0 ? 'pos' : 'neg'}">${sgn(s.r20)}</td><td class="${s.r60 >= 0 ? 'pos' : 'neg'}">${sgn(s.r60)}</td><td>${fmt(s.fromHi, 1)}%</td><td>${en}</td><td>${st}</td><td class="mut">${esc(s.industry)}</td></tr>`;
   }).join('') : `<tr><td colspan="20" class="empty">Nothing matches these filters.</td></tr>`;
