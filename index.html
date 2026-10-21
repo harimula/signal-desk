@@ -787,7 +787,7 @@ async function refreshAll(auto) {
   rfBusy = false; btn.disabled = false; lastRefresh = Date.now();
   if (arMin > 0) arNext = Date.now() + arMin * 60000;
   analyzeAll();
-  (function rIdle() { if (uxBusy()) { setTimeout(rIdle, 400); return; } renderAll(); })();
+  (function rIdle() { if (uxBusy()) { setTimeout(rIdle, 400); return; } renderAll(true); })();
   syncRecs();
   const now2 = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
   const feed = $('#feed');
@@ -812,7 +812,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792609482';
+const BUILD_V = '1792610079';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -868,7 +868,7 @@ setInterval(() => {
   fhPend = {};
   const nowS = Math.floor(Date.now() / 1000);
   if (nowS > BASE_STAMP.US.liveAt) { BASE_STAMP.US.liveAt = nowS; BASE_STAMP.US.liveLocal = tzFmt(Date.now(), DATA.markets.US.tz, 'ET') + ' (live)'; BASE_STAMP.US.note = 'US prices are streaming live from Finnhub; indicators use daily bars through the last completed session.'; }
-  analyzeAll(); renderAll(); syncRecs();
+  analyzeAll(); renderAll(true); syncRecs();
   for (const [sym, d9] of flash) document.querySelectorAll(`[data-s="${CSS.escape(sym)}"]`).forEach(el => el.classList.add(d9 >= 0 ? 'tkup' : 'tkdn'));
 }, 2500);
 const fhi = $('#fhIn'); if (fhi) { fhi.value = fhKey; $('#fhSave').addEventListener('click', () => { fhKey = $('#fhIn').value.trim(); save('sd-fh', fhKey); fhStatus(fhKey ? 'Key saved.' : 'Key cleared.'); fhConnect(); goliveCheck(); }); }
@@ -1693,8 +1693,8 @@ ${(si => si.has ? `<td>${c}${fmt(s.lastClose)}<div class="${(si.extPct || 0) >= 
 <td>${a ? fmt(a.v) : '–'}</td><td>${x}</td>
 <td class="${s.r20 >= 0 ? 'pos' : 'neg'}">${sgn(s.r20)}</td><td class="${s.r60 >= 0 ? 'pos' : 'neg'}">${sgn(s.r60)}</td><td>${fmt(s.fromHi, 1)}%</td><td>${en}</td><td>${st}</td><td class="mut">${esc(s.industry)}</td></tr>`;
   }).join('') : `<tr><td colspan="20" class="empty">Nothing matches these filters.</td></tr>`;
-  $('#tb thead').innerHTML = head;
-  $('#tb tbody').innerHTML = body;
+  morphSet($('#tb thead'), head);
+  morphSet($('#tb tbody'), body);
   twNav2($('#view'));
   document.querySelectorAll('#tb th').forEach(th => { th.classList.toggle('sorted', th.dataset.k === sortKey); th.dataset.dir = sortDir < 0 ? ' ▼' : ' ▲'; });
 }
@@ -1723,6 +1723,30 @@ function renderAppBar() {
   if (el) el.innerHTML = APPS.map(([k, l]) => `<button class="vtab" role="tab" data-appk="${k}" aria-selected="${app === k}">${l}</button>`).join('') + `<button class="vtab" id="thBtn" type="button" style="margin-left:auto" aria-label="Switch theme">\ud83c\udf13</button>`;
   thApply();
 }
+function morphEl(t, f) {
+  for (const at of Array.from(t.attributes)) { if (at.name === 'open') continue; if (f.getAttribute(at.name) !== at.value) f.setAttribute(at.name, at.value); }
+  for (const at of Array.from(f.attributes)) { if (at.name === 'open') continue; if (!t.hasAttribute(at.name)) f.removeAttribute(at.name); }
+  morphKids(t, f);
+}
+function morphKids(t, f) {
+  const tc = Array.from(t.childNodes);
+  for (let i = 0; i < tc.length; i++) {
+    const tn = tc[i], fn = f.childNodes[i];
+    if (!fn) { f.appendChild(tn.cloneNode(true)); continue; }
+    if (fn.nodeType === 1 && fn.classList && fn.classList.contains('twwrap') && tn.nodeType === 1 && tn.classList && tn.classList.contains('tw')) {
+      const inner = fn.querySelector('.tw');
+      if (inner) { morphEl(tn, inner); continue; }
+    }
+    if (tn.nodeType !== fn.nodeType || (tn.nodeType === 1 && tn.nodeName !== fn.nodeName)) { f.replaceChild(tn.cloneNode(true), fn); continue; }
+    if (tn.nodeType === 1) {
+      if (tn.id === 'tb' && fn.id === 'tb') continue;
+      morphEl(tn, fn);
+    } else if (fn.nodeValue !== tn.nodeValue) fn.nodeValue = tn.nodeValue;
+  }
+  while (f.childNodes.length > tc.length) f.removeChild(f.lastChild);
+}
+function morphSet(el, html) { const tpl = document.createElement('template'); tpl.innerHTML = html; morphKids(tpl.content, el); }
+function viewHTML() { return tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {
   root.querySelectorAll('.tw').forEach(tw => {
     let wrap = tw.parentElement;
@@ -1755,7 +1779,17 @@ function fitTool() {
 }
 let rszT = null;
 window.addEventListener('resize', () => { clearTimeout(rszT); rszT = setTimeout(() => { try { if (app === 'desk') twNav2($('#view')); else fitTool(); } catch (e2) {} }, 250); });
-function renderAll() {
+function renderAll(bg) {
+  if (bg) {
+    if (app !== 'desk') return;
+    const v0 = $('#view');
+    if (v0.dataset.rv === app + ':' + tab) {
+      morphSet(v0, viewHTML());
+      if ($('#tb')) board(currentStocks());
+      twNav2(v0);
+      return;
+    }
+  }
   renderAppBar();
   const deskOn = app === 'desk';
   document.querySelectorAll('header, .subhead, #banners, #tabs, #tools, #foot, #golive, #pxBox').forEach(el => { el.style.display = deskOn ? '' : 'none'; });
@@ -1780,7 +1814,7 @@ function renderAll() {
   const sameView = view.dataset.rv === app + ':' + tab, scY = window.scrollY, scX = window.scrollX;
   const twPos = sameView ? Array.from(view.querySelectorAll('.tw')).map(el => [el.scrollTop, el.scrollLeft]) : [];
   view.dataset.rv = app + ':' + tab;
-  view.innerHTML = tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab);
+  view.innerHTML = viewHTML();
   view.querySelectorAll('details[data-k]').forEach(d2 => { if (openKeys.has(d2.dataset.k)) d2.open = true; });
   if (sameView) {
     Array.from(view.querySelectorAll('.tw')).forEach((el, i) => { const p2 = twPos[i]; if (p2) { el.scrollTop = p2[0]; el.scrollLeft = p2[1]; } });
