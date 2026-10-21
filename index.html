@@ -825,7 +825,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792620093';
+const BUILD_V = '1792622437';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1462,7 +1462,7 @@ ${opRows ? `<details data-k="opdd" style="margin-top:12px"><summary style="curso
   return `<h2 style="margin-bottom:6px">Option trading — ${mk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
 <div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-opm="${k}" aria-selected="${mk === k}">${l}</button>`).join('')}</div>
 <div class="mut" style="font-size:12.5px;margin:8px 0 12px">Buying CALLs and PUTs only — you can never lose more than the premium you pay. Same engine as Day trading, with stricter filters. Tap a card for the chart. Not advice; this page places no orders.</div>
-<div class="card" style="padding:12px 16px;margin-bottom:4px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Premium money (${cu})</b><input id="opAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="opSplit" type="button">Split it</button><span class="mut" style="font-size:12px">total premium at risk — split across today's picks, strongest first</span></div></div>
+${mk === 'US' ? evCard() : ''}<div class="card" style="padding:12px 16px;margin-bottom:4px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Premium money (${cu})</b><input id="opAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="opSplit" type="button">Split it</button><span class="mut" style="font-size:12px">total premium at risk — split across today's picks, strongest first</span></div></div>
 ${plCard}
 ${grid(calls, 'CALL', 'Buy CALLs today', 'No stock passes the CALL rules today — that is a signal too. An uptrend stock must be washed out short-term before a CALL is worth paying for.')}
 ${grid(puts, 'PUT', 'Buy PUTs today', 'No stock passes the PUT rules today. A downtrend stock must be stretched upward before a PUT is worth paying for.')}
@@ -1554,7 +1554,7 @@ ${(si => `<div><small>${si.nowLab}</small><b>${fmt(s.px)}</b><small class="${(si
   return `<h2 style="margin-bottom:6px">Day trading — ${dtMk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
 <div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-dtm="${k}" aria-selected="${dtMk === k}">${l}</button>`).join('')}</div>
 <div class="mut" style="font-size:12.5px;margin:8px 0 12px">Press ↻ Refresh prices ${dtMk === 'US' ? 'before the market opens (9:30 ET)' : 'after the market closes'} to get today's numbers. Tap any stock for details. Not advice.</div>
-<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Money to trade with (${cu})</b><input id="dtAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="dtSplit" type="button">Split it</button><span class="mut" style="font-size:12px">divided across today's buys — the strongest one gets the most</span></div></div>
+${dtMk === 'US' ? evCard() : ''}<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Money to trade with (${cu})</b><input id="dtAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="dtSplit" type="button">Split it</button><span class="mut" style="font-size:12px">divided across today's buys — the strongest one gets the most</span></div></div>
 ${live ? `<div class="card" style="padding:14px 16px;margin-bottom:14px">
 <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><b style="font-size:14px">Your P/L — started ${dFmt2(live.start)}</b><span class="mut" style="font-size:11.5px">scored from real prices after each trading day ends</span></div>
 <div class="lv" style="margin:10px 0 0">
@@ -1801,6 +1801,42 @@ function morphKids(t, f) {
   while (f.childNodes.length > tc.length) f.removeChild(f.lastChild);
 }
 function morphSet(el, html) { const tpl = document.createElement('template'); tpl.innerHTML = html; morphKids(tpl.content, el); }
+// ---------- market events & headlines (events.json + Finnhub general news when a key is saved) ----------
+let evList = null, evHeads = [], evAt = 0, evBusy = false;
+const EV_KEYS = {war: ['war', 'missile', 'invasion', 'airstrike', 'troops', 'nuclear', 'terror', 'escalat'], policy: ['white house', 'tariff', 'executive order', 'trade war', 'sanction', 'shutdown', 'debt ceiling'], fed: ['fomc', 'federal reserve', 'powell', 'rate hike', 'rate cut', 'fed minutes'], macro: ['cpi', 'inflation', 'jobs report', 'payrolls', 'gdp', 'recession'], crisis: ['bank failure', 'default', 'crash', 'circuit breaker', 'bankrupt']};
+const evCats = t => { t = (' ' + (t || '') + ' ').toLowerCase(); return Object.keys(EV_KEYS).filter(k => EV_KEYS[k].some(w => t.includes(w))); };
+async function evLoad() {
+  if (evBusy || Date.now() - evAt < 120000) return;
+  evBusy = true; evAt = Date.now();
+  try { const r = await fetch('events.json?t=' + Math.floor(Date.now() / 3600e3), {cache: 'no-store'}); if (r.ok) evList = (await r.json()).events || []; } catch (e) {}
+  try {
+    const k = typeof fhKey !== 'undefined' ? fhKey : '';
+    if (k) {
+      const r = await fetch('https://finnhub.io/api/v1/news?category=general&token=' + encodeURIComponent(k));
+      if (r.ok) { const a = await r.json(); evHeads = (Array.isArray(a) ? a : []).map(x => ({t: x.datetime * 1000, h: x.headline, s: x.source, u: x.url, c: evCats(x.headline + ' ' + (x.summary || ''))})).filter(x => x.c.length && Date.now() - x.t < 6 * 3600e3).slice(0, 6); }
+    }
+  } catch (e) {}
+  evBusy = false;
+  if (app === 'desk' && (tab === 'DT' || tab === 'OP' || tab === 'BOT')) renderAll(true);
+}
+setInterval(() => { if (app === 'desk' && (tab === 'DT' || tab === 'OP' || tab === 'BOT') && !document.hidden) evLoad(); }, 120000);
+const EV_ADVICE = {FOMC: 'Fed decision 2:00pm, press conference 2:30. Expect big swings: avoid new options today; the bot pauses 1:30–3:00pm and closes options at 1:50.', CPI: 'Inflation data at 8:30am moves everything at the open. Wait until about 10:15 before entering; use half size until 11:00.', JOBS: 'Jobs report at 8:30am. Wait until about 10:15 before entering; use half size until 11:00.', PPI: 'Producer prices at 8:30am. Wait until about 10:15 before entering; use half size until 11:00.', MINUTES: 'Fed minutes at 2:00pm can jolt prices. Avoid new entries 1:45–2:30pm.'};
+function evCard() {
+  evLoad();
+  if (!evList) return '';
+  const d0 = new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York'}).format(new Date());
+  const today = evList.filter(e => e.date === d0), next = evList.filter(e => e.date > d0).slice(0, 4);
+  const dl = d => new Intl.DateTimeFormat('en-GB', {weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC'}).format(new Date(d + 'T12:00:00Z'));
+  const days = d => Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(d0 + 'T12:00:00Z')) / 864e5);
+  const tl = t => { const [h, m] = t.split(':').map(Number); return (h > 12 ? h - 12 : h) + ':' + String(m).padStart(2, '0') + (h >= 12 ? 'pm' : 'am'); };
+  const warn = today.length || evHeads.length;
+  return `<div class="card" style="padding:12px 16px;margin:0 0 14px;${warn ? 'border-left:4px solid var(--s)' : ''}">
+<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b style="font-size:13.5px">📰 Market events &amp; news</b><span class="mut" style="font-size:11.5px">scheduled releases + live headlines that move markets</span></div>
+${today.length ? today.map(e => `<div style="margin-top:8px;font-size:13px"><b class="neg">TODAY ${tl(e.time)} · ${esc(e.title)}</b><div class="mut" style="font-size:12px">${EV_ADVICE[e.type] || ''}</div></div>`).join('') : '<div class="mut" style="margin-top:6px;font-size:12.5px">No scheduled Fed, CPI or jobs release today.</div>'}
+${next.length ? `<div style="margin-top:8px;font-size:12px;line-height:1.7">${next.map(e => `<span style="display:inline-block;margin-right:14px"><b>${dl(e.date)}</b> ${tl(e.time)} · ${esc(e.title)} <span class="mut">(${days(e.date) === 1 ? 'tomorrow' : 'in ' + days(e.date) + ' days'})</span></span>`).join(' ')}</div>` : ''}
+${evHeads.length ? `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px;font-size:12.5px"><b>Headlines that can move the market</b>${evHeads.map(x => `<div style="margin-top:3px"><span class="mut">${new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit'}).format(new Date(x.t))}</span> · <span class="pill r-Hold" style="font-size:10px">${x.c.join(', ')}</span> <a href="${esc(x.u)}" target="_blank" rel="noopener" style="color:var(--text)">${esc(x.h)}</a> <span class="mut">${esc(x.s || '')}</span></div>`).join('')}</div>` : (typeof fhKey !== 'undefined' && !fhKey ? '<div class="mut" style="font-size:11.5px;margin-top:6px">Live headlines appear here once your Finnhub key is saved (⚡ Live prices panel).</div>' : '')}
+</div>`;
+}
 // ---------- Bot trades tab: reads bot/journal.json written by the paper-trading bot ----------
 let botJ = null, botErr = '', botBusy = false, botAt = 0;
 async function botLoad(force) {
@@ -1860,7 +1896,14 @@ ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins 
   }).join('');
   const acts = (J.acts || []).slice(-12).reverse();
   const log = acts.length ? `<details data-k="botlog" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700;font-size:13.5px">What the bot did recently</summary><div class="card" style="padding:10px 14px;margin-top:6px;font-size:12.5px;line-height:1.7">${acts.map(a => `<div><span class="mut">${tET(a.t)}</span> · ${esc(a.m)}</div>`).join('')}</div></details>` : '';
-  return head + boxes + openTbl +
+  const env = J.env;
+  const envCard = env ? `<div class="card" style="padding:12px 16px;margin:0 0 14px;${env.block ? 'border-left:4px solid var(--ts)' : env.reasons && env.reasons.length ? 'border-left:4px solid var(--s)' : ''}">
+<b style="font-size:13.5px">\ud83d\udee1\ufe0f Bot\u2019s market check</b> <span class="mut" style="font-size:11.5px">\u00b7 ${tET(env.at)} ET${env.spyPct != null ? ' \u00b7 SPY ' + sgn(env.spyPct) + '%' : ''}${env.newsOk === false ? ' \u00b7 news feed unavailable' : ''}</span>
+<div style="margin-top:6px;font-size:13px">${env.block ? '<b class="neg">PAUSED \u2014 no new trades</b>' : '<b class="pos">Trading normally</b>'}</div>
+${(env.reasons || []).map(r => `<div class="mut" style="font-size:12.5px;margin-top:3px">\u2022 ${esc(r)}</div>`).join('')}
+${(env.flagged || []).length ? `<div style="margin-top:8px;font-size:12px"><b>Headlines it reacted to or is watching</b>${env.flagged.slice(0, 6).map(f => `<div style="margin-top:2px"><span class="mut">${tET(f.t)}</span> \u00b7 <span class="pill r-Hold" style="font-size:10px">${esc(f.cats.join(', '))}</span> ${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" style="color:var(--text)">${esc(f.headline)}</a>` : esc(f.headline)}</div>`).join('')}</div>` : ''}
+</div>` : '';
+  return head + evCard() + envCard + boxes + openTbl +
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? '' : ' · paper account (fake money)'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }

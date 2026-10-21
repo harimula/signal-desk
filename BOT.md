@@ -83,3 +83,27 @@ touching a trigger, it runs a full cycle. That stays under Alpaca's 200-requests
 Profit-taking sell orders rest at Alpaca, so they fill at broker speed regardless.
 Keep the repo public: public repos get unlimited free Actions minutes (a private repo would
 burn ~8,000 minutes a month this way).
+
+## News & events guard
+The bot does not trade blind into the news. Before every entry it checks:
+
+**Scheduled releases** (`events.json`, from the Fed and BLS calendars):
+- **Fed decision days (FOMC)** — half size all day, no new options, closes options at
+  1:50pm, no new trades 1:30–3:00pm (statement 2:00, press conference 2:30).
+- **CPI / jobs / PPI days** (8:30am releases) — no entries until 10:15, half size until 11:00.
+- **Fed minutes** — paused 1:45–2:30pm.
+
+**Live headlines** (Alpaca's Benzinga news feed, included with your Alpaca keys), scanned every minute:
+- War / geopolitics, White House & policy (tariffs, executive orders, sanctions, shutdowns),
+  or crisis headlines (bank failures, defaults, crashes, halts) in the last 30 minutes —
+  **all new entries pause for 30 minutes**.
+- Fed / macro headlines are tracked and shown, and feed the scheduled-event rules above.
+- **Company news**: a stock with fresh news in the last 2 hours, or earnings talk in the last
+  3 days, is skipped — it can gap through any level.
+
+**Market tone** (SPY vs yesterday's close):
+- SPY down 1% or more — no new stock buys or CALLs (PUTs still allowed).
+- SPY up 1% or more — no new PUTs.
+
+Everything it decided shows in the **Bot trades** tab under "Bot's market check".
+Add each new year's FOMC/CPI dates to `events.json` when the agencies publish them.

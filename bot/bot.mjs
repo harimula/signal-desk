@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import { signalAt, signalShortAt, r2d } from './strategy.mjs';
 import { buildJournal } from './journal.mjs';
+import { guard, loadEvents, symbolRisk } from './news.mjs';
 
 const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
 export const HAVE_KEYS = !!(KEY && SECRET);
@@ -57,6 +58,7 @@ const act = m => {                                          // same message with
   seen.set(k, Date.now()); console.log(m); acts.push({ t: new Date().toISOString(), m });
 };
 let lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
+let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null;
 
 // One full decision cycle: manage every position, then look for new entries.
 export async function botCycle({ journal = false } = {}) {
@@ -102,6 +104,29 @@ async function run() {
   const openOrders = await T('/v2/orders?status=open&limit=500');
   const hist = await T('/v2/orders?status=all&limit=500&direction=desc&after=' + new Date(Date.now() - 45 * 864e5).toISOString());
   const stockPos = positions.filter(p => !isOpt(p.symbol)), optPos = positions.filter(p => isOpt(p.symbol));
+
+  // ---- news & events guard (calendar + live headlines + SPY tone) ----
+  if (Date.now() - newsCache.at > 60000) {
+    try {
+      const since = h => new Date(Date.now() - h * 3600e3).toISOString();
+      const mk = (await D(`/v1beta1/news?limit=50&sort=desc&start=${since(3)}`)).news || [];
+      const sy = (await D(`/v1beta1/news?symbols=${UNIVERSE.join(',')}&limit=50&sort=desc&start=${since(72)}`)).news || [];
+      newsCache = { at: Date.now(), market: mk, syms: sy, ok: true };
+    } catch (e) { newsCache = { ...newsCache, at: Date.now(), ok: false }; act('News feed unavailable (' + e.message.slice(0, 60) + ') \u2014 calendar rules still apply'); }
+  }
+  let spyPct = null;
+  try {
+    if (!spyPrev || spyPrev.day !== TODAY) {
+      const sb = ((await D(`/v2/stocks/bars?symbols=SPY&timeframe=1Day&start=${new Date(Date.now() - 10 * 864e5).toISOString()}&limit=20&feed=iex&sort=asc`)).bars || {}).SPY || [];
+      const prev = sb.filter(b => b.t.slice(0, 10) < ymdDash(Date.now())).pop();
+      spyPrev = prev ? { day: TODAY, c: prev.c } : null;
+    }
+    const st = (((await D('/v2/stocks/trades/latest?symbols=SPY&feed=iex')).trades) || {}).SPY;
+    if (spyPrev && st) spyPct = (st.p / spyPrev.c - 1) * 100;
+  } catch (e) {}
+  const G = lastGuard = guard({ events: loadEvents(), todayDash: ymdDash(Date.now()), mins: MINS, headlines: newsCache.market, spyPct });
+  G.spyPct = spyPct; G.newsOk = newsCache.ok;
+  for (const r of G.reasons) act('Market check: ' + r);
   const sellsFor = sym => openOrders.filter(o => o.symbol === sym && o.side === 'sell');
   const cid = o => o.client_order_id || '';
 
@@ -156,6 +181,7 @@ async function run() {
     if (plpc >= OPT_TP) await out(`${p.symbol} +${plpc.toFixed(0)}% \u2014 take profit`);
     else if (plpc <= -50) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
     else if (capHit) await out(`${p.symbol} daily loss cap hit \u2014 closing options`);
+    else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options before the volatility`);
     else if (exp <= TODAY) await out(`${p.symbol} expires today \u2014 out`);
     else if (day < TODAY && MINS >= 940) await out(`${p.symbol} time stop \u2014 options are held one night at most`);
     else if (!sells.length) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
@@ -163,7 +189,8 @@ async function run() {
 
   // ---- new entries ----
   if (capHit) { act(`Daily loss cap ${LOSS_CAP}% hit (${dayPct.toFixed(2)}%) — no new trades today`); return; }
-  if (MINS < 585 || MINS >= 900) { console.log('Outside the entry window (9:45–15:00 ET).'); return; }
+  if (MINS < G.minStart || MINS >= 900) { console.log('Outside the entry window.'); return; }
+  if (G.block) { console.log('Paused by market check.'); return; }
 
   if (!barsCache.bars || Date.now() - barsCache.at > 30 * 60000) {         // daily bars: refresh every 30 min
     const start = new Date(Date.now() - 130 * 864e5).toISOString();
@@ -196,11 +223,13 @@ async function run() {
   // stock day trades
   if (STK_ON) {
     let slots = MAX_POS - stockPos.length - openOrders.filter(o => o.side === 'buy' && !isOpt(o.symbol)).length;
-    for (const s of longs) {
+    for (const s of (G.noLongs ? [] : longs)) {
       if (slots <= 0) break;
       if (stockPos.some(p => p.symbol === s.sym) || openOrders.some(o => o.symbol === s.sym)) continue;
+      const risk = symbolRisk(s.sym, newsCache.syms);
+      if (risk) { act(`${s.sym} skipped \u2014 ${risk}`); continue; }
       if (todays.filter(o => cid(o).startsWith('sd-s-' + s.sym + '-')).length >= MAX_ENTRIES) continue;
-      const qty = Math.floor(BUDGET / s.entry);
+      const qty = Math.floor(BUDGET * G.budget / s.entry);
       if (qty < 1) continue;
       await send({ symbol: s.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(s.entry), time_in_force: 'day',
         client_order_id: `sd-s-${s.sym}-${Math.round(s.target * 100)}-${Math.round(s.stop * 100)}-${TODAY}-${rid()}` }, `${s.sym} stock day trade (RSI-2 ${s.r2})`);
@@ -209,13 +238,14 @@ async function run() {
   }
 
   // options: CALL on long setups, PUT on short setups — only once the stock touches the level
-  if (OPT_ON) {
+  if (OPT_ON && !G.noOptions) {
     let slots = MAX_OPT - optPos.length - openOrders.filter(o => o.side === 'buy' && isOpt(o.symbol)).length;
     const hasOptOn = und => optPos.some(p => OPT_RE.exec(p.symbol)[1] === und) || openOrders.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === und);
-    const tries = longs.map(s => ({ ...s, type: 'call' })).concat(shorts.map(s => ({ ...s, type: 'put' })));
+    const tries = (G.noLongs ? [] : longs.map(s => ({ ...s, type: 'call' }))).concat(G.noPuts ? [] : shorts.map(s => ({ ...s, type: 'put' })));
     for (const s of tries) {
       if (slots <= 0) break;
       if (!s.px || hasOptOn(s.sym)) continue;
+      if (symbolRisk(s.sym, newsCache.syms)) continue;
       const touched = s.type === 'call' ? s.px <= s.entry * 1.002 : s.px >= s.entry * 0.998;
       if (!touched) continue;
       if (todays.filter(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym).length >= MAX_ENTRIES) continue;
@@ -228,7 +258,7 @@ async function run() {
       if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote — skipped`); continue; }
       if ((q.ap - q.bp) / q.ap > 0.2) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}) — skipped`); continue; }
       const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.03));
-      const qty = Math.floor(OPT_BUDGET / (lim * 100));
+      const qty = Math.floor(OPT_BUDGET * G.budget / (lim * 100));
       if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above the $${OPT_BUDGET} option budget — skipped`); continue; }
       await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
         client_order_id: `sd-o-${c.symbol}-${TODAY}-${qty}-${rid()}` }, `${s.sym} ${s.type.toUpperCase()} (stock touched ${s.entry})`);
@@ -252,10 +282,11 @@ async function writeJournal() {
   let prev = {};
   try { prev = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); } catch (e) {}
   const allActs = (prev.acts || []).concat(acts).slice(-80);
-  const sig = JSON.stringify([closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), acts.length]);
+  const env = lastGuard ? { at: new Date().toISOString(), block: lastGuard.block, reasons: lastGuard.reasons, today: lastGuard.today, upcoming: lastGuard.upcoming, flagged: lastGuard.flagged, spyPct: lastGuard.spyPct, newsOk: lastGuard.newsOk } : (prev.env || null);
+  const sig = JSON.stringify([closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), acts.length, env && env.reasons, env && env.flagged && env.flagged.length]);
   if (prev.sig === sig && prev.at && Date.now() - Date.parse(prev.at) < 30 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: !process.env.ALPACA_URL || /paper/.test(process.env.ALPACA_URL),
-    account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs };
+    account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env };
   fs.writeFileSync('bot/journal.json', JSON.stringify(j));
   console.log('journal written:', closed.length, 'closed,', open.length, 'open');
 }
