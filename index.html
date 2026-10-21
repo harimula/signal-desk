@@ -498,7 +498,7 @@ function analyzeAll() {
   }
 }
 analyzeAll();
-const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Options']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
+const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
 let pfolios = [{id: 'p1', name: 'Portfolio'}];
 const pfOf = k => (typeof k === 'string' && k.startsWith('PF:')) ? k.slice(3) : null;
 const pfName = id => { const p = pfolios.find(x => x.id === id); return p ? p.name : 'Portfolio'; };
@@ -769,7 +769,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792599886';
+const BUILD_V = '1792600259';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1176,6 +1176,58 @@ function eqSvg(eq, amt, cu) {
 <circle cx="${xx(vs.length - 1)}" cy="${yy(vs[vs.length - 1])}" r="3.2" fill="${col}"/>
 </svg>`;
 }
+function opTrack(mk, picks) {
+  const dts = DATA.dates[mk] || []; if (!dts.length) return null;
+  const lastTs = dts[dts.length - 1];
+  const log = load('sd-oplog', {});
+  if (!load('sd-opstart', 0)) save('sd-opstart', Date.now());
+  const k = mk + ':' + lastTs;
+  if (!log[k] && picks.length) { log[k] = {mk, ts: lastTs, tr: picks.map(r => ({sym: r.s.sym, side: r.side, e: r.entry, t: r.target, st: r.stop, lv: r.olev}))}; save('sd-oplog', log); }
+  let changed = false;
+  for (const kk of Object.keys(log)) {
+    const en = log[kk];
+    if (en.mk !== mk || en.res) continue;
+    const idx = dts.indexOf(en.ts);
+    if (idx < 0) { if (en.ts < dts[0]) { en.res = {gone: true, pls: []}; changed = true; } continue; }
+    if (idx + 1 >= dts.length) continue;
+    const pls = [];
+    for (const t3 of en.tr) {
+      const row = DATA.rows[t3.sym]; if (!row || !row[28]) continue;
+      const bars = row[28], closes = row[27], nb2 = bars.length / 4, bi = idx + 1;
+      if (bi >= nb2) continue;
+      const o = bars[bi * 4], h = bars[bi * 4 + 1], l = bars[bi * 4 + 2], c = closes[closes.length - nb2 + bi];
+      if (o == null || h == null || c == null) continue;
+      const sd = t3.side === -1 ? -1 : 1;
+      let fill = null, exit = null;
+      if (sd === 1) {
+        fill = o < t3.e ? o : (l <= t3.e ? t3.e : null);
+        if (fill != null) { if (fill <= t3.st) exit = c; else if (l <= t3.st) exit = t3.st; else if (h >= t3.t) exit = Math.max(t3.t, fill); else exit = c; }
+      } else {
+        fill = o > t3.e ? o : (h >= t3.e ? t3.e : null);
+        if (fill != null) { if (fill >= t3.st) exit = c; else if (h >= t3.st) exit = t3.st; else if (l <= t3.t) exit = Math.min(t3.t, fill); else exit = c; }
+      }
+      if (fill == null) { pls.push({sym: t3.sym, side: sd, pl: null}); continue; }
+      const spl = sd * (exit - fill) / fill * 100;
+      let op = spl * (t3.lv || 10);
+      op = op <= -50 ? -50 : op > 50 ? (50 + Math.min(op, 100)) / 2 : op;
+      pls.push({sym: t3.sym, side: sd, pl: Math.round(op * 100) / 100, spl: Math.round(spl * 100) / 100, f: Math.round(fill * 100) / 100, x: Math.round(exit * 100) / 100});
+    }
+    en.res = {pls};
+    changed = true;
+  }
+  if (changed) save('sd-oplog', log);
+  const ents = Object.values(log).filter(e2 => e2.mk === mk).sort((a2, b2) => a2.ts - b2.ts);
+  let cum2 = 0, days = 0, lastDay = null;
+  for (const e2 of ents) {
+    if (!e2.res || !e2.res.pls) continue;
+    const got = e2.res.pls.filter(x2 => x2.pl != null);
+    if (!got.length) continue;
+    const avg2 = got.reduce((t2, x2) => t2 + x2.pl, 0) / got.length;
+    cum2 += avg2; days++; lastDay = {avg: avg2, n: got.length};
+  }
+  const pend = ents.filter(e2 => !e2.res).reduce((t2, e2) => t2 + e2.tr.length, 0);
+  return {cum: cum2, days, lastDay, pend, start: load('sd-opstart', Date.now()), ents};
+}
 function opView() {
   const mk = opMk, cu = MK[mk].cur, mult = mk === 'IN' ? null : 100;
   const rows = dtRows(mk);
@@ -1203,6 +1255,39 @@ function opView() {
     const movePct = Math.abs(r.target - r.entry) / r.entry * 100;
     return {strike, prem, lev, estGain: Math.min(400, Math.round(movePct * lev))};
   };
+  picks.forEach(r => { r.olev = Math.round(plan(r).lev * 10) / 10; });
+  const live = opTrack(mk, picks);
+  const dFmt2 = ms => new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short'}).format(new Date(ms));
+  const money = v => (v >= 0 ? '+' : '−') + cu + fmt(Math.abs(amt * v / 100), 2);
+  const dtsA = DATA.dates[mk] || [];
+  const opRows = live && live.ents ? [...live.ents].reverse().map(en => {
+    const ix3 = dtsA.indexOf(en.ts);
+    const traded = ix3 >= 0 && ix3 + 1 < dtsA.length ? dFmt2(dtsA[ix3 + 1] * 1000) : (en.res ? dFmt2(en.ts * 1000) : 'Today');
+    if (!en.res) return `<div style="margin-top:12px"><b>${traded}</b> <span class="mut" style="font-size:12px">· ${en.tr.length} option trade${en.tr.length === 1 ? '' : 's'} working — scored after the close</span></div>`;
+    if (en.res.gone || !en.res.pls || !en.res.pls.length) return `<div style="margin-top:12px"><b>${traded}</b> <span class="mut" style="font-size:12px">· nothing scored that day</span></div>`;
+    const got = en.res.pls.filter(x2 => x2.pl != null);
+    const avg3 = got.length ? got.reduce((t2, x2) => t2 + x2.pl, 0) / got.length : null;
+    const per = got.length ? amt / got.length : 0;
+    const trs = en.res.pls.map(x2 => {
+      const pill = `<span class="pill ${x2.side === -1 ? 'r-Top-Sell' : 'r-Top-Buy'}">${x2.side === -1 ? 'PUT' : 'CALL'}</span>`;
+      return x2.pl == null
+        ? `<tr><td class="lt"><b>${esc(showSym(x2.sym))}</b></td><td class="lt">${pill}</td><td colspan="2" class="lt mut" style="font-size:12px">stock never hit the entry — no trade</td><td>–</td><td>–</td></tr>`
+        : `<tr><td class="lt"><b>${esc(showSym(x2.sym))}</b></td><td class="lt">${pill}</td><td>${x2.f != null ? fmt(x2.f) + ' → ' + fmt(x2.x) : '–'}</td><td class="${(x2.spl || 0) >= 0 ? 'pos' : 'neg'}">${x2.spl != null ? sgn(x2.spl) + '%' : '–'}</td><td class="${x2.pl >= 0 ? 'pos' : 'neg'}">${sgn(x2.pl)}%</td><td class="${x2.pl >= 0 ? 'pos' : 'neg'}"><b>${(x2.pl >= 0 ? '+' : '−') + cu + fmt(Math.abs(per * x2.pl / 100), 2)}</b></td></tr>`;
+    }).join('');
+    return `<div style="margin-top:12px"><b>${traded}</b>${avg3 != null ? ` <span class="${avg3 >= 0 ? 'pos' : 'neg'}" style="font-weight:700;font-size:13px">${sgn(avg3)}% · ${money(avg3)}</span>` : ` <span class="mut" style="font-size:12px">· no entries filled — flat day</span>`}</div>
+<div class="tw card" style="margin-top:6px"><table style="min-width:440px"><thead><tr><th class="lt">Stock</th><th class="lt">Type</th><th>Stock in → out</th><th>Stock move</th><th>Option P/L</th><th>P/L ${cu}</th></tr></thead><tbody>${trs}</tbody></table></div>`;
+  }).join('') : '';
+  const plCard = live ? `<div class="card" style="padding:14px 16px;margin:10px 0 4px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><b style="font-size:14px">Your option P/L — started ${dFmt2(live.start)}</b><span class="mut" style="font-size:11.5px">estimated from real stock prices after each day ends</span></div>
+<div class="lv" style="margin:10px 0 0">
+${lvBox('Last trading day', live.lastDay ? `<span class="${live.lastDay.avg >= 0 ? 'pos' : 'neg'}">${sgn(live.lastDay.avg)}% · ${money(live.lastDay.avg)}</span>` : 'nothing scored yet')}
+${lvBox('Total since you started', live.days ? `<span class="${live.cum >= 0 ? 'pos' : 'neg'}">${sgn(live.cum)}% · ${money(live.cum)}</span>` : 'first score after the close')}
+${lvBox('Days counted', String(live.days))}
+${lvBox('Working today', live.pend ? live.pend + ' trade' + (live.pend === 1 ? '' : 's') : 'none')}
+</div>
+${opRows ? `<details data-k="opdd" style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;font-size:13px">Day by day — which option made or lost what</summary>${opRows}
+<div class="mut" style="font-size:11.5px;margin-top:8px">${cu} figures split your premium money equally across that day's filled trades. Option P/L is estimated: the stock's actual move times each plan's leverage, capped by the exit ladder (out at −50%, half off at +50%, all off at +100%). Percentages are on the premium you put at risk. Tracking starts the day you first open this tab.</div></details>` : ''}
+</div>` : '';
   const card = (r, kind) => {
     const s = r.s, o = plan(r), d = amt * r.sc / wsum;
     const callish = kind === 'CALL';
@@ -1228,10 +1313,11 @@ function opView() {
   };
   const grid = (list, kind, head, emptyTxt) => `<h3 style="margin:18px 0 8px">${head} <span class="mut" style="font-weight:400;font-size:13px">· ${list.length}</span></h3>` +
     (list.length ? `<div class="grid regime">${list.map(r => card(r, kind)).join('')}</div>` : `<div class="card empty">${emptyTxt}</div>`);
-  return `<h2 style="margin-bottom:6px">Options — ${mk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
+  return `<h2 style="margin-bottom:6px">Option trading — ${mk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
 <div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-opm="${k}" aria-selected="${mk === k}">${l}</button>`).join('')}</div>
 <div class="mut" style="font-size:12.5px;margin:8px 0 12px">Buying CALLs and PUTs only — you can never lose more than the premium you pay. Same engine as Day trading, with stricter filters. Tap a card for the chart. Not advice; this page places no orders.</div>
 <div class="card" style="padding:12px 16px;margin-bottom:4px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Premium money (${cu})</b><input id="opAmt" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="opSplit" type="button">Split it</button><span class="mut" style="font-size:12px">total premium at risk — split across today's picks, strongest first</span></div></div>
+${plCard}
 ${grid(calls, 'CALL', 'Buy CALLs today', 'No stock passes the CALL rules today — that is a signal too. An uptrend stock must be washed out short-term before a CALL is worth paying for.')}
 ${grid(puts, 'PUT', 'Buy PUTs today', 'No stock passes the PUT rules today. A downtrend stock must be stretched upward before a PUT is worth paying for.')}
 <details data-k="oprules" style="margin-top:18px"><summary style="cursor:pointer;font-weight:700;font-size:14px">The option rules, in plain words</summary>
