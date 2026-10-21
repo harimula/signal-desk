@@ -785,7 +785,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792606771';
+const BUILD_V = '1792606975';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1708,8 +1708,15 @@ function renderAll() {
   $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
   const view = $('#view');
   const openKeys = new Set(Array.from(view.querySelectorAll('details[data-k][open]')).map(d2 => d2.dataset.k));
+  const sameView = view.dataset.rv === app + ':' + tab, scY = window.scrollY, scX = window.scrollX;
+  const twPos = sameView ? Array.from(view.querySelectorAll('.tw')).map(el => [el.scrollTop, el.scrollLeft]) : [];
+  view.dataset.rv = app + ':' + tab;
   view.innerHTML = tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab);
   view.querySelectorAll('details[data-k]').forEach(d2 => { if (openKeys.has(d2.dataset.k)) d2.open = true; });
+  if (sameView) {
+    Array.from(view.querySelectorAll('.tw')).forEach((el, i) => { const p2 = twPos[i]; if (p2) { el.scrollTop = p2[0]; el.scrollLeft = p2[1]; } });
+    window.scrollTo(scX, scY);
+  }
   document.querySelectorAll('[data-list]').forEach(l => {
     l.addEventListener('click', e => { const li = e.target.closest('[data-s]'); if (li) openDetail(li.dataset.s, li.dataset.m); });
     l.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('[data-s]'); if (li) { e.preventDefault(); openDetail(li.dataset.s, li.dataset.m); } } });
