@@ -785,7 +785,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792606311';
+const BUILD_V = '1792606771';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -914,7 +914,7 @@ $('#acLogin').addEventListener('click', () => acDo((em, pw) => fbAuth.signInWith
 $('#acSign').addEventListener('click', () => acDo(async (em, pw) => { await fbAuth.createUserWithEmailAndPassword(em, pw); acctStat('Account created — you are signed in.'); }));
 $('#acForgot').addEventListener('click', () => acDo(async em => { await fbAuth.sendPasswordResetEmail(em); acctStat('Password reset email sent.'); }));
 $('#acLogout').addEventListener('click', async () => { if (fbAuth) { await fbAuth.signOut(); acctStat('Logged out. The data on this device stays on this device.'); } });
-if (FB_CONFIG) fbBoot();
+if (FB_CONFIG) fbBoot(); else { const ab = $('#acctBtn'); if (ab) ab.style.display = 'none'; }
 
 // ---------- tabs ----------
 function renderTabs() {
