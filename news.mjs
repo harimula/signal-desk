@@ -40,7 +40,26 @@ async function collect() {
     if (seen.has(k) || Date.now() - it.t > 3 * 864e5) continue;
     seen.add(k); clean.push(it);
   }
-  return { at: Date.now(), status, items: clean.slice(0, 120) };
+  // per-stock headlines for every tracked symbol (Yahoo RSS per ticker, India .NS included)
+  const bySym = {};
+  try {
+    const syms = JSON.parse(fs.readFileSync('symbols.json', 'utf8')).filter(s => !s.startsWith('^'));
+    let i = 0, ok = 0, fail = 0;
+    await Promise.all(Array.from({ length: 6 }, async () => {
+      while (i < syms.length) {
+        const s = syms[i++];
+        try {
+          const r = parseRss(await (await get('https://feeds.finance.yahoo.com/rss/2.0/headline?s=' + encodeURIComponent(s) + '&region=US&lang=en-US')).text(), 'Yahoo Finance')
+            .filter(x => Date.now() - x.t < 7 * 864e5).sort((a, b) => b.t - a.t).slice(0, 4)
+            .map(x => ({ t: x.t, h: x.h, u: x.u, sum: x.sum.slice(0, 160), s: x.s }));
+          if (r.length) bySym[s] = r;
+          ok++;
+        } catch (e) { fail++; }
+      }
+    }));
+    status['Per-stock'] = ok + ' ok' + (fail ? ', ' + fail + ' failed' : '');
+  } catch (e) { status['Per-stock'] = 'error: ' + e.message.slice(0, 60); }
+  return { at: Date.now(), status, items: clean.slice(0, 120), bySym };
 }
 if (import.meta.url === 'file://' + process.argv[1]) {
   const out = await collect();
