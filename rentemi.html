@@ -1,0 +1,725 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Rent vs EMI</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: sticky name bar; results (verdict, chart, ledger, sensitivity) beside the inputs on wide screens, stacked on phones. */
+:root{
+  --bg:#F2F5F3; --surface:#FFFFFF; --surface-2:#E8EEEB; --fg:#14221E; --muted:#566661; --line:#D3DCD8;
+  --buy:#2554C7; --rent:#B85A08; --focus:#2554C7;
+  --font-display:'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body:'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1916; --surface:#16231F; --surface-2:#1D2D28; --fg:#E6EEEA; --muted:#9AACA6; --line:#2A3B35;
+    --buy:#7DA2FF; --rent:#F2A154; --focus:#7DA2FF; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1916; --surface:#16231F; --surface-2:#1D2D28; --fg:#E6EEEA; --muted:#9AACA6; --line:#2A3B35;
+  --buy:#7DA2FF; --rent:#F2A154; --focus:#7DA2FF; color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+h1,h2,p,dl,dd{margin:0}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--font-body); font-size:15px; line-height:1.5;
+  padding-block:0 48px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+body::before{content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--bg)}
+
+.top{
+  position:sticky; top:env(safe-area-inset-top, 0px); z-index:5; background:var(--bg);
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  max-width:1120px; margin:0 auto 20px; padding-block:12px; border-bottom:1px solid var(--line);
+}
+.brand{font:700 20px/1.1 var(--font-display); letter-spacing:-0.01em}
+.brand small{display:block; font:400 12px/1.3 var(--font-body); color:var(--muted); letter-spacing:0; margin-top:2px}
+.chip{
+  display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px; white-space:nowrap;
+  font:600 13px/1.2 var(--font-body); border:1px solid var(--line); background:var(--surface);
+}
+.chip[data-state="buy"]{background:color-mix(in srgb, var(--buy) 16%, var(--surface)); border-color:var(--buy)}
+.chip[data-state="rent"]{background:color-mix(in srgb, var(--rent) 16%, var(--surface)); border-color:var(--rent)}
+
+.page{
+  display:grid; gap:20px; max-width:1120px; margin:0 auto; grid-template-columns:minmax(0,1fr);
+  grid-template-areas:"verdict" "chart" "inputs" "details";
+}
+.verdict{grid-area:verdict} .chart-card{grid-area:chart} .inputs{grid-area:inputs} .details{grid-area:details}
+@media (min-width:920px){
+  .page{
+    grid-template-columns:minmax(0,390px) minmax(0,1fr); gap:20px 28px; align-items:start;
+    grid-template-areas:"inputs verdict" "inputs chart" "inputs details"; grid-template-rows:auto auto 1fr;
+  }
+}
+
+.card{background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:16px; min-width:0}
+.details .card + .card{margin-top:16px}
+h2{font:600 15px/1.3 var(--font-display); letter-spacing:0.005em; display:flex; align-items:center; gap:8px}
+.sw{display:inline-block; width:10px; height:10px; border-radius:2px; flex:none}
+.sw-buy{background:var(--buy)} .sw-rent{background:var(--rent)} .sw-neutral{background:var(--muted)}
+.eyebrow{font:500 12px/1.2 var(--font-body); letter-spacing:0.08em; text-transform:uppercase; color:var(--muted)}
+.muted{color:var(--muted)}
+.mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums}
+
+/* verdict */
+.vword{font:700 clamp(3rem, 13vw, 4.6rem)/1 var(--font-display); letter-spacing:-0.02em; margin:8px 0 10px; text-wrap:balance}
+.verdict[data-state="buy"] .vword{color:var(--buy)}
+.verdict[data-state="rent"] .vword{color:var(--rent)}
+.vline{font-size:16px; max-width:56ch}
+.vstats{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; margin-top:16px}
+.stat{border-top:3px solid var(--line); padding-top:8px; min-width:0}
+.stat.s-buy{border-top-color:var(--buy)} .stat.s-rent{border-top-color:var(--rent)}
+.stat .k{display:block; font-size:12.5px; color:var(--muted)}
+.stat .v{display:block; font:500 22px/1.3 var(--font-mono); font-variant-numeric:tabular-nums}
+.stat .s{display:block; font-size:12.5px; color:var(--muted); line-height:1.4}
+.vmonth{margin-top:16px; font-size:14px; color:var(--muted); max-width:62ch}
+.ties{margin-top:16px; border-top:1px solid var(--line)}
+.tie{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 12px; padding:10px 0; border-bottom:1px solid var(--line)}
+.tie dt{font-size:14px}
+.tie dd{font:500 14px var(--font-mono); text-align:right; font-variant-numeric:tabular-nums}
+.tie .why{grid-column:1 / -1; font-size:12.5px; color:var(--muted)}
+.fine{font-size:12.5px; color:var(--muted); margin-top:12px}
+
+/* chart */
+.readout{display:flex; flex-wrap:wrap; gap:4px 18px; align-items:baseline; margin:8px 0 6px; font-size:13px}
+.readout .yr{font:500 12px var(--font-mono); color:var(--muted); letter-spacing:0.04em; text-transform:uppercase}
+.readout span.item{display:inline-flex; align-items:center; gap:6px}
+.readout b{font:500 14px var(--font-mono); font-variant-numeric:tabular-nums}
+.chart{width:100%; min-height:220px}
+.chart svg{display:block; max-width:100%; touch-action:pan-y; cursor:crosshair}
+.chart text{font:11px var(--font-mono); fill:var(--muted)}
+.chart .gl{stroke:var(--line); stroke-width:1}
+.chart .zero{stroke:var(--muted); stroke-width:1}
+.chart .ln{fill:none; stroke-width:2.5; stroke-linejoin:round; stroke-linecap:round}
+.chart .ln-buy{stroke:var(--buy)} .chart .ln-rent{stroke:var(--rent)}
+.chart .dot-buy{fill:var(--buy); stroke:var(--surface); stroke-width:2}
+.chart .dot-rent{fill:var(--rent); stroke:var(--surface); stroke-width:2}
+.chart .guide{stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3}
+
+/* ledger + sensitivity */
+.tablewrap{overflow-x:auto; margin-top:10px}
+table{border-collapse:collapse; width:100%}
+.ledger th, .ledger td{padding:7px 6px; font-size:13.5px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap}
+.ledger th:first-child, .ledger td:first-child{text-align:left; white-space:normal; font-weight:400; padding-left:0}
+.ledger td{font:13px var(--font-mono); font-variant-numeric:tabular-nums}
+.ledger thead th{font-weight:600; border-bottom:1px solid var(--fg)}
+.ledger thead th.c-buy{color:var(--buy)} .ledger thead th.c-rent{color:var(--rent)}
+.ledger tr.total th, .ledger tr.total td{border-top:1px solid var(--fg); font-weight:600}
+.ledger tr.net th, .ledger tr.net td{border-bottom:0; font-weight:600; font-size:14px}
+.ledger td.win{box-shadow:inset 0 -3px 0 var(--accent-win)}
+.ledger td.none{color:var(--muted)}
+.note{font-size:13px; color:var(--muted); margin-top:12px; max-width:62ch}
+.note.warn{color:var(--fg); border-left:3px solid var(--rent); padding-left:10px}
+.sens{table-layout:fixed; min-width:320px}
+.sens th{font:500 11.5px/1.25 var(--font-mono); color:var(--muted); padding:6px 2px; text-align:center}
+.sens th.corner{width:74px; text-align:left; font-size:10.5px; font-weight:400}
+.sens td{padding:0; border:2px solid var(--surface); text-align:center}
+.sens td button{display:block; width:100%; background:transparent; border:0; color:var(--fg); font:500 12px var(--font-mono); font-variant-numeric:tabular-nums; padding:10px 0; cursor:pointer}
+.sens td button:focus-visible{outline:2px solid var(--focus); outline-offset:-3px}
+.field.tight label{min-height:0}
+.sens td.me{outline:2px solid var(--fg); outline-offset:-2px}
+.sens-key{display:flex; flex-wrap:wrap; gap:4px 16px; margin-top:10px; font-size:12.5px; color:var(--muted)}
+.sens-key span{display:inline-flex; align-items:center; gap:6px}
+.sens th .tag{display:block; font:400 9.5px/1.2 var(--font-body); color:var(--muted); margin-top:1px}
+.assume{margin-top:16px}
+.assume .eyebrow{display:block}
+dl.src{margin:10px 0 0}
+.src dt{font:600 13.5px/1.35 var(--font-body); margin-top:12px}
+.src dd{margin:3px 0 0; font-size:13px; color:var(--muted); max-width:70ch}
+.src a{color:var(--buy)}
+
+/* inputs */
+.inputs .card + .card{margin-top:16px}
+.group-sub{font-size:12.5px; color:var(--muted); margin:4px 0 12px}
+.fields{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px}
+.field{display:flex; flex-direction:column; gap:4px; min-width:0}
+.field label{font-size:12.5px; line-height:1.3; color:var(--muted); min-height:2.6em}
+.inp{display:flex; align-items:center; background:var(--surface-2); border:1px solid var(--line); border-radius:6px; height:40px}
+.inp:focus-within{outline:2px solid var(--focus); outline-offset:1px}
+.inp input, .inp select{flex:1; min-width:0; border:0; background:transparent; color:var(--fg); font:500 15px var(--font-mono); padding:0 8px; height:100%; -moz-appearance:textfield; appearance:textfield}
+.inp select{appearance:auto; font-family:var(--font-mono)}
+.inp input:focus, .inp select:focus{outline:none}
+.inp input::-webkit-outer-spin-button, .inp input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+.inp .pre, .inp .suf{color:var(--muted); font:14px var(--font-mono)}
+.inp .pre{padding-left:10px} .inp .suf{padding-right:10px}
+.hint{font:12px/1.3 var(--font-mono); color:var(--muted); min-height:1.3em}
+.hint:empty{display:none}
+.derived{font:12.5px/1.5 var(--font-mono); color:var(--muted); margin-top:14px; padding-top:10px; border-top:1px dashed var(--line); font-variant-numeric:tabular-nums}
+.pricebar{padding-bottom:16px; margin-bottom:16px; border-bottom:1px solid var(--line)}
+.pricebar .eyebrow{display:block; margin-bottom:6px}
+.inp.big{height:54px}
+.inp.big input{font-size:24px}
+.inp.big .pre{font-size:20px; padding-left:12px}
+.presets{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+.presets button{background:var(--surface-2); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 10px; font:500 13px var(--font-mono); cursor:pointer}
+.presets button[aria-pressed="true"]{border-color:var(--buy); background:color-mix(in srgb, var(--buy) 14%, var(--surface))}
+.presets button:focus-visible, .linkbtn:focus-visible{outline:2px solid var(--focus); outline-offset:2px}
+.linkbtn{background:none; border:0; padding:0; color:var(--buy); font:inherit; text-decoration:underline; cursor:pointer}
+.check{display:flex; gap:10px; align-items:flex-start; font-size:14px; margin-top:10px; cursor:pointer}
+.check input{accent-color:var(--buy); width:18px; height:18px; margin:2px 0 0; flex:none}
+#taxExtra{margin-top:14px}
+
+details.how{margin-top:16px; border-top:1px solid var(--line); padding-top:12px}
+details.how summary{cursor:pointer; font:600 14px var(--font-display)}
+details.how summary:focus-visible, .check:focus-within{outline:2px solid var(--focus); outline-offset:3px}
+details.how ul{margin:10px 0 0; padding-left:18px; font-size:13.5px; color:var(--muted); display:grid; gap:8px; max-width:70ch}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important; transition:none!important; animation:none!important}}
+</style>
+
+<header class="top">
+  <h1 class="brand">Rent vs EMI<small>Same cash each month, two paths</small></h1>
+  <span class="chip" id="chip" data-state="even" hidden></span>
+</header>
+
+<main class="page">
+  <section class="card verdict" id="verdict" data-state="even">
+    <div class="pricebar">
+      <label class="eyebrow" for="price">Cost of house, incl. stamp duty</label>
+      <div class="inp big"><span class="pre">₹</span><input id="price" type="number" inputmode="decimal" step="any" value="10000000"></div>
+      <span class="hint" id="h_price"></span>
+      <div class="presets" id="presets" role="group" aria-label="Quick house costs"></div>
+      <p class="fine" style="margin-top:10px">Down payment, rent, upfront costs and running costs follow this number. Edit any of them to set your own.</p>
+      <div class="assume">
+        <span class="eyebrow">Growth assumptions</span>
+        <div class="presets" id="assumeSets" role="group" aria-label="Growth assumption sets"></div>
+        <p class="fine" id="assumeNote" style="margin-top:8px"></p>
+      </div>
+    </div>
+    <div id="vResult" aria-live="polite">
+    <p class="eyebrow">Higher net worth after <span id="vYears">20</span> years</p>
+    <p class="vword" id="vWord">&nbsp;</p>
+    <p class="vline" id="vLine"></p>
+    <div class="vstats">
+      <div class="stat s-buy"><span class="k">If you buy, you hold</span><span class="v" id="sBuy"></span><span class="s" id="sBuyNote"></span></div>
+      <div class="stat s-rent"><span class="k">If you rent, you hold</span><span class="v" id="sRent"></span><span class="s" id="sRentNote"></span></div>
+    </div>
+    <p class="vmonth" id="vMonth"></p>
+    <dl class="ties" id="ties"></dl>
+    <p class="fine">Arithmetic on the inputs you set, before capital gains tax. It is not financial advice.</p>
+    </div>
+  </section>
+
+  <section class="card chart-card">
+    <h2>Net worth, year by year</h2>
+    <div class="readout" id="readout"></div>
+    <div class="chart" id="chart"></div>
+  </section>
+
+  <form class="inputs" id="form" autocomplete="off">
+    <section class="card">
+      <h2><i class="sw sw-buy"></i>If you buy</h2>
+      <p class="group-sub">Down payment and running costs follow the house cost until you edit them. <button type="button" class="linkbtn" id="resetAuto" hidden>Reset to auto</button></p>
+      <div class="fields" id="fBuy"></div>
+      <p class="derived" id="dBuy"></p>
+    </section>
+    <section class="card">
+      <h2><i class="sw sw-rent"></i>If you rent</h2>
+      <p class="group-sub">Rent follows the house cost at 0.3% a month, as in your sheet. Edit it to use a quote you have.</p>
+      <div class="fields" id="fRent"></div>
+      <p class="derived" id="dRent"></p>
+    </section>
+    <section class="card">
+      <h2><i class="sw sw-neutral"></i>Both paths</h2>
+      <div class="fields" id="fBoth" style="margin-top:12px"></div>
+    </section>
+    <section class="card">
+      <h2><i class="sw sw-neutral"></i>Tax savings</h2>
+      <label class="check" for="oldRegime"><input type="checkbox" id="oldRegime"><span>I claim home-loan deductions and HRA (old tax regime)</span></label>
+      <div class="fields" id="taxExtra" hidden>
+        <div class="field"><label for="slab">Tax slab</label><div class="ctl"><div class="inp"><select id="slab"><option value="5">5%</option><option value="20">20%</option><option value="30" selected>30%</option></select></div></div></div>
+        <div class="field"><label for="hra">HRA tax saved per year (rent side)</label><div class="ctl"><div class="inp"><span class="pre">₹</span><input id="hra" type="number" inputmode="decimal" step="any" value="0"></div><span class="hint" id="h_hra"></span></div></div>
+      </div>
+    </section>
+  </form>
+
+  <div class="details">
+    <section class="card">
+      <h2>Where the money goes</h2>
+      <p class="note" style="margin-top:6px">Both paths spend the same cash every month. Whatever buying costs beyond the rent goes into investments on the rent path.</p>
+      <div class="tablewrap"><table class="ledger" id="ledger"></table></div>
+      <p class="note" id="crossNote" hidden></p>
+      <p class="note warn" id="brokeNote" hidden></p>
+    </section>
+    <section class="card">
+      <h2>What if the assumptions are off?</h2>
+      <p class="note" style="margin-top:6px">Each cell is buy minus rent in ₹ crore at the end of your stay. Blue (+) means buying ends up ahead, orange (−) means renting does, and 0.00 is a tie. Tap a cell to use those numbers in the calculator. By default the axes use the 30-year record listed below.</p>
+      <div class="fields" style="margin-top:12px">
+        <div class="field tight"><label for="sensRow">Down the side</label><div class="ctl"><div class="inp"><select id="sensRow"><option value="rentGrowth" selected>Rent growth</option><option value="appreciation">House price growth</option><option value="invReturn">Investment return</option></select></div></div></div>
+        <div class="field tight"><label for="sensCol">Across the top</label><div class="ctl"><div class="inp"><select id="sensCol"><option value="rentGrowth">Rent growth</option><option value="appreciation" selected>House price growth</option><option value="invReturn">Investment return</option></select></div></div></div>
+        <div class="field tight"><label for="sensMode">Grid values</label><div class="ctl"><div class="inp"><select id="sensMode"><option value="auto" selected>Auto: 30-year record</option><option value="around">Around my inputs</option></select></div></div></div>
+      </div>
+      <div class="tablewrap"><table class="sens" id="sens"></table></div>
+      <p class="note" id="sensMe"></p>
+      <div class="sens-key"><span><i class="sw sw-buy"></i>+ buy ahead</span><span><i class="sw sw-rent"></i>− rent ahead</span><span>* rent uses CPI inflation as a proxy</span></div>
+      <details class="how">
+        <summary>The 30-year record behind the auto values</summary>
+        <dl class="src">
+          <dt>House prices: 9.3% a year (auto), about 6% over 20 years, 3.6% now</dt>
+          <dd>A Centre for Social and Economic Progress paper puts house price growth at 9.3% a year from 1991 to 2021 and 3.7% a year from 2017 to 2022. CRISIL, as quoted by NoBroker, gives about 6% a year over 20 years. The RBI house price index rose 3.6% in the year to Q1 FY27. Sources: <a href="https://csep.org/working-paper/house-prices-in-india-how-high-and-for-how-long/" target="_blank" rel="noopener">CSEP</a>, <a href="https://www.nobroker.in/blog/house-price-graph/" target="_blank" rel="noopener">NoBroker</a>, <a href="https://www.devdiscourse.com/article/business/3967152-indias-house-price-growth-slows-36-q1-fy27-rbi" target="_blank" rel="noopener">RBI index via Devdiscourse</a>.</dd>
+          <dt>Investments: 12% a year (auto), from the Nifty 50's own 30 years</dt>
+          <dd>The Nifty 50 started on 3 November 1995 at 1,000 and closed near 22,620 on 14 October 2026. That is 10.6% a year in price over 31 years (my arithmetic, in line with Finnovate's 10.59% to March 2026). NSE's factsheet shows a dividend yield of 1.35% (May 2026), and it has mostly stayed between 1% and 2%. Price plus dividends comes to about 12%. Shorter windows are weaker. A Nifty 50 index fund returned 11.4% a year over 10 years, 10.0% over 20 years, 5.7% over 5 years and −8.8% over the last year, after fund costs, to 16 October 2026. Sources: <a href="https://www.finnovate.in/learn/blog/nifty-20-year-cagr-below-10-percent-history" target="_blank" rel="noopener">Finnovate</a>, <a href="https://www.kotakneo.com/news/market-news/stock-market-update-15-october-2026-sensex-nifty/" target="_blank" rel="noopener">Kotak Neo</a>, <a href="https://www.bajajamc.com/knowledge-centre/nifty-50-dividend-yield" target="_blank" rel="noopener">Bajaj AMC</a>, <a href="https://integrato.in/mfic-app/mktpage.php?p=nifty-50" target="_blank" rel="noopener">Integrato</a>.</dd>
+          <dt>Rent: 6% a year (auto, a proxy)</dt>
+          <dd>I found no clean 30-year rent series. The auto value follows average CPI inflation of about 5.8% from 2000 to 2026. Urban housing CPI ran between 3.2% and 4.5% in 2020 to 2022, and some areas saw rents rise about 10% a year from 2019 to 2024. Sources: <a href="https://rupaywise.com/data/inflation-history" target="_blank" rel="noopener">Rupaywise</a>, <a href="https://www.business-standard.com/amp/article/economy-policy/india-s-rising-home-prices-rentals-a-new-inflation-threat-analysis-123011700474_1.html" target="_blank" rel="noopener">Business Standard</a>, <a href="https://www.cribapp.com/resources/average-rent-india" target="_blank" rel="noopener">Crib</a>.</dd>
+          <dt>Loan rate: your 9.075% stays</dt>
+          <dd>Kotak puts the 10-year average home loan rate near 9.2%, with a low of 6.7% in 2020 to 2022. Source: <a href="https://www.kotak.bank.in/en/stories-in-focus/loans/home-loan/home-loan-interest-rate-history-india.html" target="_blank" rel="noopener">Kotak</a>.</dd>
+        </dl>
+        <p class="note">These are rounded figures from secondary sources covering different periods. They are not an official series, and past returns do not predict the next 20 years.</p>
+      </details>
+      <details class="how">
+        <summary>How this is calculated</summary>
+        <ul>
+          <li>Buy: you pay the down payment, the EMI for the loan tenure, and property tax, society and upkeep that rise every year. At the end you own the house at its grown price, minus any loan left.</li>
+          <li>Rent: rent steps up once a year. Down payment minus upfront costs is invested on day one. Each month, the cost of buying minus the rent goes into investments. When rent passes the cost of buying, the shortfall comes out of the investments.</li>
+          <li>Investment return and house price growth are yearly rates, applied monthly. Net worth is the house value minus loan, or the investment balance, at the end of your stay.</li>
+          <li>Tax: with the old-regime box ticked, buying saves the slab rate on principal repaid (up to ₹1.5 L) plus interest paid (up to ₹2 L) each year, as on your Tax Benefits tab. Renting saves the HRA amount you enter. Both savings are invested.</li>
+          <li>Different from the sheet: the sheet scores renting as investments minus rent paid and buying as house value minus all costs, which are not on the same footing. This version compares what each path is worth at the end, with identical cash going out.</li>
+          <li>Growth assumptions: "30-year history" sets rent growth, house price growth and investment return from the record listed above. "Last 5 years" and "Your sheet" are the other two sets. Edit any of the three fields to use your own.</li>
+          <li>Auto-fill from the house cost, using your sheet's ratios: down payment 20%, rent 0.3% a month, upfront rent costs of 4 months' rent, property tax and society maintenance 0.5% a year each, upkeep 0.1% a year. At ₹1 Cr these give exactly your sheet's figures.</li>
+          <li>Left out:</li> selling costs, capital gains tax, loan prepayment, home insurance and vacancy. The rent deposit is treated as spent, as in the sheet.</li>
+        </ul>
+      </details>
+    </section>
+  </div>
+</main>
+
+<script>
+// MODEL-START
+function simulate(p){
+  const H = p.horizon, n = H * 12;
+  const price = p.price;
+  const down = Math.min(Math.max(p.down, 0), price);
+  const loan = price - down;
+  const N = p.tenure * 12;
+  const mr = p.loanRate / 1200;
+  const emi = loan <= 0 ? 0 : (mr > 0 ? loan * mr / (1 - Math.pow(1 + mr, -N)) : loan / N);
+  const g = Math.pow(1 + p.invReturn / 100, 1 / 12) - 1;
+  const ownYear = p.propTax + p.society + p.upkeep;
+  const lump = down - p.upfront;
+  let bal = loan, R = lump, B = 0;
+  let totEmi = 0, totOwn = 0, totRent = 0, totGap = 0, taxSaved = 0, hraSaved = 0, yrP = 0, yrI = 0;
+  let crossYear = null, brokeYear = null;
+  const series = [{ y: 0, buy: price - loan, rent: R }];
+  for (let m = 1; m <= n; m++) {
+    const yr = Math.ceil(m / 12);
+    const own = ownYear / 12 * Math.pow(1 + p.costGrowth / 100, yr - 1);
+    const rent = p.rent * Math.pow(1 + p.rentGrowth / 100, yr - 1);
+    let pay = 0;
+    if (m <= N && bal > 1e-6) {
+      const interest = bal * mr;
+      const principal = Math.min(emi - interest, bal);
+      bal -= principal; pay = emi; yrP += principal; yrI += interest;
+    }
+    totEmi += pay; totOwn += own; totRent += rent;
+    const gap = pay + own - rent;
+    totGap += gap;
+    if (gap < 0 && crossYear === null) crossYear = yr;
+    R = (R + gap) * (1 + g);
+    B = B * (1 + g);
+    if (m % 12 === 0) {
+      if (p.oldRegime) {
+        const save = p.slab / 100 * (Math.min(yrP, 150000) + Math.min(yrI, 200000));
+        B += save; taxSaved += save; R += p.hra; hraSaved += p.hra;
+      }
+      yrP = 0; yrI = 0;
+      const house = price * Math.pow(1 + p.appreciation / 100, yr);
+      series.push({ y: yr, buy: house - bal + B, rent: R });
+    }
+    if (R < 0 && brokeYear === null) brokeYear = yr;
+  }
+  if (bal < 0.5) bal = 0;
+  const house = price * Math.pow(1 + p.appreciation / 100, H);
+  const buyNW = house - bal + B;
+  return {
+    emi, loan, down, lump, house, bal, B, R, buyNW, rentNW: R, series,
+    totEmi, totOwn, totRent, totGap, taxSaved, hraSaved, crossYear, brokeYear,
+    ownMonth1: ownYear / 12
+  };
+}
+function gapFor(p, key, v){
+  const q = Object.assign({}, p); q[key] = v;
+  const r = simulate(q);
+  return r.buyNW - r.rentNW;
+}
+function solveTie(p, key, lo, hi){
+  const fl = gapFor(p, key, lo), fh = gapFor(p, key, hi);
+  if (fl >= 0) return { kind: 'buyAlways', lo, hi };
+  if (fh <= 0) return { kind: 'rentAlways', lo, hi };
+  let a = lo, b = hi;
+  for (let i = 0; i < 40; i++) { const mid = (a + b) / 2; if (gapFor(p, key, mid) < 0) a = mid; else b = mid; }
+  return { kind: 'tie', v: (a + b) / 2, lo, hi };
+}
+// Fields that follow the house cost, with the ratios from the original sheet.
+function autoFill(price){
+  const rd = (v, s) => Math.round(v / s) * s;
+  const rent = rd(price * 0.003, 500);
+  return {
+    down: rd(price * 0.2, 10000), rent, upfront: rent * 4,
+    propTax: rd(price * 0.005, 500), society: rd(price * 0.005, 500), upkeep: rd(price * 0.001, 100)
+  };
+}
+// MODEL-END
+
+const $ = id => document.getElementById(id);
+const MINUS = '−';
+const inr = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+function rs(n){ const r = Math.round(n); return (r < 0 ? MINUS : '') + '₹' + inr.format(Math.abs(r)); }
+function short(n){
+  const a = Math.abs(n), s = n < 0 ? MINUS : '';
+  if (a >= 1e7) return s + '₹' + (a / 1e7).toFixed(2) + ' Cr';
+  if (a >= 1e5) return s + '₹' + (a / 1e5).toFixed(2) + ' L';
+  return s + '₹' + inr.format(Math.round(a));
+}
+function pc(v){ return (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, '') + '%'; }
+
+const FIELDS = {
+  buy: [
+    { id: 'down', label: 'Down payment', kind: 'money', value: 2000000 },
+    { id: 'loanRate', label: 'Loan interest rate', kind: 'pct', value: 9.075 },
+    { id: 'tenure', label: 'Loan tenure', kind: 'yrs', value: 20 },
+    { id: 'appreciation', label: 'House price growth per year', kind: 'pct', value: 4.3 },
+    { id: 'costGrowth', label: 'Yearly rise in running costs', kind: 'pct', value: 5 },
+    { id: 'propTax', label: 'Property tax per year', kind: 'money', value: 50000 },
+    { id: 'society', label: 'Society maintenance per year', kind: 'money', value: 50000 },
+    { id: 'upkeep', label: 'House upkeep per year', kind: 'money', value: 10000 }
+  ],
+  rent: [
+    { id: 'rent', label: 'Monthly rent', kind: 'money', value: 30000 },
+    { id: 'rentGrowth', label: 'Yearly rent increase', kind: 'pct', value: 10 },
+    { id: 'upfront', label: 'Deposit, brokerage, upfront costs', kind: 'money', value: 120000 }
+  ],
+  both: [
+    { id: 'horizon', label: 'Years you stay', kind: 'yrs', value: 20 },
+    { id: 'invReturn', label: 'Return on investments per year', kind: 'pct', value: 10 }
+  ]
+};
+function fieldHTML(f){
+  const pre = f.kind === 'money' ? '<span class="pre">₹</span>' : '';
+  const suf = f.kind === 'pct' ? '<span class="suf">%</span>' : f.kind === 'yrs' ? '<span class="suf">yrs</span>' : '';
+  const hint = f.kind === 'money' ? '<span class="hint" id="h_' + f.id + '"></span>' : '';
+  return '<div class="field"><label for="' + f.id + '">' + f.label + '</label><div class="ctl"><div class="inp">' + pre +
+    '<input id="' + f.id + '" type="number" inputmode="decimal" step="any" value="' + f.value + '">' + suf + '</div>' + hint + '</div></div>';
+}
+function buildFields(){
+  $('fBuy').innerHTML = FIELDS.buy.map(fieldHTML).join('');
+  $('fRent').innerHTML = FIELDS.rent.map(fieldHTML).join('');
+  $('fBoth').innerHTML = FIELDS.both.map(fieldHTML).join('');
+}
+
+function readParams(){
+  const g = id => { const v = parseFloat($(id).value); return Number.isFinite(v) ? v : 0; };
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  const price = Math.max(g('price'), 0);
+  return {
+    price,
+    down: clamp(g('down'), 0, price),
+    loanRate: clamp(g('loanRate'), 0, 40),
+    tenure: clamp(Math.round(g('tenure')) || 1, 1, 40),
+    appreciation: clamp(g('appreciation'), -50, 50),
+    costGrowth: clamp(g('costGrowth'), -50, 50),
+    propTax: Math.max(g('propTax'), 0),
+    society: Math.max(g('society'), 0),
+    upkeep: Math.max(g('upkeep'), 0),
+    rent: Math.max(g('rent'), 0),
+    rentGrowth: clamp(g('rentGrowth'), -50, 60),
+    upfront: Math.max(g('upfront'), 0),
+    horizon: clamp(Math.round(g('horizon')) || 1, 1, 40),
+    invReturn: clamp(g('invReturn'), -50, 50),
+    oldRegime: $('oldRegime').checked,
+    slab: parseFloat($('slab').value) || 0,
+    hra: Math.max(g('hra'), 0)
+  };
+}
+
+const state = { p: null, r: null, ro: null, lastW: 0 };
+
+function verdictOf(r){
+  const top = Math.max(Math.abs(r.buyNW), Math.abs(r.rentNW), 1);
+  const gap = r.buyNW - r.rentNW;
+  if (Math.abs(gap) < 0.03 * top) return 'even';
+  return gap > 0 ? 'buy' : 'rent';
+}
+
+function tieRow(label, t, entered, unitNote){
+  let val, why;
+  if (t.kind === 'tie') { val = pc(t.v) + ' a year'; why = 'Now ' + pc(entered) + '. Buying wins above this.'; }
+  else if (t.kind === 'buyAlways') { val = 'Any'; why = 'Buying wins even at ' + pc(t.lo) + ' a year.'; }
+  else { val = 'None'; why = 'Renting wins even at ' + pc(t.hi) + ' a year.'; }
+  return '<div class="tie"><dt>' + label + '</dt><dd>' + val + '</dd><span class="why">' + why + '</span></div>';
+}
+
+function renderVerdict(p, r){
+  const st = verdictOf(r), gap = r.buyNW - r.rentNW;
+  const box = $('verdict');
+  box.dataset.state = st;
+  $('vYears').textContent = p.horizon;
+  $('vWord').textContent = st === 'buy' ? 'Buy' : st === 'rent' ? 'Rent' : 'Even';
+  $('vLine').textContent = st === 'even'
+    ? 'The two paths end within ' + short(Math.abs(gap)) + ' of each other.'
+    : (st === 'buy' ? 'Buying' : 'Renting') + ' leaves you ' + short(Math.abs(gap)) + ' ahead of ' + (st === 'buy' ? 'renting.' : 'buying.');
+  $('sBuy').textContent = short(r.buyNW);
+  $('sBuyNote').textContent = 'House ' + short(r.house) + (r.bal > 0 ? ', loan left ' + short(r.bal) : ', no loan left') + (r.B > 0 ? ', tax savings ' + short(r.B) : '');
+  $('sRent').textContent = short(r.rentNW);
+  $('sRentNote').textContent = 'Investments, after paying ' + short(r.totRent) + ' in rent';
+  const first = r.emi + r.ownMonth1, diff = first - p.rent;
+  $('vMonth').textContent = diff >= 0
+    ? 'Month 1: buying costs ' + rs(first) + ' (EMI ' + rs(r.emi) + ' plus running costs ' + rs(r.ownMonth1) + '). Rent is ' + rs(p.rent) + ', so renting leaves ' + rs(diff) + ' a month to invest.'
+    : 'Month 1: rent of ' + rs(p.rent) + ' is ' + rs(-diff) + ' more than the ' + rs(first) + ' it costs to buy.';
+  const tA = solveTie(p, 'appreciation', -5, 25), tR = solveTie(p, 'rentGrowth', 0, 30);
+  $('ties').innerHTML = tieRow('House price growth where it is a tie', tA, p.appreciation) + tieRow('Rent growth where it is a tie', tR, p.rentGrowth);
+  const chip = $('chip');
+  chip.dataset.state = st;
+  chip.innerHTML = st === 'even' ? 'Too close to call'
+    : '<i class="sw ' + (st === 'buy' ? 'sw-buy' : 'sw-rent') + '"></i>' + (st === 'buy' ? 'Buy' : 'Rent') + ' ahead by ' + short(Math.abs(gap));
+}
+
+function renderLedger(p, r){
+  const dash = '<td class="none">–</td>';
+  const cell = v => v === null ? dash : '<td>' + short(v) + '</td>';
+  const row = (label, b, n, cls) => '<tr' + (cls ? ' class="' + cls + '"' : '') + '><th scope="row">' + label + '</th>' + cell(b) + cell(n) + '</tr>';
+  const cashBuy = r.down + r.totEmi + r.totOwn;
+  const cashRent = p.upfront + r.lump + r.totRent + r.totGap;
+  let h = '<thead><tr><th></th><th class="c-buy">Buy</th><th class="c-rent">Rent</th></tr></thead><tbody>';
+  h += row('Down payment', r.down, null);
+  h += row('Upfront rent costs', null, p.upfront);
+  h += row('Invested on day one', null, r.lump);
+  h += row('EMIs paid', r.totEmi, null);
+  h += row('Property tax, society, upkeep', r.totOwn, null);
+  h += row('Rent paid', null, r.totRent);
+  h += row(r.totGap >= 0 ? 'Monthly gap invested' : 'Taken out of investments', null, Math.abs(r.totGap));
+  h += row('Total cash out', cashBuy, cashRent, 'total');
+  if (p.oldRegime) h += row('Tax saved, invested', r.taxSaved, r.hraSaved);
+  h += row('House value at the end', r.house, null);
+  if (r.bal > 0) h += row('Loan still owed', -r.bal, null);
+  if (r.B > 0) h += row('Tax savings, grown', r.B, null);
+  h += row('Investments at the end', null, r.rentNW);
+  const st = verdictOf(r);
+  const net = '<tr class="net"><th scope="row">Net worth</th><td' + (st === 'buy' ? ' class="win"' : '') + '>' + short(r.buyNW) + '</td><td' + (st === 'rent' ? ' class="win"' : '') + '>' + short(r.rentNW) + '</td></tr>';
+  $('ledger').innerHTML = h + net + '</tbody>';
+  $('ledger').style.setProperty('--accent-win', st === 'buy' ? 'var(--buy)' : 'var(--rent)');
+
+  const cn = $('crossNote'), bn = $('brokeNote');
+  if (r.crossYear) { cn.hidden = false; cn.textContent = 'From year ' + r.crossYear + ', rent costs more per month than buying, so the rent path starts taking money out of its investments.'; }
+  else cn.hidden = true;
+  const msgs = [];
+  if (r.brokeYear) msgs.push('The rent path runs out of investments in year ' + r.brokeYear + '. After that its balance is negative, which is like borrowing at your investment return.');
+  if (r.lump < 0) msgs.push('Upfront rent costs are larger than the down payment, so the rent path starts in debt.');
+  bn.hidden = msgs.length === 0; bn.textContent = msgs.join(' ');
+}
+
+const SENS_VARS = {
+  rentGrowth: { short: 'Rent', phrase: 'rent rises', step: 2.5,
+    auto: [{ v: 4 }, { v: 5 }, { v: 6, tag: '30-yr*' }, { v: 8 }, { v: 10, tag: 'sheet' }] },
+  appreciation: { short: 'Price', phrase: 'house grows', step: 1,
+    auto: [{ v: 3.6, tag: 'now' }, { v: 4.5 }, { v: 6, tag: '20-yr' }, { v: 7.5 }, { v: 9.3, tag: '30-yr' }] },
+  invReturn: { short: 'Returns', phrase: 'investments earn', step: 2,
+    auto: [{ v: 5.7, tag: '5-yr' }, { v: 8 }, { v: 10, tag: 'sheet' }, { v: 12, tag: '30-yr' }, { v: 14 }] }
+};
+function sensAxis(key, p){
+  const V = SENS_VARS[key];
+  if ($('sensMode').value === 'auto') return V.auto;
+  return [-2, -1, 0, 1, 2].map(k => ({ v: Math.round((p[key] + k * V.step) * 100) / 100 }));
+}
+function renderSens(p, r){
+  const rk = $('sensRow').value;
+  let ck = $('sensCol').value;
+  if (rk === ck) { ck = Object.keys(SENS_VARS).find(k => k !== rk); $('sensCol').value = ck; }
+  const R = SENS_VARS[rk], C = SENS_VARS[ck];
+  const RV = sensAxis(rk, p), CV = sensAxis(ck, p);
+  const gaps = RV.map(ra => CV.map(ca => { const q = Object.assign({}, p); q[rk] = ra.v; q[ck] = ca.v; const x = simulate(q); return x.buyNW - x.rentNW; }));
+  const mx = Math.max(1, ...gaps.flat().map(Math.abs));
+  const same = (a, b) => Math.abs(a - b) < 1e-9;
+  let h = '<thead><tr><th class="corner">' + R.short + ' ↓<br>' + C.short + ' →</th>' + CV.map(c => '<th scope="col">' + pc(c.v) + (c.tag ? '<span class="tag">' + c.tag + '</span>' : '') + '</th>').join('') +'</tr></thead><tbody>';
+  RV.forEach((ra, i) => {
+    const rv = ra.v;
+    h += '<tr><th scope="row">' + pc(rv) + (ra.tag ? '<span class="tag">' + ra.tag + '</span>' : '') + '</th>';
+    CV.forEach((ca, j) => {
+      const cv = ca.v;
+      const d = gaps[i][j], a = Math.abs(d) / 1e7;
+      const txt = a < 0.005 ? '0.00' : (d > 0 ? '+' : MINUS) + (a >= 100 ? a.toFixed(1) : a.toFixed(2));
+      const alpha = Math.round(10 + 32 * Math.abs(d) / mx);
+      const col = d >= 0 ? 'var(--buy)' : 'var(--rent)';
+      const me = same(p[rk], rv) && same(p[ck], cv);
+      h += '<td' + (me ? ' class="me"' : '') + ' style="background:color-mix(in srgb, ' + col + ' ' + alpha + '%, var(--surface))"><button type="button" data-r="' + rv + '" data-c="' + cv + '" aria-label="' + R.phrase + ' ' + pc(rv) + ' a year, ' + C.phrase + ' ' + pc(cv) + ' a year: ' + (d >= 0 ? 'buying' : 'renting') + ' ahead by ' + short(Math.abs(d)) + '">' + txt + '</button></td>';
+    });
+    h += '</tr>';
+  });
+  $('sens').innerHTML = h + '</tbody>';
+  const gap = r.buyNW - r.rentNW;
+  $('sensMe').textContent = 'Your inputs: ' + R.phrase + ' ' + pc(p[rk]) + ', ' + C.phrase + ' ' + pc(p[ck]) + ' a year. ' +
+    (Math.abs(gap) < 5e4 ? 'A tie.' : (gap > 0 ? 'Buying' : 'Renting') + ' ahead by ' + short(Math.abs(gap)) + '.');
+}
+
+function niceStep(raw){
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const f = raw / pow;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * pow;
+}
+function axisLabel(v, unitCr){
+  if (Math.abs(v) < 1) return '0';
+  return unitCr ? parseFloat((v / 1e7).toFixed(2)) + ' Cr' : parseFloat((v / 1e5).toFixed(1)) + ' L';
+}
+
+function setReadout(i){
+  const r = state.r; if (!r) return;
+  const s = r.series[Math.max(0, Math.min(i, r.series.length - 1))];
+  state.ro = s.y;
+  $('readout').innerHTML = '<span class="yr">Year ' + s.y + '</span>' +
+    '<span class="item"><i class="sw sw-buy"></i>Buy <b>' + short(s.buy) + '</b></span>' +
+    '<span class="item"><i class="sw sw-rent"></i>Rent <b>' + short(s.rent) + '</b></span>';
+  const g = state.geo; if (!g) return;
+  const db = $('dotBuy'), dr = $('dotRent'), gd = $('guide');
+  if (db && dr && gd) {
+    db.setAttribute('cx', g.X(s.y)); db.setAttribute('cy', g.Y(s.buy));
+    dr.setAttribute('cx', g.X(s.y)); dr.setAttribute('cy', g.Y(s.rent));
+    gd.setAttribute('x1', g.X(s.y)); gd.setAttribute('x2', g.X(s.y));
+  }
+}
+
+function drawChart(r){
+  const host = $('chart');
+  const w = Math.max(host.clientWidth, 260);
+  const h = Math.round(Math.min(Math.max(w * 0.58, 220), 340));
+  state.lastW = w;
+  const m = { l: 48, r: 12, t: 10, b: 26 };
+  const pw = w - m.l - m.r, ph = h - m.t - m.b;
+  const ser = r.series, H = ser[ser.length - 1].y;
+  let lo = 0, hi = 0;
+  ser.forEach(s => { lo = Math.min(lo, s.buy, s.rent); hi = Math.max(hi, s.buy, s.rent); });
+  if (hi <= lo) hi = lo + 1;
+  const step = niceStep((hi - lo) / 4);
+  const y0 = Math.floor(lo / step) * step, y1 = Math.ceil(hi / step) * step;
+  const X = y => m.l + pw * (y / H);
+  const Y = v => m.t + ph * (1 - (v - y0) / (y1 - y0));
+  state.geo = { X, Y, m, pw, H };
+  const unitCr = (y1 - y0) >= 1e7 || Math.abs(y1) >= 1e7;
+  let svg = '<svg id="svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Net worth by year. Buying ends at ' + short(r.buyNW) + ' and renting at ' + short(r.rentNW) + '.">';
+  for (let v = y0; v <= y1 + step * 1e-6; v += step) {
+    const y = Y(v).toFixed(1);
+    svg += '<line class="' + (Math.abs(v) < 1 && y0 < 0 ? 'zero' : 'gl') + '" x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + y + '" y2="' + y + '"/>';
+    svg += '<text x="' + (m.l - 6) + '" y="' + (parseFloat(y) + 4) + '" text-anchor="end">' + axisLabel(v, unitCr) + '</text>';
+  }
+  const xs = [1, 2, 5, 10].find(s => H / s <= 6) || 10;
+  const ticks = []; for (let y = 0; y <= H; y += xs) ticks.push(y);
+  if (H - ticks[ticks.length - 1] >= xs * 0.6) ticks.push(H);
+  ticks.forEach(y => { svg += '<text x="' + X(y).toFixed(1) + '" y="' + (h - 8) + '" text-anchor="middle">' + y + '</text>'; });
+  const path = key => ser.map((s, i) => (i ? 'L' : 'M') + X(s.y).toFixed(1) + ',' + Y(s[key]).toFixed(1)).join('');
+  svg += '<line id="guide" class="guide" x1="0" x2="0" y1="' + m.t + '" y2="' + (m.t + ph) + '"/>';
+  svg += '<path class="ln ln-rent" d="' + path('rent') + '"/><path class="ln ln-buy" d="' + path('buy') + '"/>';
+  svg += '<circle id="dotRent" class="dot-rent" r="4.5" cx="0" cy="0"/><circle id="dotBuy" class="dot-buy" r="4.5" cx="0" cy="0"/></svg>';
+  host.innerHTML = svg;
+  const el = $('svg');
+  const move = e => {
+    const rect = el.getBoundingClientRect();
+    setReadout(Math.round((e.clientX - rect.left - m.l) / pw * H));
+  };
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerdown', move);
+  el.addEventListener('pointerleave', () => setReadout(H));
+  setReadout(state.ro !== null && state.ro <= H ? state.ro : H);
+}
+
+function updateHints(p){
+  ['price', 'down', 'propTax', 'society', 'upkeep', 'rent', 'upfront', 'hra'].forEach(id => {
+    const el = $('h_' + id);
+    if (el) {
+      const v = parseFloat($(id).value);
+      const auto = AUTO_IDS.includes(id) && !touched.has(id) ? ' · auto' : '';
+      el.textContent = Number.isFinite(v) && v > 0 ? short(v) + auto : '';
+    }
+  });
+}
+
+function update(){
+  const p = readParams();
+  const r = simulate(p);
+  state.p = p; state.r = r; state.ro = null;
+  $('taxExtra').hidden = !p.oldRegime;
+  updateHints(p);
+  syncAutoUI(p);
+  $('dBuy').textContent = 'Loan ' + short(r.loan) + ' · EMI ' + rs(r.emi) + ' a month';
+  $('dRent').textContent = 'Invested on day one ' + short(r.lump) + ' (down payment minus upfront costs)';
+  renderVerdict(p, r);
+  renderLedger(p, r);
+  renderSens(p, r);
+  drawChart(r);
+}
+
+buildFields();
+const AUTO_IDS = ['down', 'rent', 'upfront', 'propTax', 'society', 'upkeep'];
+const touched = new Set();
+const PRESETS = [5e6, 7.5e6, 1e7, 1.5e7, 2e7, 3e7, 4e7, 5e7, 6e7, 7e7, 8e7, 9e7, 1e8];
+const presetLabel = v => v >= 1e7 ? '₹' + parseFloat((v / 1e7).toFixed(2)) + ' Cr' : '₹' + parseFloat((v / 1e5).toFixed(2)) + ' L';
+function applyAuto(){
+  const price = parseFloat($('price').value);
+  if (!Number.isFinite(price) || price <= 0) return;
+  const a = autoFill(price);
+  AUTO_IDS.forEach(id => { if (!touched.has(id)) $(id).value = a[id]; });
+}
+function syncAutoUI(p){
+  $('resetAuto').hidden = touched.size === 0;
+  document.querySelectorAll('#presets button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.v) === p.price)));
+  const key = currentAssumption(p);
+  document.querySelectorAll('#assumeSets button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.k === key)));
+  $('assumeNote').textContent = key ? ASSUMPTIONS[key].note
+    : 'Custom: rent ' + pc(p.rentGrowth) + ', house prices ' + pc(p.appreciation) + ', investments ' + pc(p.invReturn) + ' a year.';
+}
+$('presets').innerHTML = PRESETS.map(v => '<button type="button" data-v="' + v + '" aria-pressed="false">' + presetLabel(v) + '</button>').join('');
+$('presets').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  $('price').value = b.dataset.v; applyAuto(); update();
+});
+const ASSUMPTIONS = {
+  hist30: { label: '30-year history', rentGrowth: 6, appreciation: 9.3, invReturn: 12,
+    note: 'Rent 6% (CPI inflation as a proxy), house prices 9.3% (1991 to 2021), investments 12% (Nifty 50 over 30 years, price plus dividends). Sources are listed below the grid.' },
+  recent: { label: 'Last 5 years', rentGrowth: 4.5, appreciation: 3.6, invReturn: 5.7,
+    note: 'Rent 4.5% (urban housing CPI), house prices 3.6% (RBI index, latest year), investments 5.7% (Nifty 50 over 5 years).' },
+  sheet: { label: 'Your sheet', rentGrowth: 10, appreciation: 4.3, invReturn: 10,
+    note: 'Rent 10%, house prices 4.3%, investments 10%, as in your original sheet.' }
+};
+const GROWTH_IDS = ['rentGrowth', 'appreciation', 'invReturn'];
+function applyAssumptions(key){ const a = ASSUMPTIONS[key]; GROWTH_IDS.forEach(id => { $(id).value = a[id]; }); }
+function currentAssumption(p){
+  return Object.keys(ASSUMPTIONS).find(k => GROWTH_IDS.every(id => Math.abs(ASSUMPTIONS[k][id] - p[id]) < 1e-9)) || null;
+}
+$('assumeSets').innerHTML = Object.keys(ASSUMPTIONS).map(k => '<button type="button" data-k="' + k + '" aria-pressed="false">' + ASSUMPTIONS[k].label + '</button>').join('');
+$('assumeSets').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  applyAssumptions(b.dataset.k); update();
+});
+$('sens').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  $($('sensRow').value).value = b.dataset.r;
+  $($('sensCol').value).value = b.dataset.c;
+  update();
+});
+$('resetAuto').addEventListener('click', () => { touched.clear(); applyAuto(); update(); });
+document.addEventListener('input', e => {
+  const id = e.target.id;
+  if (id === 'price') applyAuto();
+  else if (AUTO_IDS.includes(id)) touched.add(id);
+  update();
+});
+$('form').addEventListener('change', update);
+$('form').addEventListener('submit', e => e.preventDefault());
+applyAssumptions('hist30');
+update();
+
+if ('ResizeObserver' in window) {
+  new ResizeObserver(() => { const w = Math.max($('chart').clientWidth, 260); if (state.r && w !== state.lastW) drawChart(state.r); }).observe($('chart'));
+} else {
+  window.addEventListener('resize', () => { if (state.r) drawChart(state.r); });
+}
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver(es => { $('chip').hidden = es[0].isIntersecting; }).observe($('verdict'));
+} else {
+  $('chip').hidden = false;
+}
+</script>
+
+</body></html>

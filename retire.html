@@ -1,0 +1,724 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Retirement Corpus Calculator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: account and spending inputs on the left, a sticky results panel on the right, then the breakdown tables and balance chart across the bottom. Stacks with results first on phones. */
+:root {
+  --bg: #f2f5f6;
+  --surface: #ffffff;
+  --ink: #15222c;
+  --muted: #566772;
+  --line: #d8e0e5;
+  --accent: #0b6a66;
+  --accent-soft: #e0f0ee;
+  --good: #1b7a3d;
+  --good-soft: #e2f3e7;
+  --bad: #b0372d;
+  --bad-soft: #fbe8e5;
+  --track: #e3e9ed;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e161b;
+    --surface: #151f26;
+    --ink: #e5edf1;
+    --muted: #94a5b0;
+    --line: #26343d;
+    --accent: #4fc3bb;
+    --accent-soft: #14302e;
+    --good: #5ccf88;
+    --good-soft: #14301f;
+    --bad: #f08a7f;
+    --bad-soft: #36191a;
+    --track: #24323b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e161b;
+  --surface: #151f26;
+  --ink: #e5edf1;
+  --muted: #94a5b0;
+  --line: #26343d;
+  --accent: #4fc3bb;
+  --accent-soft: #14302e;
+  --good: #5ccf88;
+  --good-soft: #14301f;
+  --bad: #f08a7f;
+  --bad-soft: #36191a;
+  --track: #24323b;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+h1 { margin: 0; font-size: 26px; line-height: 1.15; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+button {
+  font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink);
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (min-width: 900px) {
+  .grid { grid-template-columns: minmax(0, 1fr) 400px; }
+  #inputs { grid-column: 1; grid-row: 1; }
+  #results { grid-column: 2; grid-row: 1; position: sticky; top: 16px; }
+}
+
+#inputs { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+fieldset { margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 14px 16px 16px; min-width: 0; }
+legend { padding: 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 16px; }
+.f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.lab { font-size: 13px; font-weight: 500; }
+.box { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); overflow: hidden; }
+.box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.box select { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 15px; padding: 8px 10px; outline: none; }
+.box input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font-family: var(--font-num); font-size: 15px; padding: 8px 10px; outline: none; }
+.pre, .unit { display: flex; align-items: center; padding: 0 10px; color: var(--muted); font-size: 13px; font-family: var(--font-num); background: var(--track); }
+.hint { font-size: 12px; color: var(--muted); }
+
+.acct-head, .acct { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px 14px; align-items: center; }
+.acct-head { font-size: 12px; font-weight: 600; color: var(--muted); padding-bottom: 6px; }
+.acct { padding: 10px 0; border-top: 1px solid var(--line); }
+.aname { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.aname strong { font-size: 14px; font-weight: 600; }
+.acell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cap { display: none; font-size: 12px; color: var(--muted); }
+.tag { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); vertical-align: 1px; }
+@media (max-width: 640px) {
+  .acct-head { display: none; }
+  .acct { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .aname { grid-column: 1 / -1; }
+  .cap { display: block; }
+}
+
+#results { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; min-width: 0; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.pill.good { background: var(--good-soft); color: var(--good); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.kicker { margin: 14px 0 2px; font-size: 13px; color: var(--muted); }
+.big { font-family: var(--font-num); font-size: 36px; line-height: 1.1; font-weight: 500; letter-spacing: -0.02em; }
+.alt { margin-top: 4px; font-family: var(--font-num); font-size: 14px; color: var(--muted); }
+.bar { margin: 16px 0 6px; height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+.bar.over > span { background: var(--good); }
+.barlab { font-size: 12px; color: var(--muted); }
+dl { margin: 16px 0 0; display: flex; flex-direction: column; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.row dt { font-size: 13px; color: var(--muted); }
+.row dd { margin: 0; font-family: var(--font-num); font-size: 14px; text-align: right; }
+.row .note { grid-column: 1 / -1; font-size: 12px; color: var(--muted); font-family: var(--font-body); text-align: left; }
+.neg { color: var(--bad); }
+.pos { color: var(--good); }
+.msg { margin: 0; color: var(--muted); }
+
+.detail { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 20px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+.card h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
+.card > p { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.card.wide { grid-column: 1 / -1; }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: right; font-weight: 500; font-size: 12px; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+td { padding: 8px; border-bottom: 1px solid var(--line); text-align: right; font-family: var(--font-num); white-space: nowrap; vertical-align: top; }
+td:first-child { font-family: var(--font-body); white-space: normal; min-width: 150px; }
+td small { display: block; color: var(--muted); font-size: 11px; }
+tr.tot td { font-weight: 600; border-bottom: 0; border-top: 2px solid var(--line); }
+tr.dim td { color: var(--muted); }
+
+#chartWrap h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
+#chartWrap p { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+svg { display: block; width: 100%; height: auto; }
+svg text { font-family: var(--font-num); font-size: 11px; fill: var(--muted); }
+.grid-line { stroke: var(--line); stroke-width: 1; }
+.axis { stroke: var(--muted); stroke-width: 1; }
+.line-you { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.line-need { fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-dasharray: 5 4; }
+.ret-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.seg { display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { flex: 1; border: 0; border-radius: 0; padding: 8px 10px; font-size: 13px; background: var(--bg); color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .seg button[aria-pressed="true"] { color: #0a1d1c; } }
+:root[data-theme="dark"] .seg button[aria-pressed="true"] { color: #0a1d1c; }
+.seg button:disabled { opacity: 0.45; cursor: not-allowed; }
+th.act { color: var(--accent); background: var(--accent-soft); }
+td.act { background: var(--accent-soft); }
+tr.sub td { font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2.5px solid var(--accent); vertical-align: middle; margin-right: 6px; }
+.legend i.d { border-top: 2px dashed var(--muted); }
+.fine { font-size: 12px; color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .bar > span { transition: width 0.25s ease; } }
+
+.note { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+details.adv { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 12px 16px; }
+details.adv summary, details.card summary { cursor: pointer; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+details.adv[open] summary, details.card[open] summary { margin-bottom: 14px; }
+details.card summary { font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.two { display: flex; flex-direction: column; gap: 0; margin-top: 14px; }
+.two .row { padding: 10px 0; }
+.life { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.lc { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 12px; border-radius: 8px; background: var(--bg); }
+.lc strong { font-size: 15px; }
+.lc .need { font-family: var(--font-num); font-size: 14px; color: var(--accent); font-weight: 500; }
+.lc .st { font-size: 12px; font-weight: 600; }
+.lc small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.lc[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+.lc:disabled { cursor: default; opacity: 1; }
+.growbox { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.growbox label { font-size: 13px; font-weight: 500; }
+.growbox .box { width: 140px; flex: none; }
+.areanote { margin: 10px 0 14px; }
+.scroll.tall { max-height: 380px; overflow: auto; }
+.advice { margin: 14px 0 0; padding: 12px; border-radius: 6px; background: var(--accent-soft); font-size: 14px; }
+.explain { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+.card .scroll + p { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Retirement Corpus Calculator</h1>
+      <p class="sub">How much you need to retire in Bangalore with a premium life for four. All amounts are in today's money.</p>
+    </div>
+    <div class="actions">
+      <button type="button" id="clearBtn">Clear my numbers</button>
+      <button type="button" id="resetBtn">Reset all</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <form id="inputs" onsubmit="return false"></form>
+    <section id="results"><div class="growbox"><label for="grow">Money grows until you retire</label><span class="box"><input id="grow" type="number" inputmode="decimal" min="0" max="40" step="0.5" aria-label="Yearly growth until you retire"><span class="unit">% / yr</span></span></div><div id="out" aria-live="polite"></div></section>
+  </div>
+
+  <div class="detail" id="detail"></div>
+
+  <details class="card" id="chartWrap">
+    <summary>Show balance chart</summary>
+    <p>US and Indian portfolios, in today's money, in ₹ crore. The solid line is your plan; the dashed line is the path that just reaches your goal. The 401(k) and Roth join when they open.</p>
+    <div id="chart"></div>
+    <div class="legend"><span><i></i>Your projected balance</span><span><i class="d"></i>Balance if you start with the needed amount</span></div>
+  </details>
+
+  <p class="fine">A planning model, not financial advice. The prices for help, groceries, healthcare, travel, cars and school in the dropdowns are my rough estimates, not quotes. Area rents are the middle of the April 2026 market ranges from <a href="https://www.onecityproperty.com/news/rental-property-in-bangalore" target="_blank" rel="noopener">OneCity Property</a>, with Sadashivanagar from <a href="https://wb.rentok.com/market-trends/best-areas-to-live-in-bangalore-ultimate-rental-guide/" target="_blank" rel="noopener">RentOk</a> (2025), and Devanahalli from <a href="https://www.nobroker.in/3bhk-flats-for-rent-in-devanahalli_bangalore" target="_blank" rel="noopener">NoBroker</a> listings (October 2026). The community type sets where in that range the rent falls: standard apartment a quarter of the way up, gated community halfway, premium gated 85% up, and a villa 30% above that. A 4BHK is 1.5 times and a 5BHK 2 times the 3BHK. Those steps and the Sadashivanagar 3BHK range are my estimates, so check listings before you decide. Returns are after tax and fees. Before age 59½ a traditional 401(k) carries a 10% penalty, so this plan does not touch it until 60. As a US citizen you owe US tax on worldwide income, and Indian mutual funds fall under PFIC rules. Check the details with a cross-border CPA.</p>
+</div>
+
+<script id="model">
+// Each allowance is a dropdown of options. Option values are ₹ lakh per year; choose None for anything you do not need.
+const CATS = [
+  { id: 'c_housing', label: 'Housing (rent)', def: 15 },
+  { id: 'c_maid', label: 'Maid', def: 1.2, opts: [[0, 'None'], [0.6, 'Part-time, a few hours a week'], [1.2, 'Daily, a few hours'], [2.4, 'Full-time']] },
+  { id: 'c_cook', label: 'Cook', def: 2.4, opts: [[0, 'None'], [1.2, 'Part-time, one or two meals'], [2.4, 'Full-time'], [4.8, 'Full-time, chef level']] },
+  { id: 'c_driver', label: 'Driver', def: 3.6, opts: [[0, 'None, I drive or use cabs'], [1.8, 'On call or part-time'], [3.6, 'Full-time']] },
+  { id: 'c_nanny', label: 'Nanny or child carer', def: 1.8, opts: [[0, 'None'], [1.8, 'Part-time'], [3.6, 'Full-time'], [4.8, 'Live-in']] },
+  { id: 'c_groc', label: 'Groceries and dining out', def: 12, opts: [[6, 'Basic'], [9, 'Comfortable'], [12, 'Premium'], [18, 'Gourmet'], [24, 'Lavish']] },
+  { id: 'c_util', label: 'Utilities and household', def: 6, opts: [[2.4, 'Small home'], [3.6, 'Standard home'], [6, 'Large home, high AC use'], [8, 'Villa size']] },
+  { id: 'c_health', label: 'Healthcare and insurance', def: 4, opts: [[2, 'Basic family insurance'], [3, 'Standard family plan'], [4, 'Premium plan with top-up cover'], [6, 'Premium plus wellness and dental'], [8, 'Concierge-level care']] },
+  { id: 'c_intl', label: 'International travel', def: 10, opts: [[0, 'None'], [4, '1 trip, economy'], [10, '1 trip, premium'], [20, '2 premium trips'], [30, '3 premium trips']] },
+  { id: 'c_dom', label: 'Domestic travel', def: 5, opts: [[0, 'None'], [2, '2 trips'], [5, '3 trips'], [7, '4 trips'], [12, '6 trips']] },
+  { id: 'c_cars', label: 'Cars and fuel', def: 4, opts: [[2, 'No car, cabs only'], [3, 'One small car'], [4, 'One SUV or sedan'], [6, 'Two cars'], [8, 'Two premium cars']] },
+  { id: 'c_other', label: 'Shopping, clubs, entertainment', def: 15, opts: [[3, 'Light'], [5, 'Moderate'], [10, 'Comfortable'], [15, 'Premium'], [30, 'Lavish']] }
+];
+const SCHOOLS = [[2, 'Good CBSE or ICSE school'], [5, 'Top private school'], [8, 'Premium private or entry-level international'], [11, 'Good international school (IB, IGCSE)'], [14, 'Top international school'], [17.5, 'Top international with transport and activities'], [22, 'Elite international school with all extras']];
+const PRESETS = [
+  { id: 'lean', name: 'Lean', blurb: 'Modest 2BHK, daily maid, no driver, one economy trip a year, good local school.', fee: 5, home: 2,
+    vals: { c_housing: 8, c_maid: 1.2, c_cook: 0, c_driver: 0, c_nanny: 0, c_groc: 9, c_util: 2.4, c_health: 3, c_intl: 4, c_dom: 2, c_cars: 2, c_other: 5 } },
+  { id: 'comfortable', name: 'Comfortable', blurb: 'Nice 3BHK, maid, part-time cook and nanny, regular trips, a good private school.', fee: 11, home: 3,
+    vals: { c_housing: 12, c_maid: 1.2, c_cook: 1.2, c_driver: 0, c_nanny: 1.8, c_groc: 12, c_util: 3.6, c_health: 4, c_intl: 4, c_dom: 5, c_cars: 3, c_other: 10 } },
+  { id: 'premium', name: 'Premium', blurb: 'Premium 3BHK, cook, maid, driver and nanny, top international school, 1 international and 3 domestic trips.', fee: 17.5, home: 3,
+    vals: { c_housing: 15, c_maid: 1.2, c_cook: 2.4, c_driver: 3.6, c_nanny: 1.8, c_groc: 12, c_util: 6, c_health: 4, c_intl: 10, c_dom: 5, c_cars: 4, c_other: 15 } },
+  { id: 'ultra', name: 'Ultra premium', blurb: 'Villa or large apartment, full staff, elite international school, frequent international travel.', fee: 22, home: 4,
+    vals: { c_housing: 30, c_maid: 2.4, c_cook: 4.8, c_driver: 3.6, c_nanny: 4.8, c_groc: 18, c_util: 8, c_health: 8, c_intl: 20, c_dom: 12, c_cars: 8, c_other: 30 } }
+];
+// Monthly rent in ₹ thousand: low and high of the market range for a 2BHK (lo2, hi2) and a 3BHK (lo3, hi3).
+// 4BHK is estimated as 1.5 times the 3BHK and 5BHK as 2 times.
+const AREAS = [
+  { id: 'indiranagar', name: 'Indiranagar', lo2: 38, hi2: 75, lo3: 65, hi3: 150, blurb: 'Central, restaurants and cafes, the priciest of the popular areas.' },
+  { id: 'sadashivanagar', name: 'Sadashivanagar', lo2: 50, hi2: 80, lo3: 87.5, hi3: 140, blurb: 'Old, leafy and quiet, close to the centre. The 3BHK range is estimated from the 2BHK.' },
+  { id: 'koramangala', name: 'Koramangala', lo2: 35, hi2: 65, lo3: 55, hi3: 120, blurb: 'Central, startup hub, many international schools within reach.' },
+  { id: 'hsr', name: 'HSR Layout', lo2: 30, hi2: 55, lo3: 45, hi3: 85, blurb: 'Family friendly, good for south Bangalore schools.' },
+  { id: 'whitefield', name: 'Whitefield', lo2: 28, hi2: 50, lo3: 40, hi3: 75, blurb: 'East side, tech parks, large gated communities.' },
+  { id: 'bellandur', name: 'Bellandur', lo2: 25, hi2: 45, lo3: 40, hi3: 70, blurb: 'Near the Outer Ring Road tech corridor.' },
+  { id: 'hebbal', name: 'Hebbal', lo2: 25, hi2: 45, lo3: 40, hi3: 75, blurb: 'North side, near the airport road.' },
+  { id: 'sarjapur', name: 'Sarjapur Road', lo2: 22, hi2: 40, lo3: 35, hi3: 60, blurb: 'Spacious apartments and villas, several international schools.' },
+  { id: 'devanahalli', name: 'Devanahalli', lo2: 12, hi2: 36, lo3: 23.4, hi3: 58, blurb: 'Next to the airport, large new gated communities. Listing rents, so they run lower than the central areas.' }
+];
+// Where in the market range the rent falls, and a premium for independent villas.
+const COMMS = [
+  { id: 'standard', name: 'Standard apartment building', p: 0.25 },
+  { id: 'gated', name: 'Gated community with amenities', p: 0.5 },
+  { id: 'premium', name: 'Premium gated community', p: 0.85 },
+  { id: 'villa', name: 'Independent villa', p: 0.85, mult: 1.3 }
+];
+function rentMonthly(a, home, commId) {
+  const c = COMMS.find(x => x.id === commId) || COMMS[1];
+  const at = (lo, hi) => lo + c.p * (hi - lo);
+  const r2 = at(a.lo2, a.hi2), r3 = at(a.lo3, a.hi3);
+  const base = home === 2 ? r2 : home === 3 ? r3 : home === 4 ? r3 * 1.5 : r3 * 2;
+  return base * (c.mult || 1);
+}
+function areaHousing(areaId, home, commId) {
+  const a = AREAS.find(x => x.id === areaId);
+  if (!a) return null;
+  return Math.round(rentMonthly(a, home, commId) * 12 / 100 * 10) / 10;
+}
+function housingFor(pr, areaId, beds, commId) {
+  const home = beds && beds !== 'auto' ? Number(beds) : pr.home;
+  const v = areaHousing(areaId, home, commId);
+  return v === null ? pr.vals.c_housing : v;
+}
+const FIELDS = [
+  { sec: 'About you', items: [
+    { id: 'age', label: 'Your age now', def: 36, unit: 'yrs', step: 1 },
+    { id: 'retAge', label: 'Retire at age', def: 40, unit: 'yrs', step: 1 },
+    { id: 'income', label: 'Your yearly income now', def: 250000, pre: '$', step: 5000, hint: 'Only used to check the savings are realistic.' } ] },
+  { sec: 'Money you have today', items: [
+    { id: 'k401', label: '401(k)', def: 0, pre: '$', step: 1000, my: true, hint: 'Locked until age 60.' },
+    { id: 'roth', label: 'Roth IRA', def: 0, pre: '$', step: 1000, my: true, hint: 'Locked until age 60.' },
+    { id: 'usp', label: 'US portfolio', def: 0, pre: '$', step: 1000, my: true, hint: 'Taxable stocks, ETFs, cash. You live on this first.' },
+    { id: 'ind', label: 'Indian portfolio', def: 0, pre: '₹', unit: 'crore', step: 0.1, my: true, hint: 'Mutual funds, stocks, FDs, PPF.' },
+    { id: 'p529', label: '529 plan', def: 0, pre: '$', step: 1000, my: true, hint: 'Pays for college first.' },
+    { id: 'cust', label: 'Custodial account', def: 0, pre: '$', step: 1000, my: true, hint: 'UTMA or UGMA. Pays for college first.' },
+    { id: 'save', label: 'You add each year', def: 0, pre: '$', step: 1000, my: true, hint: 'Until you retire. Goes into the US portfolio.' } ] },
+  { sec: 'Lifestyle', life: true, items: [{ id: 'area', def: 'none' }, { id: 'beds', def: 'auto' }, { id: 'comm', def: 'gated' }] },
+  { sec: 'What you need each year', note: 'In today’s prices. Choose None for anything you do not need.', items: CATS.map(c => c.opts ? { id: c.id, label: c.label, def: c.def, select: c.opts } : { id: c.id, label: c.label, def: c.def, pre: '₹', unit: 'lakh', step: 0.5, hint: 'Set by the area above, or type your own.' }) },
+  { sec: 'School and college', items: [
+    { id: 'fee', label: 'School for each child', def: 17.5, select: SCHOOLS, hint: 'Fee per child per year, paid until age 18.' },
+    { id: 'k1', label: 'Child 1 age now', def: 5, unit: 'yrs', step: 1 },
+    { id: 'k2', label: 'Child 2 age now', def: 1, unit: 'yrs', step: 1, hint: 'Leave blank if none.' },
+    { id: 'col', label: 'College per child per year', def: 80000, pre: '$', step: 5000, hint: 'US college is about $80,000. Use 0 for India.' } ] },
+  { sec: 'Leave to your kids', items: [
+    { id: 'legacy', label: 'Amount left at the end', def: 0, pre: '$', step: 10000, my: true, hint: 'In today’s money.' } ] },
+  { sec: 'Advanced settings', adv: true, items: [
+    { id: 'swr', label: 'Withdrawal rate', def: 4, unit: '% / yr', step: 0.25, hint: 'Used for everyday costs. Planners use 3-3.5% for 40+ years.' },
+    { id: 'planAge', label: 'Plan to age', def: 90, unit: 'yrs', step: 1 },
+    { id: 'accAge', label: 'First use of 401(k) and Roth', def: 60, unit: 'yrs', step: 1 },
+    { id: 'rPre', label: 'US accounts grow', def: 12, unit: '% / yr', step: 0.5 },
+    { id: 'rInd', label: 'Indian portfolio grows', def: 12, unit: '% / yr', step: 0.5 },
+    { id: 'rPost', label: 'Money grows after you retire', def: 8, unit: '% / yr', step: 0.5 },
+    { id: 'rKid', label: '529 and custodial grow', def: 7, unit: '% / yr', step: 0.5 },
+    { id: 'inf', label: 'General inflation', def: 6, unit: '% / yr', step: 0.5 },
+    { id: 'edu', label: 'School and college inflation', def: 8, unit: '% / yr', step: 0.5 },
+    { id: 'hc', label: 'Tax on 401(k) withdrawals', def: 25, unit: '%', step: 1 },
+    { id: 'colYrs', label: 'Years of college', def: 4, unit: 'yrs', step: 1 },
+    { id: 'fx', label: 'Exchange rate', def: 88, pre: '₹', unit: 'per $', step: 0.5 } ] }
+];
+function allFields() {
+  const out = [];
+  FIELDS.forEach(g => g.items.forEach(f => out.push({ id: f.id, def: f.def === undefined ? 0 : f.def, my: !!f.my })));
+  return out;
+}
+
+const $ = id => document.getElementById(id);
+function val(id) { const v = $(id).value.trim(); return v === '' ? null : Number(v); }
+function num(id) { const v = val(id); return Number.isFinite(v) ? v : 0; }
+
+function readInputs() {
+  const fx = num('fx') || 1;
+  const usd = id => num(id) * fx;
+  const inf = num('inf') / 100;
+  return {
+    method: 'rate', accAge: num('accAge'), swr: num('swr') / 100, rInd: num('rInd') / 100,
+    age: num('age'), retAge: num('retAge'), planAge: num('planAge'), fx,
+    a401: usd('k401'), c401: 0, roth: usd('roth'), cRoth: 0,
+    usp: usd('usp'), cUsp: usd('save'),
+    india: num('ind') * 1e7, cInd: 0,
+    p529: usd('p529'), c529: 0, cust: usd('cust'), cCust: 0,
+    cats: CATS.map(c => ({ id: c.id, label: c.label, amt: num(c.id) * 1e5, inf })),
+    fee: num('fee') * 1e5,
+    kids: [val('k1'), val('k2')].filter(k => k !== null && Number.isFinite(k) && k >= 0),
+    col: num('col'), colYrs: num('colYrs'), legacy: num('legacy'),
+    rPre: num('rPre') / 100, rPost: num('rPost') / 100, rKid: num('rKid') / 100,
+    inf, edu: num('edu') / 100, hc: Math.min(1, num('hc') / 100)
+  };
+}
+
+// Rupees in the money of year t (t = years from now).
+function schoolFee(p, t) {
+  let s = 0;
+  for (const k of p.kids) if (k + t < 18) s += p.fee * Math.pow(1 + p.edu, t);
+  return s;
+}
+function catCost(p, c, t) { return c.amt * Math.pow(1 + c.inf, t); }
+function living(p, t) { return p.cats.reduce((s, c) => s + catCost(p, c, t), 0) + schoolFee(p, t); }
+function college(p, t) {
+  let s = 0;
+  for (const k of p.kids) if (k + t >= 18 && k + t < 18 + p.colYrs) s += p.col * p.fx * Math.pow(1 + p.edu, t);
+  return s;
+}
+// 529 and custodial money pays college first; short[t] is what your own savings must cover.
+function kidsPlan(p, R) {
+  const N = p.planAge - p.age;
+  let pot = p.p529 + p.cust;
+  const cK = p.c529 + p.cCust;
+  const short = [], potEnd = []; let tc = 0, tp = 0;
+  for (let t = 0; t < N; t++) {
+    pot = pot * (1 + p.rKid) + (t < R ? cK : 0);
+    const c = college(p, t), paid = Math.min(pot, c);
+    pot -= paid; short.push(c - paid); potEnd.push(pot); tc += c; tp += paid;
+  }
+  return { short, potEnd, tc, tp, potRet: R > 0 ? potEnd[R - 1] : p.p529 + p.cust };
+}
+// Each account grows to the start of year R. College the kids' accounts cannot cover is taken from your savings.
+// The 401(k) and Roth stay locked until age accAge. The US and Indian portfolios are the money you live on first.
+function accumulate(p, R, plan) {
+  let a = p.a401, b = p.roth, u = p.usp, i = p.india, off = 0;
+  for (let t = 0; t < R; t++) {
+    a = a * (1 + p.rPre) + p.c401; b = b * (1 + p.rPre) + p.cRoth; u = u * (1 + p.rPre) + p.cUsp; i = i * (1 + p.rInd) + p.cInd;
+    off = off * (1 + p.rPre) + plan.short[t];
+  }
+  const lockedAll = a * (1 - p.hc) + b;
+  const k = Math.max(0, p.accAge - p.age - R);
+  const open = k === 0;
+  const accessible = u + i - off + (open ? lockedAll : 0);
+  return { a, b, u, i, off, tax: a * p.hc, k, lockedAll, lockedNet: open ? 0 : lockedAll, accessible, main: accessible };
+}
+// What the locked 401(k) and Roth are worth the year they open, and when.
+function unlockOf(p, R, acc) {
+  const N = p.planAge - p.age;
+  if (acc.k === 0 || R + acc.k >= N) return null;
+  const g = Math.pow(1 + p.rPre, acc.k);
+  return { t: R + acc.k, amt: acc.a * g * (1 - p.hc) + acc.b * g };
+}
+// Money needed in the US and Indian portfolios at the start of year R, under both ways of sizing it.
+// Withdrawals happen at the start of each year. The chosen method (p.method) fills the top-level fields.
+function needed(p, R, plan, acc) {
+  const N = p.planAge - p.age;
+  const un = unlockOf(p, R, acc);
+  const lockPV = un ? un.amt / Math.pow(1 + p.rPost, un.t - R) : 0;
+  const mk = () => ({ cats: {}, sch: 0, col: 0, leg: 0 });
+  const sp = mk(), rt = mk();
+  p.cats.forEach(c => { sp.cats[c.id] = 0; rt.cats[c.id] = 0; });
+  let bridge = 0;
+  for (let t = R; t < N; t++) {
+    const d = 1 / Math.pow(1 + p.rPost, t - R);
+    p.cats.forEach(c => { sp.cats[c.id] += catCost(p, c, t) * d; });
+    sp.sch += schoolFee(p, t) * d; sp.col += plan.short[t] * d;
+    if (t < R + acc.k) bridge += (living(p, t) + plan.short[t]) * d;
+  }
+  sp.leg = rt.leg = p.legacy * p.fx * Math.pow(1 + p.inf, N) / Math.pow(1 + p.rPost, N - R);
+  const haveRate = p.swr > 0;
+  if (haveRate) {
+    p.cats.forEach(c => { rt.cats[c.id] = catCost(p, c, R) / p.swr; });
+    rt.sch = sp.sch; rt.col = sp.col;
+  }
+  const fin = (m, rate) => {
+    m.liv = p.cats.reduce((s, c) => s + m.cats[c.id], 0);
+    m.cost = m.liv + m.sch + m.col + m.leg;
+    m.total = rate ? Math.max(bridge, m.cost - acc.lockedNet) : bridge + Math.max(0, m.cost - bridge - lockPV);
+    m.less = Math.max(0, m.cost - m.total);
+  };
+  fin(sp, false); if (haveRate) fin(rt, true);
+  const useRate = p.method === 'rate' && haveRate;
+  return Object.assign({}, useRate ? rt : sp, { bridge, both: { rate: haveRate ? rt : null, spend: sp }, active: useRate ? 'rate' : 'spend' });
+}
+function earliest(p) {
+  const N = p.planAge - p.age;
+  for (let r = 0; r < N && r <= 45; r++) {
+    const plan = kidsPlan(p, r), acc = accumulate(p, r, plan);
+    if (acc.accessible >= needed(p, r, plan, acc).total) return p.age + r;
+  }
+  return null;
+}
+// Balances at the start of each year from year R, nominal rupees. The locked accounts join in the year they open.
+function simulate(p, R, startBal, plan, un) {
+  const N = p.planAge - p.age;
+  const pts = []; let b = startBal, out = null;
+  for (let t = R; t < N; t++) {
+    if (un && t === un.t) b += un.amt;
+    pts.push({ t, b });
+    const w = living(p, t) + plan.short[t];
+    if (b - w < 0 && out === null) out = p.age + t;
+    b = Math.max(0, b - w) * (1 + p.rPost);
+    if (out !== null) b = 0;
+  }
+  pts.push({ t: N, b });
+  return { pts, out };
+}
+function yourPath(p, R, plan, acc) {
+  let a = p.a401, b = p.roth, u = p.usp, i = p.india, off = 0;
+  const pts = [];
+  for (let t = 0; t < R; t++) {
+    const open = p.accAge <= p.age + t;
+    pts.push({ t, b: u + i - off + (open ? a * (1 - p.hc) + b : 0) });
+    a = a * (1 + p.rPre) + p.c401; b = b * (1 + p.rPre) + p.cRoth; u = u * (1 + p.rPre) + p.cUsp; i = i * (1 + p.rInd) + p.cInd;
+    off = off * (1 + p.rPre) + plan.short[t];
+  }
+  const s = simulate(p, R, acc.accessible, plan, unlockOf(p, R, acc));
+  return { pts: pts.concat(s.pts), out: s.out };
+}
+if (typeof module !== 'undefined') module.exports = { readInputs, living, college, kidsPlan, accumulate, unlockOf, needed, earliest, simulate, yourPath, schoolFee };
+</script>
+<script>
+const STORE = 'bangalore-corpus-calculator-v3';
+let lifeId = 'premium';
+function numBox(id, f, label) {
+  if (f.select) return '<span class="box"><select id="' + id + '" aria-label="' + label + '">' + f.select.map(o => '<option value="' + o[0] + '">' + (o[0] === 0 ? o[1] : o[1] + ' (₹' + o[0] + ' lakh a year)') + '</option>').join('') + '</select></span>';
+  return '<span class="box">' + (f.pre ? '<span class="pre">' + f.pre + '</span>' : '') +
+    '<input id="' + id + '" type="number" inputmode="decimal" min="0" step="' + f.step + '" aria-label="' + label + '">' +
+    (f.unit ? '<span class="unit">' + f.unit + '</span>' : '') + '</span>';
+}
+function fieldHtml(f) {
+  return '<label class="f" for="' + f.id + '"><span class="lab">' + f.label + '</span>' + numBox(f.id, f, f.label) + (f.hint ? '<span class="hint">' + f.hint + '</span>' : '') + '</label>';
+}
+function build() {
+  const form = $('inputs');
+  form.innerHTML = FIELDS.map(g => g.life
+    ? '<fieldset><legend>Lifestyle</legend><div class="fields"><label class="f" for="area"><span class="lab">Where in Bangalore</span><span class="box"><select id="area"><option value="none">Use the lifestyle’s own housing cost</option>' + AREAS.map(a => '<option value="' + a.id + '">' + a.name + '</option>').join('') + '</select></span></label><label class="f" for="beds"><span class="lab">Bedrooms</span><span class="box"><select id="beds"><option value="auto">Follow the lifestyle</option><option value="2">2 bedrooms</option><option value="3">3 bedrooms</option><option value="4">4 bedrooms</option><option value="5">5 bedrooms</option></select></span></label><label class="f" for="comm"><span class="lab">Community</span><span class="box"><select id="comm">' + COMMS.map(c => '<option value="' + c.id + '">' + c.name + '</option>').join('') + '</select></span></label></div><p class="hint areanote" id="areaNote"></p><div class="life" id="life"></div><p class="note">Pick one and the yearly costs below fill in. Each card shows what that lifestyle needs with your other numbers. Edit any cost below to make it your own.</p></fieldset>'
+    : g.adv
+    ? '<details class="adv"><summary>' + g.sec + '</summary><div class="fields">' + g.items.map(fieldHtml).join('') + '</div></details>'
+    : '<fieldset><legend>' + g.sec + '</legend>' + (g.note ? '<p class="note">' + g.note + '</p>' : '') + '<div class="fields">' + g.items.map(fieldHtml).join('') + '</div></fieldset>').join('');
+  allFields().forEach(f => { $(f.id).value = f.def; });
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (saved) for (const id in saved) if ($(id)) $(id).value = saved[id];
+    allFields().forEach(f => { if ($(f.id).selectedIndex === -1) $(f.id).value = f.def; });
+  } catch (e) {}
+  form.addEventListener('input', () => { save(); render(); });
+}
+function save() {
+  try {
+    const o = {};
+    allFields().forEach(f => { o[f.id] = $(f.id).value; });
+    localStorage.setItem(STORE, JSON.stringify(o));
+  } catch (e) {}
+}
+function setAll(onlyMine) {
+  allFields().forEach(f => {
+    if (onlyMine && !f.my) return;
+    $(f.id).value = onlyMine ? '' : f.def;
+  });
+  save(); render();
+}
+
+const inr = v => { const a = Math.abs(v), s = v < 0 ? '-' : ''; return a >= 9.995e6 ? s + '₹' + (a / 1e7).toFixed(2) + ' cr' : s + '₹' + (a / 1e5).toFixed(1) + ' lakh'; };
+const usd = v => { const a = Math.abs(v), s = v < 0 ? '-' : ''; return a >= 1e6 ? s + '$' + (a / 1e6).toFixed(2) + 'M' : s + '$' + Math.round(a / 1e3).toLocaleString('en-US') + 'k'; };
+const dash = '&ndash;';
+
+function render() {
+  const p = readInputs();
+  const R = p.retAge - p.age, N = p.planAge - p.age;
+  const out = $('out');
+  if (!(R >= 0) || !(N > R) || p.planAge > 110 || p.age < 0) {
+    out.innerHTML = '<p class="msg">Set the retirement age at or after your current age. The plan age (in Advanced settings) must be later than that, up to 110.</p>';
+    $('chartWrap').hidden = true; $('detail').hidden = true; return;
+  }
+  $('chartWrap').hidden = false; $('detail').hidden = false;
+  const plan = kidsPlan(p, R);
+  const acc = accumulate(p, R, plan), need = needed(p, R, plan, acc), un = unlockOf(p, R, acc);
+  const defl = Math.pow(1 + p.inf, R), T = v => v / defl;
+  const have = acc.accessible, gap = need.total - have, ok = gap <= need.total * 0.002;
+  const e = earliest(p);
+  const path = yourPath(p, R, plan, acc);
+  const pct = need.total > 0 ? Math.min(100, Math.max(0, have / need.total * 100)) : 100;
+  const swrTxt = (p.swr * 100).toFixed(2).replace(/\.?0+$/, '');
+
+  const todayAll = p.a401 * (1 - p.hc) + p.roth + p.usp + p.india;
+  const fvf = p.rPre === 0 ? R : (Math.pow(1 + p.rPre, R) - 1) / p.rPre;
+  const plan0 = p.cUsp / p.fx;
+  const reqRaw = R > 0 ? plan0 + gap / fvf / p.fx : null;
+  const req = reqRaw === null ? null : Math.max(0, reqRaw);
+  const usdFull = v => '$' + (Math.round(v / 100) * 100).toLocaleString('en-US');
+  const usdMo = v => '$' + (Math.round(v / 12 / 10) * 10).toLocaleString('en-US');
+  const g1 = (p.rPre * 100).toFixed(1).replace(/\.0$/, ''), g2 = (p.rInd * 100).toFixed(1).replace(/\.0$/, '');
+  const gtxt = g1 === g2 ? g1 + '%' : 'US ' + g1 + '%, India ' + g2 + '%';
+  const noMoney = p.a401 + p.roth + p.usp + p.india + p.cUsp === 0;
+  let advice;
+  if (R === 0) {
+    advice = ok ? 'You can retire now.' : 'You retire now, so only a one-time deposit of <b>' + usdFull(gap / p.fx) + '</b> closes the gap.';
+  } else if (ok) {
+    advice = 'You are on track. The least you need to add is <b>' + usdFull(req) + ' a year</b> (' + usdMo(req) + ' a month) until age ' + p.retAge +
+      (plan0 > 0 ? '. You plan to add ' + usdFull(plan0) + ' a year.' : '.') +
+      (e !== null && e < p.retAge ? ' The earliest age that works is ' + e + '.' : '');
+  } else {
+    advice = 'Add <b>' + usdFull(req) + ' every year</b> (' + usdMo(req) + ' a month) until age ' + p.retAge +
+      (plan0 > 0 ? '. You plan ' + usdFull(plan0) + ', so that is ' + usdFull(req - plan0) + ' more.' : '.') +
+      (e !== null ? ' Or retire at age ' + e + ' instead.' : ' Or retire later.');
+  }
+  const inc = num('income');
+  if (R > 0 && inc > 0 && Math.max(req, plan0) > inc) advice += ' <b>Heads up:</b> ' + usdFull(Math.max(req, plan0)) + ' a year is more than the ' + usdFull(inc) + ' you earn now, so it is not a realistic saving. A later retirement age or a smaller lifestyle is the way to close this.';
+  else if (R > 0 && inc > 0 && Math.max(req, plan0) > inc * 0.5) advice += ' That is ' + Math.round(Math.max(req, plan0) / inc * 100) + '% of your ' + usdFull(inc) + ' income, which is a very high savings rate.';
+  if (R > 0) advice += ' This assumes your money grows ' + gtxt + ' a year until then.';
+  if (noMoney) advice += ' Enter what you have on the left to personalise this.';
+
+  out.innerHTML =
+    '<span class="pill ' + (ok ? 'good' : 'bad') + '">' + (ok ? 'On track' : 'Short by ' + inr(T(gap))) + '</span>' +
+    '<p class="kicker">You need at age ' + p.retAge + '</p>' +
+    '<div class="big">' + inr(T(need.total)) + '</div>' +
+    '<div class="alt">' + usd(T(need.total) / p.fx) + '</div>' +
+    '<div class="bar ' + (ok ? 'over' : '') + '"><span style="width:' + pct.toFixed(1) + '%"></span></div>' +
+    '<div class="two">' +
+      '<div class="row"><dt>You have today</dt><dd>' + inr(todayAll) + '</dd><dd class="note">' + usd(todayAll / p.fx) + ' across your 401(k) (after tax), Roth, US and Indian accounts.</dd></div>' +
+      '<div class="row"><dt>You will have at age ' + p.retAge + '</dt><dd>' + inr(T(have)) + '</dd><dd class="note">US and Indian portfolios only, with the yearly savings you entered.</dd></div>' +
+      '<div class="row"><dt>' + (gap <= 0 ? 'Spare' : ok ? 'Short, but within 0.2%' : 'Gap') + '</dt><dd class="' + (ok ? 'pos' : 'neg') + '">' + inr(T(Math.abs(gap))) + '</dd></div>' +
+    '</div>' +
+    '<p class="advice">' + advice + '</p>' +
+    '<p class="explain">Your 401(k) and Roth are locked until age ' + p.accAge + ' and are not counted in what you will have. They are credited in the table below.</p>';
+  if (document.activeElement !== $('grow')) $('grow').value = g1;
+
+  // What the money pays for
+  const inSchool = p.kids.filter(k => k < 18).length;
+  const row = (label, per, corpus, cls) => '<tr class="' + (cls || '') + '"><td>' + label + '</td><td>' + (per === null ? dash : inr(per)) + '</td><td>' + (corpus === null ? dash : inr(corpus)) + '</td></tr>';
+  let t = '<tr><th>Allowance</th><th>Per year today</th><th>Needed at age ' + p.retAge + '</th></tr>';
+  p.cats.filter(c => c.amt > 0).forEach(c => { t += row(c.label, c.amt, T(need.cats[c.id])); });
+  t += row('School fees after you retire', inSchool * p.fee, T(need.sch));
+  t += row('College (per year shown is per child)', p.col * p.fx, T(need.col));
+  t += row('Left to your kids', null, T(need.leg));
+  t += row('Total', null, T(need.cost), 'sub');
+  if (need.less > 0) t += row('Covered by your 401(k) and Roth from age ' + p.accAge, null, -T(need.less), 'dim');
+  t += row('You need in US and Indian money', null, T(need.total), 'tot');
+  const note = p.swr > 0
+    ? 'Items set to None are left out. Everyday allowances = yearly cost ÷ ' + swrTxt + '%. School, college and the amount for your kids are paid only for the years they happen, so they are costed year by year. College is what is left after your 529 and custodial money.'
+    : 'The withdrawal rate is 0, so every year is costed exactly.';
+  let d = '<section class="card"><h2>What the money pays for</h2><p>The pot you need on the day you retire.</p><div class="scroll"><table>' + t + '</table></div><p>' + note + '</p></section>';
+
+  // What you have
+  const hrow = (label, today, at, cls) => '<tr class="' + (cls || '') + '"><td>' + label + '</td><td>' + (today === null ? dash : inr(today)) + '</td><td>' + (at === null ? dash : inr(at)) + '</td></tr>';
+  let h = '<tr><th>Account</th><th>Today</th><th>At age ' + p.retAge + '</th></tr>';
+  h += hrow('US portfolio', p.usp, T(acc.u));
+  h += hrow('Indian portfolio', p.india, T(acc.i));
+  if (acc.off > 0) h += hrow('Less college paid before you retire', null, -T(acc.off), 'dim');
+  h += hrow('You will have', p.usp + p.india, T(acc.u + acc.i - acc.off), 'tot');
+  h += hrow('401(k), after tax, locked until ' + p.accAge, p.a401 * (1 - p.hc), T(acc.a * (1 - p.hc)), 'dim');
+  h += hrow('Roth IRA, locked until ' + p.accAge, p.roth, T(acc.b), 'dim');
+  h += hrow('529 and custodial, college only', p.p529 + p.cust, T(plan.potRet), 'dim');
+  d += '<section class="card"><h2>What you have</h2><p>US and Indian portfolios are what you live on from age ' + p.retAge + '. Grey rows are not counted.</p><div class="scroll"><table>' + h + '</table></div></section>';
+  let ga = p.a401, gb = p.roth, gu = p.usp, gi = p.india, goff = 0, lastTot = 0;
+  let gt = '<tr><th>Age</th><th>Indian portfolio</th><th>US portfolio</th><th>401(k) + Roth, locked</th><th>Total</th></tr>';
+  for (let t = 0; t <= R; t++) {
+    const locked = ga * (1 - p.hc) + gb, us = gu - goff, tot = gi + us + locked;
+    lastTot = tot;
+    gt += '<tr' + (t === R && R > 0 ? ' class="tot"' : '') + '><td>' + (p.age + t) + (t === 0 ? ' (today)' : t === R ? ' (retire)' : '') + '</td><td>' + inr(gi) + '</td><td>' + inr(us) + '<small>' + usd(us / p.fx) + '</small></td><td>' + inr(locked) + '</td><td>' + inr(tot) + '</td></tr>';
+    ga = ga * (1 + p.rPre) + p.c401; gb = gb * (1 + p.rPre) + p.cRoth; gu = gu * (1 + p.rPre) + p.cUsp; gi = gi * (1 + p.rInd) + p.cInd;
+    goff = goff * (1 + p.rPre) + (plan.short[t] || 0);
+  }
+  d += '<section class="card wide"><h2>How your money grows until age ' + p.retAge + '</h2><p>Your Indian and US portfolios grow ' + gtxt + ' a year, compounded yearly. Amounts are in future rupees, so they are bigger than the same money in today’s prices.</p><div class="scroll tall"><table>' + gt + '</table></div><p>' + (plan0 > 0 ? 'Your ' + usdFull(plan0) + ' a year goes into the US portfolio at the end of each year. ' : '') + 'The 401(k) is shown after tax. At age ' + p.retAge + ' your total is worth ' + inr(lastTot / defl) + ' in today’s money.' + (goff > 0 ? ' The US portfolio is shown after paying college bills that your 529 and custodial money cannot cover.' : '') + '</p></section>';
+  $('detail').innerHTML = d;
+  lifeCards(p, R, defl, need, acc);
+  drawChart(p, R, need.total, path, plan, un);
+}
+
+function lifeCards(p, R, defl, needCur, accCur) {
+  const cur = {};
+  CATS.forEach(c => { cur[c.id] = num(c.id); });
+  const fee = num('fee');
+  const sum = o => CATS.reduce((s, c) => s + o[c.id], 0);
+  const area = $('area').value, beds = $('beds').value, comm = $('comm').value;
+  const pv = pr => Object.assign({}, pr.vals, { c_housing: housingFor(pr, area, beds, comm) });
+  const active = PRESETS.find(pr => { const v = pv(pr); return CATS.every(c => Math.abs(cur[c.id] - v[c.id]) < 1e-6) && Math.abs(fee - pr.fee) < 1e-9; });
+  if (active) lifeId = active.id;
+  const hasMoney = accCur.accessible > 0;
+  const card = (key, name, living, feeL, total, have, blurb, on) =>
+    '<button type="button" class="lc" data-life="' + key + '" aria-pressed="' + on + '"' + (key === 'custom' ? ' disabled' : '') + '>' +
+    '<strong>' + name + '</strong>' +
+    '<span class="need">Needs ' + inr(total / defl) + '</span>' +
+    (hasMoney ? '<span class="st ' + (have >= total ? 'pos' : 'neg') + '">' + (have >= total ? 'You have enough' : 'Short by ' + inr((total - have) / defl)) + '</span>' : '') +
+    '<small>' + inr(living * 1e5) + ' a year, school ' + inr(feeL * 1e5) + ' a child</small>' +
+    '<small>' + blurb + '</small></button>';
+  let html = PRESETS.map(pr => {
+    const q = Object.assign({}, p, { fee: pr.fee * 1e5, cats: p.cats.map(c => Object.assign({}, c, { amt: pv(pr)[c.id] * 1e5 })) });
+    const plan = kidsPlan(q, R), acc = accumulate(q, R, plan), nd = needed(q, R, plan, acc);
+    return card(pr.id, pr.name, sum(pv(pr)), pr.fee, nd.total, acc.accessible, pr.blurb, active === pr);
+  }).join('');
+  if (!active) html += card('custom', 'Your own', sum(cur), fee, needCur.total, accCur.accessible, 'Based on the costs you entered below.', true);
+  $('life').innerHTML = html;
+  const ar = AREAS.find(a => a.id === area);
+  const k = v => '₹' + Math.round(v) + 'k';
+  $('beds').disabled = $('comm').disabled = !ar;
+  if (ar) {
+    const cm = COMMS.find(c => c.id === comm) || COMMS[1];
+    const mo = hm => rentMonthly(ar, hm, cm.id);
+    $('areaNote').textContent = ar.name + ', ' + cm.name.toLowerCase() + ', monthly rent: 2BHK ' + k(mo(2)) + ', 3BHK ' + k(mo(3)) + ', 4BHK ' + k(mo(4)) + ', 5BHK ' + k(mo(5)) + ' (4 and 5 bedrooms are estimates). ' + ar.blurb + (beds === 'auto' ? ' Bedrooms follow the lifestyle: Lean 2, Comfortable and Premium 3, Ultra premium 4.' : '');
+  } else {
+    $('areaNote').textContent = 'Housing follows the lifestyle you pick. Choose an area to set housing from rents there, then pick bedrooms and community.';
+  }
+}
+function niceStep(raw) {
+  const m = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / m;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * m;
+}
+function drawChart(p, R, need, path, plan, un) {
+  const W = 640, H = 300, ml = 48, mr = 14, mt = 14, mb = 34;
+  const N = p.planAge - p.age;
+  const toToday = (t, b) => b / Math.pow(1 + p.inf, t) / 1e7;
+  const you = path.pts.map(q => ({ t: q.t, v: toToday(q.t, q.b) }));
+  const nd = simulate(p, R, need, plan, un).pts.map(q => ({ t: q.t, v: toToday(q.t, q.b) }));
+  const maxV = Math.max(0.5, ...you.map(q => q.v), ...nd.map(q => q.v));
+  const step = niceStep(maxV / 5), top = Math.ceil(maxV / step) * step;
+  const X = t => ml + t / N * (W - ml - mr);
+  const Y = v => H - mb - Math.max(0, v) / top * (H - mt - mb);
+  const pl = a => a.map((q, i) => (i ? 'L' : 'M') + X(q.t).toFixed(1) + ' ' + Y(q.v).toFixed(1)).join(' ');
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Projected balance by age compared with the balance needed">';
+  for (let v = 0; v <= top + step / 2; v += step) {
+    s += '<line class="grid-line" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '"/>' +
+      '<text x="' + (ml - 6) + '" y="' + (Y(v) + 4).toFixed(1) + '" text-anchor="end">' + (+v.toFixed(2)) + '</text>';
+  }
+  const xs = N <= 30 ? 5 : 10;
+  for (let a = Math.ceil(p.age / xs) * xs; a <= p.planAge; a += xs) {
+    s += '<text x="' + X(a - p.age).toFixed(1) + '" y="' + (H - mb + 16) + '" text-anchor="middle">' + a + '</text>';
+  }
+  s += '<line class="axis" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + Y(0) + '" y2="' + Y(0) + '"/>';
+  s += '<text x="' + ml + '" y="' + (H - 4) + '">Age</text><text x="' + (ml + 4) + '" y="' + (mt + 2) + '">₹ cr</text>';
+  if (R > 0) {
+    s += '<line class="ret-line" x1="' + X(R) + '" x2="' + X(R) + '" y1="' + mt + '" y2="' + Y(0) + '"/>' +
+      '<text x="' + (X(R) + 5) + '" y="' + (mt + 22) + '">Retire at ' + p.retAge + '</text>';
+  }
+  if (un) s += '<line class="ret-line" x1="' + X(un.t) + '" x2="' + X(un.t) + '" y1="' + mt + '" y2="' + Y(0) + '"/><text x="' + (X(un.t) + 5) + '" y="' + (mt + 22) + '">401(k) and Roth open</text>';
+  s += '<path class="line-need" d="' + pl(nd) + '"/><path class="line-you" d="' + pl(you) + '"/>';
+  s += '<circle cx="' + X(R) + '" cy="' + Y(nd[0].v) + '" r="4" fill="var(--muted)"/>';
+  s += '</svg>';
+  $('chart').innerHTML = s;
+}
+
+build();
+$('grow').addEventListener('input', () => {
+  const v = $('grow').value.trim();
+  if (v === '' || !Number.isFinite(Number(v))) return;
+  $('rPre').value = v; $('rInd').value = v;
+  save(); render();
+});
+$('inputs').addEventListener('click', e => {
+  const b = e.target.closest('[data-life]');
+  if (!b) return;
+  const pr = PRESETS.find(x => x.id === b.dataset.life);
+  if (!pr) return;
+  CATS.forEach(c => { $(c.id).value = pr.vals[c.id]; });
+  $('c_housing').value = housingFor(pr, $('area').value, $('beds').value, $('comm').value);
+  $('fee').value = pr.fee;
+  lifeId = pr.id;
+  save(); render();
+});
+['area', 'beds', 'comm'].forEach(id => $(id).addEventListener('change', () => {
+  const pr = PRESETS.find(x => x.id === lifeId) || PRESETS[2];
+  $('c_housing').value = housingFor(pr, $('area').value, $('beds').value, $('comm').value);
+  save(); render();
+}));
+$('clearBtn').addEventListener('click', () => setAll(true));
+$('resetBtn').addEventListener('click', () => setAll(false));
+render();
+</script>
+
+</body></html>
