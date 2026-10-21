@@ -768,7 +768,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792588600';
+const BUILD_V = '1792597627';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1127,7 +1127,7 @@ function dtTrack(mk, rows) {
       else if (l <= t3.st) exit = t3.st;
       else if (h >= t3.t) exit = Math.max(t3.t, fill);
       else exit = c;
-      pls.push({sym: t3.sym, pl: Math.round((exit - fill) / fill * 10000) / 100});
+      pls.push({sym: t3.sym, pl: Math.round((exit - fill) / fill * 10000) / 100, f: Math.round(fill * 100) / 100, x: Math.round(exit * 100) / 100});
     }
     en.res = {pls};
     changed = true;
@@ -1143,7 +1143,7 @@ function dtTrack(mk, rows) {
     cum2 += avg2; days++; lastDay = {avg: avg2, ts: e2.ts, n: got.length};
   }
   const pend = ents.filter(e2 => !e2.res).reduce((t2, e2) => t2 + e2.tr.length, 0);
-  return {cum: cum2, days, lastDay, pend, start: load('sd-dtstart', Date.now())};
+  return {cum: cum2, days, lastDay, pend, start: load('sd-dtstart', Date.now()), ents};
 }
 function eqSvg(eq, amt, cu) {
   const w = 560, h = 130, pad = 8, padR = 10;
@@ -1207,6 +1207,19 @@ ${(si => `<div><small>${si.nowLab}</small><b>${fmt(s.px)}</b><small class="${(si
     return `<tr data-s="${esc(s.sym)}" data-m="${dtMk}" title="${esc(r.why)}" style="cursor:pointer"><td class="lt"><b>${esc(showSym(s.sym))}</b></td><td class="lt">${dtp(r.rt)}</td><td>${cu}${fmt(s.px)}</td><td>${f2(r.entry)}</td><td>${f2(r.target)}</td><td>${f2(r.stop)}</td>${x && x.trades ? `<td class="${(x.last || 0) >= 0 ? 'pos' : 'neg'}">${x.last == null ? '–' : sgn(x.last) + '%'}</td><td class="${x.tot >= 0 ? 'pos' : 'neg'}"><b>${sgn(x.tot)}%</b></td>` : '<td>–</td><td>–</td>'}</tr>`;
   }).join('');
   const money = v => (v >= 0 ? '+' : '−') + cu + fmt(Math.abs(amt * v / 100), 2);
+  const dayRows = live && live.ents ? [...live.ents].reverse().map(en => {
+    const dd = dFmt2(en.ts * 1000);
+    if (!en.res) return `<div style="margin-top:12px"><b>${dd}</b> <span class="mut" style="font-size:12px">\u00b7 ${en.tr.length} trade${en.tr.length === 1 ? '' : 's'} working \u2014 scored after the close</span></div>`;
+    if (en.res.gone || !en.res.pls || !en.res.pls.length) return `<div style="margin-top:12px"><b>${dd}</b> <span class="mut" style="font-size:12px">\u00b7 too old to score \u2014 prices no longer available</span></div>`;
+    const got = en.res.pls.filter(x2 => x2.pl != null);
+    const avg3 = got.length ? got.reduce((t2, x2) => t2 + x2.pl, 0) / got.length : null;
+    const per = got.length ? amt / got.length : 0;
+    const trs = en.res.pls.map(x2 => x2.pl == null
+      ? `<tr><td class="lt"><b>${esc(showSym(x2.sym))}</b></td><td colspan="2" class="lt mut" style="font-size:12px">order never filled \u2014 no trade</td><td>\u2013</td><td>\u2013</td></tr>`
+      : `<tr><td class="lt"><b>${esc(showSym(x2.sym))}</b></td><td>${x2.f != null ? cu + fmt(x2.f) : '\u2013'}</td><td>${x2.x != null ? cu + fmt(x2.x) : '\u2013'}</td><td class="${x2.pl >= 0 ? 'pos' : 'neg'}">${sgn(x2.pl)}%</td><td class="${x2.pl >= 0 ? 'pos' : 'neg'}"><b>${(x2.pl >= 0 ? '+' : '\u2212') + cu + fmt(Math.abs(per * x2.pl / 100), 2)}</b></td></tr>`).join('');
+    return `<div style="margin-top:12px"><b>${dd}</b>${avg3 != null ? ` <span class="${avg3 >= 0 ? 'pos' : 'neg'}" style="font-weight:700;font-size:13px">${sgn(avg3)}% \u00b7 ${money(avg3)}</span>` : ` <span class="mut" style="font-size:12px">\u00b7 no orders filled \u2014 flat day</span>`}</div>
+<div class="tw card" style="margin-top:6px"><table style="min-width:380px"><thead><tr><th class="lt">Stock</th><th>Bought at</th><th>Sold at</th><th>P/L %</th><th>P/L ${cu}</th></tr></thead><tbody>${trs}</tbody></table></div>`;
+  }).join('') : '';
   return `<h2 style="margin-bottom:6px">Day trading — ${dtMk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
 <div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-dtm="${k}" aria-selected="${dtMk === k}">${l}</button>`).join('')}</div>
 <div class="mut" style="font-size:12.5px;margin:8px 0 12px">Press ↻ Refresh prices ${dtMk === 'US' ? 'before the market opens (9:30 ET)' : 'after the market closes'} to get today's numbers. Tap any stock for details. Not advice.</div>
@@ -1218,7 +1231,9 @@ ${lvBox('Last trading day', live.lastDay ? `<span class="${live.lastDay.avg >= 0
 ${lvBox('Total since you started', live.days ? `<span class="${live.cum >= 0 ? 'pos' : 'neg'}">${sgn(live.cum)}% · ${money(live.cum)}</span>` : 'first score after the close')}
 ${lvBox('Days counted', String(live.days))}
 ${lvBox('Working today', live.pend ? live.pend + ' trade' + (live.pend === 1 ? '' : 's') : 'none')}
-</div></div>` : ''}
+</div>
+${dayRows ? `<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;font-size:13px">Day by day \u2014 which stock made or lost what</summary>${dayRows}
+<div class="mut" style="font-size:11.5px;margin-top:8px">${cu} figures split your ${cu}${fmt(amt, 0)} equally across that day's filled trades. Bought at / Sold at are the prices the score used; a dash means the day was scored before prices were being saved.</div></details>` : ''}</div>` : ''}
 <h3 style="margin:0 0 8px">Buy today <span class="mut" style="font-weight:400;font-size:13px">· ${buys.length} trade${buys.length === 1 ? '' : 's'}</span></h3>
 ${buys.length ? `<div class="grid regime">${cards}</div>
 <div class="mut" style="font-size:12px;margin-top:8px">If every trade hits its stop today, you lose <b class="neg">${cu}${fmt(totRisk, totRisk < 10 ? 2 : 0)}</b> of your ${cu}${fmt(amt, 0)} (${fmt(totRisk / (amt || 1) * 100, 1)}%). Cancel orders that have not filled by the close.</div>` : `<div class="card empty">Nothing worth buying today by these rules — that is a signal too. Check again after the next refresh.</div>`}
