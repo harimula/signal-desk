@@ -528,7 +528,7 @@ function analyzeAll() {
   }
 }
 analyzeAll();
-const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
+const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades'], ['NEWS', 'News']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
 let pfolios = [{id: 'p1', name: 'Portfolio'}];
 const pfOf = k => (typeof k === 'string' && k.startsWith('PF:')) ? k.slice(3) : null;
 const pfName = id => { const p = pfolios.find(x => x.id === id); return p ? p.name : 'Portfolio'; };
@@ -624,12 +624,12 @@ function fresh(m) {
   return {age, open, level};
 }
 function chrome() {
-  const m = MK[(tab === 'MY' || tab === 'RULES' || tab === 'BOT' || pfOf(tab)) ? 'US' : tab === 'DT' ? dtMk : tab === 'OP' ? opMk : tab], f = fresh(m);
+  const m = MK[(tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || pfOf(tab)) ? 'US' : tab === 'DT' ? dtMk : tab === 'OP' ? opMk : tab], f = fresh(m);
   $('#mdots').innerHTML = ['US', 'IN'].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
-  $('#asof').innerHTML = (tab === 'BOT' ? 'Paper-trading bot — every trade it took' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
-  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
+  $('#asof').innerHTML = (tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'BOT' ? 'Paper-trading bot — every trade it took' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
+  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
   let h = '';
-  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && !pfOf(tab)) {
+  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && !pfOf(tab)) {
     if (f.level === 'stale') h += `<div class="banner warn"><b>Stale data. Entry zones are for reference only.</b> This snapshot is ${ageText(f.age)} old and prices have likely moved. Press ↻ Refresh prices.</div>`;
     else if (f.level === 'aging') h += `<div class="banner warn"><b>Snapshot is ageing.</b> Pulled ${ageText(f.age)} ago. Press ↻ Refresh prices.</div>`;
     h += `<div class="banner info">${esc(m.stamp.note)} Prices update when you press ↻ Refresh prices or on the auto-refresh schedule you pick (Yahoo data can lag ~15 minutes). Signals are rule-based readouts, not advice. The page places no orders.</div>`;
@@ -825,7 +825,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792622437';
+const BUILD_V = '1792623069';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1806,18 +1806,12 @@ let evList = null, evHeads = [], evAt = 0, evBusy = false;
 const EV_KEYS = {war: ['war', 'missile', 'invasion', 'airstrike', 'troops', 'nuclear', 'terror', 'escalat'], policy: ['white house', 'tariff', 'executive order', 'trade war', 'sanction', 'shutdown', 'debt ceiling'], fed: ['fomc', 'federal reserve', 'powell', 'rate hike', 'rate cut', 'fed minutes'], macro: ['cpi', 'inflation', 'jobs report', 'payrolls', 'gdp', 'recession'], crisis: ['bank failure', 'default', 'crash', 'circuit breaker', 'bankrupt']};
 const evCats = t => { t = (' ' + (t || '') + ' ').toLowerCase(); return Object.keys(EV_KEYS).filter(k => EV_KEYS[k].some(w => t.includes(w))); };
 async function evLoad() {
+  nwLoad();
   if (evBusy || Date.now() - evAt < 120000) return;
   evBusy = true; evAt = Date.now();
   try { const r = await fetch('events.json?t=' + Math.floor(Date.now() / 3600e3), {cache: 'no-store'}); if (r.ok) evList = (await r.json()).events || []; } catch (e) {}
-  try {
-    const k = typeof fhKey !== 'undefined' ? fhKey : '';
-    if (k) {
-      const r = await fetch('https://finnhub.io/api/v1/news?category=general&token=' + encodeURIComponent(k));
-      if (r.ok) { const a = await r.json(); evHeads = (Array.isArray(a) ? a : []).map(x => ({t: x.datetime * 1000, h: x.headline, s: x.source, u: x.url, c: evCats(x.headline + ' ' + (x.summary || ''))})).filter(x => x.c.length && Date.now() - x.t < 6 * 3600e3).slice(0, 6); }
-    }
-  } catch (e) {}
   evBusy = false;
-  if (app === 'desk' && (tab === 'DT' || tab === 'OP' || tab === 'BOT')) renderAll(true);
+  if (app === 'desk' && ['DT', 'OP', 'BOT', 'NEWS'].includes(tab)) renderAll(true);
 }
 setInterval(() => { if (app === 'desk' && (tab === 'DT' || tab === 'OP' || tab === 'BOT') && !document.hidden) evLoad(); }, 120000);
 const EV_ADVICE = {FOMC: 'Fed decision 2:00pm, press conference 2:30. Expect big swings: avoid new options today; the bot pauses 1:30–3:00pm and closes options at 1:50.', CPI: 'Inflation data at 8:30am moves everything at the open. Wait until about 10:15 before entering; use half size until 11:00.', JOBS: 'Jobs report at 8:30am. Wait until about 10:15 before entering; use half size until 11:00.', PPI: 'Producer prices at 8:30am. Wait until about 10:15 before entering; use half size until 11:00.', MINUTES: 'Fed minutes at 2:00pm can jolt prices. Avoid new entries 1:45–2:30pm.'};
@@ -1834,8 +1828,79 @@ function evCard() {
 <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b style="font-size:13.5px">📰 Market events &amp; news</b><span class="mut" style="font-size:11.5px">scheduled releases + live headlines that move markets</span></div>
 ${today.length ? today.map(e => `<div style="margin-top:8px;font-size:13px"><b class="neg">TODAY ${tl(e.time)} · ${esc(e.title)}</b><div class="mut" style="font-size:12px">${EV_ADVICE[e.type] || ''}</div></div>`).join('') : '<div class="mut" style="margin-top:6px;font-size:12.5px">No scheduled Fed, CPI or jobs release today.</div>'}
 ${next.length ? `<div style="margin-top:8px;font-size:12px;line-height:1.7">${next.map(e => `<span style="display:inline-block;margin-right:14px"><b>${dl(e.date)}</b> ${tl(e.time)} · ${esc(e.title)} <span class="mut">(${days(e.date) === 1 ? 'tomorrow' : 'in ' + days(e.date) + ' days'})</span></span>`).join(' ')}</div>` : ''}
-${evHeads.length ? `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px;font-size:12.5px"><b>Headlines that can move the market</b>${evHeads.map(x => `<div style="margin-top:3px"><span class="mut">${new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit'}).format(new Date(x.t))}</span> · <span class="pill r-Hold" style="font-size:10px">${x.c.join(', ')}</span> <a href="${esc(x.u)}" target="_blank" rel="noopener" style="color:var(--text)">${esc(x.h)}</a> <span class="mut">${esc(x.s || '')}</span></div>`).join('')}</div>` : (typeof fhKey !== 'undefined' && !fhKey ? '<div class="mut" style="font-size:11.5px;margin-top:6px">Live headlines appear here once your Finnhub key is saved (⚡ Live prices panel).</div>' : '')}
+${evHeads.length ? `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:6px;font-size:12.5px"><b>Headlines that can move the market</b>${evHeads.map(x => `<div style="margin-top:3px"><span class="mut">${new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit'}).format(new Date(x.t))}</span> · <span class="pill r-Hold" style="font-size:10px">${x.c.join(', ')}</span> <a href="${esc(x.u)}" target="_blank" rel="noopener" style="color:var(--text)">${esc(x.h)}</a> <span class="mut">${esc(x.s || '')}</span></div>`).join('')}</div>` : ''}
 </div>`;
+}
+// ---------- News tab: server feed (news.json) + Finnhub live when a key is saved ----------
+let nwItems = null, nwAt = 0, nwBusy = false, nwSrc = {}, nwCat = load('sd-nwcat', 'moving');
+const NW_LAB = {crisis: 'Crisis', war: 'Geopolitics', policy: 'White House & policy', fed: 'Fed & rates', macro: 'Inflation & jobs', energy: 'Oil & energy', earnings: 'Earnings'};
+const NW_EXTRA = {earnings: ['earnings', 'quarterly results', 'guidance', 'beats estimates', 'misses estimates', 'profit warning'], energy: ['oil price', 'oil prices', 'opec', 'crude', 'natural gas', 'brent']};
+const nwCats = t => { const c = evCats(t), x = (' ' + (t || '') + ' ').toLowerCase(); for (const k in NW_EXTRA) if (NW_EXTRA[k].some(w => x.includes(w))) c.push(k); return c; };
+async function nwLoad(force) {
+  if (nwBusy || (!force && Date.now() - nwAt < 170000)) return;
+  nwBusy = true; nwAt = Date.now();
+  const all = []; nwSrc = {};
+  try { const r = await fetch('news.json?t=' + Math.floor(Date.now() / 60000), {cache: 'no-store'}); if (r.ok) { const j = await r.json(); nwSrc.server = j.at; (j.items || []).forEach(x => all.push(x)); } } catch (e) {}
+  try {
+    const k = typeof fhKey !== 'undefined' ? fhKey : '';
+    if (k) { const r = await fetch('https://finnhub.io/api/v1/news?category=general&token=' + encodeURIComponent(k)); if (r.ok) { const a = await r.json(); nwSrc.finnhub = Date.now(); (Array.isArray(a) ? a : []).forEach(x => all.push({t: x.datetime * 1000, h: x.headline, u: x.url, sum: x.summary, s: x.source})); } }
+  } catch (e) {}
+  const seen = new Set(), out = [];
+  for (const x of all.sort((a, b) => b.t - a.t)) {
+    const key = (x.h || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').slice(0, 70);
+    if (!x.h || seen.has(key) || Date.now() - x.t > 3 * 864e5) continue;
+    seen.add(key); out.push({...x, c: nwCats(x.h + ' ' + (x.sum || ''))});
+  }
+  nwItems = out;
+  evHeads = out.filter(x => x.c.some(c => ['war', 'policy', 'fed', 'macro', 'crisis'].includes(c)) && Date.now() - x.t < 6 * 3600e3).slice(0, 6);
+  nwBusy = false;
+  if (app === 'desk' && ['DT', 'OP', 'BOT', 'NEWS'].includes(tab)) renderAll(true);
+}
+setInterval(() => { if (app === 'desk' && tab === 'NEWS' && !document.hidden) nwLoad(); }, 180000);
+document.addEventListener('click', e => { const c = e.target.closest && e.target.closest('[data-nwc]'); if (c) { nwCat = c.dataset.nwc; save('sd-nwcat', nwCat); renderAll(); } });
+function newsView() {
+  nwLoad(); evLoad();
+  const ago = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 60 ? m + 'm ago' : m < 1440 ? Math.round(m / 60) + 'h ago' : Math.round(m / 1440) + 'd ago'; };
+  const first = s => { s = (s || '').replace(/\s+/g, ' ').trim(); const m = /^(.{40,220}?[.!?])(\s|$)/.exec(s); return m ? m[1] : s.slice(0, 200) + (s.length > 200 ? '…' : ''); };
+  const open = mOpen(MK.US);
+  const tone = [['SPY', 'S&P 500'], ['QQQ', 'Nasdaq 100'], ['DIA', 'Dow']].map(([sy, lb]) => { const r = DATA.rows[sy]; if (!r) return ''; const ch = open ? (r[1] / r[2] - 1) * 100 : (r[2] / r[3] - 1) * 100; return `<span style="margin-right:14px;white-space:nowrap">${lb} <b class="${ch >= 0 ? 'pos' : 'neg'}">${sgn(ch)}%</b></span>`; }).join(' ');
+  const day = (nwItems || []).filter(x => Date.now() - x.t < 864e5);
+  const pri = ['crisis', 'war', 'policy', 'fed', 'macro', 'energy', 'earnings'];
+  const used = new Set();
+  const brief = pri.map(c => {
+    const all = day.filter(x => x.c.includes(c)), arr = all.filter(x => !used.has(x.h)); if (!arr.length) return '';
+    const a = arr[0], more = arr[1]; used.add(a.h); if (more) used.add(more.h);
+    return `<li style="margin:6px 0"><b>${NW_LAB[c]}</b> <span class="mut">(${all.length})</span> — ${esc(a.h)}${a.sum ? `<div class="mut" style="font-size:12.5px">${esc(first(a.sum))}</div>` : ''}${more ? `<div class="mut" style="font-size:12px">Also: ${esc(more.h)}</div>` : ''}</li>`;
+  }).join('');
+  const d0 = new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York'}).format(new Date());
+  const evs = (evList || []).filter(e => e.date >= d0).slice(0, 10);
+  const dl = d => new Intl.DateTimeFormat('en-GB', {weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC'}).format(new Date(d + 'T12:00:00Z'));
+  const dd = d => Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(d0 + 'T12:00:00Z')) / 864e5);
+  const tl = t => { const [h, m] = t.split(':').map(Number); return (h > 12 ? h - 12 : h) + ':' + String(m).padStart(2, '0') + (h >= 12 ? 'pm' : 'am'); };
+  const when = d => dd(d) === 0 ? 'today' : dd(d) === 1 ? 'tomorrow' : 'in ' + dd(d) + ' days';
+  const nextEv = evs[0];
+  const briefCard = `<div class="card" style="padding:14px 18px;margin-bottom:14px">
+<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b style="font-size:15px">Market brief</b><span class="mut" style="font-size:12px">${open ? 'today so far' : 'last session'} · ${tone}</span></div>
+${nwItems == null ? '<div class="mut" style="margin-top:8px">Loading the news…</div>' : brief ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:13.5px;line-height:1.5">${brief}</ul>` : '<div class="mut" style="margin-top:8px;font-size:13px">No major market-moving headlines in the last 24 hours — a quiet tape. Charts and the calendar matter more than news today.</div>'}
+${nextEv ? `<div style="margin-top:10px;font-size:13px;border-top:1px solid var(--line);padding-top:8px">⏰ <b>Next scheduled:</b> ${esc(nextEv.title)} — ${dl(nextEv.date)} ${tl(nextEv.time)} ET <span class="mut">(${when(nextEv.date)})</span></div>` : ''}
+</div>`;
+  const schedCard = `<div class="card" style="padding:14px 18px;margin-bottom:14px"><b style="font-size:15px">Upcoming schedule</b> <span class="mut" style="font-size:12px">· Fed, inflation and jobs releases — Eastern Time</span>
+${evs.length ? `<div class="tw" style="margin-top:8px"><table style="min-width:560px"><thead><tr><th class="lt" style="text-align:left">When</th><th class="lt" style="text-align:left">Event</th><th class="lt" style="text-align:left">What to expect</th></tr></thead><tbody>${evs.map(e => `<tr${e.date === d0 ? ' style="background:var(--ts-bg)"' : ''}><td class="lt" style="white-space:nowrap"><b>${dl(e.date)}</b> ${tl(e.time)}<div class="mut" style="font-size:11px">${when(e.date)}</div></td><td class="lt"><b>${esc(e.title)}</b></td><td class="lt mut" style="font-size:12px;white-space:normal;min-width:260px;text-align:left">${EV_ADVICE[e.type] || ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="mut" style="margin-top:6px">Loading the calendar…</div>'}</div>`;
+  const has = (x, k) => k === 'all' ? true : k === 'moving' ? x.c.length > 0 : x.c.includes(k);
+  const items = (nwItems || []).filter(x => has(x, nwCat));
+  const cnt = k => (nwItems || []).filter(x => has(x, k)).length;
+  const chips = [['moving', 'Market-moving'], ['all', 'All']].concat(pri.map(c => [c, NW_LAB[c]])).map(([k, l]) => `<button class="vtab" type="button" data-nwc="${k}" aria-selected="${nwCat === k}">${esc(l)} <span class="mut" style="font-size:11px">${cnt(k)}</span></button>`).join('');
+  const list = items.slice(0, 50).map(x => `<div style="padding:10px 0;border-top:1px solid var(--line)">
+<div class="mut" style="font-size:11.5px">${ago(x.t)} · ${esc(x.s || '')} ${x.c.map(c => `<span class="pill r-Hold" style="font-size:10px">${esc(NW_LAB[c] || c)}</span>`).join(' ')}</div>
+<a href="${esc(x.u || '#')}" target="_blank" rel="noopener" style="color:var(--text);font-weight:700;font-size:14px;text-decoration:none">${esc(x.h)}</a>
+${x.sum ? `<div class="mut" style="font-size:12.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(x.sum)}</div>` : ''}</div>`).join('');
+  const srcLine = [nwSrc.server ? 'Server feed updated ' + ago(nwSrc.server) : '', nwSrc.finnhub ? 'Finnhub live' : ''].filter(Boolean).join(' · ');
+  return `<h2 style="margin-bottom:6px">News</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">What is moving markets — summarized, tagged and timed — plus every scheduled release coming up. Tap a headline to read the full story.</div>
+${briefCard}${schedCard}
+<div class="card" style="padding:12px 18px"><b style="font-size:15px">Headlines</b>
+<div class="vnav" role="tablist" style="margin:10px 0 4px">${chips}</div>
+${nwItems == null ? '<div class="mut" style="padding:10px 0">Loading…</div>' : list || `<div class="mut" style="padding:10px 0">${(nwItems || []).length ? 'Nothing in this category in the last 3 days.' : 'No headlines yet. They appear once the server feed runs (every 10 minutes on market days), or right away once a Finnhub key is saved in ⚡ Live prices.'}</div>`}
+<div class="mut" style="font-size:11px;margin-top:8px">${srcLine ? srcLine + '. ' : ''}Sources: Yahoo Finance, Federal Reserve, Benzinga (via Alpaca), Finnhub. Tags are keyword-based. Not advice.</div></div>`;
 }
 // ---------- Bot trades tab: reads bot/journal.json written by the paper-trading bot ----------
 let botJ = null, botErr = '', botBusy = false, botAt = 0;
@@ -1907,7 +1972,7 @@ ${(env.flagged || []).length ? `<div style="margin-top:8px;font-size:12px"><b>He
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? '' : ' · paper account (fake money)'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }
-function viewHTML() { return tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
+function viewHTML() { return tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {
   root.querySelectorAll('.tw').forEach(tw => {
     let wrap = tw.parentElement;
@@ -1969,7 +2034,7 @@ function renderAll(bg) {
   $('#view').dataset.app = 'desk';
   if (typeof goliveCheck === 'function') goliveCheck();
   renderTabs(); chrome();
-  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
+  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || tab === 'NEWS' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
   const view = $('#view');
   const openKeys = new Set(Array.from(view.querySelectorAll('details[data-k][open]')).map(d2 => d2.dataset.k));
   const sameView = view.dataset.rv === app + ':' + tab, scY = window.scrollY, scX = window.scrollX;

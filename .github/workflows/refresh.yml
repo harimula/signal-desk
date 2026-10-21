@@ -14,10 +14,15 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: node fetch.mjs
+      - run: node news.mjs || true
+        env:
+          ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+          ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
       - run: |
           git config user.name "signal-desk-bot"
           git config user.email "bot@users.noreply.github.com"
           git add live.json
+          [ -f news.json ] && git add news.json
           git diff --cached --quiet && exit 0
           git commit -m "Refresh prices"
           for i in 1 2 3; do
