@@ -123,7 +123,10 @@ input,select,button{font:inherit;color:var(--text)}
 .twbtn{position:absolute;top:50%;transform:translateY(-50%);z-index:7;width:32px;height:52px;border-radius:9px;border:1px solid var(--line);background:var(--surface);opacity:.92;color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);padding:0}
 .twbtn:active{background:var(--surface2)}
 .twl{left:6px}.twr{right:6px}
-#appbar{max-width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+html{overflow-anchor:none}
+#view table{width:100%}
+@media (max-width:980px){#tb th:nth-child(12),#tb td:nth-child(12),#tb th:nth-child(13),#tb td:nth-child(13),#tb th:nth-child(17),#tb td:nth-child(17),#tb th:nth-child(20),#tb td:nth-child(20){display:none}}
+#appbar{display:flex;width:100%;max-width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .vnav{max-width:100%;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 @media (max-width:700px){.tw:has(#tb),.tw:has(#dttab),.tw:has(#pftab){max-height:none}}
 
@@ -209,7 +212,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 <nav class="vnav" id="appbar" role="tablist" style="margin:10px 0 6px"></nav>
 <header>
   <div class="brand"><h1>Signal Desk</h1><div class="dots" id="mdots"></div></div>
-  <div class="hright"><div class="asof" id="clock"></div><span id="cdown" class="mut" style="font-size:12px;font-weight:700;font-feature-settings:'tnum'"></span><button class="btn ghost" id="thBtn" type="button" title="Switch light / dark">🌓</button><button class="btn ghost" id="acctBtn" type="button">👤 Sign in</button><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="1">● Live</option><option value="2">Every 2 min</option><option value="5">Every 5 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
+  <div class="hright"><div class="asof" id="clock"></div><span id="cdown" class="mut" style="font-size:12px;font-weight:700;font-feature-settings:'tnum'"></span><button class="btn ghost" id="acctBtn" type="button">👤 Sign in</button><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="1">● Live</option><option value="2">Every 2 min</option><option value="5">Every 5 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
 </header>
 <div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
 <div class="wrap"><details id="pxBox" style="font-size:12.5px;margin:2px 0 4px"><summary style="cursor:pointer;font-weight:700">⚡ Live prices — set up once per device</summary>
@@ -541,8 +544,8 @@ function thApply() {
   if (theme) document.documentElement.setAttribute('data-theme', theme); else document.documentElement.removeAttribute('data-theme');
   const b = document.getElementById('thBtn');
   if (b) { b.textContent = theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🌓'; b.title = theme === 'dark' ? 'Dark — tap for light' : theme === 'light' ? 'Light — tap for auto' : 'Auto theme — tap for dark'; }
+  document.querySelectorAll('#view iframe').forEach(f => { try { const d = f.contentDocument && f.contentDocument.documentElement; if (!d) return; if (theme) d.setAttribute('data-theme', theme); else d.removeAttribute('data-theme'); } catch (e2) {} });
 }
-document.getElementById('thBtn').addEventListener('click', () => { theme = theme === '' ? 'dark' : theme === 'dark' ? 'light' : ''; save('sd-theme', theme); thApply(); });
 thApply();
 
 let wl = new Set(load('sd-wl', []));
@@ -809,7 +812,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792608248';
+const BUILD_V = '1792608829';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -819,6 +822,7 @@ async function verCheck() {
 }
 $('#upbtn').addEventListener('click', () => { try { location.replace(location.pathname + '?u=' + Date.now()); } catch (e) { location.reload(); } });
 setInterval(verCheck, 180000); setTimeout(verCheck, 3000);
+(async () => { try { if (location.search.indexOf('u=') >= 0) return; const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const v = (await r.text()).trim(); if (/^\d+$/.test(v) && BUILD_V !== '__BUILD' + 'V__' && v !== BUILD_V) location.replace(location.pathname + '?u=' + Date.now()); } catch (e) {} })();
 setInterval(() => {
   const el = $('#cdown'); if (!el) return;
   if (!(arMin > 0)) { el.textContent = ''; return; }
@@ -947,6 +951,7 @@ function renderTabs() {
   $('#tabs').innerHTML = tabsList().map(([k, l]) => `<button class="tab" role="tab" data-t="${k}" aria-selected="${k === tab}">${esc(l)}</button>`).join('') + `<button class="tab" id="pfAdd" type="button" title="New portfolio" aria-label="New portfolio">+</button>`;
 }
 document.getElementById('appbar').addEventListener('click', e => {
+  if (e.target.closest('#thBtn')) { theme = theme === '' ? 'dark' : theme === 'dark' ? 'light' : ''; save('sd-theme', theme); thApply(); return; }
   const b = e.target.closest('[data-appk]'); if (!b) return;
   app = b.dataset.appk; save('sd-app', app); renderAll();
 });
@@ -1714,7 +1719,8 @@ function toolFrame(src, title) {
 }
 function renderAppBar() {
   const el = document.getElementById('appbar');
-  if (el) el.innerHTML = APPS.map(([k, l]) => `<button class="vtab" role="tab" data-appk="${k}" aria-selected="${app === k}">${l}</button>`).join('');
+  if (el) el.innerHTML = APPS.map(([k, l]) => `<button class="vtab" role="tab" data-appk="${k}" aria-selected="${app === k}">${l}</button>`).join('') + `<button class="vtab" id="thBtn" type="button" style="margin-left:auto" aria-label="Switch theme">\ud83c\udf13</button>`;
+  thApply();
 }
 function twNav2(root) {
   root.querySelectorAll('.tw').forEach(tw => {
@@ -1738,6 +1744,8 @@ function twBtns(wrap, tw) {
   r.style.display = mx - tw.scrollLeft > 8 ? 'flex' : 'none';
 }
 document.addEventListener('toggle', e => { try { if (e.target && e.target.tagName === 'DETAILS' && e.target.closest('#view')) twNav2($('#view')); } catch (e2) {} }, true);
+let rszT = null;
+window.addEventListener('resize', () => { clearTimeout(rszT); rszT = setTimeout(() => { try { twNav2($('#view')); } catch (e2) {} }, 250); });
 function renderAll() {
   renderAppBar();
   const deskOn = app === 'desk';
@@ -1746,6 +1754,7 @@ function renderAll() {
     if ($('#view').dataset.app !== app) {
       $('#view').dataset.app = app;
       $('#view').innerHTML = app === 'retire' ? toolFrame('retire.html', 'Retirement Corpus Calculator') : toolFrame('rentemi.html?v=2', 'Rent vs EMI');
+      const fr0 = $('#view').querySelector('iframe'); if (fr0) fr0.addEventListener('load', thApply);
     }
     return;
   }
