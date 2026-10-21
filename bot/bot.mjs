@@ -16,7 +16,7 @@ import { signalAt, signalShortAt, r2d } from './strategy.mjs';
 import { buildJournal } from './journal.mjs';
 
 const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
-if (!KEY || !SECRET) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
+export const HAVE_KEYS = !!(KEY && SECRET);
 const BASE = process.env.ALPACA_URL || 'https://paper-api.alpaca.markets';
 const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
 const n = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? +process.env[k] : d);
@@ -30,7 +30,8 @@ const DRY = process.env.BOT_DRY === '1';
 
 const H = { 'APCA-API-KEY-ID': KEY, 'APCA-API-SECRET-KEY': SECRET, 'content-type': 'application/json' };
 async function call(base, path, opt = {}) {
-  const r = await fetch(base + path, { headers: H, ...opt });
+  let r = await fetch(base + path, { headers: H, ...opt });
+  if (r.status === 429) { await new Promise(z => setTimeout(z, 3000)); r = await fetch(base + path, { headers: H, ...opt }); }   // rate limited: back off once
   if (r.status === 204) return null;
   const tx = await r.text();
   if (!r.ok) throw new Error(path.split('?')[0] + ' HTTP ' + r.status + ' ' + tx.slice(0, 200));
@@ -41,27 +42,59 @@ const send = async (body, why) => { act(why + ' — ' + body.side.toUpperCase() 
 
 // ---- time in New York ----
 const etParts = d => Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map(p => [p.type, p.value]));
-const ep = etParts(new Date());
-const TODAY = ep.year + ep.month + ep.day;                 // yyyymmdd
-const MINS = (+ep.hour % 24) * 60 + +ep.minute;
+let TODAY = '', MINS = 0;                                   // yyyymmdd, minutes past midnight ET
+export function setNow() { const ep = etParts(new Date()); TODAY = ep.year + ep.month + ep.day; MINS = (+ep.hour % 24) * 60 + +ep.minute; return MINS; }
+setNow();
 const ymdDash = ms => { const e = etParts(new Date(ms)); return e.year + '-' + e.month + '-' + e.day; };
 const rid = () => Math.random().toString(36).slice(2, 7);
 const OPT_RE = /^([A-Z.]+)(\d{6})([CP])(\d{8})$/;
 const isOpt = s => OPT_RE.test(s);
 const tick = p => p >= 3 ? Math.round(p * 20) / 20 : Math.round(p * 100) / 100;
-const acts = [];
-const act = m => { console.log(m); acts.push({ t: new Date().toISOString(), m }); };
+const acts = [], seen = new Map();
+const act = m => {                                          // same message within 10 min is logged once
+  const k = m.replace(/[-+]?\d+(\.\d+)?%/g, '#');
+  if (seen.has(k) && Date.now() - seen.get(k) < 10 * 60000) return;
+  seen.set(k, Date.now()); console.log(m); acts.push({ t: new Date().toISOString(), m });
+};
+let lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
 
-try {
-  await run();
-} catch (e) {
-  act('Error: ' + (e.message || e));
-} finally {
-  await writeJournal().catch(e => console.log('journal error', e.message));
+// One full decision cycle: manage every position, then look for new entries.
+export async function botCycle({ journal = false } = {}) {
+  setNow();
+  const before = acts.length;
+  try { await run(); } catch (e) { act('Error: ' + (e.message || e)); }
+  pendingActs += acts.length - before;
+  if (journal || pendingActs) { await writeJournal().catch(e => console.log('journal error', e.message)); pendingActs = 0; }
+  return { open: !!(lastClock && lastClock.is_open) };
 }
 
+// Cheap 1-second check (2 requests): does anything need a full cycle right now?
+const fired = new Set();
+export async function fastCheck() {
+  setNow();
+  if (!lastClock || !lastClock.is_open) return false;
+  const pos = await T('/v2/positions');
+  const sig = pos.map(p => p.symbol + ':' + p.qty).sort().join(',');
+  if (sig !== lastPosSig) { lastPosSig = sig; return 'a fill happened'; }      // bought or sold: re-plan, maybe re-enter
+  for (const p of pos) {
+    const pc = +p.unrealized_plpc * 100;
+    if (isOpt(p.symbol) && (pc <= -50 || pc >= OPT_TP)) return p.symbol + ' option exit level';
+    if (!isOpt(p.symbol) && HOLD_FLOOR > 0 && pc <= -HOLD_FLOOR) return p.symbol + ' hard floor';
+  }
+  if (OPT_ON && lastSignals && MINS >= 585 && MINS < 900) {
+    const syms = [...new Set(lastSignals.longs.concat(lastSignals.shorts).map(s => s.sym))];
+    if (syms.length) {
+      const tr = (await D(`/v2/stocks/trades/latest?symbols=${syms.join(',')}&feed=iex`)).trades || {};
+      for (const s of lastSignals.longs) { const px = tr[s.sym] && tr[s.sym].p; const k = TODAY + 'C' + s.sym; if (px && px <= s.entry * 1.002 && !fired.has(k)) { fired.add(k); return s.sym + ' touched CALL entry ' + s.entry; } }
+      for (const s of lastSignals.shorts) { const px = tr[s.sym] && tr[s.sym].p; const k = TODAY + 'P' + s.sym; if (px && px >= s.entry * 0.998 && !fired.has(k)) { fired.add(k); return s.sym + ' touched PUT entry ' + s.entry; } }
+    }
+  }
+  return false;
+}
+export const clockInfo = () => lastClock;
+
 async function run() {
-  const clock = await T('/v2/clock');
+  const clock = lastClock = await T('/v2/clock');
   if (!clock.is_open) { console.log('Market closed.'); return; }
   const acct = await T('/v2/account');
   const equity = +acct.equity, lastEq = +acct.last_equity || equity;
@@ -85,6 +118,7 @@ async function run() {
   for (const p of stockPos) {
     const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-s-' + p.symbol + '-'));
     if (!e) continue;                                   // not ours — never touch manual positions
+    if (sellsFor(p.symbol).some(o => o.type === 'market')) continue;
     const [, , , tgtC, , day] = cid(e).split('-');
     const tgt = +tgtC / 100, avg = +p.avg_entry_price, plpc = +p.unrealized_plpc * 100;
     const held = day < TODAY;
@@ -113,6 +147,7 @@ async function run() {
   for (const p of optPos) {
     const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-o-' + p.symbol + '-'));
     if (!e) continue;
+    if (sellsFor(p.symbol).some(o => o.type === 'market')) continue;
     const day = cid(e).split('-')[3];
     const qty = Math.abs(+p.qty), plpc = +p.unrealized_plpc * 100, avg = +p.avg_entry_price;
     const m = OPT_RE.exec(p.symbol), exp = '20' + m[2];
@@ -130,14 +165,18 @@ async function run() {
   if (capHit) { act(`Daily loss cap ${LOSS_CAP}% hit (${dayPct.toFixed(2)}%) — no new trades today`); return; }
   if (MINS < 585 || MINS >= 900) { console.log('Outside the entry window (9:45–15:00 ET).'); return; }
 
-  const start = new Date(Date.now() - 130 * 864e5).toISOString();
-  const bars = {};
-  let token = '';
-  for (let k = 0; k < 10; k++) {
-    const j = await D(`/v2/stocks/bars?symbols=${UNIVERSE.join(',')}&timeframe=1Day&start=${start}&limit=10000&adjustment=split&feed=iex&sort=asc${token ? '&page_token=' + token : ''}`);
-    for (const [s, arr] of Object.entries(j.bars || {})) bars[s] = (bars[s] || []).concat(arr);
-    token = j.next_page_token; if (!token) break;
+  if (!barsCache.bars || Date.now() - barsCache.at > 30 * 60000) {         // daily bars: refresh every 30 min
+    const start = new Date(Date.now() - 130 * 864e5).toISOString();
+    const b2 = {};
+    let token = '';
+    for (let k = 0; k < 10; k++) {
+      const j = await D(`/v2/stocks/bars?symbols=${UNIVERSE.join(',')}&timeframe=1Day&start=${start}&limit=10000&adjustment=split&feed=iex&sort=asc${token ? '&page_token=' + token : ''}`);
+      for (const [s, arr] of Object.entries(j.bars || {})) b2[s] = (b2[s] || []).concat(arr);
+      token = j.next_page_token; if (!token) break;
+    }
+    barsCache = { at: Date.now(), bars: b2 };
   }
+  const bars = barsCache.bars;
   const last = (await D(`/v2/stocks/trades/latest?symbols=${UNIVERSE.join(',')}&feed=iex`)).trades || {};
   const todayDash = ymdDash(Date.now());
   const longs = [], shorts = [];
@@ -151,6 +190,7 @@ async function run() {
   }
   const order = (a, b) => (b.strong - a.strong) || (a.r2 - b.r2);
   longs.sort(order); shorts.sort((a, b) => (b.strong - a.strong) || (b.r2 - a.r2));
+  lastSignals = { longs, shorts, at: Date.now() };
   const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && o.status !== 'canceled' && o.status !== 'expired' && o.status !== 'rejected');
 
   // stock day trades
@@ -218,4 +258,9 @@ async function writeJournal() {
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs };
   fs.writeFileSync('bot/journal.json', JSON.stringify(j));
   console.log('journal written:', closed.length, 'closed,', open.length, 'open');
+}
+
+if (import.meta.url === 'file://' + process.argv[1]) {
+  if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
+  await botCycle({ journal: true });
 }

@@ -1,8 +1,10 @@
 # Signal Desk trading bot — setup (paper money first)
 
 The bot trades an **Alpaca paper account** — fake money, real market prices — using the
-same rules as the dashboard's Day trading tab. It runs on GitHub Actions every 5 minutes
-during US market hours. No computer of yours needs to stay on.
+same rules as the dashboard's Day trading tab. It runs on GitHub Actions and **watches every second** for the whole session: a quick
+check each second (prices, fills, option levels) and a full decision cycle every 20 seconds
+— instantly when the quick check sees a fill or a trigger. No computer of yours needs to
+stay on.
 
 It can hold several stocks at once (default 6) and re-enter a stock after a target or
 stop hits (default 2 entries per stock per day) — multiple trades per day by design.
@@ -71,3 +73,13 @@ does not exist), one trade/symbol/day in the test, no fees, survivorship bias.
 Run paper for at least 1–2 months and compare with the backtest. If you ever switch
 (`ALPACA_URL=https://api.alpaca.markets` + live keys), that decision and those keys are
 yours alone, losses included. This is a rules demo, not financial advice.
+
+## How the every-second watching works
+GitHub can only *start* a job every 5 minutes, so each job starts once and stays alive for
+the session (up to ~5h45m — GitHub's limit is 6h); the next scheduled job waits in the queue
+and takes over the moment the first one ends. Each second it makes 1–2 light requests
+(positions, latest prices); every 20 seconds, or the instant it sees a fill or a price
+touching a trigger, it runs a full cycle. That stays under Alpaca's 200-requests/minute limit.
+Profit-taking sell orders rest at Alpaca, so they fill at broker speed regardless.
+Keep the repo public: public repos get unlimited free Actions minutes (a private repo would
+burn ~8,000 minutes a month this way).
