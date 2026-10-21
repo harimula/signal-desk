@@ -22,7 +22,8 @@ const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
 const n = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? +process.env[k] : d);
 const STK_ON = process.env.BOT_STOCKS !== '0', OPT_ON = process.env.BOT_OPTIONS !== '0';
 const BUDGET = n('BOT_PER_TRADE', 500), OPT_BUDGET = n('BOT_OPT_BUDGET', 300);
-const MAX_POS = n('BOT_MAX_POSITIONS', 6), MAX_OPT = n('BOT_MAX_OPTIONS', 4), MAX_ENTRIES = n('BOT_MAX_ENTRIES_PER_SYM', 2);
+const MAX_POS = n('BOT_MAX_POSITIONS', 6), MAX_OPT = n('BOT_MAX_OPTIONS', 4), MAX_ENTRIES = n('BOT_MAX_ENTRIES_PER_SYM', 3);
+const TP = n('BOT_TAKE_PROFIT', 1), OPT_TP = n('BOT_OPT_TAKE_PROFIT', 50); // quick-profit exits, in %
 const LOSS_CAP = n('BOT_DAILY_LOSS_CAP', 3), HOLD_LOSS = n('BOT_HOLD_LOSS', 1.5), HOLD_FLOOR = n('BOT_HOLD_FLOOR', 25), MAX_HOLD_DAYS = n('BOT_MAX_HOLD_DAYS', 30);
 const UNIVERSE = (process.env.BOT_SYMBOLS || 'AAPL,MSFT,NVDA,AMZN,META,GOOGL,TSLA,AMD,JPM,BAC,XOM,CVX,KO,PEP,WMT,HD,DIS,INTC,CSCO,QCOM,ORCL,CRM,ADBE,NFLX,UBER,PLTR,SHOP,COIN,SOFI,F').split(',').map(s => s.trim()).filter(Boolean);
 const DRY = process.env.BOT_DRY === '1';
@@ -97,9 +98,9 @@ async function run() {
       act(`${p.symbol} is down ${plpc.toFixed(2)}% — holding instead of selling at a loss; will exit at breakeven`);
     }
     const goingHeld = held || (MINS >= 945 && plpc <= -HOLD_LOSS);
-    const want = goingHeld ? tick(avg * 1.003) : tick(tgt);
+    const want = goingHeld ? tick(avg * 1.003) : tick(Math.max(avg * 1.002, Math.min(tgt, avg * (1 + TP / 100))));
     const qty = String(Math.abs(+p.qty));
-    if (!sells.length) await send({ symbol: p.symbol, qty, side: 'sell', type: 'limit', limit_price: String(want), time_in_force: 'gtc', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, goingHeld ? `${p.symbol} recovery exit` : `${p.symbol} target`);
+    if (!sells.length) await send({ symbol: p.symbol, qty, side: 'sell', type: 'limit', limit_price: String(want), time_in_force: 'gtc', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, goingHeld ? `${p.symbol} recovery exit` : `${p.symbol} take-profit (first of +${TP}% or target)`);
     else if (Math.abs(+sells[0].limit_price - want) > 0.011 && sells[0].type === 'limit') {
       act(`${p.symbol} moving sell limit ${sells[0].limit_price} → ${want}`);
       if (!DRY) await T('/v2/orders/' + sells[0].id, { method: 'PATCH', body: JSON.stringify({ limit_price: String(want) }) });
@@ -107,20 +108,22 @@ async function run() {
   }
 
   // ---- manage option positions ----
+  // A resting limit sells everything at +OPT_TP% the instant it trades there.
+  // The bot cancels it and sells at market for the stop, time stop, expiry and loss cap.
   for (const p of optPos) {
-    if (sellsFor(p.symbol).length) continue;
     const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-o-' + p.symbol + '-'));
     if (!e) continue;
-    const parts = cid(e).split('-'), day = parts[3], origQty = +parts[4] || +p.qty;
-    const qty = Math.abs(+p.qty), plpc = +p.unrealized_plpc * 100;
+    const day = cid(e).split('-')[3];
+    const qty = Math.abs(+p.qty), plpc = +p.unrealized_plpc * 100, avg = +p.avg_entry_price;
     const m = OPT_RE.exec(p.symbol), exp = '20' + m[2];
-    const out = (q, why) => send({ symbol: p.symbol, qty: String(q), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why);
-    if (plpc >= 100) await out(qty, `${p.symbol} +${plpc.toFixed(0)}% — take full profit`);
-    else if (plpc <= -50) await out(qty, `${p.symbol} ${plpc.toFixed(0)}% — option stop`);
-    else if (capHit) await out(qty, `${p.symbol} daily loss cap hit — closing options`);
-    else if (exp <= TODAY) await out(qty, `${p.symbol} expires today — out`);
-    else if (day < TODAY && MINS >= 940) await out(qty, `${p.symbol} time stop — options are held one night at most`);
-    else if (plpc >= 50 && origQty >= 2 && qty === origQty) await out(Math.floor(qty / 2), `${p.symbol} +${plpc.toFixed(0)}% — sell half`);
+    const sells = sellsFor(p.symbol);
+    const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }); await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
+    if (plpc >= OPT_TP) await out(`${p.symbol} +${plpc.toFixed(0)}% \u2014 take profit`);
+    else if (plpc <= -50) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
+    else if (capHit) await out(`${p.symbol} daily loss cap hit \u2014 closing options`);
+    else if (exp <= TODAY) await out(`${p.symbol} expires today \u2014 out`);
+    else if (day < TODAY && MINS >= 940) await out(`${p.symbol} time stop \u2014 options are held one night at most`);
+    else if (!sells.length) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
   }
 
   // ---- new entries ----

@@ -25,7 +25,10 @@ market is open. Watch results at https://app.alpaca.markets (paper).
 
 ## What it trades
 **Stock day trades** — buy limit at S3 when a stock closed above its 20-day average with
-RSI-2 ≤ 40; sell limit at R1 (target). At 3:45pm ET winners and small losers are sold.
+RSI-2 ≤ 40. The moment it fills, a sell limit sits at the broker at **+1% or the R1 target,
+whichever comes first** — profit is taken early, any time of day, and the slot frees up for
+the next trade (up to 3 trades per stock per day). At 3:45pm ET anything still open that is
+a winner or a small loser is sold.
 **A stock down more than 1.5% at the close is HELD instead of sold at a loss** — it gets a
 sell limit at breakeven (+0.3%) and waits to recover. Two guards stay on: a hard floor at
 −25% and a 30-day maximum hold.
@@ -33,8 +36,8 @@ sell limit at breakeven (+0.3%) and waits to recover. Two guards stay on: a hard
 **CALLs** on the same uptrend setups, **PUTs** on the mirror setups (downtrend stock that
 bounced up hard, RSI-2 ≥ 60) — bought only once the stock actually touches the trigger
 level. Strike nearest the trigger, expiry 6–17 days out, skipped if the bid/ask spread is
-wider than 20%. Exits: sell half at +50%, all at +100%, all at −50%, all by 3:40pm the next
-session, never into expiry day. Options are never held at a loss "to recover" — they decay.
+wider than 20%. Exits: a sell limit at **+50%** sits at the broker from the moment it fills (instant
+profit-taking); all out at −50%, all by 3:40pm the next session, never into expiry day. Options are never held at a loss "to recover" — they decay.
 
 Stands aside the first 15 minutes; no new entries after 3:00pm. If the account is down 3%
 on the day it stops opening trades and closes its options (held stocks stay).
@@ -50,7 +53,9 @@ day-by-day P/L, total realized P/L, open positions and the account value. It rea
 ## Controls (Settings → Secrets and variables → Actions → Variables)
 `BOT_PER_TRADE` ($500 per stock trade), `BOT_OPT_BUDGET` ($300 per option trade),
 `BOT_MAX_POSITIONS` (6 stocks), `BOT_MAX_OPTIONS` (4), `BOT_HOLD_LOSS` (1.5),
-`BOT_HOLD_FLOOR` (25), `BOT_STOCKS` / `BOT_OPTIONS` (set to 0 to switch either off).
+`BOT_HOLD_FLOOR` (25), `BOT_TAKE_PROFIT` (1 = +1% stock quick profit),
+`BOT_OPT_TAKE_PROFIT` (50 = +50% option profit), `BOT_MAX_ENTRIES_PER_SYM` (3),
+`BOT_STOCKS` / `BOT_OPTIONS` (set to 0 to switch either off).
 
 ## Kill switch
 Create a file named `bot/STOP` in the repo (GitHub → Add file). Next run (≤5 min) the bot

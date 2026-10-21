@@ -25,6 +25,9 @@ jobs:
           BOT_MAX_OPTIONS: ${{ vars.BOT_MAX_OPTIONS }}
           BOT_HOLD_LOSS: ${{ vars.BOT_HOLD_LOSS }}
           BOT_HOLD_FLOOR: ${{ vars.BOT_HOLD_FLOOR }}
+          BOT_TAKE_PROFIT: ${{ vars.BOT_TAKE_PROFIT }}
+          BOT_OPT_TAKE_PROFIT: ${{ vars.BOT_OPT_TAKE_PROFIT }}
+          BOT_MAX_ENTRIES_PER_SYM: ${{ vars.BOT_MAX_ENTRIES_PER_SYM }}
           BOT_STOCKS: ${{ vars.BOT_STOCKS }}
           BOT_OPTIONS: ${{ vars.BOT_OPTIONS }}
       - run: |
