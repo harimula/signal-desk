@@ -813,7 +813,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792610330';
+const BUILD_V = '1792610432';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -823,7 +823,16 @@ async function verCheck() {
 }
 $('#upbtn').addEventListener('click', () => { try { location.replace(location.pathname + '?u=' + Date.now()); } catch (e) { location.reload(); } });
 setInterval(verCheck, 180000); setTimeout(verCheck, 3000);
-(async () => { try { if (location.search.indexOf('u=') >= 0) return; const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const v = (await r.text()).trim(); if (/^\d+$/.test(v) && BUILD_V !== '__BUILD' + 'V__' && v !== BUILD_V) location.replace(location.pathname + '?u=' + Date.now()); } catch (e) {} })();
+(async () => { try {
+  const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
+  const v = (await r.text()).trim();
+  if (!/^\d+$/.test(v) || BUILD_V === '__BUILD' + 'V__' || v === BUILD_V) { sessionStorage.removeItem('sd-upd'); return; }
+  const tries = +(sessionStorage.getItem('sd-upd') || 0);
+  if (tries >= 2) return;
+  sessionStorage.setItem('sd-upd', String(tries + 1));
+  location.replace(location.pathname + '?u=' + Date.now());
+} catch (e) {} })();
+try { const fo = document.getElementById('foot'); if (fo) { const sp = document.createElement('div'); sp.className = 'mut'; sp.style.cssText = 'font-size:10.5px;margin-top:6px'; sp.textContent = 'build v' + BUILD_V; fo.parentNode.insertBefore(sp, fo.nextSibling); } } catch (e) {}
 setInterval(() => {
   const el = $('#cdown'); if (!el) return;
   if (!(arMin > 0)) { el.textContent = ''; return; }
