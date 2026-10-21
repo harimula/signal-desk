@@ -120,7 +120,7 @@ input,select,button{font:inherit;color:var(--text)}
 .tw{overflow-x:auto;border-radius:8px}
 .tw{overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;max-width:100%}
 .twwrap{position:relative}
-.twbtn{position:absolute;top:50%;transform:translateY(-50%);z-index:7;width:32px;height:52px;border-radius:9px;border:1px solid var(--line);background:var(--surface);opacity:.92;color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);padding:0}
+.twbtn{position:absolute;top:50%;transform:translateY(-50%);z-index:7;width:34px;height:56px;border-radius:9px;border:1px solid var(--h);background:var(--surface2);color:var(--text);font-size:22px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.25);padding:0}
 .twbtn:active{background:var(--surface2)}
 .twl{left:6px}.twr{right:6px}
 html{overflow-anchor:none}
@@ -131,10 +131,10 @@ html{overflow-anchor:none}
 @media (max-width:700px){.tw:has(#tb),.tw:has(#dttab),.tw:has(#pftab){max-height:none}}
 
 .tw:has(#tb),.tw:has(#dttab),.tw:has(#pftab){max-height:76vh;overflow:auto}
-@keyframes tkp{0%{background:rgba(16,163,127,.22)}100%{background:transparent}}
-@keyframes tkn{0%{background:rgba(220,38,38,.16)}100%{background:transparent}}
-tr.tkup td,.tkup:not(tr){animation:tkp .9s ease-out}
-tr.tkdn td,.tkdn:not(tr){animation:tkn .9s ease-out}
+@keyframes tkp{0%{background:rgba(16,163,127,.10)}100%{background:transparent}}
+@keyframes tkn{0%{background:rgba(220,38,38,.09)}100%{background:transparent}}
+tr.tkup td,.tkup:not(tr){animation:tkp .55s ease-out}
+tr.tkdn td,.tkdn:not(tr){animation:tkn .55s ease-out}
 #tb thead th,#dttab thead th,#pftab thead th{position:sticky;top:0;background:var(--surface);z-index:3}
 #tb thead th:nth-child(1),#tb thead th:nth-child(2),#dttab thead th:first-child,#pftab thead th:first-child{z-index:5}
 table{border-collapse:separate;border-spacing:0;width:100%;min-width:1280px;background:var(--surface);font-size:12.5px}
@@ -812,7 +812,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792609190';
+const BUILD_V = '1792609482';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -870,7 +870,7 @@ setInterval(() => {
   if (nowS > BASE_STAMP.US.liveAt) { BASE_STAMP.US.liveAt = nowS; BASE_STAMP.US.liveLocal = tzFmt(Date.now(), DATA.markets.US.tz, 'ET') + ' (live)'; BASE_STAMP.US.note = 'US prices are streaming live from Finnhub; indicators use daily bars through the last completed session.'; }
   analyzeAll(); renderAll(); syncRecs();
   for (const [sym, d9] of flash) document.querySelectorAll(`[data-s="${CSS.escape(sym)}"]`).forEach(el => el.classList.add(d9 >= 0 ? 'tkup' : 'tkdn'));
-}, 1100);
+}, 2500);
 const fhi = $('#fhIn'); if (fhi) { fhi.value = fhKey; $('#fhSave').addEventListener('click', () => { fhKey = $('#fhIn').value.trim(); save('sd-fh', fhKey); fhStatus(fhKey ? 'Key saved.' : 'Key cleared.'); fhConnect(); goliveCheck(); }); }
 if (fhKey) fhConnect();
 const fmpi = $('#fmpIn'); if (fmpi) { fmpi.value = load('sd-fmp', ''); $('#fmpSave').addEventListener('click', () => { const v = $('#fmpIn').value.trim(); save('sd-fmp', v); $('#fmpSt').textContent = v ? 'FMP key saved. Press \u21bb Refresh prices to get live quotes.' : 'FMP key cleared.'; goliveCheck(); }); }
@@ -1695,6 +1695,7 @@ ${(si => si.has ? `<td>${c}${fmt(s.lastClose)}<div class="${(si.extPct || 0) >= 
   }).join('') : `<tr><td colspan="20" class="empty">Nothing matches these filters.</td></tr>`;
   $('#tb thead').innerHTML = head;
   $('#tb tbody').innerHTML = body;
+  twNav2($('#view'));
   document.querySelectorAll('#tb th').forEach(th => { th.classList.toggle('sorted', th.dataset.k === sortKey); th.dataset.dir = sortDir < 0 ? ' ▼' : ' ▲'; });
 }
 function currentStocks() {
@@ -1786,6 +1787,7 @@ function renderAll() {
     window.scrollTo(scX, scY);
     requestAnimationFrame(() => { if (Math.abs(window.scrollY - scY) > 40 || Math.abs(window.scrollX - scX) > 40) window.scrollTo(scX, scY); });
   }
+  twNav2(view);
   setTimeout(() => {
     twNav2(view);
     if (sameView) {
