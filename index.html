@@ -768,7 +768,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792598748';
+const BUILD_V = '1792599077';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1132,6 +1132,21 @@ function dtTrack(mk, rows) {
     en.res = {pls};
     changed = true;
   }
+  // Fill in any sessions missed since the start, scored by the same replay rules
+  const start0 = load('sd-dtstart', 0) || Date.now();
+  const covered = new Set();
+  for (const kk of Object.keys(log)) { const en = log[kk]; if (en.mk !== mk) continue; const ix = dts.indexOf(en.ts); if (ix >= 0) covered.add(ix + 1); }
+  for (let di = 1; di < dts.length; di++) {
+    if (dts[di] * 1000 <= start0 || covered.has(di)) continue;
+    const pls = [];
+    for (const r4 of rows) {
+      const x4 = r4.sim; if (!x4 || !x4.list) continue;
+      const nbS = Math.floor(((r4.s.bars || []).length) / 4), offD = dts.length - nbS;
+      for (const t4 of x4.list) if (t4.i + offD === di) pls.push({sym: r4.s.sym, pl: Math.round(t4.pl * 100) / 100, f: t4.fill, x: t4.exit});
+    }
+    log[mk + ':' + dts[di - 1] + ':bf'] = {mk, ts: dts[di - 1], bf: true, tr: [], res: {pls}};
+    changed = true;
+  }
   if (changed) save('sd-dtlog', log);
   const ents = Object.values(log).filter(e2 => e2.mk === mk).sort((a2, b2) => a2.ts - b2.ts);
   let cum2 = 0, days = 0, lastDay = null;
@@ -1207,17 +1222,21 @@ ${(si => `<div><small>${si.nowLab}</small><b>${fmt(s.px)}</b><small class="${(si
     return `<tr data-s="${esc(s.sym)}" data-m="${dtMk}" title="${esc(r.why)}" style="cursor:pointer"><td class="lt"><b>${esc(showSym(s.sym))}</b></td><td class="lt">${dtp(r.rt)}</td><td>${cu}${fmt(s.px)}</td><td>${f2(r.entry)}</td><td>${f2(r.target)}</td><td>${f2(r.stop)}</td>${x && x.trades ? `<td class="${(x.last || 0) >= 0 ? 'pos' : 'neg'}">${x.last == null ? '–' : sgn(x.last) + '%'}</td><td class="${x.tot >= 0 ? 'pos' : 'neg'}"><b>${sgn(x.tot)}%</b></td>` : '<td>–</td><td>–</td>'}</tr>`;
   }).join('');
   const money = v => (v >= 0 ? '+' : '−') + cu + fmt(Math.abs(amt * v / 100), 2);
+  const dtsAll = DATA.dates[dtMk] || [];
   const dayRows = live && live.ents ? [...live.ents].reverse().map(en => {
-    const dd = dFmt2(en.ts * 1000);
-    if (!en.res) return `<div style="margin-top:12px"><b>${dd}</b> <span class="mut" style="font-size:12px">\u00b7 ${en.tr.length} trade${en.tr.length === 1 ? '' : 's'} working \u2014 scored after the close</span></div>`;
-    if (en.res.gone || !en.res.pls || !en.res.pls.length) return `<div style="margin-top:12px"><b>${dd}</b> <span class="mut" style="font-size:12px">\u00b7 too old to score \u2014 prices no longer available</span></div>`;
+    const ix3 = dtsAll.indexOf(en.ts);
+    const traded = ix3 >= 0 && ix3 + 1 < dtsAll.length ? dFmt2(dtsAll[ix3 + 1] * 1000) : (en.res ? dFmt2(en.ts * 1000) : 'Today');
+    const tag = en.bf ? ' <span class="mut" style="font-weight:400;font-size:11px">reconstructed \u2014 page was not open that day</span>' : '';
+    if (!en.res) return `<div style="margin-top:12px"><b>${traded}</b> <span class="mut" style="font-size:12px">\u00b7 ${en.tr.length} trade${en.tr.length === 1 ? '' : 's'} working \u2014 scored after the close</span></div>`;
+    if (en.res.gone) return `<div style="margin-top:12px"><b>${traded}</b> <span class="mut" style="font-size:12px">\u00b7 too old to score \u2014 prices no longer available</span></div>`;
+    if (!en.res.pls || !en.res.pls.length) return `<div style="margin-top:12px"><b>${traded}</b>${tag} <span class="mut" style="font-size:12px">\u00b7 the rules found nothing to trade \u2014 flat day</span></div>`;
     const got = en.res.pls.filter(x2 => x2.pl != null);
     const avg3 = got.length ? got.reduce((t2, x2) => t2 + x2.pl, 0) / got.length : null;
     const per = got.length ? amt / got.length : 0;
     const trs = en.res.pls.map(x2 => x2.pl == null
       ? `<tr><td class="lt"><b>${esc(showSym(x2.sym))}</b></td><td colspan="2" class="lt mut" style="font-size:12px">order never filled \u2014 no trade</td><td>\u2013</td><td>\u2013</td></tr>`
       : `<tr><td class="lt"><b>${esc(showSym(x2.sym))}</b></td><td>${x2.f != null ? cu + fmt(x2.f) : '\u2013'}</td><td>${x2.x != null ? cu + fmt(x2.x) : '\u2013'}</td><td class="${x2.pl >= 0 ? 'pos' : 'neg'}">${sgn(x2.pl)}%</td><td class="${x2.pl >= 0 ? 'pos' : 'neg'}"><b>${(x2.pl >= 0 ? '+' : '\u2212') + cu + fmt(Math.abs(per * x2.pl / 100), 2)}</b></td></tr>`).join('');
-    return `<div style="margin-top:12px"><b>${dd}</b>${avg3 != null ? ` <span class="${avg3 >= 0 ? 'pos' : 'neg'}" style="font-weight:700;font-size:13px">${sgn(avg3)}% \u00b7 ${money(avg3)}</span>` : ` <span class="mut" style="font-size:12px">\u00b7 no orders filled \u2014 flat day</span>`}</div>
+    return `<div style="margin-top:12px"><b>${traded}</b>${avg3 != null ? ` <span class="${avg3 >= 0 ? 'pos' : 'neg'}" style="font-weight:700;font-size:13px">${sgn(avg3)}% \u00b7 ${money(avg3)}</span>` : ` <span class="mut" style="font-size:12px">\u00b7 no orders filled \u2014 flat day</span>`}${tag}</div>
 <div class="tw card" style="margin-top:6px"><table style="min-width:380px"><thead><tr><th class="lt">Stock</th><th>Bought at</th><th>Sold at</th><th>P/L %</th><th>P/L ${cu}</th></tr></thead><tbody>${trs}</tbody></table></div>`;
   }).join('') : '';
   return `<h2 style="margin-bottom:6px">Day trading — ${dtMk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
@@ -1233,7 +1252,7 @@ ${lvBox('Days counted', String(live.days))}
 ${lvBox('Working today', live.pend ? live.pend + ' trade' + (live.pend === 1 ? '' : 's') : 'none')}
 </div>
 ${dayRows ? `<details data-k="dtdd" style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;font-size:13px">Day by day \u2014 which stock made or lost what</summary>${dayRows}
-<div class="mut" style="font-size:11.5px;margin-top:8px">${cu} figures split your ${cu}${fmt(amt, 0)} equally across that day's filled trades. Bought at / Sold at are the prices the score used; a dash means the day was scored before prices were being saved.</div></details>` : ''}</div>` : ''}
+<div class="mut" style="font-size:11.5px;margin-top:8px">${cu} figures split your ${cu}${fmt(amt, 0)} equally across that day's filled trades. Bought at / Sold at are the prices the score used; a dash means the day was scored before prices were being saved. Days marked reconstructed were filled in with the same rules for sessions when this page was not open, so no day since you started is missing.</div></details>` : ''}</div>` : ''}
 <h3 style="margin:0 0 8px">Buy today <span class="mut" style="font-weight:400;font-size:13px">· ${buys.length} trade${buys.length === 1 ? '' : 's'}</span></h3>
 ${buys.length ? `<div class="grid regime">${cards}</div>
 <div class="mut" style="font-size:12px;margin-top:8px">If every trade hits its stop today, you lose <b class="neg">${cu}${fmt(totRisk, totRisk < 10 ? 2 : 0)}</b> of your ${cu}${fmt(amt, 0)} (${fmt(totRisk / (amt || 1) * 100, 1)}%). Cancel orders that have not filled by the close.</div>` : `<div class="card empty">Nothing worth buying today by these rules — that is a signal too. Check again after the next refresh.</div>`}
