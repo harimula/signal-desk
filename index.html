@@ -813,7 +813,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792610432';
+const BUILD_V = '1792612582';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1496,6 +1496,16 @@ ${(si => `<div><small>${si.nowLab}</small><b>${fmt(s.px)}</b><small class="${(si
 <div><small>Stop at</small><b class="neg">${fmt(r.stop)}</b><small style="color:var(--ts)">−${fmt(dnP, 1)}%</small></div>
 </div>
 <div class="mut" style="font-size:11.5px;margin-top:8px">Worst case: lose ${cu}${fmt(risk, risk < 10 ? 2 : 0)}${x && x.trades ? ` · 45-day record <b class="${x.tot >= 0 ? 'pos' : 'neg'}">${sgn(x.tot)}%</b>` : ''}</div>
+<details class="tkt" data-k="tk-${esc(s.sym)}" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px"><summary style="cursor:pointer;font-size:12px;font-weight:700">\ud83d\udccb Order ticket \u2014 ${dtMk === 'US' ? 'copy into Robinhood' : 'copy into your broker'}</summary>
+<div class="mut" style="font-size:12px;line-height:1.7;margin-top:6px">
+1. <b>Buy</b>: Limit order \u00b7 limit price <b>${fmt(r.entry)}</b> \u00b7 <b>${fmt(sh, sh < 10 ? 2 : 1)}</b> shares \u00b7 Good for day.<br>
+2. <b>After it fills</b>: Sell \u2192 Limit order at <b>${fmt(r.target)}</b> (your target, +${fmt(upP, 1)}%).<br>
+3. <b>Safety rule</b>: if the price touches <b>${fmt(r.stop)}</b>, sell. ${dtMk === 'US' ? 'Robinhood cannot hold a target and a stop on the same shares at once \u2014 keep the sell limit working and set a price alert at the stop.' : 'If your broker supports bracket/GTT orders, set target and stop together.'}<br>
+4. <b>Not filled by the close?</b> Cancel the buy \u2014 no trade that day.
+</div>
+<button class="btn ghost" type="button" data-tkt="${esc(s.sym)}" data-e="${fmt(r.entry)}" data-t="${fmt(r.target)}" data-st="${fmt(r.stop)}" data-sh="${fmt(sh, sh < 10 ? 2 : 1)}" style="margin-top:7px;font-size:12px">Copy ticket</button>
+<span class="mut" data-tktmsg="${esc(s.sym)}" style="font-size:11.5px;margin-left:8px"></span>
+</details>
 </div>`;
   }).join('');
   const sellRows = sells.map(r => `<tr data-s="${esc(r.s.sym)}" data-m="${dtMk}" style="cursor:pointer"><td class="lt"><b>${esc(showSym(r.s.sym))}</b></td><td class="lt">${dtp(r.rt)}</td><td>${cu}${fmt(r.s.px)}</td><td><b>${cu}${fmt(r.entry)}</b></td><td>${(x => x && x.trades ? `<span class="${x.tot >= 0 ? 'pos' : 'neg'}">${sgn(x.tot)}%</span>` : '–')(r.sim)}</td></tr>`).join('');
@@ -1895,9 +1905,17 @@ function renderAll(bg) {
     if ($('#dtSplit')) { $('#dtSplit').addEventListener('click', sv); $('#dtAmt').addEventListener('keydown', e => { if (e.key === 'Enter') sv(); }); }
     document.querySelectorAll('[data-dtm]').forEach(el => el.addEventListener('click', () => { dtMk = el.dataset.dtm; save('sd-dtmk', dtMk); renderAll(); }));
     document.querySelectorAll('#view .mt[data-s], #dttab tr[data-s], #dtsell tr[data-s]').forEach(el => {
-      el.addEventListener('click', () => openDT(el.dataset.s, el.dataset.m || dtMk));
-      el.addEventListener('keydown', e => { if (e.key === 'Enter') openDT(el.dataset.s, el.dataset.m || dtMk); });
+      el.addEventListener('click', e => { if (e.target.closest('.tkt')) return; openDT(el.dataset.s, el.dataset.m || dtMk); });
+      el.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('.tkt')) openDT(el.dataset.s, el.dataset.m || dtMk); });
     });
+    document.querySelectorAll('[data-tkt]').forEach(btn => btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const b2 = e.currentTarget, cu2 = dtMk === 'IN' ? '\u20b9' : '$';
+      const txt = 'BUY ' + b2.dataset.tkt + '\nOrder type: Limit buy\nLimit price: ' + cu2 + b2.dataset.e + '\nShares: ' + b2.dataset.sh + '\nTime in force: Good for day\n\nAfter it fills:\nSELL limit at ' + cu2 + b2.dataset.t + ' (target)\nSafety: if price touches ' + cu2 + b2.dataset.st + ', sell\nCancel the buy if not filled by the close.';
+      const m2 = document.querySelector('[data-tktmsg="' + b2.dataset.tkt + '"]');
+      try { await navigator.clipboard.writeText(txt); if (m2) m2.textContent = 'Copied \u2014 paste anywhere.'; }
+      catch (e2) { if (m2) m2.textContent = 'Could not copy \u2014 use the steps above.'; }
+    }));
   } else if (pfOf(tab)) {
     const go = async () => { $('#pfMsg').textContent = 'Saving…'; const msg = await addHolding($('#pfSym').value, $('#pfMk').value, $('#pfQty').value, $('#pfCost').value); renderAll(); const el2 = $('#pfMsg'); if (el2) el2.textContent = msg || 'Added.'; };
     if ($('#pfBtn')) {
