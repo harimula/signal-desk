@@ -23,15 +23,34 @@ Secrets are encrypted and never appear in the code or logs.
 Actions tab → "paper-trade-bot" → enable. It then runs itself every 5 minutes while the
 market is open. Watch results at https://app.alpaca.markets (paper).
 
-## The rules it follows
-- Buy limit at S3 when a stock closed above its 20-day average with RSI-2 ≤ 40.
-- Bracket order: target R1, stop S4 — target and stop live at the broker, not in the bot.
-- Stands aside the first 15 minutes. Flattens everything at 3:45pm ET. Never holds overnight.
-- Stops for the day if the account drops 3% (BOT_DAILY_LOSS_CAP).
+## What it trades
+**Stock day trades** — buy limit at S3 when a stock closed above its 20-day average with
+RSI-2 ≤ 40; sell limit at R1 (target). At 3:45pm ET winners and small losers are sold.
+**A stock down more than 1.5% at the close is HELD instead of sold at a loss** — it gets a
+sell limit at breakeven (+0.3%) and waits to recover. Two guards stay on: a hard floor at
+−25% and a 30-day maximum hold.
 
-## Controls (optional repo variables)
-`BOT_PER_TRADE` ($500), `BOT_MAX_POSITIONS` (6), `BOT_MAX_ENTRIES_PER_SYM` (2),
-`BOT_DAILY_LOSS_CAP` (3), `BOT_SYMBOLS` (comma list).
+**CALLs** on the same uptrend setups, **PUTs** on the mirror setups (downtrend stock that
+bounced up hard, RSI-2 ≥ 60) — bought only once the stock actually touches the trigger
+level. Strike nearest the trigger, expiry 6–17 days out, skipped if the bid/ask spread is
+wider than 20%. Exits: sell half at +50%, all at +100%, all at −50%, all by 3:40pm the next
+session, never into expiry day. Options are never held at a loss "to recover" — they decay.
+
+Stands aside the first 15 minutes; no new entries after 3:00pm. If the account is down 3%
+on the day it stops opening trades and closes its options (held stocks stay).
+
+Alpaca paper accounts normally have options enabled; if options orders are rejected, turn
+options on in the Alpaca dashboard (paper) or set `BOT_OPTIONS=0`.
+
+## Watching it
+Your site's **Bot trades** tab shows every trade — bought when, sold when, at what price —
+day-by-day P/L, total realized P/L, open positions and the account value. It reads
+`bot/journal.json`, which the bot updates after trades and about every 30 minutes.
+
+## Controls (Settings → Secrets and variables → Actions → Variables)
+`BOT_PER_TRADE` ($500 per stock trade), `BOT_OPT_BUDGET` ($300 per option trade),
+`BOT_MAX_POSITIONS` (6 stocks), `BOT_MAX_OPTIONS` (4), `BOT_HOLD_LOSS` (1.5),
+`BOT_HOLD_FLOOR` (25), `BOT_STOCKS` / `BOT_OPTIONS` (set to 0 to switch either off).
 
 ## Kill switch
 Create a file named `bot/STOP` in the repo (GitHub → Add file). Next run (≤5 min) the bot

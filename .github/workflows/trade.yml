@@ -1,8 +1,13 @@
 name: paper-trade-bot
 on:
   schedule:
-    - cron: '*/5 13-20 * * 1-5'   # every 5 min around US market hours (UTC)
+    - cron: '*/5 13-21 * * 1-5'   # every 5 min around US market hours (UTC); GitHub may delay runs
   workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: paper-trade-bot
+  cancel-in-progress: false
 jobs:
   trade:
     runs-on: ubuntu-latest
@@ -14,3 +19,24 @@ jobs:
         env:
           ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
           ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+          BOT_PER_TRADE: ${{ vars.BOT_PER_TRADE }}
+          BOT_OPT_BUDGET: ${{ vars.BOT_OPT_BUDGET }}
+          BOT_MAX_POSITIONS: ${{ vars.BOT_MAX_POSITIONS }}
+          BOT_MAX_OPTIONS: ${{ vars.BOT_MAX_OPTIONS }}
+          BOT_HOLD_LOSS: ${{ vars.BOT_HOLD_LOSS }}
+          BOT_HOLD_FLOOR: ${{ vars.BOT_HOLD_FLOOR }}
+          BOT_STOCKS: ${{ vars.BOT_STOCKS }}
+          BOT_OPTIONS: ${{ vars.BOT_OPTIONS }}
+      - run: |
+          [ -f bot/journal.json ] || exit 0
+          git config user.name "signal-desk-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add bot/journal.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Bot journal"
+          for i in 1 2 3; do
+            git push && exit 0
+            git pull --rebase -X theirs origin main || git rebase --abort
+            sleep 3
+          done
+          git push

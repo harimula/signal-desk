@@ -54,3 +54,23 @@ export function replay(bars, closes, startIdx = 22) {
   }
   return trades;
 }
+
+// Mirror rule for PUTs: downtrend stock stretched up short-term — fade the bounce at R3.
+export function signalShortAt(bars, closes, i) {
+  if (i < 21) return null;
+  const H = bars[i].h, L = bars[i].l, C = closes[i];
+  const rng = H - L;
+  if (!(rng > 0) || !(C > 0)) return null;
+  const s20 = sma(closes, 20, i);
+  const r2 = rsi2(closes, i);
+  if (s20 == null || r2 == null) return null;
+  if (!(C < s20 && r2 >= 60)) return null;
+  const atrPct = rng / C * 100;
+  if (atrPct < 0.8 || atrPct > 9) return null;
+  const P = (H + L + C) / 3;
+  const entry = C + rng * 1.1 / 4;                    // R3
+  const stop = C + rng * 1.1 / 2;                     // R4
+  const target = 2 * P - H;                           // S1
+  if (!(target < entry && entry < stop)) return null;
+  return { entry: r2d(entry), stop: r2d(stop), target: r2d(target), strong: r2 >= 85, r2: Math.round(r2) };
+}

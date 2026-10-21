@@ -1,94 +1,218 @@
-// Signal Desk paper-trading bot — runs every 5 minutes during US market hours
-// via GitHub Actions. Trades an ALPACA PAPER account (fake money, real prices).
-// Stateless: every run rebuilds its picture from the broker, so missed runs are safe.
+// Signal Desk paper-trading bot — runs every 5 minutes via GitHub Actions.
+// Trades an ALPACA PAPER account (fake money, real prices). Stateless: each run rebuilds
+// its picture from the broker; trade plans ride inside each order's client_order_id.
 //
-// Safety: ALPACA_URL defaults to the paper endpoint. A file named bot/STOP in the
-// repo flattens everything and halts. A daily loss cap halts for the day.
+// What it trades
+//  - Stock day trades (long): limit buy at S3 on uptrend+washout stocks, sell limit at R1.
+//    At 3:45pm ET winners and small losers are sold. A stock down more than BOT_HOLD_LOSS%
+//    is HELD instead of sold, with a sell limit at breakeven (+0.3%) until it recovers.
+//    Hard floor BOT_HOLD_FLOOR% and max BOT_MAX_HOLD_DAYS still apply to held stocks.
+//  - CALLs on the same long setups, PUTs on the mirror (downtrend+stretched) setups,
+//    bought when the stock touches the entry level. Exits: half at +50%, all at +100%,
+//    all at -50%, all by 3:40pm the next session, never into expiry day.
+// Safety: paper endpoint by default; bot/STOP file flattens and halts; daily loss cap.
 import fs from 'node:fs';
-import { signalAt, r2d } from './strategy.mjs';
+import { signalAt, signalShortAt, r2d } from './strategy.mjs';
+import { buildJournal } from './journal.mjs';
 
 const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
 if (!KEY || !SECRET) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
 const BASE = process.env.ALPACA_URL || 'https://paper-api.alpaca.markets';
-const DATA = 'https://data.alpaca.markets';
-const BUDGET = +(process.env.BOT_PER_TRADE || 500);        // $ per trade
-const MAX_POS = +(process.env.BOT_MAX_POSITIONS || 6);      // concurrent positions
-const MAX_ENTRIES = +(process.env.BOT_MAX_ENTRIES_PER_SYM || 2); // re-entries per symbol per day
-const LOSS_CAP = +(process.env.BOT_DAILY_LOSS_CAP || 3);    // % of equity, halt for the day
-const UNIVERSE = (process.env.BOT_SYMBOLS || 'AAPL,MSFT,NVDA,AMZN,META,GOOGL,TSLA,AMD,JPM,BAC,XOM,CVX,KO,PEP,WMT,HD,DIS,INTC,CSCO,QCOM,ORCL,CRM,ADBE,NFLX,UBER,PLTR,SHOP,COIN,SOFI,F').split(',');
+const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
+const n = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? +process.env[k] : d);
+const STK_ON = process.env.BOT_STOCKS !== '0', OPT_ON = process.env.BOT_OPTIONS !== '0';
+const BUDGET = n('BOT_PER_TRADE', 500), OPT_BUDGET = n('BOT_OPT_BUDGET', 300);
+const MAX_POS = n('BOT_MAX_POSITIONS', 6), MAX_OPT = n('BOT_MAX_OPTIONS', 4), MAX_ENTRIES = n('BOT_MAX_ENTRIES_PER_SYM', 2);
+const LOSS_CAP = n('BOT_DAILY_LOSS_CAP', 3), HOLD_LOSS = n('BOT_HOLD_LOSS', 1.5), HOLD_FLOOR = n('BOT_HOLD_FLOOR', 25), MAX_HOLD_DAYS = n('BOT_MAX_HOLD_DAYS', 30);
+const UNIVERSE = (process.env.BOT_SYMBOLS || 'AAPL,MSFT,NVDA,AMZN,META,GOOGL,TSLA,AMD,JPM,BAC,XOM,CVX,KO,PEP,WMT,HD,DIS,INTC,CSCO,QCOM,ORCL,CRM,ADBE,NFLX,UBER,PLTR,SHOP,COIN,SOFI,F').split(',').map(s => s.trim()).filter(Boolean);
 const DRY = process.env.BOT_DRY === '1';
 
 const H = { 'APCA-API-KEY-ID': KEY, 'APCA-API-SECRET-KEY': SECRET, 'content-type': 'application/json' };
-const api = async (path, opt = {}) => {
-  const r = await fetch((path.startsWith('/v2/stocks') ? DATA : BASE) + path, { headers: H, ...opt });
-  if (!r.ok) throw new Error(path + ' HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200));
-  return r.json();
-};
-
-// ---- clock & kill switches ----
-const clock = await api('/v2/clock');
-if (!clock.is_open) { console.log('Market closed.'); process.exit(0); }
-const acct = await api('/v2/account');
-const equity = +acct.equity, dayStart = +acct.last_equity || equity;
-const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-const minsET = nowET.getHours() * 60 + nowET.getMinutes();
-const stopAll = fs.existsSync('bot/STOP');
-const dailyLossHit = dayStart > 0 && (equity - dayStart) / dayStart * 100 <= -LOSS_CAP;
-const eod = minsET >= 15 * 60 + 45; // 3:45pm ET: flatten, stop entering
-
-async function flattenAll(why) {
-  console.log('FLATTEN:', why);
-  if (DRY) return;
-  await api('/v2/orders', { method: 'DELETE' });
-  await api('/v2/positions?cancel_orders=true', { method: 'DELETE' });
+async function call(base, path, opt = {}) {
+  const r = await fetch(base + path, { headers: H, ...opt });
+  if (r.status === 204) return null;
+  const tx = await r.text();
+  if (!r.ok) throw new Error(path.split('?')[0] + ' HTTP ' + r.status + ' ' + tx.slice(0, 200));
+  return tx ? JSON.parse(tx) : null;
 }
-if (stopAll) { await flattenAll('bot/STOP file present'); process.exit(0); }
-if (dailyLossHit) { await flattenAll('daily loss cap ' + LOSS_CAP + '% hit'); process.exit(0); }
-if (eod) { await flattenAll('end of day - day trades do not sleep overnight'); process.exit(0); }
-if (minsET < 9 * 60 + 45) { console.log('First 15 min - standing aside.'); process.exit(0); }
+const T = (p, o) => call(BASE, p, o), D = (p, o) => call(DATA, p, o);
+const send = async (body, why) => { act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }); };
 
-// ---- current state ----
-const positions = await api('/v2/positions');
-const openOrders = await api('/v2/orders?status=open&limit=200');
-const todayISO = nowET.toISOString().slice(0, 10);
-const closed = await api('/v2/orders?status=closed&limit=200&after=' + todayISO + 'T00:00:00-04:00');
-const entriesToday = {};
-closed.concat(openOrders).forEach(o => { if (o.side === 'buy') entriesToday[o.symbol] = (entriesToday[o.symbol] || 0) + 1; });
-const busy = new Set(positions.map(p => p.symbol).concat(openOrders.map(o => o.symbol)));
-console.log(`Equity $${equity} | positions ${positions.length} | open orders ${openOrders.length}`);
+// ---- time in New York ----
+const etParts = d => Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map(p => [p.type, p.value]));
+const ep = etParts(new Date());
+const TODAY = ep.year + ep.month + ep.day;                 // yyyymmdd
+const MINS = (+ep.hour % 24) * 60 + +ep.minute;
+const ymdDash = ms => { const e = etParts(new Date(ms)); return e.year + '-' + e.month + '-' + e.day; };
+const rid = () => Math.random().toString(36).slice(2, 7);
+const OPT_RE = /^([A-Z.]+)(\d{6})([CP])(\d{8})$/;
+const isOpt = s => OPT_RE.test(s);
+const tick = p => p >= 3 ? Math.round(p * 20) / 20 : Math.round(p * 100) / 100;
+const acts = [];
+const act = m => { console.log(m); acts.push({ t: new Date().toISOString(), m }); };
 
-// ---- signals from daily bars (free IEX feed) ----
-const end = new Date().toISOString();
-const bars = await api(`/v2/stocks/bars?symbols=${UNIVERSE.join(',')}&timeframe=1Day&limit=60&adjustment=split&feed=iex&end=${end}&start=2000-01-01T00:00:00Z&sort=asc`);
-let room = MAX_POS - busy.size;
-const plans = [];
-for (const sym of UNIVERSE) {
-  const bs = (bars.bars && bars.bars[sym]) || [];
-  if (bs.length < 25) continue;
-  const B = bs.map(b => ({ o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
-  // last completed session: drop today's partial bar if present
-  const lastDay = bs[bs.length - 1].t.slice(0, 10);
-  if (lastDay === todayISO) B.pop();
-  const closes = B.map(b => b.c);
-  const sig = signalAt(B, closes, B.length - 1);
-  if (!sig) continue;
-  if (busy.has(sym)) continue;
-  if ((entriesToday[sym] || 0) >= MAX_ENTRIES) continue;
-  plans.push({ sym, ...sig });
+try {
+  await run();
+} catch (e) {
+  act('Error: ' + (e.message || e));
+} finally {
+  await writeJournal().catch(e => console.log('journal error', e.message));
 }
-plans.sort((a, b) => (b.strong - a.strong) || (a.r2 - b.r2));
-for (const pl of plans) {
-  if (room <= 0) break;
-  const qty = Math.floor(BUDGET / pl.entry);
-  if (qty < 1) { console.log(pl.sym, 'skipped - 1 share above per-trade budget'); continue; }
-  const order = {
-    symbol: pl.sym, qty: String(qty), side: 'buy', type: 'limit', time_in_force: 'day',
-    limit_price: String(pl.entry), order_class: 'bracket',
-    take_profit: { limit_price: String(pl.target) },
-    stop_loss: { stop_price: String(pl.stop) }
-  };
-  console.log('ORDER', JSON.stringify(order));
-  if (!DRY) await api('/v2/orders', { method: 'POST', body: JSON.stringify(order) });
-  room--;
+
+async function run() {
+  const clock = await T('/v2/clock');
+  if (!clock.is_open) { console.log('Market closed.'); return; }
+  const acct = await T('/v2/account');
+  const equity = +acct.equity, lastEq = +acct.last_equity || equity;
+  const positions = await T('/v2/positions');
+  const openOrders = await T('/v2/orders?status=open&limit=500');
+  const hist = await T('/v2/orders?status=all&limit=500&direction=desc&after=' + new Date(Date.now() - 45 * 864e5).toISOString());
+  const stockPos = positions.filter(p => !isOpt(p.symbol)), optPos = positions.filter(p => isOpt(p.symbol));
+  const sellsFor = sym => openOrders.filter(o => o.symbol === sym && o.side === 'sell');
+  const cid = o => o.client_order_id || '';
+
+  // ---- kill switch ----
+  if (fs.existsSync('bot/STOP')) {
+    act('STOP file found — cancelling all orders and closing everything.');
+    if (!DRY) { await T('/v2/orders', { method: 'DELETE' }); await T('/v2/positions?cancel_orders=true', { method: 'DELETE' }); }
+    return;
+  }
+  const dayPct = lastEq > 0 ? (equity - lastEq) / lastEq * 100 : 0;
+  const capHit = dayPct <= -LOSS_CAP;
+
+  // ---- manage stock positions ----
+  for (const p of stockPos) {
+    const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-s-' + p.symbol + '-'));
+    if (!e) continue;                                   // not ours — never touch manual positions
+    const [, , , tgtC, , day] = cid(e).split('-');
+    const tgt = +tgtC / 100, avg = +p.avg_entry_price, plpc = +p.unrealized_plpc * 100;
+    const held = day < TODAY;
+    const sells = sellsFor(p.symbol);
+    const sellAll = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }); await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
+    if (HOLD_FLOOR > 0 && plpc <= -HOLD_FLOOR) { await sellAll(`${p.symbol} down ${plpc.toFixed(1)}% — hit the ${HOLD_FLOOR}% hard floor`); continue; }
+    const ageDays = (Date.parse(e.filled_at || e.submitted_at) ? (Date.now() - Date.parse(e.filled_at || e.submitted_at)) / 864e5 : 0);
+    if (held && ageDays > MAX_HOLD_DAYS) { await sellAll(`${p.symbol} held ${Math.round(ageDays)} days — max hold reached`); continue; }
+    if (!held && MINS >= 945) {
+      if (plpc > -HOLD_LOSS) { await sellAll(`${p.symbol} day trade closed at the bell (${plpc >= 0 ? '+' : ''}${plpc.toFixed(2)}%)`); continue; }
+      act(`${p.symbol} is down ${plpc.toFixed(2)}% — holding instead of selling at a loss; will exit at breakeven`);
+    }
+    const goingHeld = held || (MINS >= 945 && plpc <= -HOLD_LOSS);
+    const want = goingHeld ? tick(avg * 1.003) : tick(tgt);
+    const qty = String(Math.abs(+p.qty));
+    if (!sells.length) await send({ symbol: p.symbol, qty, side: 'sell', type: 'limit', limit_price: String(want), time_in_force: 'gtc', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, goingHeld ? `${p.symbol} recovery exit` : `${p.symbol} target`);
+    else if (Math.abs(+sells[0].limit_price - want) > 0.011 && sells[0].type === 'limit') {
+      act(`${p.symbol} moving sell limit ${sells[0].limit_price} → ${want}`);
+      if (!DRY) await T('/v2/orders/' + sells[0].id, { method: 'PATCH', body: JSON.stringify({ limit_price: String(want) }) });
+    }
+  }
+
+  // ---- manage option positions ----
+  for (const p of optPos) {
+    if (sellsFor(p.symbol).length) continue;
+    const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-o-' + p.symbol + '-'));
+    if (!e) continue;
+    const parts = cid(e).split('-'), day = parts[3], origQty = +parts[4] || +p.qty;
+    const qty = Math.abs(+p.qty), plpc = +p.unrealized_plpc * 100;
+    const m = OPT_RE.exec(p.symbol), exp = '20' + m[2];
+    const out = (q, why) => send({ symbol: p.symbol, qty: String(q), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why);
+    if (plpc >= 100) await out(qty, `${p.symbol} +${plpc.toFixed(0)}% — take full profit`);
+    else if (plpc <= -50) await out(qty, `${p.symbol} ${plpc.toFixed(0)}% — option stop`);
+    else if (capHit) await out(qty, `${p.symbol} daily loss cap hit — closing options`);
+    else if (exp <= TODAY) await out(qty, `${p.symbol} expires today — out`);
+    else if (day < TODAY && MINS >= 940) await out(qty, `${p.symbol} time stop — options are held one night at most`);
+    else if (plpc >= 50 && origQty >= 2 && qty === origQty) await out(Math.floor(qty / 2), `${p.symbol} +${plpc.toFixed(0)}% — sell half`);
+  }
+
+  // ---- new entries ----
+  if (capHit) { act(`Daily loss cap ${LOSS_CAP}% hit (${dayPct.toFixed(2)}%) — no new trades today`); return; }
+  if (MINS < 585 || MINS >= 900) { console.log('Outside the entry window (9:45–15:00 ET).'); return; }
+
+  const start = new Date(Date.now() - 130 * 864e5).toISOString();
+  const bars = {};
+  let token = '';
+  for (let k = 0; k < 10; k++) {
+    const j = await D(`/v2/stocks/bars?symbols=${UNIVERSE.join(',')}&timeframe=1Day&start=${start}&limit=10000&adjustment=split&feed=iex&sort=asc${token ? '&page_token=' + token : ''}`);
+    for (const [s, arr] of Object.entries(j.bars || {})) bars[s] = (bars[s] || []).concat(arr);
+    token = j.next_page_token; if (!token) break;
+  }
+  const last = (await D(`/v2/stocks/trades/latest?symbols=${UNIVERSE.join(',')}&feed=iex`)).trades || {};
+  const todayDash = ymdDash(Date.now());
+  const longs = [], shorts = [];
+  for (const sym of UNIVERSE) {
+    const bs = bars[sym] || [];
+    const B = bs.filter(b => b.t.slice(0, 10) < todayDash).map(b => ({ o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
+    if (B.length < 25) continue;
+    const C = B.map(b => b.c), i = B.length - 1;
+    const L = signalAt(B, C, i); if (L) longs.push({ sym, ...L, px: last[sym] && last[sym].p });
+    const S = signalShortAt(B, C, i); if (S) shorts.push({ sym, ...S, px: last[sym] && last[sym].p });
+  }
+  const order = (a, b) => (b.strong - a.strong) || (a.r2 - b.r2);
+  longs.sort(order); shorts.sort((a, b) => (b.strong - a.strong) || (b.r2 - a.r2));
+  const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && o.status !== 'canceled' && o.status !== 'expired' && o.status !== 'rejected');
+
+  // stock day trades
+  if (STK_ON) {
+    let slots = MAX_POS - stockPos.length - openOrders.filter(o => o.side === 'buy' && !isOpt(o.symbol)).length;
+    for (const s of longs) {
+      if (slots <= 0) break;
+      if (stockPos.some(p => p.symbol === s.sym) || openOrders.some(o => o.symbol === s.sym)) continue;
+      if (todays.filter(o => cid(o).startsWith('sd-s-' + s.sym + '-')).length >= MAX_ENTRIES) continue;
+      const qty = Math.floor(BUDGET / s.entry);
+      if (qty < 1) continue;
+      await send({ symbol: s.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(s.entry), time_in_force: 'day',
+        client_order_id: `sd-s-${s.sym}-${Math.round(s.target * 100)}-${Math.round(s.stop * 100)}-${TODAY}-${rid()}` }, `${s.sym} stock day trade (RSI-2 ${s.r2})`);
+      slots--;
+    }
+  }
+
+  // options: CALL on long setups, PUT on short setups — only once the stock touches the level
+  if (OPT_ON) {
+    let slots = MAX_OPT - optPos.length - openOrders.filter(o => o.side === 'buy' && isOpt(o.symbol)).length;
+    const hasOptOn = und => optPos.some(p => OPT_RE.exec(p.symbol)[1] === und) || openOrders.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === und);
+    const tries = longs.map(s => ({ ...s, type: 'call' })).concat(shorts.map(s => ({ ...s, type: 'put' })));
+    for (const s of tries) {
+      if (slots <= 0) break;
+      if (!s.px || hasOptOn(s.sym)) continue;
+      const touched = s.type === 'call' ? s.px <= s.entry * 1.002 : s.px >= s.entry * 0.998;
+      if (!touched) continue;
+      if (todays.filter(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym).length >= MAX_ENTRIES) continue;
+      const cj = await T(`/v2/options/contracts?underlying_symbols=${s.sym}&type=${s.type}&status=active&expiration_date_gte=${ymdDash(Date.now() + 6 * 864e5)}&expiration_date_lte=${ymdDash(Date.now() + 17 * 864e5)}&strike_price_gte=${r2d(s.entry * 0.95)}&strike_price_lte=${r2d(s.entry * 1.05)}&limit=200`);
+      const cs = (cj.option_contracts || []).filter(c => c.tradable !== false);
+      if (!cs.length) { act(`${s.sym} ${s.type.toUpperCase()}: no contract 6–17 days out near ${s.entry}`); continue; }
+      const ex = [...new Set(cs.map(c => c.expiration_date))].sort()[0];
+      const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - s.entry) - Math.abs(+b.strike_price - s.entry))[0];
+      const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`)).quotes || {})[c.symbol];
+      if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote — skipped`); continue; }
+      if ((q.ap - q.bp) / q.ap > 0.2) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}) — skipped`); continue; }
+      const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.03));
+      const qty = Math.floor(OPT_BUDGET / (lim * 100));
+      if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above the $${OPT_BUDGET} option budget — skipped`); continue; }
+      await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
+        client_order_id: `sd-o-${c.symbol}-${TODAY}-${qty}-${rid()}` }, `${s.sym} ${s.type.toUpperCase()} (stock touched ${s.entry})`);
+      slots--;
+    }
+  }
 }
-if (!plans.length) console.log('No setups right now - that is a signal too.');
+
+async function writeJournal() {
+  const acct = await T('/v2/account');
+  const positions = await T('/v2/positions');
+  let fills = [], token = '';
+  for (let k = 0; k < 30; k++) {
+    const j = await T('/v2/account/activities/FILL?direction=asc&page_size=100' + (token ? '&page_token=' + token : ''));
+    if (!j || !j.length) break;
+    fills = fills.concat(j);
+    if (j.length < 100) break;
+    token = j[j.length - 1].id;
+  }
+  const { closed, open } = buildJournal(fills, positions);
+  let prev = {};
+  try { prev = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); } catch (e) {}
+  const allActs = (prev.acts || []).concat(acts).slice(-80);
+  const sig = JSON.stringify([closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), acts.length]);
+  if (prev.sig === sig && prev.at && Date.now() - Date.parse(prev.at) < 30 * 60000) { console.log('journal unchanged'); return; }
+  const j = { at: new Date().toISOString(), sig, paper: !process.env.ALPACA_URL || /paper/.test(process.env.ALPACA_URL),
+    account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs };
+  fs.writeFileSync('bot/journal.json', JSON.stringify(j));
+  console.log('journal written:', closed.length, 'closed,', open.length, 'open');
+}
