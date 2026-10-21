@@ -27,6 +27,10 @@ jobs:
           RUN_MINUTES: '345'
           ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
           ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          BOT_RISK_PCT: ${{ vars.BOT_RISK_PCT }}
+          BOT_MAX_HEAT: ${{ vars.BOT_MAX_HEAT }}
+          BOT_MAX_PER_SECTOR: ${{ vars.BOT_MAX_PER_SECTOR }}
           BOT_PER_TRADE: ${{ vars.BOT_PER_TRADE }}
           BOT_OPT_BUDGET: ${{ vars.BOT_OPT_BUDGET }}
           BOT_MAX_POSITIONS: ${{ vars.BOT_MAX_POSITIONS }}

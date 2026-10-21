@@ -1,47 +1,109 @@
-// Long-history backtest of the Signal Desk day-trade rules on daily bars.
-// Run by the "backtest" GitHub Actions workflow (or locally: node bot/backtest.mjs).
-// Honest limits, stated in the report: daily bars only (no 40-year minute data exists),
-// one trade per symbol per day, no fees/slippage, survivorship bias in the fixed universe.
+// Professional-style backtest of the bot's stock rules on long daily history.
+// - Trading costs: 0.05% per side (slippage + fees) on every trade.
+// - Position sizing like the bot: 10% of equity per position, max 6 per day (strongest RSI-2 first).
+// - Market-regime filter (SPY vs its 50/200-day averages), tested ON vs OFF.
+// - In-sample (first 70% of years) vs out-of-sample (last 30%) — a strategy that only works
+//   in-sample is curve-fit. SPY buy-and-hold shown for the same period.
+// Honest limits: daily bars only (no 40-year minute data exists), one round trip per stock per
+// day, options are not backtested (no free historical option prices), fixed symbol list =
+// survivorship bias. Run: Actions → backtest → Run workflow (or node bot/backtest.mjs).
 import fs from 'node:fs';
-import { replay } from './strategy.mjs';
+import { signalAt } from './strategy.mjs';
+import { regimeOf } from './risk.mjs';
 
-const YEARS = +(process.env.BT_YEARS || 40);
-const UNIVERSE = (process.env.BT_SYMBOLS || 'AAPL,MSFT,KO,JNJ,PG,XOM,CVX,JPM,WMT,MCD,DIS,IBM,GE,CAT,BA,MMM,HD,INTC,ORCL,T,VZ,PFE,MRK,PEP,NKE,AXP,GS,UNH,LOW,TXN,AMD,ADBE,COST,SBUX,CSCO,QCOM,AMGN,GD,LMT,SPY').split(',');
+const YEARS = +(process.env.BT_YEARS || 40), COST = +(process.env.BT_COST_PCT || 0.05) / 100;
+const POS = 0.10, MAXPOS = 6;
+const UNIVERSE = (process.env.BT_SYMBOLS || 'AAPL,MSFT,KO,JNJ,PG,XOM,CVX,JPM,WMT,MCD,DIS,IBM,GE,CAT,BA,MMM,HD,INTC,ORCL,T,VZ,PFE,MRK,PEP,NKE,AXP,GS,UNH,LOW,TXN,AMD,ADBE,COST,SBUX,CSCO,QCOM,AMGN,GD,LMT').split(',');
 
-async function pull(sym) {
+async function pullYahoo(sym) {
   const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${YEARS}y&interval=1d&includePrePost=false`;
   const r = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0' } });
   if (!r.ok) throw new Error('HTTP ' + r.status);
-  const res = (await r.json()).chart.result[0], q = res.indicators.quote[0], ts = res.timestamp, bars = [], dates = [];
-  ts.forEach((t, i) => { if (q.close[i] != null && q.high[i] != null) { bars.push({ o: q.open[i] ?? q.close[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] || 0 }); dates.push(t); } });
-  return { bars, closes: bars.map(b => b.c), dates };
+  const res = (await r.json()).chart.result[0], q = res.indicators.quote[0], out = [];
+  res.timestamp.forEach((t, i) => { if (q.close[i] != null && q.high[i] != null && q.low[i] != null) out.push({ d: new Date(t * 1000).toISOString().slice(0, 10), o: q.open[i] ?? q.close[i], h: q.high[i], l: q.low[i], c: q.close[i] }); });
+  return out;
+}
+function pullLiveJson(sym) {            // offline test path: uses the site's live.json (60 bars)
+  const lj = JSON.parse(fs.readFileSync('live.json', 'utf8')), row = lj.rows[sym]; if (!row) throw new Error('no row');
+  const cl = row[27], flat = row[28], nb = flat.length / 4, tail = cl.slice(-nb), dates = lj.dates[sym.endsWith('.NS') ? 'IN' : 'US'] || [];
+  return Array.from({ length: nb }, (_, i) => ({ d: dates[i] ? new Date(dates[i] * 1000).toISOString().slice(0, 10) : 'd' + String(i).padStart(4, '0'), o: flat[i * 4], h: flat[i * 4 + 1], l: flat[i * 4 + 2], c: tail[i] }));
+}
+const pull = async s => process.env.BT_SOURCE === 'livejson' ? pullLiveJson(s) : pullYahoo(s);
+
+// trades for one symbol: {d (trade date), sig date, pl (net of costs), r2}
+function tradesOf(bars) {
+  const closes = bars.map(b => b.c), out = [];
+  for (let i = 22; i < bars.length - 1; i++) {
+    const sig = signalAt(bars, closes, i); if (!sig) continue;
+    const nb = bars[i + 1];
+    const fill = nb.o < sig.entry ? nb.o : (nb.l <= sig.entry ? sig.entry : null); if (fill == null) continue;
+    let exit;
+    if (fill <= sig.stop) exit = nb.c; else if (nb.l <= sig.stop) exit = sig.stop; else if (nb.h >= sig.target) exit = Math.max(sig.target, fill); else exit = nb.c;
+    out.push({ d: nb.d, sigD: bars[i].d, pl: (exit - fill) / fill - 2 * COST, r2: sig.r2 });
+  }
+  return out;
 }
 
-const fmtPct = x => (x >= 0 ? '+' : '') + x.toFixed(2) + '%';
-const byYear = {};
-let all = [], perSym = [];
-for (const sym of UNIVERSE) {
-  try {
-    const { bars, closes, dates } = await pull(sym);
-    const tr = replay(bars, closes);
-    tr.forEach(t => { t.sym = sym; t.y = new Date(dates[t.i] * 1000).getUTCFullYear(); (byYear[t.y] = byYear[t.y] || []).push(t.pl); });
-    all = all.concat(tr);
-    const tot = tr.reduce((s, t) => s + t.pl, 0);
-    perSym.push({ sym, n: tr.length, tot, win: tr.filter(t => t.pl > 0).length, from: new Date(dates[0] * 1000).getUTCFullYear() });
-    console.log(sym, tr.length, 'trades', fmtPct(tot));
-  } catch (e) { console.log('skip', sym, e.message); }
-  await new Promise(r => setTimeout(r, 400));
+function metrics(days, label) {            // days: [{d, ret}] sorted
+  if (!days.length) return { label, years: 0 };
+  let eq = 1, peak = 1, mdd = 0;
+  for (const x of days) { eq *= 1 + x.ret; peak = Math.max(peak, eq); mdd = Math.max(mdd, 1 - eq / peak); }
+  const y0 = +days[0].d.slice(0, 4), y1 = +days[days.length - 1].d.slice(0, 4), years = Math.max(1, (Date.parse(days[days.length - 1].d) - Date.parse(days[0].d)) / (365.25 * 864e5));
+  const rs = days.map(x => x.ret), mean = rs.reduce((a, b) => a + b, 0) / rs.length;
+  const sd = Math.sqrt(rs.reduce((a, b) => a + (b - mean) ** 2, 0) / rs.length), dsd = Math.sqrt(rs.reduce((a, b) => a + Math.min(0, b) ** 2, 0) / rs.length);
+  return { label, from: days[0].d, to: days[days.length - 1].d, years: +years.toFixed(1), cagr: (eq ** (1 / years) - 1) * 100, sharpe: sd ? mean / sd * Math.sqrt(252) : 0, sortino: dsd ? mean / dsd * Math.sqrt(252) : 0, maxDD: mdd * 100, total: (eq - 1) * 100 };
 }
-const wins = all.filter(t => t.pl > 0), losses = all.filter(t => t.pl <= 0);
-const gw = wins.reduce((s, t) => s + t.pl, 0), gl = -losses.reduce((s, t) => s + t.pl, 0);
-const years = Object.keys(byYear).sort();
-let md = `# Backtest — Signal Desk day-trade rules\n\nGenerated ${new Date().toISOString().slice(0, 10)} · ${UNIVERSE.length} symbols · up to ${YEARS} years of daily bars (Yahoo Finance)\n\n`;
-md += `**What this is.** Every day, for every symbol: if the stock closed above its 20-day average with RSI-2 ≤ 40, place a buy limit at S3 for the next session; stop S4, target R1; out at the close if neither hits. One trade per symbol per day, equal-weighted. No fees or slippage counted. The fixed symbol list means survivorship bias — treat results as the rules' character, not a promise.\n\n`;
-md += `## Overall\n\n| Metric | Value |\n|---|---|\n| Trades | ${all.length} |\n| Win rate | ${(wins.length / Math.max(1, all.length) * 100).toFixed(1)}% |\n| Average trade | ${fmtPct(all.reduce((s, t) => s + t.pl, 0) / Math.max(1, all.length))} |\n| Profit factor | ${gl > 0 ? (gw / gl).toFixed(2) : 'n/a'} |\n| Sum of per-trade % | ${fmtPct(all.reduce((s, t) => s + t.pl, 0))} |\n\n`;
-md += `## Year by year (average trade, trade count)\n\n| Year | Avg trade | Trades | Win rate |\n|---|---|---|---|\n`;
-for (const y of years) { const a = byYear[y]; const w = a.filter(x => x > 0).length; md += `| ${y} | ${fmtPct(a.reduce((s, x) => s + x, 0) / a.length)} | ${a.length} | ${(w / a.length * 100).toFixed(0)}% |\n`; }
-md += `\n## Per symbol\n\n| Symbol | Since | Trades | Win rate | Sum of trade % |\n|---|---|---|---|---|\n`;
-perSym.sort((a, b) => b.tot - a.tot).forEach(s => { md += `| ${s.sym} | ${s.from} | ${s.n} | ${(s.win / Math.max(1, s.n) * 100).toFixed(0)}% | ${fmtPct(s.tot)} |\n`; });
-md += `\n*Not financial advice. Past results do not predict future results.*\n`;
+function portfolio(trades, calendar, allow) {   // calendar: all SPY dates; allow(date) => regime ok
+  const byDay = {};
+  for (const t of trades) if (allow(t.sigD)) (byDay[t.d] = byDay[t.d] || []).push(t);
+  const days = [], list = [];
+  for (const d of calendar) {
+    const arr = (byDay[d] || []).sort((a, b) => a.r2 - b.r2).slice(0, MAXPOS);
+    arr.forEach(t => list.push(t));
+    days.push({ d, ret: arr.reduce((s, t) => s + t.pl * POS, 0) });
+  }
+  return { days, list };
+}
+function tradeStats(list) {
+  const w = list.filter(t => t.pl > 0), l = list.filter(t => t.pl <= 0);
+  const gw = w.reduce((s, t) => s + t.pl, 0), gl = -l.reduce((s, t) => s + t.pl, 0);
+  return { n: list.length, win: list.length ? w.length / list.length * 100 : 0, avgWin: w.length ? gw / w.length * 100 : 0, avgLoss: l.length ? -gl / l.length * 100 : 0, expectancy: list.length ? (gw - gl) / list.length * 100 : 0, pf: gl > 0 ? gw / gl : null };
+}
+
+const spyBars = await pull('SPY');
+const calendar = spyBars.map(b => b.d), spyClose = spyBars.map(b => b.c);
+const regimeOn = {};                       // regime known at the close of each date
+spyBars.forEach((b, i) => { regimeOn[b.d] = regimeOf(spyClose.slice(Math.max(0, i - 299), i + 1)).regime; });
+let trades = [], perSym = [];
+for (const sym of UNIVERSE) {
+  try { const t = tradesOf(await pull(sym)); trades = trades.concat(t.map(x => ({ ...x, sym }))); perSym.push({ sym, ...tradeStats(t) }); console.log(sym, t.length); }
+  catch (e) { console.log('skip', sym, e.message); }
+  if (process.env.BT_SOURCE !== 'livejson') await new Promise(r => setTimeout(r, 300));
+}
+const split = calendar[Math.floor(calendar.length * 0.7)];
+const runs = {
+  on: portfolio(trades, calendar, d => regimeOn[d] !== 'bear'),
+  off: portfolio(trades, calendar, () => true),
+};
+const spyDays = spyBars.slice(1).map((b, i) => ({ d: b.d, ret: b.c / spyBars[i].c - 1 }));
+const M = {
+  full: metrics(runs.on.days, 'Bot rules (regime filter ON)'), fullOff: metrics(runs.off.days, 'Same rules, filter OFF'), spy: metrics(spyDays, 'SPY buy & hold'),
+  ins: metrics(runs.on.days.filter(x => x.d < split), 'In-sample (first 70%)'), oos: metrics(runs.on.days.filter(x => x.d >= split), 'Out-of-sample (last 30%)'),
+  spyOos: metrics(spyDays.filter(x => x.d >= split), 'SPY, out-of-sample period'),
+};
+const TS = tradeStats(runs.on.list), TSo = tradeStats(runs.on.list.filter(t => t.d >= split));
+const byYear = {};
+for (const x of runs.on.days) { const y = x.d.slice(0, 4); byYear[y] = (byYear[y] || 1) * (1 + x.ret); }
+const f = (x, d = 2) => x == null || !isFinite(x) ? 'n/a' : x.toFixed(d), pc = x => (x >= 0 ? '+' : '') + f(x) + '%';
+const row = m => `| ${m.label} | ${m.from || ''} → ${m.to || ''} | ${pc(m.cagr)} | ${f(m.sharpe)} | ${f(m.sortino)} | −${f(m.maxDD, 1)}% | ${pc(m.total)} |`;
+let md = `# Backtest — Signal Desk bot rules\n\nGenerated ${new Date().toISOString().slice(0, 10)} · ${perSym.length} stocks · ${YEARS} years requested · costs ${(COST * 100).toFixed(2)}% per side · 10% of equity per position, max ${MAXPOS} a day\n\n`;
+md += `## Headline numbers\n\n| Strategy | Period | CAGR | Sharpe | Sortino | Max drawdown | Total |\n|---|---|---|---|---|---|---|\n${[M.full, M.fullOff, M.spy].map(row).join('\n')}\n\n`;
+md += `## Is it real or curve-fit? In-sample vs out-of-sample\n\n| Strategy | Period | CAGR | Sharpe | Sortino | Max drawdown | Total |\n|---|---|---|---|---|---|---|\n${[M.ins, M.oos, M.spyOos].map(row).join('\n')}\n\n`;
+md += `If the out-of-sample Sharpe is far below in-sample, the edge is fading or was luck.\n\n`;
+md += `## Per-trade statistics (filter ON)\n\n| | All years | Out-of-sample |\n|---|---|---|\n| Trades | ${TS.n} | ${TSo.n} |\n| Win rate | ${f(TS.win, 1)}% | ${f(TSo.win, 1)}% |\n| Average win | ${pc(TS.avgWin)} | ${pc(TSo.avgWin)} |\n| Average loss | ${pc(TS.avgLoss)} | ${pc(TSo.avgLoss)} |\n| Expectancy per trade | ${pc(TS.expectancy)} | ${pc(TSo.expectancy)} |\n| Profit factor | ${f(TS.pf)} | ${f(TSo.pf)} |\n\n`;
+md += `## Year by year (filter ON)\n\n| Year | Return |\n|---|---|\n${Object.keys(byYear).sort().map(y => `| ${y} | ${pc((byYear[y] - 1) * 100)} |`).join('\n')}\n\n`;
+md += `## Per stock\n\n| Stock | Trades | Win rate | Expectancy | Profit factor |\n|---|---|---|---|---|\n${perSym.sort((a, b) => b.expectancy - a.expectancy).map(s => `| ${s.sym} | ${s.n} | ${f(s.win, 0)}% | ${pc(s.expectancy)} | ${f(s.pf)} |`).join('\n')}\n\n`;
+md += `**Limits:** daily bars (no 40-year intraday data exists), one round trip per stock per day, options not backtested, fixed symbol list (survivorship bias), costs are an estimate. Past results do not predict future results. Not financial advice.\n`;
 fs.writeFileSync('bot/backtest_report.md', md);
-console.log('report written: bot/backtest_report.md');
+fs.writeFileSync('bot/backtest.json', JSON.stringify({ at: new Date().toISOString(), stocks: perSym.length, cost: COST * 100, metrics: M, trades: TS, tradesOos: TSo, byYear: Object.fromEntries(Object.entries(byYear).map(([y, v]) => [y, (v - 1) * 100])) }));
+console.log(JSON.stringify({ full: M.full, oos: M.oos, spy: M.spy }, null, 1));

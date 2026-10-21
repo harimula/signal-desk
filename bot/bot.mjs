@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import { signalAt, signalShortAt, r2d } from './strategy.mjs';
 import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
+import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
 
 const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
 export const HAVE_KEYS = !!(KEY && SECRET);
@@ -22,12 +23,16 @@ const BASE = process.env.ALPACA_URL || 'https://paper-api.alpaca.markets';
 const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
 const n = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? +process.env[k] : d);
 const STK_ON = process.env.BOT_STOCKS !== '0', OPT_ON = process.env.BOT_OPTIONS !== '0';
-const BUDGET = n('BOT_PER_TRADE', 500), OPT_BUDGET = n('BOT_OPT_BUDGET', 300);
+const BUDGET = n('BOT_PER_TRADE', 0), OPT_BUDGET = n('BOT_OPT_BUDGET', 0);   // 0 = auto: 10% of equity per stock position, 2% per option trade
 const MAX_POS = n('BOT_MAX_POSITIONS', 6), MAX_OPT = n('BOT_MAX_OPTIONS', 4), MAX_ENTRIES = n('BOT_MAX_ENTRIES_PER_SYM', 3);
 const TP = n('BOT_TAKE_PROFIT', 1), OPT_TP = n('BOT_OPT_TAKE_PROFIT', 50); // quick-profit exits, in %
 const LOSS_CAP = n('BOT_DAILY_LOSS_CAP', 3), HOLD_LOSS = n('BOT_HOLD_LOSS', 1.5), HOLD_FLOOR = n('BOT_HOLD_FLOOR', 25), MAX_HOLD_DAYS = n('BOT_MAX_HOLD_DAYS', 30);
 const UNIVERSE = (process.env.BOT_SYMBOLS || 'AAPL,MSFT,NVDA,AMZN,META,GOOGL,TSLA,AMD,JPM,BAC,XOM,CVX,KO,PEP,WMT,HD,DIS,INTC,CSCO,QCOM,ORCL,CRM,ADBE,NFLX,UBER,PLTR,SHOP,COIN,SOFI,F').split(',').map(s => s.trim()).filter(Boolean);
 const DRY = process.env.BOT_DRY === '1';
+// professional risk limits (all % of account equity)
+const RISK_PCT = n('BOT_RISK_PCT', 0.5), OPT_RISK_PCT = n('BOT_OPT_RISK_PCT', 0.5), MAX_HEAT = n('BOT_MAX_HEAT', 3);
+const MAX_PER_SECTOR = n('BOT_MAX_PER_SECTOR', 2), MAX_STREAK = n('BOT_MAX_LOSS_STREAK', 3), WEEK_CAP = n('BOT_WEEKLY_LOSS_CAP', 6), STALE_MIN = n('BOT_STALE_ORDER_MIN', 45);
+const NTFY = process.env.NTFY_TOPIC || '';
 
 const H = { 'APCA-API-KEY-ID': KEY, 'APCA-API-SECRET-KEY': SECRET, 'content-type': 'application/json' };
 async function call(base, path, opt = {}) {
@@ -39,7 +44,7 @@ async function call(base, path, opt = {}) {
   return tx ? JSON.parse(tx) : null;
 }
 const T = (p, o) => call(BASE, p, o), D = (p, o) => call(DATA, p, o);
-const send = async (body, why) => { act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }); };
+const send = async (body, why) => { alerts.push((body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why); act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }); };
 
 // ---- time in New York ----
 const etParts = d => Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map(p => [p.type, p.value]));
@@ -58,13 +63,15 @@ const act = m => {                                          // same message with
   seen.set(k, Date.now()); console.log(m); acts.push({ t: new Date().toISOString(), m });
 };
 let lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
-let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null;
+let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [] }, lastRisk = null;
+const alerts = [];
 
 // One full decision cycle: manage every position, then look for new entries.
 export async function botCycle({ journal = false } = {}) {
   setNow();
   const before = acts.length;
-  try { await run(); } catch (e) { act('Error: ' + (e.message || e)); }
+  try { await run(); } catch (e) { act('Error: ' + (e.message || e)); const k = 'err:' + (e.message || '').slice(0, 40); if (!seen.has(k) || Date.now() - seen.get(k) > 30 * 60000) { seen.set(k, Date.now()); alerts.push('\u26a0\ufe0f Bot error: ' + (e.message || e)); } }
+  await flushAlerts();
   pendingActs += acts.length - before;
   if (journal || pendingActs) { await writeJournal().catch(e => console.log('journal error', e.message)); pendingActs = 0; }
   return { open: !!(lastClock && lastClock.is_open) };
@@ -95,6 +102,18 @@ export async function fastCheck() {
 }
 export const clockInfo = () => lastClock;
 
+// Phone alerts via ntfy.sh (free): install the ntfy app, subscribe to your secret topic name.
+const sentAlerts = new Map();
+async function flushAlerts() {
+  if (!alerts.length) return;
+  const lines = alerts.splice(0).filter(m => { const k = m.replace(/[\d.]+/g, '#'); if (sentAlerts.has(k) && Date.now() - sentAlerts.get(k) < 20 * 60000) return false; sentAlerts.set(k, Date.now()); return true; });
+  if (!NTFY || !lines.length || DRY) return;
+  try {
+    await fetch('https://ntfy.sh/' + encodeURIComponent(NTFY), { method: 'POST', body: lines.join('\n'),
+      headers: { Title: 'Signal Desk bot' + (lines.length > 1 ? ' (' + lines.length + ')' : ''), Priority: lines.some(l => /\u26d4|\u26a0/.test(l)) ? 'high' : 'default', Tags: 'chart_with_upwards_trend' } });
+  } catch (e) { console.log('alert failed', e.message); }
+}
+
 async function run() {
   const clock = lastClock = await T('/v2/clock');
   if (!clock.is_open) { console.log('Market closed.'); return; }
@@ -117,16 +136,37 @@ async function run() {
   let spyPct = null;
   try {
     if (!spyPrev || spyPrev.day !== TODAY) {
-      const sb = ((await D(`/v2/stocks/bars?symbols=SPY&timeframe=1Day&start=${new Date(Date.now() - 10 * 864e5).toISOString()}&limit=20&feed=iex&sort=asc`)).bars || {}).SPY || [];
-      const prev = sb.filter(b => b.t.slice(0, 10) < ymdDash(Date.now())).pop();
-      spyPrev = prev ? { day: TODAY, c: prev.c } : null;
+      const sb = ((await D(`/v2/stocks/bars?symbols=SPY&timeframe=1Day&start=${new Date(Date.now() - 450 * 864e5).toISOString()}&limit=1000&adjustment=split&feed=iex&sort=asc`)).bars || {}).SPY || [];
+      const done = sb.filter(b => b.t.slice(0, 10) < ymdDash(Date.now()));
+      const prev = done[done.length - 1];
+      spyPrev = prev ? { day: TODAY, c: prev.c, closes: done.map(b => b.c) } : null;
     }
     const st = (((await D('/v2/stocks/trades/latest?symbols=SPY&feed=iex')).trades) || {}).SPY;
     if (spyPrev && st) spyPct = (st.p / spyPrev.c - 1) * 100;
   } catch (e) {}
   const G = lastGuard = guard({ events: loadEvents(), todayDash: ymdDash(Date.now()), mins: MINS, headlines: newsCache.market, spyPct });
   G.spyPct = spyPct; G.newsOk = newsCache.ok;
+  const RG = regimeOf(spyPrev && spyPrev.closes);
+  G.regime = RG.regime; G.longSize = 1;
+  if (RG.regime === 'bear') { G.noLongs = true; G.reasons.push('Bear market regime (SPY below its 50- and 200-day averages) \u2014 no new stock buys or CALLs'); }
+  else if (RG.regime === 'neutral') { G.longSize = 0.5; G.reasons.push('Choppy regime (SPY near its 50-day average) \u2014 long trades at half size'); }
+  // circuit breakers: losing streak today, weekly drawdown
+  try {
+    if (Date.now() - fillsCache.at > 60000) {
+      const f = await T('/v2/account/activities/FILL?date=' + ymdDash(Date.now()) + '&direction=asc&page_size=100');
+      fillsCache = { at: Date.now(), closed: buildJournal(f || [], []).closed };
+    }
+    const streak = lossStreak(fillsCache.closed);
+    if (streak >= MAX_STREAK) { G.block = true; G.halt = true; G.reasons.push(`${streak} losing trades in a row today \u2014 done for the day (protects against a bad tape)`); }
+    if (Date.now() - weekCache.at > 10 * 60000) {
+      const h = await T('/v2/account/portfolio/history?period=1W&timeframe=1D');
+      const eqs = (h && h.equity || []).filter(x => x != null && x > 0);
+      weekCache = { at: Date.now(), start: eqs.length ? eqs[0] : null };
+    }
+    if (weekCache.start && (equity / weekCache.start - 1) * 100 <= -WEEK_CAP) { G.block = true; G.halt = true; G.reasons.push(`Down ${((1 - equity / weekCache.start) * 100).toFixed(1)}% this week (limit ${WEEK_CAP}%) \u2014 no new trades until next week`); }
+  } catch (e) { console.log('breaker check failed', e.message); }
   for (const r of G.reasons) act('Market check: ' + r);
+  if (G.halt) alerts.push('\u26d4 ' + G.reasons[G.reasons.length - 1]);
   const sellsFor = sym => openOrders.filter(o => o.symbol === sym && o.side === 'sell');
   const cid = o => o.client_order_id || '';
 
@@ -137,7 +177,19 @@ async function run() {
     return;
   }
   const dayPct = lastEq > 0 ? (equity - lastEq) / lastEq * 100 : 0;
+  const bud = BUDGET > 0 ? BUDGET : equity * 0.10, obud = OPT_BUDGET > 0 ? OPT_BUDGET : equity * 0.02;
   const capHit = dayPct <= -LOSS_CAP;
+
+  // ---- cancel stale entries ----
+  for (const o of openOrders) {
+    if (o.side !== 'buy' || !/^sd-[so]-/.test(cid(o))) continue;
+    if (Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > STALE_MIN * 60000) {
+      act(`${o.symbol} buy at ${o.limit_price} unfilled for ${STALE_MIN} min \u2014 cancelled (setup is stale)`);
+      if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
+      o._cancelled = true;
+    }
+  }
+  const liveOrders = openOrders.filter(o => !o._cancelled);
 
   // ---- manage stock positions ----
   for (const p of stockPos) {
@@ -192,6 +244,19 @@ async function run() {
   if (MINS < G.minStart || MINS >= 900) { console.log('Outside the entry window.'); return; }
   if (G.block) { console.log('Paused by market check.'); return; }
 
+  // ---- portfolio risk: heat (money at risk to the stops) and sector concentration ----
+  const stopFor = (sym, ord) => {
+    const src = ord && /^sd-s-/.test(cid(ord)) ? ord : hist.find(o => o.side === 'buy' && cid(o).startsWith('sd-s-' + sym + '-'));
+    return src ? +cid(src).split('-')[4] / 100 : null;
+  };
+  let heat = openRisk({ positions, orders: liveOrders, stopFor });
+  const heatCap = equity * MAX_HEAT / 100;
+  const undOf = s => isOpt(s) ? OPT_RE.exec(s)[1] : s;
+  const sectorCount = {};
+  for (const s of positions.map(p => p.symbol).concat(liveOrders.filter(o => o.side === 'buy').map(o => o.symbol))) { const k = sectorOf(undOf(s)); sectorCount[k] = (sectorCount[k] || 0) + 1; }
+  const sectorFull = sym => sectorOf(sym) !== 'Other' && (sectorCount[sectorOf(sym)] || 0) >= MAX_PER_SECTOR;
+  lastRisk = { heatPct: heat / equity * 100, capPct: MAX_HEAT, sectors: sectorCount, regime: G.regime };
+
   if (!barsCache.bars || Date.now() - barsCache.at > 30 * 60000) {         // daily bars: refresh every 30 min
     const start = new Date(Date.now() - 130 * 864e5).toISOString();
     const b2 = {};
@@ -222,15 +287,19 @@ async function run() {
 
   // stock day trades
   if (STK_ON) {
-    let slots = MAX_POS - stockPos.length - openOrders.filter(o => o.side === 'buy' && !isOpt(o.symbol)).length;
+    let slots = MAX_POS - stockPos.length - liveOrders.filter(o => o.side === 'buy' && !isOpt(o.symbol)).length;
     for (const s of (G.noLongs ? [] : longs)) {
       if (slots <= 0) break;
       if (stockPos.some(p => p.symbol === s.sym) || openOrders.some(o => o.symbol === s.sym)) continue;
       const risk = symbolRisk(s.sym, newsCache.syms);
       if (risk) { act(`${s.sym} skipped \u2014 ${risk}`); continue; }
       if (todays.filter(o => cid(o).startsWith('sd-s-' + s.sym + '-')).length >= MAX_ENTRIES) continue;
-      const qty = Math.floor(BUDGET * G.budget / s.entry);
+      if (sectorFull(s.sym)) { act(`${s.sym} skipped \u2014 already ${MAX_PER_SECTOR} positions in ${sectorOf(s.sym)}`); continue; }
+      const qty = stockQty({ equity, riskPct: RISK_PCT * G.budget * G.longSize, entry: s.entry, stop: s.stop, budget: bud * G.budget * G.longSize });
       if (qty < 1) continue;
+      const add = qty * (s.entry - s.stop);
+      if (heat + add > heatCap) { act(`${s.sym} skipped \u2014 total risk would exceed ${MAX_HEAT}% of the account`); continue; }
+      heat += add; sectorCount[sectorOf(s.sym)] = (sectorCount[sectorOf(s.sym)] || 0) + 1;
       await send({ symbol: s.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(s.entry), time_in_force: 'day',
         client_order_id: `sd-s-${s.sym}-${Math.round(s.target * 100)}-${Math.round(s.stop * 100)}-${TODAY}-${rid()}` }, `${s.sym} stock day trade (RSI-2 ${s.r2})`);
       slots--;
@@ -239,13 +308,14 @@ async function run() {
 
   // options: CALL on long setups, PUT on short setups — only once the stock touches the level
   if (OPT_ON && !G.noOptions) {
-    let slots = MAX_OPT - optPos.length - openOrders.filter(o => o.side === 'buy' && isOpt(o.symbol)).length;
+    let slots = MAX_OPT - optPos.length - liveOrders.filter(o => o.side === 'buy' && isOpt(o.symbol)).length;
     const hasOptOn = und => optPos.some(p => OPT_RE.exec(p.symbol)[1] === und) || openOrders.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === und);
     const tries = (G.noLongs ? [] : longs.map(s => ({ ...s, type: 'call' }))).concat(G.noPuts ? [] : shorts.map(s => ({ ...s, type: 'put' })));
     for (const s of tries) {
       if (slots <= 0) break;
       if (!s.px || hasOptOn(s.sym)) continue;
       if (symbolRisk(s.sym, newsCache.syms)) continue;
+      if (sectorFull(s.sym)) continue;
       const touched = s.type === 'call' ? s.px <= s.entry * 1.002 : s.px >= s.entry * 0.998;
       if (!touched) continue;
       if (todays.filter(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym).length >= MAX_ENTRIES) continue;
@@ -258,8 +328,11 @@ async function run() {
       if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote — skipped`); continue; }
       if ((q.ap - q.bp) / q.ap > 0.2) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}) — skipped`); continue; }
       const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.03));
-      const qty = Math.floor(OPT_BUDGET * G.budget / (lim * 100));
-      if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above the $${OPT_BUDGET} option budget — skipped`); continue; }
+      const qty = optionQty({ equity, riskPct: OPT_RISK_PCT * G.budget * (s.type === 'call' ? G.longSize : 1), price: lim, budget: obud * G.budget * (s.type === 'call' ? G.longSize : 1) });
+      const addO = qty * lim * 100 * 0.5;
+      if (qty >= 1 && heat + addO > heatCap) { act(`${c.symbol} skipped \u2014 total risk would exceed ${MAX_HEAT}% of the account`); continue; }
+      if (qty >= 1) { heat += addO; sectorCount[sectorOf(s.sym)] = (sectorCount[sectorOf(s.sym)] || 0) + 1; }
+      if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's risk budget — skipped`); continue; }
       await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
         client_order_id: `sd-o-${c.symbol}-${TODAY}-${qty}-${rid()}` }, `${s.sym} ${s.type.toUpperCase()} (stock touched ${s.entry})`);
       slots--;
@@ -282,11 +355,12 @@ async function writeJournal() {
   let prev = {};
   try { prev = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); } catch (e) {}
   const allActs = (prev.acts || []).concat(acts).slice(-80);
-  const env = lastGuard ? { at: new Date().toISOString(), block: lastGuard.block, reasons: lastGuard.reasons, today: lastGuard.today, upcoming: lastGuard.upcoming, flagged: lastGuard.flagged, spyPct: lastGuard.spyPct, newsOk: lastGuard.newsOk } : (prev.env || null);
+  const env = lastGuard ? { at: new Date().toISOString(), block: lastGuard.block, regime: lastGuard.regime, reasons: lastGuard.reasons, today: lastGuard.today, upcoming: lastGuard.upcoming, flagged: lastGuard.flagged, spyPct: lastGuard.spyPct, newsOk: lastGuard.newsOk } : (prev.env || null);
   const sig = JSON.stringify([closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), acts.length, env && env.reasons, env && env.flagged && env.flagged.length]);
-  if (prev.sig === sig && prev.at && Date.now() - Date.parse(prev.at) < 30 * 60000) { console.log('journal unchanged'); return; }
+  if (prev.sig === sig && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: !process.env.ALPACA_URL || /paper/.test(process.env.ALPACA_URL),
-    account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env };
+    account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
+    risk: lastRisk, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   fs.writeFileSync('bot/journal.json', JSON.stringify(j));
   console.log('journal written:', closed.length, 'closed,', open.length, 'open');
 }
