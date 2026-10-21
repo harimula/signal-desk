@@ -119,6 +119,10 @@ input,select,button{font:inherit;color:var(--text)}
 .toolbar button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .tw{overflow-x:auto;border-radius:8px}
 .tw:has(#tb),.tw:has(#dttab),.tw:has(#pftab){max-height:76vh;overflow:auto}
+@keyframes tkp{0%{background:rgba(16,163,127,.22)}100%{background:transparent}}
+@keyframes tkn{0%{background:rgba(220,38,38,.16)}100%{background:transparent}}
+tr.tkup td,.tkup:not(tr){animation:tkp .9s ease-out}
+tr.tkdn td,.tkdn:not(tr){animation:tkn .9s ease-out}
 #tb thead th,#dttab thead th,#pftab thead th{position:sticky;top:0;background:var(--surface);z-index:3}
 #tb thead th:nth-child(1),#tb thead th:nth-child(2),#dttab thead th:first-child,#pftab thead th:first-child{z-index:5}
 table{border-collapse:separate;border-spacing:0;width:100%;min-width:1280px;background:var(--surface);font-size:12.5px}
@@ -769,7 +773,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792600259';
+const BUILD_V = '1792605057';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -817,12 +821,14 @@ function fhConnect() {
 setInterval(() => {
   const ks = Object.keys(fhPend); if (!ks.length || rfBusy) return;
   const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) return;
-  for (const sym of ks) { const px = fhPend[sym]; if (DATA.rows[sym] && px > 0) { DATA.rows[sym][1] = r2n(px); BASE_PX[sym] = r2n(px); } }
+  const flash = [];
+  for (const sym of ks) { const px = fhPend[sym]; const row = DATA.rows[sym]; if (row && px > 0) { if (r2n(px) !== row[1]) flash.push([sym, px - row[1]]); row[1] = r2n(px); BASE_PX[sym] = r2n(px); } }
   fhPend = {};
   const nowS = Math.floor(Date.now() / 1000);
   if (nowS > BASE_STAMP.US.liveAt) { BASE_STAMP.US.liveAt = nowS; BASE_STAMP.US.liveLocal = tzFmt(Date.now(), DATA.markets.US.tz, 'ET') + ' (live)'; BASE_STAMP.US.note = 'US prices are streaming live from Finnhub; indicators use daily bars through the last completed session.'; }
   analyzeAll(); renderAll(); syncRecs();
-}, 2500);
+  for (const [sym, d9] of flash) document.querySelectorAll(`[data-s="${CSS.escape(sym)}"]`).forEach(el => el.classList.add(d9 >= 0 ? 'tkup' : 'tkdn'));
+}, 1100);
 const fhi = $('#fhIn'); if (fhi) { fhi.value = fhKey; $('#fhSave').addEventListener('click', () => { fhKey = $('#fhIn').value.trim(); save('sd-fh', fhKey); fhStatus(fhKey ? 'Key saved.' : 'Key cleared.'); fhConnect(); goliveCheck(); }); }
 if (fhKey) fhConnect();
 const fmpi = $('#fmpIn'); if (fmpi) { fmpi.value = load('sd-fmp', ''); $('#fmpSave').addEventListener('click', () => { const v = $('#fmpIn').value.trim(); save('sd-fmp', v); $('#fmpSt').textContent = v ? 'FMP key saved. Press \u21bb Refresh prices to get live quotes.' : 'FMP key cleared.'; goliveCheck(); }); }
