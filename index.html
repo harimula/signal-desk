@@ -200,7 +200,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 <nav class="vnav" id="appbar" role="tablist" style="margin:10px 0 6px"></nav>
 <header>
   <div class="brand"><h1>Signal Desk</h1><div class="dots" id="mdots"></div></div>
-  <div class="hright"><div class="asof" id="clock"></div><span id="cdown" class="mut" style="font-size:12px;font-weight:700;font-feature-settings:'tnum'"></span><button class="btn ghost" id="acctBtn" type="button">👤 Sign in</button><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="0">Auto: off</option><option value="2">Auto: 2 min</option><option value="5">Auto: 5 min</option><option value="10">Auto: 10 min</option><option value="30">Auto: 30 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
+  <div class="hright"><div class="asof" id="clock"></div><span id="cdown" class="mut" style="font-size:12px;font-weight:700;font-feature-settings:'tnum'"></span><button class="btn ghost" id="acctBtn" type="button">👤 Sign in</button><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="1">● Live</option><option value="2">Every 2 min</option><option value="5">Every 5 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
 </header>
 <div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
 <div class="wrap"><details id="pxBox" style="font-size:12.5px;margin:2px 0 4px"><summary style="cursor:pointer;font-weight:700">⚡ Live prices — set up once per device</summary>
@@ -772,7 +772,8 @@ async function refreshAll(auto) {
 $('#rfBtn').addEventListener('click', () => refreshAll(false));
 $('#pxIn').value = proxy;
 $('#pxSave').addEventListener('click', () => { proxy = $('#pxIn').value.trim(); save('sd-proxy', proxy); $('#rfMsg').textContent = proxy ? 'Proxy saved. Press Refresh prices.' : 'Proxy cleared. Using Yahoo directly.'; });
-let arMin = +load('sd-ar', 0) || 0, arTimer = null, arNext = 0;
+let arMin = +load('sd-ar', 1) || 1, arTimer = null, arNext = 0;
+if (![1, 2, 5].includes(arMin)) arMin = 1;
 function setAuto(min) {
   arMin = min; save('sd-ar', min); const sel = $('#arSel'); if (sel) sel.value = String(min);
   if (arTimer) { clearInterval(arTimer); arTimer = null; }
@@ -785,7 +786,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792606975';
+const BUILD_V = '1792607153';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -798,8 +799,9 @@ setInterval(verCheck, 180000); setTimeout(verCheck, 3000);
 setInterval(() => {
   const el = $('#cdown'); if (!el) return;
   if (!(arMin > 0)) { el.textContent = ''; return; }
-  if (rfBusy) { el.textContent = 'refreshing\u2026'; return; }
   if (!(exOpen(MK.US) || exOpen(MK.IN))) { el.textContent = 'auto paused \u00b7 markets closed'; return; }
+  if (arMin === 1) { el.textContent = rfBusy ? '\u25cf live \u00b7 updating\u2026' : '\u25cf live'; return; }
+  if (rfBusy) { el.textContent = 'refreshing\u2026'; return; }
   const left = Math.max(0, arNext - Date.now());
   el.textContent = 'next refresh ' + Math.floor(left / 60000) + ':' + String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
 }, 1000);
