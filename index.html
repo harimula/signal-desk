@@ -812,7 +812,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792608829';
+const BUILD_V = '1792609190';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1728,8 +1728,10 @@ function twNav2(root) {
     const has = wrap && wrap.classList && wrap.classList.contains('twwrap');
     if (!has) {
       if (tw.scrollWidth <= tw.clientWidth + 6) return;
+      const st0 = tw.scrollTop, sl0 = tw.scrollLeft;
       wrap = document.createElement('div'); wrap.className = 'twwrap';
       tw.parentNode.insertBefore(wrap, tw); wrap.appendChild(tw);
+      tw.scrollTop = st0; tw.scrollLeft = sl0;
       const mk2 = (cls, d, ch) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'twbtn ' + cls; b.textContent = ch; b.setAttribute('aria-label', d > 0 ? 'Scroll right' : 'Scroll left'); b.addEventListener('click', () => tw.scrollBy({left: d * tw.clientWidth * 0.8, behavior: 'smooth'})); wrap.appendChild(b); };
       mk2('twl', -1, '‹'); mk2('twr', 1, '›');
       tw.addEventListener('scroll', () => twBtns(wrap, tw), {passive: true});
@@ -1744,20 +1746,30 @@ function twBtns(wrap, tw) {
   r.style.display = mx - tw.scrollLeft > 8 ? 'flex' : 'none';
 }
 document.addEventListener('toggle', e => { try { if (e.target && e.target.tagName === 'DETAILS' && e.target.closest('#view')) twNav2($('#view')); } catch (e2) {} }, true);
+function fitTool() {
+  const f = $('#view').querySelector('iframe'); if (!f) return;
+  const top = f.getBoundingClientRect().top + window.scrollY;
+  f.style.minHeight = '0';
+  f.style.height = Math.max(420, window.innerHeight - top - 8) + 'px';
+}
 let rszT = null;
-window.addEventListener('resize', () => { clearTimeout(rszT); rszT = setTimeout(() => { try { twNav2($('#view')); } catch (e2) {} }, 250); });
+window.addEventListener('resize', () => { clearTimeout(rszT); rszT = setTimeout(() => { try { if (app === 'desk') twNav2($('#view')); else fitTool(); } catch (e2) {} }, 250); });
 function renderAll() {
   renderAppBar();
   const deskOn = app === 'desk';
   document.querySelectorAll('header, .subhead, #banners, #tabs, #tools, #foot, #golive, #pxBox').forEach(el => { el.style.display = deskOn ? '' : 'none'; });
   if (!deskOn) {
+    document.body.style.overflow = 'hidden';
     if ($('#view').dataset.app !== app) {
       $('#view').dataset.app = app;
+      window.scrollTo(0, 0);
       $('#view').innerHTML = app === 'retire' ? toolFrame('retire.html', 'Retirement Corpus Calculator') : toolFrame('rentemi.html?v=2', 'Rent vs EMI');
       const fr0 = $('#view').querySelector('iframe'); if (fr0) fr0.addEventListener('load', thApply);
     }
+    fitTool();
     return;
   }
+  document.body.style.overflow = '';
   $('#view').dataset.app = 'desk';
   if (typeof goliveCheck === 'function') goliveCheck();
   renderTabs(); chrome();
@@ -1772,8 +1784,15 @@ function renderAll() {
   if (sameView) {
     Array.from(view.querySelectorAll('.tw')).forEach((el, i) => { const p2 = twPos[i]; if (p2) { el.scrollTop = p2[0]; el.scrollLeft = p2[1]; } });
     window.scrollTo(scX, scY);
+    requestAnimationFrame(() => { if (Math.abs(window.scrollY - scY) > 40 || Math.abs(window.scrollX - scX) > 40) window.scrollTo(scX, scY); });
   }
-  setTimeout(() => twNav2(view), 0);
+  setTimeout(() => {
+    twNav2(view);
+    if (sameView) {
+      Array.from(view.querySelectorAll('.tw')).forEach((el, i) => { const p2 = twPos[i]; if (p2 && (p2[0] || p2[1])) { el.scrollTop = p2[0]; el.scrollLeft = p2[1]; } });
+      if (Math.abs(window.scrollY - scY) > 40 || Math.abs(window.scrollX - scX) > 40) window.scrollTo(scX, scY);
+    }
+  }, 0);
   document.querySelectorAll('[data-list]').forEach(l => {
     l.addEventListener('click', e => { const li = e.target.closest('[data-s]'); if (li) openDetail(li.dataset.s, li.dataset.m); });
     l.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('[data-s]'); if (li) { e.preventDefault(); openDetail(li.dataset.s, li.dataset.m); } } });
