@@ -247,6 +247,12 @@ details.how ul{margin:10px 0 0; padding-left:18px; font-size:13.5px; color:var(-
       <p class="note warn" id="brokeNote" hidden></p>
     </section>
     <section class="card">
+      <h2><i class="sw sw-rent"></i>Your SIP plan, if you rent</h2>
+      <p class="note" style="margin-top:6px" id="sipIntro"></p>
+      <div class="tablewrap"><table class="ledger" id="sipTab"></table></div>
+      <p class="note" id="sipNote"></p>
+    </section>
+    <section class="card">
       <h2>What if the assumptions are off?</h2>
       <p class="note" style="margin-top:6px">Each cell is buy minus rent in ₹ crore at the end of your stay. Blue (+) means buying ends up ahead, orange (−) means renting does, and 0.00 is a tie. Tap a cell to use those numbers in the calculator. By default the axes use the 30-year record listed below.</p>
       <div class="fields" style="margin-top:12px">
@@ -303,6 +309,7 @@ function simulate(p){
   const lump = down - p.upfront;
   let bal = loan, R = lump, B = 0;
   let totEmi = 0, totOwn = 0, totRent = 0, totGap = 0, taxSaved = 0, hraSaved = 0, yrP = 0, yrI = 0;
+  const sipYears = []; let sipA = 0, sipF = null, sipL = 0;
   let crossYear = null, brokeYear = null;
   const series = [{ y: 0, buy: price - loan, rent: R }];
   for (let m = 1; m <= n; m++) {
@@ -318,6 +325,7 @@ function simulate(p){
     totEmi += pay; totOwn += own; totRent += rent;
     const gap = pay + own - rent;
     totGap += gap;
+    if (sipF === null) sipF = gap; sipA += gap; sipL = gap;
     if (gap < 0 && crossYear === null) crossYear = yr;
     R = (R + gap) * (1 + g);
     B = B * (1 + g);
@@ -329,6 +337,8 @@ function simulate(p){
       yrP = 0; yrI = 0;
       const house = price * Math.pow(1 + p.appreciation / 100, yr);
       series.push({ y: yr, buy: house - bal + B, rent: R });
+      sipYears.push({ y: yr, first: sipF, last: sipL, add: sipA, end: R });
+      sipA = 0; sipF = null;
     }
     if (R < 0 && brokeYear === null) brokeYear = yr;
   }
@@ -337,7 +347,7 @@ function simulate(p){
   const buyNW = house - bal + B;
   return {
     emi, loan, down, lump, house, bal, B, R, buyNW, rentNW: R, series,
-    totEmi, totOwn, totRent, totGap, taxSaved, hraSaved, crossYear, brokeYear,
+    totEmi, totOwn, totRent, totGap, taxSaved, hraSaved, crossYear, brokeYear, sipYears,
     ownMonth1: ownYear / 12
   };
 }
@@ -512,6 +522,25 @@ function renderLedger(p, r){
   bn.hidden = msgs.length === 0; bn.textContent = msgs.join(' ');
 }
 
+function renderSip(p, r){
+  const first = r.emi + r.ownMonth1, diff = first - p.rent;
+  $('sipIntro').textContent = (r.lump > 0 ? 'Day one: put ' + short(r.lump) + ' (the down payment you did not spend, minus upfront rent costs) into the fund as a lump sum. ' : '')
+    + (diff > 0
+      ? 'Then SIP the money buying would have taken: cost of buying ' + rs(first) + ' a month minus your rent ' + rs(p.rent) + ' = ' + rs(diff) + ' a month to start. The amount changes each year as rent and running costs grow:'
+      : 'Buying would cost less per month than your rent from day one, so there is no monthly surplus to SIP \u2014 the plan below shows the money the rent path takes out instead.');
+  const one = v => v >= 0 ? rs(v) : 'take out ' + rs(-v);
+  const moTxt = q => Math.abs(Math.round(q.first) - Math.round(q.last)) < 1 ? one(q.first) : one(q.first) + ' \u2192 ' + one(q.last);
+  let h = '<thead><tr><th>Year</th><th>SIP per month</th><th>Put in that year</th><th>Worth at year end</th></tr></thead><tbody>';
+  for (const q of r.sipYears) h += '<tr><th scope="row">' + q.y + '</th><td>' + moTxt(q) + '</td><td>' + (q.add >= 0 ? short(q.add) : MINUS + short(-q.add)) + '</td><td>' + short(q.end) + '</td></tr>';
+  $('sipTab').innerHTML = h + '</tbody>';
+  const notes = [];
+  const flip = r.sipYears.find(q => q.first < 0);
+  if (flip) notes.push('From year ' + flip.y + ', rent costs more than buying would, so the plan draws the difference out of the fund instead of adding to it.');
+  if (p.oldRegime && p.hra > 0) notes.push('Each year end also adds your HRA tax saving of ' + rs(p.hra) + '.');
+  notes.push('Year-end worth assumes the fund earns ' + pc(p.invReturn) + ' a year, the same return used everywhere above. Set the SIP as an auto-debit so the surplus is invested the day after rent is paid, not spent.');
+  $('sipNote').textContent = notes.join(' ');
+}
+
 const SENS_VARS = {
   rentGrowth: { short: 'Rent', phrase: 'rent rises', step: 2.5,
     auto: [{ v: 4 }, { v: 5 }, { v: 6, tag: '30-yr*' }, { v: 8 }, { v: 10, tag: 'sheet' }] },
@@ -646,6 +675,7 @@ function update(){
   $('dRent').textContent = 'Invested on day one ' + short(r.lump) + ' (down payment minus upfront costs)';
   renderVerdict(p, r);
   renderLedger(p, r);
+  renderSip(p, r);
   renderSens(p, r);
   drawChart(r);
 }
