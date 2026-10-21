@@ -15,6 +15,25 @@ export function parseRss(xml, src) {
   }
   return out;
 }
+// Does this story actually talk about the company? (ticker or name must appear)
+const SUFFIX = /\b(incorporated|inc|corporation|corp|company|co|limited|ltd|plc|holdings?|group|class [a-c]|n\.?v|s\.?a|ag|the|trust|etf|fund|spdr|ishares|select sector)\b\.?/gi;
+const GENERIC = new Set(['bank', 'first', 'american', 'united', 'general', 'national', 'international', 'global', 'new', 'royal', 'state']);
+const ALIAS = { GOOGL: ['google', 'alphabet'], GOOG: ['google', 'alphabet'], META: ['meta', 'facebook', 'instagram'], BRK: ['berkshire'], 'BRK-B': ['berkshire'], JPM: ['jpmorgan', 'jp morgan'], GS: ['goldman'], MA: ['mastercard'], V: ['visa'], KO: ['coca-cola', 'coke'], PG: ['procter'], JNJ: ['johnson & johnson', 'j&j'], LLY: ['eli lilly', 'lilly'], UNH: ['unitedhealth'], XOM: ['exxon'], CVX: ['chevron'], HD: ['home depot'], WMT: ['walmart'], TSM: ['tsmc', 'taiwan semi'] };
+export function keysFor(sym, name) {
+  const base = sym.replace(/\.(NS|BO)$/, '').replace(/-.*$/, '');
+  const clean = (name || '').replace(/[,()]/g, ' ').replace(SUFFIX, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const keys = new Set((ALIAS[base] || []).map(s => s.toLowerCase()));
+  if (clean.length >= 4) keys.add(clean);
+  const w = clean.split(' ');
+  if (w[0] && w[0].length >= 4 && !GENERIC.has(w[0])) keys.add(w[0]);
+  else if (w.length >= 2) keys.add(w.slice(0, 2).join(' '));
+  return { re: base.length >= 2 ? new RegExp('(^|[^A-Za-z0-9])\\$?' + base.replace(/[.^$]/g, '\\$&') + '([^A-Za-z0-9]|$)') : null, words: [...keys] };
+}
+export function relevant(item, k) {
+  const raw = item.h + ' ' + (item.sum || ''), low = raw.toLowerCase();
+  if (k.re && k.re.test(item.h)) return true;                         // ticker in the headline, case-sensitive
+  return k.words.some(w => low.includes(w));
+}
 async function get(url, headers = {}) {
   const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 signal-desk', ...headers } });
   if (!r.ok) throw new Error(url.split('?')[0] + ' HTTP ' + r.status);
@@ -44,13 +63,14 @@ async function collect() {
   const bySym = {};
   try {
     const syms = JSON.parse(fs.readFileSync('symbols.json', 'utf8')).filter(s => !s.startsWith('^'));
+    let names = {}; try { const lj = JSON.parse(fs.readFileSync('live.json', 'utf8')); for (const [s, r] of Object.entries(lj.rows || {})) names[s] = r[0]; } catch (e) {}
     let i = 0, ok = 0, fail = 0;
     await Promise.all(Array.from({ length: 6 }, async () => {
       while (i < syms.length) {
         const s = syms[i++];
         try {
           const r = parseRss(await (await get('https://feeds.finance.yahoo.com/rss/2.0/headline?s=' + encodeURIComponent(s) + '&region=US&lang=en-US')).text(), 'Yahoo Finance')
-            .filter(x => Date.now() - x.t < 7 * 864e5).sort((a, b) => b.t - a.t).slice(0, 4)
+            .filter(x => Date.now() - x.t < 7 * 864e5 && relevant(x, keysFor(s, names[s]))).sort((a, b) => b.t - a.t).slice(0, 4)
             .map(x => ({ t: x.t, h: x.h, u: x.u, sum: x.sum.slice(0, 160), s: x.s }));
           if (r.length) bySym[s] = r;
           ok++;
