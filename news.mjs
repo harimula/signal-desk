@@ -31,8 +31,8 @@ export function keysFor(sym, name) {
 }
 export function relevant(item, k) {
   const low = item.h.toLowerCase();                                  // the headline itself must be about the company
-  if (k.re && k.re.test(item.h)) return true;                         // ticker in the headline, case-sensitive
   if (/report 20\d\d|market report|market size|market share|forecast to 20/i.test(item.h)) return false;   // industry-report spam
+  if (k.re && k.re.test(item.h)) return true;                         // ticker in the headline, case-sensitive
   return k.words.some(w => low.includes(w));
 }
 async function get(url, headers = {}) {
