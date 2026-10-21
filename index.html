@@ -118,6 +118,14 @@ input,select,button{font:inherit;color:var(--text)}
 .toolbar input{flex:1;min-width:140px}
 .toolbar button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .tw{overflow-x:auto;border-radius:8px}
+.tw{overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;max-width:100%}
+.twnav{display:flex;justify-content:flex-end;gap:6px;margin:8px 0 -2px}
+.twnav button{background:var(--surface);border:1px solid var(--line);border-radius:6px;color:var(--text);min-width:36px;min-height:30px;font-size:16px;cursor:pointer;line-height:1;padding:0}
+.twnav button:active{background:var(--surface2)}
+#appbar{max-width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.vnav{max-width:100%;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+@media (max-width:700px){.tw:has(#tb),.tw:has(#dttab),.tw:has(#pftab){max-height:none}}
+
 .tw:has(#tb),.tw:has(#dttab),.tw:has(#pftab){max-height:76vh;overflow:auto}
 @keyframes tkp{0%{background:rgba(16,163,127,.22)}100%{background:transparent}}
 @keyframes tkn{0%{background:rgba(220,38,38,.16)}100%{background:transparent}}
@@ -524,6 +532,9 @@ const tabsList = () => TABS0.concat(pfolios.map(p => ['PF:' + p.id, p.name]), TA
 let tab = 'US', maN = 50, maT = 'SMA', sortKey = 'score', sortDir = -1, onlyWl = false, q = '', fr = '', fi = '';
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} try { syncTouch(k); } catch (e) {} };
+let lastUX = 0;
+['touchstart', 'touchmove', 'wheel', 'pointerdown', 'scroll'].forEach(ev => window.addEventListener(ev, () => { lastUX = Date.now(); }, {passive: true, capture: true}));
+const uxBusy = () => Date.now() - lastUX < 1300;
 let wl = new Set(load('sd-wl', []));
 let dlgHist = false;
 let dtMk = load('sd-dtmk', 'US'); if (dtMk !== 'IN') dtMk = 'US';
@@ -762,7 +773,9 @@ async function refreshAll(auto) {
   save('sd-my', custom);
   rfBusy = false; btn.disabled = false; lastRefresh = Date.now();
   if (arMin > 0) arNext = Date.now() + arMin * 60000;
-  analyzeAll(); renderAll(); syncRecs();
+  analyzeAll();
+  (function rIdle() { if (uxBusy()) { setTimeout(rIdle, 400); return; } renderAll(); })();
+  syncRecs();
   const now2 = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
   const feed = $('#feed');
   if (fail >= total && total) { msg.textContent = 'No price feed is reachable right now (' + firstErr + '). Showing the newest saved prices.'; if (feed) feed.innerHTML = ''; }
@@ -786,7 +799,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792607153';
+const BUILD_V = '1792607709';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1693,6 +1706,18 @@ function renderAppBar() {
   const el = document.getElementById('appbar');
   if (el) el.innerHTML = APPS.map(([k, l]) => `<button class="vtab" role="tab" data-appk="${k}" aria-selected="${app === k}">${l}</button>`).join('');
 }
+function twNav2(root) {
+  root.querySelectorAll('.twnav').forEach(n => n.remove());
+  root.querySelectorAll('.tw').forEach(tw => {
+    if (tw.scrollWidth <= tw.clientWidth + 6) return;
+    const nv = document.createElement('div');
+    nv.className = 'twnav';
+    nv.innerHTML = '<button type="button" data-d="-1" aria-label="Scroll left">\u2039</button><button type="button" data-d="1" aria-label="Scroll right">\u203a</button>';
+    nv.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (b) tw.scrollBy({left: +b.dataset.d * tw.clientWidth * 0.8, behavior: 'smooth'}); });
+    tw.parentNode.insertBefore(nv, tw);
+  });
+}
+document.addEventListener('toggle', e => { try { if (e.target && e.target.tagName === 'DETAILS' && e.target.closest('#view')) twNav2($('#view')); } catch (e2) {} }, true);
 function renderAll() {
   renderAppBar();
   const deskOn = app === 'desk';
@@ -1719,6 +1744,7 @@ function renderAll() {
     Array.from(view.querySelectorAll('.tw')).forEach((el, i) => { const p2 = twPos[i]; if (p2) { el.scrollTop = p2[0]; el.scrollLeft = p2[1]; } });
     window.scrollTo(scX, scY);
   }
+  setTimeout(() => twNav2(view), 0);
   document.querySelectorAll('[data-list]').forEach(l => {
     l.addEventListener('click', e => { const li = e.target.closest('[data-s]'); if (li) openDetail(li.dataset.s, li.dataset.m); });
     l.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const li = e.target.closest('[data-s]'); if (li) { e.preventDefault(); openDetail(li.dataset.s, li.dataset.m); } } });
