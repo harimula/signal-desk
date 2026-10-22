@@ -1,5 +1,7 @@
 # Signal Desk
 
+**Documentation:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (functional, architectural and technical, with diagrams) · [web version](https://hmula-fbin.github.io/signal-desk/docs/) · [architecture slides](docs/architecture.pptx). Updated with every change.
+
 USA + India stock signal board: Top Buy / Buy / Hold / Sell / Top Sell, entry and exit levels,
 custom moving-average calculator, drill-down view, and your own tickers. Static page, no build step.
 Not financial advice. The page places no orders.

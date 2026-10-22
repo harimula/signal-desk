@@ -844,7 +844,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792633751';
+const BUILD_V = '1792634957';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2735,7 +2735,7 @@ $('#dlg').addEventListener('click', e => { if (e.target.id === 'dlg') e.target.c
 $('#dlg').addEventListener('close', () => { if (dlgHist) { dlgHist = false; try { history.back(); } catch (e) {} } });
 window.addEventListener('popstate', () => { const d = $('#dlg'); if (d.open) { dlgHist = false; d.close(); } });
 
-$('#foot').innerHTML = `<b>How this works.</b> The <b>Rules</b> tab spells out every rule on this page: the full scoring table, rating bands, entry/stop/target construction, industry blending and call tracking. Signals are rule-based readouts of public daily data — a screen, not a forecast, and not financial advice. The page places no orders.`;
+$('#foot').innerHTML = `<b>How this works.</b> The <b>Rules</b> tab spells out every rule on this page: the full scoring table, rating bands, entry/stop/target construction, industry blending and call tracking. Signals are rule-based readouts of public daily data — a screen, not a forecast, and not financial advice. The page places no orders. <a href="https://hmula-fbin.github.io/signal-desk/docs/" target="_blank" rel="noopener" style="color:var(--tb);font-weight:700">📘 System documentation</a>`;
 renderAll(); refreshInfo();
 setInterval(chrome, 60000);
 </script>

@@ -1,0 +1,481 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Signal Desk Documentation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: fixed left index on wide screens, single column on phones; numbered chapters because the doc is read in order. */
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --surface2:#eceff6; --line:#d9dee9;
+  --fg:#17202e; --muted:#5b6678; --accent:#0e7c86; --accent-ink:#ffffff; --warn:#8a5a00; --warn-bg:#fff3d6;
+  --display:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f141c; --surface:#161d27; --surface2:#1e2733; --line:#2b3542; --fg:#e8edf5; --muted:#9aa7ba; --accent:#4fc3cc; --accent-ink:#06222a; --warn:#ffd47a; --warn-bg:#3a2d10; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141c; --surface:#161d27; --surface2:#1e2733; --line:#2b3542; --fg:#e8edf5; --muted:#9aa7ba; --accent:#4fc3cc; --accent-ink:#06222a; --warn:#ffd47a; --warn-bg:#3a2d10; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 var(--body);padding-block:0 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+a{color:var(--accent)}
+.page{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:40px}
+@media (max-width:860px){.page{grid-template-columns:minmax(0,1fr)}}
+nav.idx{position:sticky;top:env(safe-area-inset-top,0px);align-self:start;padding-top:28px;font-size:14px}
+@media (max-width:860px){nav.idx{position:static;padding-top:16px;border-bottom:1px solid var(--line);padding-bottom:10px}}
+nav.idx ol{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+@media (max-width:860px){nav.idx ol{flex-direction:row;flex-wrap:wrap;gap:6px 14px}}
+nav.idx a{text-decoration:none;color:var(--muted);display:block;padding:3px 0}
+nav.idx a:hover,nav.idx a:focus-visible{color:var(--accent)}
+nav.idx .k{font-family:var(--mono);font-size:11px;color:var(--accent);margin-right:6px}
+.brand{font:700 15px var(--display);letter-spacing:.2px}
+.stamp{font-size:12px;color:var(--muted);margin-top:4px}
+main{min-width:0;padding-top:28px}
+h1{font:700 clamp(28px,4vw,40px)/1.15 var(--display);margin:0 0 6px;text-wrap:balance}
+.lede{font-size:18px;color:var(--muted);max-width:62ch;margin:0 0 8px}
+.notice{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 14px;font-size:14px;margin:18px 0 0}
+section{margin-top:46px;scroll-margin-top:16px}
+h2{font:600 clamp(22px,2.6vw,28px)/1.2 var(--display);margin:0 0 14px;padding-top:14px;border-top:2px solid var(--fg);text-wrap:balance}
+h2 .k{font-family:var(--mono);font-size:13px;color:var(--accent);display:block;margin-bottom:6px;letter-spacing:.04em}
+h3{font:700 17px/1.3 var(--body);margin:26px 0 8px}
+p{max-width:72ch;margin:0 0 12px}
+ul{max-width:72ch;padding-left:20px;margin:0 0 12px}li{margin:3px 0}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:12px 0 18px}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
+th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--surface2)}
+tr:last-child td{border-bottom:0}
+td b{font-weight:700}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--surface2);padding:1px 5px;border-radius:4px}
+pre.tree{font-family:var(--mono);font-size:13px;line-height:1.5;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:12px 0 18px}
+pre.tree .c{color:var(--muted)}
+figure{margin:14px 0 20px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto}
+figure figcaption{font-size:13px;color:var(--muted);margin-top:8px}
+pre.mermaid svg{max-width:none!important;width:auto!important;height:auto}
+pre.mermaid{margin:0;font-family:var(--mono);font-size:12px;color:var(--muted);white-space:pre}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:12px 0 18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;min-width:0}
+.card b{display:block;font-size:15px;margin-bottom:4px}
+.card span{font-size:14px;color:var(--muted)}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:999px;background:var(--surface2);color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+.rule{font-size:14px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;margin-top:40px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div class="page">
+<nav class="idx" aria-label="Contents">
+  <div class="brand">Signal Desk</div>
+  <div class="stamp">System documentation · v1.0<br>Updated 2026-10-21</div>
+  <ol>
+    <li><a href="#what"><span class="k">01</span>What it is</a></li>
+    <li><a href="#functional"><span class="k">02</span>Functional</a></li>
+    <li><a href="#architecture"><span class="k">03</span>Architecture</a></li>
+    <li><a href="#technical"><span class="k">04</span>Technical</a></li>
+    <li><a href="#bot"><span class="k">05</span>The bot</a></li>
+    <li><a href="#security"><span class="k">06</span>Security</a></li>
+    <li><a href="#operations"><span class="k">07</span>Operations</a></li>
+    <li><a href="#testing"><span class="k">08</span>Testing</a></li>
+    <li><a href="#changelog"><span class="k">09</span>Change log</a></li>
+    <li><a href="#glossary"><span class="k">10</span>Glossary</a></li>
+  </ol>
+</nav>
+
+<main>
+<h1>Signal Desk — how it works, end to end</h1>
+<p class="lede">A personal stock-signal website with an attached rules-based trading bot. This page explains what it does, how it is built and how it works inside, so that anyone can understand and maintain it.</p>
+<p class="stamp">Source of truth: <code>docs/ARCHITECTURE.md</code> in the repository. Slides: <code>docs/architecture.pptx</code>. Updated with every change.</p>
+<div class="notice">Not financial advice. The website places no orders. The bot places orders only on a brokerage account whose keys its owner chose to give it.</div>
+
+<section id="what">
+<h2><span class="k">01</span>What Signal Desk is</h2>
+<div class="cards">
+  <div class="card"><b>Website</b><span>One static page with three apps: Signal Desk (stocks), Retirement calculator, Rent vs EMI calculator. Hosted on GitHub Pages. $0.</span></div>
+  <div class="card"><b>Data refresh</b><span>GitHub Actions fetches prices and news every 10–15 minutes in market hours and commits them to the repo. $0.</span></div>
+  <div class="card"><b>Trading bot</b><span>Event-driven rules engine trading an Alpaca account (paper by default) during US market hours, on GitHub Actions. $0.</span></div>
+  <div class="card"><b>Research</b><span>33-year backtest harness that chose the strategy; re-runnable on demand. $0.</span></div>
+</div>
+<h3>Design principles</h3>
+<ul>
+  <li><b>No servers to maintain.</b> Static files plus scheduled GitHub Actions jobs.</li>
+  <li><b>No secrets anywhere public.</b> Broker keys live only in GitHub encrypted secrets; the page never sees them.</li>
+  <li><b>No vendor lock-in.</b> Plain Node.js with zero npm dependencies, plain HTML/JS, plain JSON. Nothing depends on Claude, Anthropic or any paid service.</li>
+  <li><b>Owner's data stays with the owner.</b> Watchlists, portfolios, quote keys and calculator inputs live in the owner's own browser.</li>
+</ul>
+</section>
+
+<section id="functional">
+<h2><span class="k">02</span>Functional description</h2>
+<h3>Three apps in one page</h3>
+<figure><pre class="mermaid">flowchart LR
+  AB[App bar] --> SD[Signal Desk]
+  AB --> RT[Retirement calculator]
+  AB --> RE[Rent vs EMI calculator]
+  AB --> TH[Dark / light theme]</pre></figure>
+<p>Retirement and Rent vs EMI are self-contained calculators. Inputs persist in the browser, so a refresh never resets them. Rent vs EMI includes a SIP plan for the money left after rent.</p>
+<h3>Signal Desk tabs</h3>
+<div class="tw"><table>
+<tr><th>Tab</th><th>Purpose</th><th>Key features</th></tr>
+<tr><td><b>USA stocks</b></td><td>Signal board for ~40 US large caps plus the user's own tickers</td><td>Overview (market cards, best setups), Screener (sortable: rating, score, price, day %, moving-average distance, analyst targets), Heat map, drill-down per stock with chart, levels and an order ticket</td></tr>
+<tr><td><b>India stocks</b></td><td>Same for NSE large caps</td><td>Same views, ₹ pricing, NSE hours</td></tr>
+<tr><td><b>Day trading</b></td><td>Tight intraday plans</td><td>Buy at / Sell at / Stop at, position size for a chosen amount, copy-ready order ticket, 45-day simulated record, P/L drill-down per stock per day</td></tr>
+<tr><td><b>Option trading</b></td><td>CALL / PUT plans on the same setups</td><td>Strike and expiry suggestion, premium estimate, exit rules, daily and overall P/L</td></tr>
+<tr><td><b>Bot trades</b></td><td>Everything the bot did</td><td>Every trade with entry/exit times and P/L, daily and overall P/L, risk dashboard, performance vs research scorecard, live-stream indicator</td></tr>
+<tr><td><b>Bot settings</b></td><td>Control panel</td><td>Risk profile, capital split stocks vs options, strategy parameters, universe, news/event guards, paper/live mode, pause / resume / run now, broker keys sealed into GitHub secrets, journal passphrase</td></tr>
+<tr><td><b>News</b></td><td>What moves markets</td><td>Market brief by category, upcoming Fed/CPI/jobs schedule, tagged headlines, news for the stocks in your portfolios</td></tr>
+<tr><td><b>Portfolio</b> (one tab each)</td><td>Holdings with live P/L</td><td>Add or rename portfolios, holdings table, per-stock news</td></tr>
+<tr><td><b>My tickers</b></td><td>User-added symbols</td><td>Fetched on demand, scored like the built-in universe</td></tr>
+<tr><td><b>Rules</b></td><td>Every rule the page applies</td><td>Scoring table, rating bands, entry/stop/target construction</td></tr>
+</table></div>
+<h3>Prices: three freshness levels</h3>
+<figure><pre class="mermaid">flowchart LR
+  A[Snapshot&lt;br/&gt;live.json from GitHub Actions&lt;br/&gt;every 10–15 min] --> P[Page]
+  B[On-demand refresh&lt;br/&gt;Yahoo Finance from the browser] --> P
+  C[Streaming ticks&lt;br/&gt;Finnhub websocket, user's own key&lt;br/&gt;2.5 s smoothed] --> P</pre></figure>
+<p>Price updates morph the existing page instead of rebuilding it: rows never jump, scroll position never moves, and a change shows as a brief green or red flash, like a broker app.</p>
+<h3>Responsive behaviour</h3>
+<ul>
+  <li>Desktop: full tables with ‹ › arrows beside each panel to scroll wide tables.</li>
+  <li>Phone and tablet: full-width tables, symbols instead of company names, compact header, arrows hidden (swipe instead).</li>
+  <li>Dark / light toggle reaches all three apps. The page reloads itself to a newer build without losing scroll or inputs.</li>
+</ul>
+</section>
+
+<section id="architecture">
+<h2><span class="k">03</span>Architecture</h2>
+<h3>System context</h3>
+<figure><pre class="mermaid">flowchart TB
+  subgraph Owner["Owner's devices"]
+    BR[Browser&lt;br/&gt;page + localStorage]
+    PH[Phone&lt;br/&gt;ntfy alerts]
+  end
+  subgraph GH["GitHub (free)"]
+    REPO[(Repository&lt;br/&gt;code + data JSON)]
+    PAGES[GitHub Pages&lt;br/&gt;static site]
+    SEC[(Encrypted secrets&lt;br/&gt;ALPACA_*, JOURNAL_KEY, NTFY_TOPIC)]
+    subgraph ACT["GitHub Actions"]
+      RF[refresh-prices&lt;br/&gt;every 10–15 min]
+      TR[paper-trade-bot&lt;br/&gt;market hours]
+      RS[strategy-research]
+      TS[bot-tests]
+    end
+  end
+  subgraph EXT["External services"]
+    YF[Yahoo Finance]
+    FH[Finnhub]
+    AL[Alpaca broker&lt;br/&gt;paper or live]
+    RSS[Fed / Yahoo RSS, Benzinga]
+    NT[ntfy.sh]
+  end
+  BR -->|reads| PAGES
+  BR -->|optional| YF
+  BR -->|own key| FH
+  BR -->|fine-grained token| REPO
+  BR -->|sealed box| SEC
+  PAGES --- REPO
+  RF -->|live.json, news.json| REPO
+  RF --> YF &amp; RSS &amp; AL
+  TR -->|config.json| PAGES
+  TR -->|orders, streams| AL
+  TR -->|journal.json| REPO
+  TR --> NT --> PH
+  SEC -.->|env at run time only| TR
+  RS --> REPO</pre>
+<figcaption>Everything runs on GitHub's free tier; the owner's devices only read the site and change settings.</figcaption></figure>
+
+<h3>Repository layout</h3>
+<pre class="tree">signal-desk/
+├── index.html              <span class="c">the website (all three apps + app bar)</span>
+├── retire.html             <span class="c">Retirement calculator</span>
+├── rentemi.html            <span class="c">Rent vs EMI calculator</span>
+├── live.json  news.json    <span class="c">price snapshot and news feed, written by refresh-prices</span>
+├── events.json             <span class="c">FOMC / CPI / jobs / PPI / minutes calendar through 2027</span>
+├── symbols.json  ver.txt   <span class="c">built-in universe; build stamp for self-update</span>
+├── fetch.mjs  news.mjs     <span class="c">fetchers used by refresh-prices</span>
+├── worker.js               <span class="c">optional Cloudflare worker (CORS proxy for Yahoo)</span>
+├── bot/
+│   ├── live.mjs            <span class="c">session runner: websockets, event loop, config hot-reload</span>
+│   ├── bot.mjs             <span class="c">decision cycle: entries, exits, floors, breakers, journal</span>
+│   ├── strategy.mjs        <span class="c">indicators and signals (SMA, RSI-2, exits)</span>
+│   ├── risk.mjs            <span class="c">sizing, heat, sector caps, regime, loss streak</span>
+│   ├── news.mjs            <span class="c">headline classifier, event guard</span>
+│   ├── config.mjs / .json  <span class="c">settings schema and the control-panel values</span>
+│   ├── journal.mjs / .json <span class="c">FIFO trade pairing; trade journal (encrypted when JOURNAL_KEY set)</span>
+│   ├── research.mjs        <span class="c">4-strategy simulator, out-of-sample split</span>
+│   ├── backtest.mjs        <span class="c">single-strategy backtest</span>
+│   └── test.mjs            <span class="c">29 unit tests (CI)</span>
+├── .github/workflows/      <span class="c">refresh, trade, research, backtest, test</span>
+├── docs/                   <span class="c">ARCHITECTURE.md · index.html (this page) · architecture.pptx</span>
+└── BOT.md  SECURITY.md  ACCOUNTS.md  FAMILY.md  README.md</pre>
+
+<h3>Data flow</h3>
+<figure><pre class="mermaid">sequenceDiagram
+  autonumber
+  participant Y as Yahoo / RSS / Benzinga
+  participant RF as refresh-prices
+  participant R as Repo / Pages
+  participant P as Page (browser)
+  participant B as Bot (Actions)
+  participant A as Alpaca
+  loop every 10–15 min, market hours
+    RF->>Y: fetch bars, quotes, headlines
+    RF->>R: commit live.json, news.json, ver.txt
+  end
+  P->>R: load page, live.json, news.json, journal.json
+  P-->>R: Bot settings write bot/config.json (GitHub API)
+  loop one session per market day
+    B->>R: read bot/config.json every 60 s
+    B->>A: account, positions, orders, bars
+    A-->>B: trade-updates + market-data websockets
+    B->>A: limit entries, take-profits, exits
+    B->>R: commit bot/journal.json every 10 min
+  end</pre></figure>
+
+<h3>Deployment and scheduling</h3>
+<div class="tw"><table>
+<tr><th>Workflow</th><th>Trigger</th><th>What it does</th><th>Limit</th></tr>
+<tr><td><code>refresh-prices</code></td><td class="mono">*/10 13-21 * * 1-5 (US)<br>*/15 3-10 * * 1-5 (India)</td><td><code>fetch.mjs</code> → live.json; <code>news.mjs</code> → news.json; commit</td><td>~1 min</td></tr>
+<tr><td><code>paper-trade-bot</code></td><td class="mono">*/5 13-21 * * 1-5, manual; one session at a time</td><td><code>bot/live.mjs</code> for up to 345 min; exits if <code>bot/STOP</code> exists</td><td>358 min</td></tr>
+<tr><td><code>strategy-research</code></td><td>manual</td><td><code>bot/research.mjs</code> → research.json + report</td><td>40 min</td></tr>
+<tr><td><code>backtest</code></td><td>manual</td><td><code>bot/backtest.mjs</code> → backtest.json + report</td><td>30 min</td></tr>
+<tr><td><code>bot-tests</code></td><td>push / PR</td><td><code>bot/test.mjs</code></td><td>5 min</td></tr>
+</table></div>
+<p>All actions are pinned to exact commit SHAs (<code>actions/checkout</code> v4.2.2, <code>actions/setup-node</code> v4.4.0).</p>
+</section>
+
+<section id="technical">
+<h2><span class="k">04</span>Technical reference</h2>
+<h3>Website</h3>
+<ul>
+  <li><b>Stack:</b> one HTML file, vanilla JavaScript, no framework. The only external script is libsodium (to seal secrets), loaded from jsDelivr with Subresource Integrity hashes.</li>
+  <li><b>State:</b> <code>localStorage</code> keys prefixed <code>sd-</code> (watchlist, portfolios, custom tickers, theme, refresh choice, quote keys, GitHub token, journal passphrase, calculator inputs). A setup link carries quote keys to another device.</li>
+  <li><b>Rendering:</b> <code>renderAll(bg)</code>. Foreground rebuilds a tab; background price ticks morph the existing DOM in place (keyed by <code>data-s</code>), keeping open sections, row order and scroll offsets. Scroll anchoring is off; an interaction guard delays updates while the user scrolls or types.</li>
+  <li><b>Scoring:</b> trend (50/200-day averages), momentum, RSI, volume, distance to the chosen moving average, analyst targets and recent signals combine into a score that maps to Top Buy / Buy / Hold / Sell / Top Sell. The Rules tab lists every weight.</li>
+  <li><b>Self-update:</b> the page polls <code>ver.txt</code> and reloads once when a newer build appears.</li>
+</ul>
+<h3>Data files</h3>
+<div class="tw"><table>
+<tr><th>File</th><th>Written by</th><th>Shape</th></tr>
+<tr><td><code>live.json</code></td><td>fetch.mjs</td><td><code>{ at, rows: { SYM: [px, prevClose, …] }, bars, stamp }</code></td></tr>
+<tr><td><code>news.json</code></td><td>news.mjs</td><td><code>{ at, items: [{t, h, u, sum, s}], bySym }</code></td></tr>
+<tr><td><code>events.json</code></td><td>hand-maintained</td><td><code>[{ date, time, type, title }]</code> for FOMC, CPI, JOBS, PPI, MINUTES</td></tr>
+<tr><td><code>bot/config.json</code></td><td>Bot settings tab</td><td>see chapter 05</td></tr>
+<tr><td><code>bot/journal.json</code></td><td>bot</td><td>plaintext trades, or <code>{ enc:1, kdf, iter, salt, iv, ct, at, sig, paper, stream }</code></td></tr>
+<tr><td><code>bot/research.json</code></td><td>research workflow</td><td>per-strategy CAGR, Sharpe, max drawdown, out-of-sample split</td></tr>
+</table></div>
+<h3>Bot modules</h3>
+<div class="tw"><table>
+<tr><th>Module</th><th>Responsibility</th><th>Key exports</th></tr>
+<tr><td><code>live.mjs</code></td><td>One market session: websocket subscriptions, wake queue, 2 s beat (1 s after 15:50), polling fallback, config hot-reload, journal commits, stream reconnect on paper↔live switch</td><td>—</td></tr>
+<tr><td><code>bot.mjs</code></td><td>One decision cycle: bars → signals → guards → sizing → orders; floors, take-profits, breakers, journal</td><td><code>botCycle</code>, <code>fastCheck</code>, <code>applyConfig</code>, <code>pushPrice</code>, <code>endpoints</code>, <code>redact</code></td></tr>
+<tr><td><code>strategy.mjs</code></td><td>Indicators and signals</td><td><code>sma</code>, <code>rsi2</code>, <code>rsi2Signal</code>, <code>rsi2Exit</code>, <code>replay</code></td></tr>
+<tr><td><code>risk.mjs</code></td><td>Money management</td><td><code>stockQty</code>, <code>optionQty</code>, <code>regimeOf</code>, <code>lossStreak</code>, <code>openRisk</code>, <code>SECTOR</code></td></tr>
+<tr><td><code>news.mjs</code></td><td>Event and headline guards</td><td><code>classify</code>, <code>loadEvents</code>, <code>guard</code>, <code>symbolRisk</code></td></tr>
+<tr><td><code>config.mjs</code></td><td>Settings schema</td><td><code>PRESETS</code>, <code>DEFAULTS</code>, <code>RANGES</code>, <code>normalize</code>, <code>summary</code></td></tr>
+<tr><td><code>journal.mjs</code></td><td>Pair fills into round trips (FIFO)</td><td><code>parseSym</code>, <code>buildJournal</code></td></tr>
+</table></div>
+<p>Zero npm dependencies; Node 20 or newer (built-in <code>fetch</code>, <code>WebSocket</code>, <code>crypto.webcrypto</code>).</p>
+</section>
+
+<section id="bot">
+<h2><span class="k">05</span>The trading bot in depth</h2>
+<h3>Why RSI-2</h3>
+<p><code>bot/research.mjs</code> simulated four strategies on 39 large US stocks from 1993 to 2026, with 0.05 % costs per side, 10 % of equity per position and at most 6 positions, judged on the last 30 % of years (2016–2026), which were never used to choose anything.</p>
+<div class="tw"><table class="num">
+<tr><th>Strategy</th><th>OOS yearly return</th><th>OOS Sharpe</th><th>OOS max drawdown</th></tr>
+<tr><td><b>RSI-2 mean reversion (chosen)</b></td><td><b>+16.4 %</b></td><td><b>1.45</b></td><td><b>−11.9 %</b></td></tr>
+<tr><td>Trend breakout</td><td>+7.2 %</td><td>0.70</td><td>−13.6 %</td></tr>
+<tr><td>SPY buy &amp; hold</td><td>+13.3 %</td><td>0.79</td><td>−34.1 %</td></tr>
+<tr><td>Original intraday pullback rules (retired)</td><td>−4.1 %</td><td>−0.86</td><td>−35.0 %</td></tr>
+</table></div>
+<p>Survivorship bias flatters all rows; treat them as an upper bound. Past results do not predict future results.</p>
+
+<h3>Rules</h3>
+<figure><pre class="mermaid">flowchart TD
+  S([Session start 9:30 ET]) --> G{Guards}
+  G -->|news crisis / FOMC window / breaker tripped| W[No new trades]
+  G -->|clear| E[Entry window 9:45 → 11:00]
+  E --> C{close above 200-day SMA&lt;br/&gt;and RSI-2 below 10&lt;br/&gt;and not bounced 1 %+}
+  C -->|yes, deepest dips first| SZ[Size: risk 0.5 % of equity&lt;br/&gt;max 10 % per position&lt;br/&gt;heat ≤ 3 %, ≤ 2 per sector]
+  SZ --> O[Resting limit BUY&lt;br/&gt;+ optional CALL 14–35 DTE]
+  C -->|no| H[Wait]
+  O --> M[Monitor every tick]
+  M --> F{price ≤ −25 % floor?}
+  F -->|yes| X1[Emergency market SELL]
+  M --> TP{option +50 %?}
+  TP -->|yes| X2[Take-profit resting order]
+  M --> L{last 10 min and close above 5-day SMA,&lt;br/&gt;or held 10 sessions}
+  L -->|yes| X3[SELL at live price]
+  L -->|no| N([Carry overnight])</pre></figure>
+<ul>
+  <li><b>Entries:</b> 9:45–11:00 ET (after 10:15 on CPI/jobs days); resting limit orders at the broker.</li>
+  <li><b>Exits:</b> last 10 minutes once the close is above the 5-day average, or after 10 sessions. A 25 % hard floor is a disaster brake and fires within a second off the stream.</li>
+  <li><b>Options:</b> CALL at the nearest strike, 14–35 days to expiry, on the same dips; take-profit +50 % as a resting order, stop −50 %, closed 3 days before expiry. Skipped under the pattern-day-trader guard when equity is under $25 000.</li>
+  <li><b>Guards:</b> FOMC/CPI/jobs windows, live headline scan (war, White House, Fed, crisis), SPY tone; daily −3 % and weekly −6 % loss caps; 3-loss streak pause; stale orders cancelled after 45 min.</li>
+</ul>
+
+<h3>Real-time engine</h3>
+<figure><pre class="mermaid">flowchart LR
+  TU[Alpaca trade-updates websocket] -->|fill / cancel| Q[Wake queue]
+  MD[Alpaca IEX market-data websocket] -->|every trade tick| PX[livePx] --> FC[fastCheck&lt;br/&gt;floors, take-profits]
+  HB[Beat 2 s, 1 s after 15:50] --> Q
+  CF[config.json poll 60 s] -->|changed| Q
+  Q -->|≥ 250 ms apart| CY[botCycle]
+  CY --> AL[Alpaca REST]
+  CY --> J[journal.json&lt;br/&gt;commit every 10 min]
+  CY --> NT[ntfy alert]
+  AL -.->|stream down| POLL[REST polling fallback]</pre>
+<figcaption>Measured against a mock broker: fill → take-profit order in 40 ms; crash tick → floor exit in 110 ms.</figcaption></figure>
+
+<h3>Settings (<code>bot/config.json</code>)</h3>
+<div class="tw"><table>
+<tr><th>Key</th><th>Meaning</th><th>Default</th></tr>
+<tr><td><code>mode</code></td><td>paper or live (live also needs live keys and a typed confirmation)</td><td>paper</td></tr>
+<tr><td><code>preset</code></td><td>conservative / balanced / aggressive / custom</td><td>balanced</td></tr>
+<tr><td><code>riskPct</code>, <code>optRiskPct</code></td><td>% of equity lost if a stock / option trade hits its stop</td><td>0.5 / 0.5</td></tr>
+<tr><td><code>maxHeat</code></td><td>% of equity at risk across everything open</td><td>3</td></tr>
+<tr><td><code>perSector</code>, <code>maxPositions</code>, <code>maxOptions</code></td><td>caps</td><td>2 / 6 / 4</td></tr>
+<tr><td><code>dayCap</code>, <code>weekCap</code>, <code>streak</code></td><td>circuit breakers: % loss, % loss, losses in a row</td><td>3 / 6 / 3</td></tr>
+<tr><td><code>stockPct</code>, <code>optPct</code></td><td>max % of equity per stock position / option budget</td><td>10 / 2</td></tr>
+<tr><td><code>stocks</code>, <code>options</code></td><td>enable each instrument</td><td>true / true</td></tr>
+<tr><td><code>rsiThreshold</code>, <code>maxHold</code>, <code>entryEnd</code></td><td>strategy parameters</td><td>10 / 10 / 11:00</td></tr>
+<tr><td><code>optTakeProfit</code>, <code>optStop</code>, <code>holdFloor</code>, <code>staleMin</code></td><td>exits</td><td>50 / 50 / 25 / 45</td></tr>
+<tr><td><code>newsGuard</code>, <code>eventGuard</code>, <code>alerts</code></td><td>guards and alerts</td><td>true</td></tr>
+<tr><td><code>symbols</code></td><td>universe</td><td>30 US large caps</td></tr>
+</table></div>
+<p>The bot re-reads this file every 60 s from the public site, so a change in Bot settings is in force within a minute. Keys are never in this file.</p>
+</section>
+
+<section id="security">
+<h2><span class="k">06</span>Security model</h2>
+<figure><pre class="mermaid">flowchart TB
+  subgraph Public["Public (GitHub Pages)"]
+    P1[Page code]
+    P2[config.json — settings, no keys]
+    P3[live.json / news.json]
+    P4[journal.json — encrypted when JOURNAL_KEY set]
+  end
+  subgraph Browser["Owner's browser only"]
+    B1[GitHub fine-grained token]
+    B2[Journal passphrase]
+    B3[Finnhub / FMP keys]
+  end
+  subgraph Secrets["GitHub encrypted secrets"]
+    S1[ALPACA_KEY / SECRET — paper]
+    S2[ALPACA_LIVE_KEY / SECRET — live]
+    S3[JOURNAL_KEY]
+    S4[NTFY_TOPIC]
+  end
+  Browser -->|libsodium sealed box, SRI-pinned| Secrets
+  Secrets -.->|env vars, in memory only| Bot[Bot run]
+  Bot -->|AES-256-GCM, PBKDF2 200k| P4</pre></figure>
+<ul>
+  <li><b>Keys never touch the page or the repo.</b> Bot settings seals them with GitHub's public key in the browser; only a workflow run can read them.</li>
+  <li><b>Paper and live are separate credentials.</b> Live trading requires live mode, live keys and the typed phrase; a paper key is rejected by the live endpoint.</li>
+  <li><b>Private journal:</b> with <code>JOURNAL_KEY</code> set, the journal is AES-256-GCM encrypted and numbers are scrubbed from Actions logs; the page decrypts locally with the passphrase.</li>
+  <li><b>Supply chain:</b> the only third-party script is pinned by hash; Actions are pinned to commit SHAs; the bot has no npm dependencies.</li>
+  <li><b>Broker API keys can trade but cannot withdraw funds</b> (verify in your own Alpaca settings).</li>
+  <li><b>Owner checklist</b> (<code>SECURITY.md</code>): 2FA everywhere, no SMS; sole collaborator on the repo; token scoped to one repo with ≤ 90-day expiry; random ntfy topic; never paste keys into chat or issues.</li>
+</ul>
+</section>
+
+<section id="operations">
+<h2><span class="k">07</span>Operations and runbook</h2>
+<h3>First-time setup (about 20 minutes)</h3>
+<ol>
+  <li>Alpaca account → Paper → generate API keys.</li>
+  <li>GitHub fine-grained token: only this repo; Contents, Secrets, Actions: read &amp; write; 90-day expiry.</li>
+  <li>Site → Bot settings: connect with the token, paste Alpaca paper keys, choose a risk profile, set a journal passphrase, Save.</li>
+  <li>Repo → Actions → enable workflows; Settings → Actions → Workflow permissions → Read and write.</li>
+  <li>2FA on GitHub, Alpaca and email.</li>
+</ol>
+<p>The bot starts on the next market morning. Nothing on the owner's devices needs to stay on.</p>
+<h3>Day to day</h3>
+<div class="tw"><table>
+<tr><th>Need</th><th>Where</th></tr>
+<tr><td>See trades, P/L, risk</td><td>Bot trades tab</td></tr>
+<tr><td>Change risk, universe, guards</td><td>Bot settings → Save (in force within 60 s)</td></tr>
+<tr><td>Pause / resume / run now</td><td>Bot settings buttons (writes or removes <code>bot/STOP</code>, dispatches the workflow)</td></tr>
+<tr><td>Alerts on the phone</td><td>ntfy app subscribed to the <code>NTFY_TOPIC</code></td></tr>
+<tr><td>Re-run research or backtest</td><td>Actions tab → workflow → Run workflow</td></tr>
+</table></div>
+<h3>Going live</h3>
+<p>Run paper for 2–3 months. Then add <code>ALPACA_LIVE_KEY</code> / <code>ALPACA_LIVE_SECRET</code>, switch Mode to Live in Bot settings and type the confirmation. Lower the risk profile first. Mind the pattern-day-trader rule (under $25 000), real slippage, overnight gaps and taxes.</p>
+<h3>Troubleshooting</h3>
+<div class="tw"><table>
+<tr><th>Symptom</th><th>Check</th></tr>
+<tr><td>Bot tab says "No bot activity"</td><td>Actions → paper-trade-bot → latest run log. Keys present? Workflow enabled?</td></tr>
+<tr><td>"Settings save failed"</td><td>Token expired or scoped wrong; regenerate it</td></tr>
+<tr><td>Prices stale</td><td>Actions → refresh-prices runs; press ↻ Refresh prices</td></tr>
+<tr><td>Page shows a lock screen</td><td>Enter the journal passphrase (same as <code>JOURNAL_KEY</code>)</td></tr>
+<tr><td>Live quotes not moving</td><td>Finnhub key saved on this device? Market open?</td></tr>
+</table></div>
+</section>
+
+<section id="testing">
+<h2><span class="k">08</span>Testing and quality</h2>
+<ul>
+  <li><code>bot/test.mjs</code>: 29 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
+  <li>Integration tests against mock brokers (REST + websocket) with a fake clock: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.</li>
+  <li>Page checks in headless Chromium at desktop and phone widths for every tab, including scroll preservation during live ticks.</li>
+  <li>Research and backtest workflows produce reproducible reports committed to the repo.</li>
+</ul>
+</section>
+
+<section id="changelog">
+<h2><span class="k">09</span>Change log and maintenance</h2>
+<p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
+<div class="tw"><table>
+<tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-21</td><td>Documentation set created (this page, ARCHITECTURE.md, architecture.pptx); docs link on the site</td><td>all</td></tr>
+<tr><td>2026-10-21</td><td>Mobile layout: full-width tables, symbol-only column, compact header; arrows hidden on touch</td><td>02</td></tr>
+<tr><td>2026-10-21</td><td>Security round: separate live keys, encrypted journal, redacted logs, PDT guard, pinned scripts and Actions, SECURITY.md, FAMILY.md</td><td>06</td></tr>
+<tr><td>2026-10-21</td><td>Real-time engine: trade-updates and market-data websockets, event-driven cycles, polling fallback, stream indicator</td><td>05</td></tr>
+<tr><td>2026-10-21</td><td>Bot settings control panel: config.json hot-reload, sealed secrets, pause / resume / run</td><td>02, 05</td></tr>
+<tr><td>2026-10-21</td><td>Strategy switched to RSI-2 after 4-strategy research; idempotent orders; 29 tests and CI</td><td>05, 08</td></tr>
+<tr><td>2026-10-21</td><td>Risk engine, regime filter, pro backtest, alerts</td><td>05</td></tr>
+<tr><td>2026-10-21</td><td>News tab, per-portfolio news, news/event guard, events calendar</td><td>02</td></tr>
+<tr><td>2026-10-21</td><td>Bot trades tab; options and stock trades; early take-profit; every-second monitoring</td><td>02, 05</td></tr>
+<tr><td>2026-10-21</td><td>Paper-trading bot and 40-year backtest workflow</td><td>03, 05</td></tr>
+<tr><td>2026-10-21</td><td>Day trading order tickets and per-day P/L drill-down; Option trading tab</td><td>02</td></tr>
+<tr><td>2026-10-21</td><td>Flicker-free live prices, scroll preservation, theme toggle, self-update</td><td>02, 04</td></tr>
+<tr><td>2026-10-21</td><td>App switcher: Signal Desk / Retirement / Rent vs EMI with SIP plan</td><td>02</td></tr>
+</table></div>
+</section>
+
+<section id="glossary">
+<h2><span class="k">10</span>Glossary</h2>
+<div class="tw"><table>
+<tr><th>Term</th><th>Meaning</th></tr>
+<tr><td>RSI-2</td><td>2-period Relative Strength Index; below 10 marks a sharp short-term dip</td></tr>
+<tr><td>SMA</td><td>Simple moving average, for example the 200-day</td></tr>
+<tr><td>OOS</td><td>Out-of-sample: years held back from strategy selection and used only to judge</td></tr>
+<tr><td>CAGR / Sharpe / max DD</td><td>Yearly growth rate / return per unit of volatility / worst peak-to-trough loss</td></tr>
+<tr><td>Heat</td><td>Total % of equity at risk across open positions and pending orders</td></tr>
+<tr><td>Regime</td><td>Market state (SPY above or below its 200-day) used to allow or block entries</td></tr>
+<tr><td>PDT</td><td>Pattern Day Trader rule: under $25 000, at most 3 same-day round trips in 5 business days</td></tr>
+<tr><td>DTE</td><td>Days to expiry of an option</td></tr>
+<tr><td>Paper trading</td><td>Simulated account with fake money and real prices</td></tr>
+<tr><td>Sealed box</td><td>Public-key encryption (libsodium) that stores secrets in GitHub without the browser ever reading them back</td></tr>
+<tr><td>ntfy</td><td>Free push-notification service used for bot alerts</td></tr>
+</table></div>
+<p class="rule">Signal Desk · system documentation v1.0 · maintained in <code>docs/</code> of the repository. Not financial advice.</p>
+</section>
+</main>
+</div>
+
+<script>
+// On GitHub Pages the diagrams need Mermaid; the claude.ai artifact viewer renders <pre class="mermaid"> itself.
+(function () {
+  if (/claude\.ai|claudeusercontent/.test(location.hostname)) return;
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js';
+  s.onload = function () {
+    var dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'neutral', securityLevel: 'loose', flowchart: { useMaxWidth: false }, sequence: { useMaxWidth: false } });
+  };
+  document.head.appendChild(s);
+})();
+</script>
