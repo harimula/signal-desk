@@ -9,5 +9,6 @@ export default [
       'no-var': 'error', 'prefer-const': 'off', 'no-eval': 'error', 'no-implied-eval': 'error',
     },
   },
+  { files: ['tools/page-test.mjs'], languageOptions: { globals: { document: 'readonly', window: 'readonly', localStorage: 'readonly', Event: 'readonly' } } },
   { files: ['worker.js'], languageOptions: { globals: { Response: 'readonly', fetch: 'readonly', URL: 'readonly' } } },
 ];
