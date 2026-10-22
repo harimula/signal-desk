@@ -102,6 +102,7 @@ check('default: no PUT is ever placed', () => assert.ok(!A.orders.some(o => /^PO
 const B = run({ stocks: true, options: true, puts: true });
 check('puts on: CALL still placed on the dip stock', () => assert.ok(B.options.some(o => /^DIP\d{6}C/.test(o.symbol) && o.id === 'sd-q')));
 check('puts on: PUT placed on the pop stock (sd-p-)', () => assert.ok(B.options.some(o => /^POP\d{6}P/.test(o.symbol) && o.id === 'sd-p')));
+check('alerts: an option buy alert shows contracts and the per-contract price', () => assert.ok((B.acts || []).some(m => /PUT on RSI-2 pop.*\u00b7 \d+ contracts? @ \$[\d.]+\/contract \(\$[\d,]+\)/.test(m)), JSON.stringify(B.acts)));
 check('puts on: no stock order for the pop stock (no shorting stock)', () => assert.ok(!B.orders.some(o => o.symbol === 'POP')));
 check('puts on: PUT is a limit buy of whole contracts', () => { const o = B.orders.find(x => /^POP\d{6}P/.test(x.symbol)); assert.equal(o.side, 'buy'); assert.equal(o.type, 'limit'); assert.ok(+o.qty >= 1 && Number.isInteger(+o.qty)); });
 
