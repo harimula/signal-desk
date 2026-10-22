@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-/gKGvByoRPC7HkU2ihpKJkGnMUghCEOU/t7MJ8jlUUs=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-YqEa0jqNJCAHKnrWs/rJbVrdgZlNZdRVvrgjiV8TpuM=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -50,6 +50,9 @@ header{padding:16px 0 2px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:c
 h1{font-size:19px;margin:0;letter-spacing:-.02em;font-weight:800}
 .dots{display:flex;gap:12px;font-size:12px;color:var(--muted);font-weight:600}
 .mkst{display:inline-flex;align-items:center;gap:5px}
+.cmgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 14px;margin-top:8px}
+.cmq{display:flex;flex-direction:column;line-height:1.25}
+.cmq b{font-size:14px}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);opacity:.4;display:inline-block}
 .dot.on{background:var(--tb);opacity:1;box-shadow:0 0 0 3px var(--tb-bg)}
 .hright{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
@@ -871,7 +874,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792696760';
+const BUILD_V = '1792700155';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1354,8 +1357,8 @@ ${plUsd != null ? `<div class="kv"><span>Open P&amp;L</span><b class="${plUsd >=
     return `<tr data-s="${esc(s.sym)}" data-m="${s.market}"><td><b>${esc(s.cm ? s.cm.name : showSym(s.sym))}</b> <span class="mut nm2">${esc(s.cm ? 'per ' + s.cm.unit : (s.name || '').slice(0, 18))}</span></td><td>${s.cm ? '<span class="mut">–</span>' : pill(s.rating)}</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>${c}${fmt(s.px)}</td><td>${c}${fmt(r.val, 0)}</td><td class="${s.chg >= 0 ? 'pos' : 'neg'}">${sgn(s.chg)}%</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null ? '–' : sgn(r.pl)}</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null || !r.cost ? '–' : sgn(r.pl / r.cost * 100) + '%'}</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
   }).join('');
   const tbl = list.length ? `<div class="tw card" style="margin-top:12px"><table id="pftab"><thead><tr><th>Holding</th><th>Rating</th><th>Shares</th><th>Avg cost</th><th>Price</th><th>Value</th><th>Day %</th><th>P&amp;L</th><th>P&amp;L %</th><th></th></tr></thead><tbody>${trs}</tbody></table></div>` : '<div class="card empty">No holdings yet. Add your first one above: ticker, how many shares, and what you paid on average.</div>';
-  const seen = new Set(), strip = CMD.filter(c => !c.conv && !seen.has(c.sym) && seen.add(c.sym)).map(c => { const q = cmdPx(c.sym); return q ? `<div class="mkst" style="gap:8px"><b>${esc(c.name)}</b> $${fmt(q.px)}<span class="mut" style="font-size:11px">/${esc(c.unit)}</span> <span class="${q.chg >= 0 ? 'pos' : 'neg'}" style="font-size:11.5px">${sgn(q.chg)}%</span></div>` : ''; }).filter(Boolean).join('');
-  const gold = cmdPx('GC=F'), cmCard = strip ? `<div class="card" style="padding:10px 16px;margin-top:8px;display:flex;gap:14px 22px;flex-wrap:wrap;align-items:center;font-size:13px"><b style="font-size:13.5px">Commodities</b>${strip}<span class="mut" style="font-size:11.5px">USD→INR ${fmt(fxRate(), 2)}${gold ? ' · gold ₹' + fmt(gold.px / OZ_G * fxRate(), 0) + '/g' : ''} · futures, updated with ↻ Refresh prices</span></div>` : '';
+  const seen = new Set(), strip = CMD.filter(c => !c.conv && !seen.has(c.sym) && seen.add(c.sym)).map(c => { const q = cmdPx(c.sym); return q ? `<div class="cmq"><span class="mut" style="font-size:11px">${esc(c.name)} <span style="opacity:.8">/${esc(c.unit)}</span></span><b>$${fmt(q.px)}</b> <span class="${q.chg >= 0 ? 'pos' : 'neg'}" style="font-size:11.5px">${sgn(q.chg)}%</span></div>` : ''; }).filter(Boolean).join('');
+  const gold = cmdPx('GC=F'), cmCard = strip ? `<div class="card" style="padding:10px 14px;margin-top:8px;font-size:13px"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline"><b style="font-size:13.5px">Commodities</b><span class="mut" style="font-size:11.5px">USD→INR ${fmt(fxRate(), 2)}${gold ? ' · gold ₹' + fmt(gold.px / OZ_G * fxRate(), 0) + '/g' : ''}</span></div><div class="cmgrid">${strip}</div><div class="mut" style="font-size:11px;margin-top:6px">Futures prices · updated with ↻ Refresh prices</div></div>` : '';
   return `<h2>${esc(pfName(pfid))}</h2>${note}${cmCard}${form}${tiles ? `<div class="grid regime" style="margin-top:4px">${allTile}${tiles}</div>` : ''}${tbl}
 <div class="card addrow" style="margin-top:12px">
 <label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Portfolio name<input id="pfNm" value="${esc(pfName(pfid))}" maxlength="24" style="width:170px"></label>
