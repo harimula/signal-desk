@@ -740,6 +740,13 @@ $('form').addEventListener('submit', e => e.preventDefault());
 applyAssumptions('hist30');
 update();
 
+// remember inputs on this device (and across devices via Signal Desk sync)
+const RE_STORE = 'rentemi-v1'; let reT = null;
+function reSave() { try { const o = {t: [...touched]}; document.querySelectorAll('#form input[id],#form select[id]').forEach(el => { o[el.id] = el.type === 'checkbox' ? el.checked : el.value; }); localStorage.setItem(RE_STORE, JSON.stringify(o)); } catch (e) {} }
+(function reLoad() { try { const o = JSON.parse(localStorage.getItem(RE_STORE) || 'null'); if (!o) return; (o.t || []).forEach(id => touched.add(id)); Object.keys(o).forEach(id => { if (id === 't') return; const el = document.getElementById(id); if (!el) return; if (el.type === 'checkbox') el.checked = !!o[id]; else el.value = o[id]; }); update(); } catch (e) {} })();
+document.addEventListener('input', () => { clearTimeout(reT); reT = setTimeout(reSave, 400); });
+$('form').addEventListener('change', reSave);
+
 if ('ResizeObserver' in window) {
   new ResizeObserver(() => { const w = Math.max($('chart').clientWidth, 260); if (state.r && w !== state.lastW) drawChart(state.r); }).observe($('chart'));
 } else {

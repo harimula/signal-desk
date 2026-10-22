@@ -844,7 +844,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792634957';
+const BUILD_V = '1792662995';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -977,6 +977,92 @@ function acctUi() {
   if ($('#acOut')) $('#acOut').style.display = fbUser ? '' : 'none';
   if (fbUser && $('#acWho')) $('#acWho').textContent = fbUser.email || '';
 }
+// ---------- device sync: your settings roam through your own repo, encrypted with your passphrase ----------
+// What syncs: every sd-* key except the two that identify this device (GitHub token, passphrase) and view state,
+// plus the calculators' inputs. Stored at user/settings.enc.json (AES-256-GCM, PBKDF2-SHA256 x200k). Last write wins.
+const SYNC_LOCAL = ['sd-ghtok', 'sd-jkey', 'sd-ghrepo', 'sd-syncat', 'sd-tab', 'sd-app', 'sd-reqs'];
+const SYNC_EXTRA = ['bangalore-corpus-calculator-v3', 'rent-vs-emi-v1', 'rentemi-v1'];
+const SYNC_PATH = '/contents/user/settings.enc.json';
+const syncKey = k => !!k && ((k.startsWith('sd-') && !SYNC_LOCAL.includes(k)) || SYNC_EXTRA.includes(k) || /^(rent|emi|retire|corpus)/i.test(k));
+const syncOn = () => !!(ghTok() && load('sd-jkey', ''));
+let syPushT = null, syBusy = false, sySha = null, syMsg = '', syPulledAt = 0, syDirty = false;
+function syncTouch(k) {
+  try { if (typeof fbUser !== 'undefined' && fbUser && fbDb && syncable(k)) schedPush(); } catch (e) {}
+  if (k === 'sd-ghtok' || k === 'sd-jkey') { if (syncOn()) setTimeout(() => syncPull(true), 300); return; }
+  if (!syncKey(k) || !syncOn()) return;
+  syDirty = true; clearTimeout(syPushT); syPushT = setTimeout(syncPush, 2500);
+}
+window.addEventListener('storage', e => { try { syncTouch(e.key); } catch (x) {} });
+function syncSnap() { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (syncKey(k)) o[k] = localStorage.getItem(k); } return o; }
+async function jEncrypt(obj, pass) {
+  const enc = new TextEncoder(), s = x => btoa(String.fromCharCode(...x));
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const km = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256'}, km, {name: 'AES-GCM', length: 256}, false, ['encrypt']);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, enc.encode(JSON.stringify(obj))));
+  return {enc: 1, kdf: 'pbkdf2-sha256', iter: 200000, salt: s(salt), iv: s(iv), ct: s(ct)};
+}
+const syDev = () => { const u = navigator.userAgent; return /iPhone|iPad/.test(u) ? 'iPhone/iPad' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows PC' : 'device'; };
+function syncUi() { const el = document.getElementById('syStat'); if (el) el.textContent = syMsg; }
+async function syncPush() {
+  if (!syncOn() || syBusy) { if (syBusy) syDirty = true; return; }
+  syBusy = true; syDirty = false;
+  try {
+    const at = Date.now();
+    const body = await jEncrypt({v: 1, at, dev: syDev(), data: syncSnap()}, load('sd-jkey', ''));
+    const put = sha => ghApi(SYNC_PATH, {method: 'PUT', body: JSON.stringify({message: 'Settings sync (' + syDev() + ')', content: b64(JSON.stringify(body)), sha: sha || undefined, branch: 'main'})});
+    let r;
+    try { r = await put(sySha); }
+    catch (e) { const f = await ghApi(SYNC_PATH + '?ref=main').catch(() => null); r = await put(f && f.sha); }
+    sySha = r && r.content && r.content.sha || sySha;
+    try { localStorage.setItem('sd-syncat', String(at)); } catch (e) {}
+    syMsg = 'Synced just now from this ' + syDev() + '.'; syncUi();
+  } catch (e) { syMsg = 'Sync failed: ' + (e.message || e); syncUi(); }
+  finally { syBusy = false; if (syDirty) { clearTimeout(syPushT); syPushT = setTimeout(syncPush, 2500); } }
+}
+async function syncPull(announce) {
+  if (!syncOn() || syBusy) return;
+  syBusy = true; syPulledAt = Date.now();
+  try {
+    let f = null;
+    try { f = await ghApi(SYNC_PATH + '?ref=main'); } catch (e) { if (!/not found|404/i.test(e.message || '')) throw e; }
+    if (!f) { syBusy = false; syMsg = 'First device — saving its settings to your repo.'; syncUi(); return syncPush(); }
+    sySha = f.sha;
+    const j = JSON.parse(decodeURIComponent(escape(atob((f.content || '').replace(/\s/g, '')))));
+    let d; try { d = await jDecrypt(j, load('sd-jkey', '')); } catch (e) { syMsg = 'The passphrase on this device differs from the one the settings were saved with.'; syncUi(); syBusy = false; return; }
+    const localAt = +(localStorage.getItem('sd-syncat') || 0);
+    if ((d.at || 0) > localAt) {
+      let diff = false;
+      for (const k of Object.keys(d.data || {})) if (syncKey(k) && localStorage.getItem(k) !== d.data[k]) { localStorage.setItem(k, d.data[k]); diff = true; }
+      try { localStorage.setItem('sd-syncat', String(d.at)); } catch (e) {}
+      syMsg = 'Settings loaded from your ' + (d.dev || 'other device') + '.'; syncUi();
+      if (diff) { syBusy = false; location.reload(); return; }
+    } else if (localAt > (d.at || 0)) { syBusy = false; return syncPush(); }
+    else { syMsg = 'In sync with your ' + (d.dev || 'other device') + ' · ' + new Date(d.at).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + '.'; syncUi(); }
+  } catch (e) { syMsg = 'Sync: ' + (e.message || e); syncUi(); }
+  finally { syBusy = false; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - syPulledAt > 120000) syncPull(); });
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-sy]'); if (!b) return;
+  const a = b.dataset.sy;
+  if (a === 'now') { syMsg = 'Syncing…'; syncUi(); syncPull(true).then(() => { if (!syBusy && syncOn()) syncPush(); }); }
+  if (a === 'pass') { const v = (document.getElementById('sy-pass') || {}).value || ''; if (!v) return; save('sd-jkey', v); syMsg = 'Passphrase saved on this device. Syncing…'; renderAll(); }
+});
+function syncCard(sec, dot) {
+  const on = syncOn(), tok = !!ghTok(), pass = !!load('sd-jkey', ''), at = +(localStorage.getItem('sd-syncat') || 0);
+  const what = 'Quote keys (Finnhub, FMP, proxy), watchlist, portfolios, your tickers, day-trade and option settings, theme, calculator inputs.';
+  const body = on
+    ? `<div style="margin-top:8px;font-size:13px">${dot(true)}On — this ${syDev()} shares settings with every device that has the same token and passphrase.${at ? ` <span class="mut">Last sync ${new Date(at).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})}.</span>` : ''}</div>
+<div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
+<div style="margin-top:8px"><button class="btn ghost" type="button" data-sy="now">Sync now</button> <span class="mut" style="font-size:11.5px">${what} Encrypted with your passphrase before it leaves this device; the token and passphrase themselves never sync.</span></div>`
+    : `<div style="margin-top:8px;font-size:13px">${dot(false)}Off on this ${syDev()}. ${tok ? '' : 'Connect GitHub above, then '}${pass ? '' : 'enter your passphrase'}${!tok && !pass ? '' : ''}${tok && !pass ? ' — the same one you chose for the journal' : ''}.</div>
+${tok && !pass ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px;max-width:520px"><input id="sy-pass" type="password" autocomplete="off" placeholder="passphrase" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" data-sy="pass">Turn on sync</button></div>` : ''}
+<div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
+<div class="mut" style="font-size:11.5px;margin-top:6px">${what} Everything is encrypted with your passphrase before it is saved to your repo, so a new laptop or phone needs only the token and the passphrase — the rest arrives by itself.</div>`;
+  return sec('Sync across devices', body, 'your settings follow you');
+}
+
 $('#acctBtn').addEventListener('click', () => {
   $('#authDlg').showModal();
   if (!FB_CONFIG) acctStat('Accounts are not switched on yet. The site owner connects a free Firebase project once (10 minutes) — steps are in ACCOUNTS.md in the repo. Until then, your data still stays private on this device.');
@@ -2268,6 +2354,7 @@ function settingsView() {
     : `<div class="mut" style="margin-top:6px;font-size:13px;line-height:1.6">This page writes settings straight into your GitHub repo, where the bot reads them. Connect it once per device with a <b>fine-grained personal access token</b>: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained → Generate. Repository access: only <b>${esc(ghRepo())}</b>. Permissions: <b>Contents: Read and write</b>, <b>Secrets: Read and write</b>, <b>Actions: Read and write</b>. The token stays in this browser only.</div>
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:10px"><label style="font-size:12px"><b>GitHub token</b><input id="st-tok" type="password" ${inp} autocomplete="off" placeholder="github_pat_…"></label><label style="font-size:12px"><b>Repository</b><input id="st-repo" ${inp} value="${esc(ghRepo())}"></label></div>
 <div style="margin-top:10px"><button class="btn" type="button" data-st="connect">Connect</button></div>`, 'your GitHub repo, broker keys and alerts');
+  const syncC = syncCard(sec, dot);
   const risk = sec('2. Risk profile', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${['conservative', 'balanced', 'aggressive'].map(presetBtn).join('')}</div>
 <div class="mut" style="font-size:12px;margin-top:8px">${c.preset === 'custom' ? '<b>Custom</b> — you changed a value below. Pick a profile to reset.' : 'Editing any value below switches to Custom.'}</div>${grid(ST_FIELDS.risk)}<input type="hidden" id="st-preset" value="${c.preset}">`, 'how much the bot may lose, per trade and in total');
   const alloc = sec('3. Capital allocation', `${chk('stocks', 'Trade stocks', 'RSI-2 dip buys, held 1–10 days')}${chk('options', 'Trade options', 'CALLs on the same dips — untested side, keep small')}${grid(ST_FIELDS.alloc)}
@@ -2280,7 +2367,7 @@ ${c.mode === 'live' || (document.getElementById('st-live') && document.getElemen
   const ctl = sec('8. Controls', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${stStop ? '<button class="btn" type="button" data-st="resume">▶ Resume trading</button>' : '<button class="btn" type="button" data-st="pause" style="background:var(--ts)">⏸ Pause — sell everything now</button>'}<button class="btn ghost" type="button" data-st="run">Run the bot now</button><button class="btn ghost" type="button" data-st="research">Re-run 33-year research</button><button class="btn ghost" type="button" data-st="reload">Reload from GitHub</button></div>
 <div class="mut" style="font-size:12px;margin-top:8px">${stStop ? '<b class="neg">Paused</b> — the bot has sold everything and is idle.' : 'Running normally.'} Pause creates <code>bot/STOP</code> in the repo; the bot sees it within seconds.</div>`, 'pause, resume, run');
   const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span style="font-size:12.5px">${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span></div>`;
-  return `<h2 style="margin-bottom:6px">Bot settings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.</div>${bar}${connect}${risk}${alloc}${strat}${guards}${uni}${mode}${ctl}`;
+  return `<h2 style="margin-bottom:6px">Bot settings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.</div>${bar}${connect}${syncC}${risk}${alloc}${strat}${guards}${uni}${mode}${ctl}`;
 }
 function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {
@@ -2737,6 +2824,7 @@ window.addEventListener('popstate', () => { const d = $('#dlg'); if (d.open) { d
 
 $('#foot').innerHTML = `<b>How this works.</b> The <b>Rules</b> tab spells out every rule on this page: the full scoring table, rating bands, entry/stop/target construction, industry blending and call tracking. Signals are rule-based readouts of public daily data — a screen, not a forecast, and not financial advice. The page places no orders. <a href="https://hmula-fbin.github.io/signal-desk/docs/" target="_blank" rel="noopener" style="color:var(--tb);font-weight:700">📘 System documentation</a>`;
 renderAll(); refreshInfo();
+setTimeout(() => { try { syncPull(); } catch (e) {} }, 800);
 setInterval(chrome, 60000);
 </script>
 </body>

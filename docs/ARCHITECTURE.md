@@ -1,6 +1,6 @@
 # Signal Desk — System Documentation
 
-**Version:** 1.0 · **Last updated:** 2026-10-21 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
+**Version:** 1.1 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
 
 Signal Desk is a personal stock-signal website with an attached rules-based trading bot.
 This document is the single place that explains **what it does** (functional), **how it is
@@ -68,7 +68,7 @@ EMI calculator includes a SIP (systematic investment) plan for the money left ov
 | **Day trading** | Tight intraday plans | Per stock: Buy at / Sell at / Stop at, position size for a chosen amount, copy-ready order ticket, 45-day simulated record, **P/L drill-down per stock per day** |
 | **Option trading** | CALL/PUT plans on the same setups | Strike/expiry suggestion, premium estimate, exit rules, daily and overall P/L like Day trading |
 | **Bot trades** | Everything the bot did | Every trade with entry/exit time and P/L, daily and overall P/L, risk dashboard (heat, breakers, regime), performance vs research scorecard, live/stream indicator |
-| **Bot settings** | Control panel for the bot | Risk profile (Conservative/Balanced/Aggressive/Custom), capital split stocks vs options, strategy parameters, stock universe, news/event guards, paper/live mode, pause/resume/run-now, broker keys (sealed into GitHub secrets), journal passphrase |
+| **Bot settings** | Control panel for the bot and this device | Device sync (settings follow you, see §2.4), risk profile (Conservative/Balanced/Aggressive/Custom), capital split stocks vs options, strategy parameters, stock universe, news/event guards, paper/live mode, pause/resume/run-now, broker keys (sealed into GitHub secrets), journal passphrase |
 | **News** | What is moving markets | Market brief by category, upcoming Fed/CPI/jobs schedule, tagged headlines, **news for the stocks in your portfolios** |
 | **Portfolio (one tab per portfolio)** | Holdings with live P/L | Add/rename portfolios, holdings table, per-stock news |
 | **My tickers** | User-added symbols | Fetched on demand, scored like the built-in universe |
@@ -86,7 +86,11 @@ flowchart LR
 Price updates **morph the existing DOM** (no rebuild), so rows never jump, the scroll position
 never moves, and a change shows as a brief green/red flash — like a broker app.
 
-### 2.4 Responsive behaviour
+### 2.4 Settings follow you (device sync)
+
+Everything the owner sets up — Finnhub/FMP keys, proxy URL, watchlist, portfolios, custom tickers, day-trade and option amounts, theme, auto-refresh choice, calculator inputs — is encrypted in the browser with the owner's passphrase (AES-256-GCM, PBKDF2-SHA256 × 200 000) and saved to the owner's own repo at `user/settings.enc.json` through the GitHub API. A new laptop or phone needs only the GitHub token and the passphrase (entered once in **Bot settings**); the rest arrives by itself. Pushes are debounced 2.5 s after any change; pulls happen on load and when the tab becomes visible again; last write wins by timestamp. The token and passphrase never sync. Rent vs EMI and Retirement inputs are included.
+
+### 2.5 Responsive behaviour
 
 - Desktop: full tables, ‹ › arrows beside each panel to scroll wide tables.
 - Phone/tablet (touch): full-width tables, company names hidden in favour of symbols, compact header, arrows hidden (swipe instead), calculators get one scroll surface.
@@ -234,7 +238,7 @@ All actions are pinned to exact commit SHAs (`actions/checkout@11bd719… # v4.2
 ### 4.1 Website
 
 - **Stack:** one HTML file, vanilla JavaScript, no framework, no build tooling in the repo (the owner's build script fills the price snapshot into the page template). External scripts: only libsodium (for sealing secrets), loaded from jsDelivr with Subresource Integrity hashes.
-- **State:** `localStorage` keys prefixed `sd-` (watchlist, portfolios, custom tickers, theme, auto-refresh choice, Finnhub/FMP keys, GitHub token, journal passphrase, calculator inputs). A **setup link** can carry quote keys and proxy URL to another device.
+- **State:** `localStorage` keys prefixed `sd-` (watchlist, portfolios, custom tickers, theme, auto-refresh choice, Finnhub/FMP keys, GitHub token, journal passphrase) plus the calculators' own keys. All of it except the token and passphrase roams between devices through `user/settings.enc.json` in the repo (§2.4); a **setup link** can still carry quote keys to a device without the token.
 - **Rendering:** `renderAll(bg)`. The foreground path rebuilds a tab; the background path (price ticks) morphs the existing DOM in place (`morphEl`/`morphKids`/`morphSet`, keyed by `data-s`), preserving `<details>` open state, row order and scroll offsets. Browser scroll anchoring is disabled; an interaction guard delays updates while the user is scrolling or typing.
 - **Scoring:** each stock gets a score from trend (50/200-day averages), momentum, RSI, volume, distance to the chosen moving average, analyst targets and recent signals; the score maps to Top Buy / Buy / Hold / Sell / Top Sell bands. The Rules tab documents every weight.
 - **Self-update:** the page polls `ver.txt`; when a newer build appears it reloads once, keeping tab and scroll.
@@ -249,6 +253,7 @@ All actions are pinned to exact commit SHAs (`actions/checkout@11bd719… # v4.2
 | `bot/config.json` | Bot settings tab | see §5.4 |
 | `bot/journal.json` | bot | plaintext `{ at, equity, day, trades, acts, … }` or encrypted `{ enc:1, kdf, iter, salt, iv, ct, at, sig, paper, stream }` |
 | `bot/research.json` | research workflow | per-strategy metrics (CAGR, Sharpe, max DD, OOS split) |
+| `user/settings.enc.json` | the page (device sync) | `{ enc:1, kdf, iter, salt, iv, ct }` wrapping `{ v, at, dev, data: { key: value } }` |
 
 ### 4.3 Bot modules
 
@@ -376,6 +381,7 @@ flowchart TB
 
 - **Keys never touch the page or the repo.** The Bot settings tab seals them with GitHub's public key in the browser; only a workflow run can read them.
 - **Paper and live are separate credentials.** Live trading requires `mode: live` **and** live keys **and** the typed phrase; a paper key is rejected by the live endpoint.
+- **Device settings** are stored in the public repo only as an encrypted blob under the owner's passphrase; without the passphrase it is opaque.
 - **Private journal:** with `JOURNAL_KEY` set, the journal is AES-256-GCM encrypted and all numbers are scrubbed from Actions logs; the page decrypts locally with the passphrase.
 - **Supply chain:** the only third-party script is pinned by hash; Actions are pinned to commit SHAs; the bot has no npm dependencies.
 - **Broker API keys can trade but cannot withdraw funds** (verify in your own Alpaca settings).
@@ -414,6 +420,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 | "Settings save failed" | Token expired or scoped wrong; regenerate |
 | Prices stale | Actions → refresh-prices runs; press ↻ Refresh prices |
 | Page shows lock screen | Enter the journal passphrase (same as `JOURNAL_KEY`) |
+| Settings missing on a new device | Bot settings → connect GitHub, then enter the passphrase under *Sync across devices* |
 | Live quotes not moving | Finnhub key saved on this device? Market open? |
 
 ---
@@ -433,6 +440,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Device sync: settings, quote keys, watchlist, portfolios and calculator inputs roam between devices through an encrypted file in the repo; Rent vs EMI inputs now persist | §2.4, §4.1, §4.2, §6 |
 | 2026-10-21 | Documentation set created: ARCHITECTURE.md, docs/index.html, architecture.pptx; docs link on the page | all |
 | 2026-10-21 | Mobile layout: full-width tables, symbol-only column, compact header; arrows hidden on touch screens | §2.4 |
 | 2026-10-21 | Security round: separate live keys, encrypted journal + redacted logs, PDT guard, SRI-pinned scripts, pinned Actions, SECURITY.md, FAMILY.md | §6 |

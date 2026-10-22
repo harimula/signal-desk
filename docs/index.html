@@ -68,7 +68,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
-  <div class="stamp">System documentation · v1.0<br>Updated 2026-10-21</div>
+  <div class="stamp">System documentation · v1.1<br>Updated 2026-10-22</div>
   <ol>
     <li><a href="#what"><span class="k">01</span>What it is</a></li>
     <li><a href="#functional"><span class="k">02</span>Functional</a></li>
@@ -123,7 +123,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <tr><td><b>Day trading</b></td><td>Tight intraday plans</td><td>Buy at / Sell at / Stop at, position size for a chosen amount, copy-ready order ticket, 45-day simulated record, P/L drill-down per stock per day</td></tr>
 <tr><td><b>Option trading</b></td><td>CALL / PUT plans on the same setups</td><td>Strike and expiry suggestion, premium estimate, exit rules, daily and overall P/L</td></tr>
 <tr><td><b>Bot trades</b></td><td>Everything the bot did</td><td>Every trade with entry/exit times and P/L, daily and overall P/L, risk dashboard, performance vs research scorecard, live-stream indicator</td></tr>
-<tr><td><b>Bot settings</b></td><td>Control panel</td><td>Risk profile, capital split stocks vs options, strategy parameters, universe, news/event guards, paper/live mode, pause / resume / run now, broker keys sealed into GitHub secrets, journal passphrase</td></tr>
+<tr><td><b>Bot settings</b></td><td>Control panel</td><td>Device sync, risk profile, capital split stocks vs options, strategy parameters, universe, news/event guards, paper/live mode, pause / resume / run now, broker keys sealed into GitHub secrets, journal passphrase</td></tr>
 <tr><td><b>News</b></td><td>What moves markets</td><td>Market brief by category, upcoming Fed/CPI/jobs schedule, tagged headlines, news for the stocks in your portfolios</td></tr>
 <tr><td><b>Portfolio</b> (one tab each)</td><td>Holdings with live P/L</td><td>Add or rename portfolios, holdings table, per-stock news</td></tr>
 <tr><td><b>My tickers</b></td><td>User-added symbols</td><td>Fetched on demand, scored like the built-in universe</td></tr>
@@ -135,6 +135,8 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   B[On-demand refresh&lt;br/&gt;Yahoo Finance from the browser] --> P
   C[Streaming ticks&lt;br/&gt;Finnhub websocket, user's own key&lt;br/&gt;2.5 s smoothed] --> P</pre></figure>
 <p>Price updates morph the existing page instead of rebuilding it: rows never jump, scroll position never moves, and a change shows as a brief green or red flash, like a broker app.</p>
+<h3>Settings follow you (device sync)</h3>
+<p>Everything the owner sets up (Finnhub/FMP keys, proxy URL, watchlist, portfolios, custom tickers, day-trade and option amounts, theme, calculator inputs) is encrypted in the browser with the owner's passphrase (AES-256-GCM, PBKDF2 × 200 000) and saved to the owner's own repo at <code>user/settings.enc.json</code>. A new laptop or phone needs only the GitHub token and the passphrase, entered once in Bot settings; the rest arrives by itself. Pushes 2.5 s after a change, pulls on load and when the tab returns; last write wins. The token and passphrase never sync.</p>
 <h3>Responsive behaviour</h3>
 <ul>
   <li>Desktop: full tables with ‹ › arrows beside each panel to scroll wide tables.</li>
@@ -264,6 +266,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <tr><td><code>bot/config.json</code></td><td>Bot settings tab</td><td>see chapter 05</td></tr>
 <tr><td><code>bot/journal.json</code></td><td>bot</td><td>plaintext trades, or <code>{ enc:1, kdf, iter, salt, iv, ct, at, sig, paper, stream }</code></td></tr>
 <tr><td><code>bot/research.json</code></td><td>research workflow</td><td>per-strategy CAGR, Sharpe, max drawdown, out-of-sample split</td></tr>
+<tr><td><code>user/settings.enc.json</code></td><td>the page (device sync)</td><td>encrypted blob wrapping <code>{ v, at, dev, data }</code></td></tr>
 </table></div>
 <h3>Bot modules</h3>
 <div class="tw"><table>
@@ -374,6 +377,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <ul>
   <li><b>Keys never touch the page or the repo.</b> Bot settings seals them with GitHub's public key in the browser; only a workflow run can read them.</li>
   <li><b>Paper and live are separate credentials.</b> Live trading requires live mode, live keys and the typed phrase; a paper key is rejected by the live endpoint.</li>
+  <li><b>Device settings</b> live in the public repo only as an encrypted blob under the owner's passphrase.</li>
   <li><b>Private journal:</b> with <code>JOURNAL_KEY</code> set, the journal is AES-256-GCM encrypted and numbers are scrubbed from Actions logs; the page decrypts locally with the passphrase.</li>
   <li><b>Supply chain:</b> the only third-party script is pinned by hash; Actions are pinned to commit SHAs; the bot has no npm dependencies.</li>
   <li><b>Broker API keys can trade but cannot withdraw funds</b> (verify in your own Alpaca settings).</li>
@@ -409,6 +413,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <tr><td>Bot tab says "No bot activity"</td><td>Actions → paper-trade-bot → latest run log. Keys present? Workflow enabled?</td></tr>
 <tr><td>"Settings save failed"</td><td>Token expired or scoped wrong; regenerate it</td></tr>
 <tr><td>Prices stale</td><td>Actions → refresh-prices runs; press ↻ Refresh prices</td></tr>
+<tr><td>Settings missing on a new device</td><td>Bot settings → connect GitHub, then enter the passphrase under <i>Sync across devices</i></td></tr>
 <tr><td>Page shows a lock screen</td><td>Enter the journal passphrase (same as <code>JOURNAL_KEY</code>)</td></tr>
 <tr><td>Live quotes not moving</td><td>Finnhub key saved on this device? Market open?</td></tr>
 </table></div>
@@ -429,6 +434,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Device sync: settings, quote keys, watchlist, portfolios and calculator inputs roam between devices through an encrypted file in the repo; Rent vs EMI inputs persist</td><td>02, 04, 06</td></tr>
 <tr><td>2026-10-21</td><td>Documentation set created (this page, ARCHITECTURE.md, architecture.pptx); docs link on the site</td><td>all</td></tr>
 <tr><td>2026-10-21</td><td>Mobile layout: full-width tables, symbol-only column, compact header; arrows hidden on touch</td><td>02</td></tr>
 <tr><td>2026-10-21</td><td>Security round: separate live keys, encrypted journal, redacted logs, PDT guard, pinned scripts and Actions, SECURITY.md, FAMILY.md</td><td>06</td></tr>
