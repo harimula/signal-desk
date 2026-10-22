@@ -49,7 +49,7 @@ if (process.argv[2] === 'child') {
     : [m5('13:30', 500, 500.5, 499, 499.4, 2e6), m5('13:35', 499.4, 499.6, 498.8, 499, 2e6), m5('13:40', 499, 499.1, 498.2, 498.4, 2e6), m5('13:45', 498.4, 498.6, 498, 498.1, 2e6), m5('13:50', 498.1, 498.2, 497.2, 497.5, 2e6)];
   const BARS5 = { ORB: ORB5, BRK: BRK5, SPY: SPY5, ...(FAKE.bars5 || {}) };
   const LIVE = { ORB: 101.55, BRK: 99.45, SPY: (FAKE.spy || 'up') === 'up' ? 502.4 : 497.4, ...(FAKE.live || {}) };
-  const orders = [], unknown = [];
+  const orders = [], unknown = [], deletes = [], patches = [];
   const occ = (und, type, px) => und + '261113' + type[0].toUpperCase() + String(Math.round(px) * 1000).padStart(8, '0');
 
   const server = http.createServer((req, res) => {
@@ -64,6 +64,8 @@ if (process.argv[2] === 'child') {
       if (p === '/v2/assets') return send(Object.keys(BARS).map(s => ({ symbol: s, tradable: true, exchange: 'NASDAQ' })).concat([{ symbol: 'OTCX', tradable: true, exchange: 'OTC' }, { symbol: 'WARR.WS', tradable: true, exchange: 'NYSE' }]));
       if (p === '/v2/account/activities/FILL') return send([]);
       if (p === '/v2/account/portfolio/history') return send({ equity: [100000, 100000], timestamp: [1, 2], base_value: 100000 });
+      if (p.startsWith('/v2/orders/') && req.method === 'DELETE') { deletes.push(p.split('/').pop()); return send(null); }
+      if (p.startsWith('/v2/orders/') && req.method === 'PATCH') { patches.push({ id: p.split('/').pop(), ...JSON.parse(body || '{}') }); return send({ id: 'r' + patches.length, status: 'replaced' }); }
       if (p === '/v2/orders' && req.method === 'POST') { const o = JSON.parse(body); orders.push(o); return send({ id: 'o' + orders.length, status: 'accepted', ...o }); }
       if (p === '/v2/orders') return send(u.searchParams.get('status') === 'open' ? (FAKE.open || []) : (FAKE.hist || []));
       if (p === '/v2/stocks/bars' && u.searchParams.get('timeframe') === '5Min') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS5[s]) out[s] = BARS5[s]; return send({ bars: out }); }
@@ -89,7 +91,7 @@ if (process.argv[2] === 'child') {
   server.close();
   let watch = null, day = null; try { const jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); watch = jj.watch; day = jj.day; } catch (e) {}
   let acts = null; try { acts = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).acts.map(a => a.m); } catch (e) {}
-  console.log('RESULT ' + JSON.stringify({ acts, watch, day, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  console.log('RESULT ' + JSON.stringify({ acts, watch, day, deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
@@ -106,6 +108,7 @@ const check = (name, fn) => { try { fn(); console.log('  ✓', name); passed++; 
 
 const A = run({ stocks: true, options: true });                       // default: puts off
 check('default: stock buy on the dip stock', () => assert.ok(A.orders.some(o => o.symbol === 'DIP' && o.side === 'buy')));
+check('default: the swing buy carries a broker-side stop at the hard floor (OTO leg, good-till-cancelled)', () => { const o = A.orders.find(x => x.symbol === 'DIP' && x.side === 'buy'); assert.equal(o.order_class, 'oto'); assert.equal(o.time_in_force, 'gtc'); const fl = +o.stop_loss.stop_price; assert.ok(Math.abs(fl / +o.limit_price - 0.75) < 0.002, 'floor ' + fl + ' vs limit ' + o.limit_price); });
 check('default: CALL on the dip stock (sd-q-)', () => { assert.equal(A.options.length, 1); assert.match(A.options[0].symbol, /^DIP\d{6}C/); assert.equal(A.options[0].id, 'sd-q'); });
 check('alerts: a buy alert carries size and price', () => assert.ok((A.acts || []).some(m => /DIP RSI-2 dip buy .*\u00b7 \d+ shares @ \$[\d.]+ \(\$[\d,]+/.test(m)), JSON.stringify(A.acts)));
 check('default: no PUT is ever placed', () => assert.ok(!A.orders.some(o => /^POP\d{6}P/.test(o.symbol))));
@@ -157,6 +160,7 @@ check('day trading on, market up: ORB long → stock buy with stop/target in the
   const d = /^sd-d-ORB-(\d+)-(\d+)-(\d+)-20261023-600-/.exec(o.client_order_id); assert.ok(d, o.client_order_id);
   const entry = +d[1] / 100, stop = +d[2] / 100, tgt = +d[3] / 100; assert.ok(stop < entry && tgt > entry && Math.abs((tgt - entry) - 2 * (entry - stop)) < 0.03, 'levels ' + [entry, stop, tgt]);
 });
+check('day trading: the entry is a bracket order with the stop and the target at the broker', () => { const o = D1.orders.find(x => x.symbol === 'ORB' && x.side === 'buy'); assert.equal(o.order_class, 'bracket'); assert.ok(+o.stop_loss.stop_price < +o.limit_price && +o.take_profit.limit_price > +o.limit_price, JSON.stringify(o)); });
 check('day trading on, market up: the breakdown stock is left alone (no shorting stock, PUTs only when the market is down)', () => assert.ok(!D1.orders.some(o => /^BRK/.test(o.symbol))));
 check('day trading: sizing never risks more than 0.5% at the stop nor more than the stock money budget', () => { const o = D1.orders.find(x => x.symbol === 'ORB'); const d = /-(\d+)-(\d+)-(\d+)-20261023/.exec(o.client_order_id); const risk = (+d[1] - +d[2]) / 100 * +o.qty; assert.ok(risk <= 500 && risk > 50, 'risk $' + risk); assert.ok(+o.qty * +o.limit_price <= 10000, 'spent ' + (+o.qty * +o.limit_price)); });
 const D2 = run(DT, { spy: 'down' });
@@ -169,6 +173,13 @@ const D4 = run(DT, { time: '2026-10-23T19:52:00Z', positions: [openPos], hist: [
 check('day trading: an open day trade is sold flat at 3:50 PM whatever the price', () => assert.ok(D4.orders.some(o => o.symbol === 'ORB' && o.side === 'sell' && o.type === 'market'), JSON.stringify(D4.orders) + JSON.stringify(D4.acts)));
 const D5 = run(DT, { time: '2026-10-23T14:30:00Z', positions: [openPos], hist: [histBuy], live: { ORB: 100.3 } });
 check('day trading: the stop sells at market as soon as the price is through it', () => assert.ok(D5.orders.some(o => o.symbol === 'ORB' && o.side === 'sell' && o.type === 'market'), JSON.stringify(D5.orders)));
+const legs = [{ id: 'leg-stop', symbol: 'ORB', side: 'sell', type: 'stop', stop_price: '100.4', qty: '98', status: 'new', client_order_id: 'x1' }, { id: 'leg-tp', symbol: 'ORB', side: 'sell', type: 'limit', limit_price: '104', qty: '98', status: 'new', client_order_id: 'x2' }];
+const D5b = run(DT, { time: '2026-10-23T14:30:00Z', positions: [openPos], hist: [histBuy], open: legs, live: { ORB: 100.3 } });
+check('day trading: with the broker stop leg in place, the bot does NOT double-sell when the price is through the stop', () => assert.ok(!D5b.orders.some(o => o.symbol === 'ORB' && o.side === 'sell'), JSON.stringify(D5b.orders)));
+const D4b = run(DT, { time: '2026-10-23T19:52:00Z', positions: [openPos], hist: [histBuy], open: legs, live: { ORB: 102.2 } });
+check('day trading: flat at 3:50 cancels both broker legs, then sells at market', () => { assert.deepEqual([...D4b.deletes].sort(), ['leg-stop', 'leg-tp']); assert.ok(D4b.orders.some(o => o.symbol === 'ORB' && o.side === 'sell' && o.type === 'market')); });
+const D7 = run(DT, { time: '2026-10-23T14:30:00Z', positions: [openPos], hist: [histBuy], open: legs, live: { ORB: 102.9 } });   // +1R and more (entry 101.6, stop 100.4)
+check('day trading: at +1R the broker stop leg is moved to breakeven', () => { assert.ok(D7.patches.some(p => p.id === 'leg-stop' && Math.abs(+p.stop_price - 101.6) < 0.01), JSON.stringify(D7.patches) + JSON.stringify(D7.acts)); assert.ok(!D7.orders.some(o => o.symbol === 'ORB' && o.side === 'sell')); });
 const D6 = run(DT, { time: '2026-10-23T14:30:00Z', positions: [openPos], hist: [histBuy], live: { ORB: 102.2 } });
 check('day trading: while the trade is working, a take-profit order rests at the target and nothing is sold', () => { const s = D6.orders.filter(o => o.symbol === 'ORB' && o.side === 'sell'); assert.equal(s.length, 1, JSON.stringify(s)); assert.equal(s[0].type, 'limit'); assert.equal(+s[0].limit_price, 104); });
 

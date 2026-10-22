@@ -6,14 +6,14 @@
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { execSync } from 'node:child_process';
-import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact } from './bot.mjs';
+import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat } from './bot.mjs';
 import { summary } from './config.mjs';
 
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const LIFE = (+process.env.RUN_MINUTES || 350) * 60000, born = Date.now();
 const BEAT = +process.env.BEAT_MS || 2000, BEAT_CLOSE = 1000, MIN_GAP = 250, JOURNAL_EVERY = 120000, COMMIT_EVERY = 10 * 60000;
-let lastFull = 0, lastJournal = 0, lastCommit = Date.now(), errors = 0, lastCfg = 0, cfgSeen = JSON.stringify(CFG), cycling = false;
+let lastBeat = 0, lastFull = 0, lastJournal = 0, lastCommit = Date.now(), errors = 0, lastCfg = 0, cfgSeen = JSON.stringify(CFG), cycling = false;
 const queue = [];                                             // reasons to run a cycle immediately
 const wake = why => { if (!queue.includes(why)) queue.push(why); };
 
@@ -123,9 +123,11 @@ while (Date.now() - born < LIFE && !stopping) {
     lastFull = Date.now(); cycling = false;
   }
   if (Date.now() - lastCommit >= COMMIT_EVERY) { commit(); lastCommit = Date.now(); }
+  if (Date.now() - lastBeat >= 60000) { lastBeat = Date.now(); heartbeat(); }
   await sleep(queue.length ? 50 : 200);
 }
 try { await botCycle({ journal: true }); } catch (e) { console.log('final cycle error', e.message); }
+if (setNow() >= 16 * 60 && !stopping) await eodReport();   // the session that reaches the close sends the day's summary
 commit();
 try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); } catch (e) {}
 console.log('Session runner finished.');

@@ -108,7 +108,12 @@ async function dayTradeCycle(ctx) {
     const px = last[und] && last[und].p; if (!px) continue;
     const st = dayState[p.symbol] || (dayState[p.symbol] = { stop: d.stop });
     const pos = { side: d.side, entry: opt ? d.entry : (+p.avg_entry_price || d.entry), stop: st.stop, target: d.target, openedMins: d.openMins };
-    const tr = dayTrail({ pos, px }); if (tr) { st.stop = tr.stop; act(`${p.symbol} ${tr.why} (${tr.stop})`); pos.stop = tr.stop; }
+    const stopLeg = sells.find(o => /stop/.test(o.type));
+    const tr = dayTrail({ pos, px });
+    if (tr) {
+      st.stop = tr.stop; pos.stop = tr.stop; act(`${p.symbol} ${tr.why} (${tr.stop})`);
+      if (stopLeg && !DRY) await T('/v2/orders/' + stopLeg.id, { method: 'PATCH', body: JSON.stringify({ stop_price: String(tick(tr.stop)) }) }).then(() => act(`${p.symbol} broker stop moved to ${tick(tr.stop)}`)).catch(e => act(`${p.symbol} could not move the broker stop (${(e.message || e).slice(0, 60)}) \u2014 the bot watches it instead`));
+    }
     const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); delete dayState[p.symbol]; };
     const plpc = +p.unrealized_plpc * 100;
     if (opt) {
@@ -117,6 +122,7 @@ async function dayTradeCycle(ctx) {
       if (MINS >= 945) { await out(`${p.symbol} day trade — options flat by 3:45 PM`); continue; }
     }
     const x = dayExit({ pos, px, mins: MINS, cfg: dayC });
+    if (x && (x.kind === 'stop' || x.kind === 'target') && !opt && stopLeg) continue;      // the broker's own legs handle these; the bot only steps in where no leg exists
     if (x) { await out(`${p.symbol} day trade ${x.kind === 'flat' ? 'closed' : 'exit'} — ${x.why} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(1)}%)`); continue; }
     if (!opt && !sells.length) await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'limit', limit_price: String(tick(d.target)), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} day trade — take-profit order at ${d.target}`);
   }
@@ -147,12 +153,14 @@ async function dayTradeCycle(ctx) {
     if (sg.side === 'long' && CFG.dayStock) {
       const lim = r2d(sg.entry * 1.001), qty = dayShares({ equity, riskPct: CFG.dayRiskPct, entry: lim, stop: sg.stop, budget: slBudget('stock') });
       if (qty < 1) { act(`${sg.sym} day setup skipped — 1 share is above the risk or money budget`); continue; }
-      await send({ symbol: sg.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: encodeDayId('sd-d-', sg.sym, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label);
+      await send({ symbol: sg.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
+        order_class: 'bracket', take_profit: { limit_price: String(tick(sg.target)) }, stop_loss: { stop_price: String(tick(sg.stop)) },
+        client_order_id: encodeDayId('sd-d-', sg.sym, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label + ' · stop and target placed at the broker');
       placed++; continue;
     }
     if ((sg.side === 'long' && CFG.dayCalls) || (sg.side === 'short' && CFG.dayPuts)) {
       const kind = sg.side === 'long' ? 'call' : 'put', c = await pickDayContract(sg.sym, kind, sg.entry); if (!c) { act(`${sg.sym} ${kind.toUpperCase()}: no liquid contract 1–${CFG.dayOptDteMax} days out — skipped`); continue; }
-      const qty = Math.max(0, Math.min(Math.floor(slBudget(kind) / (c.lim * 100)), Math.floor(equity * CFG.dayRiskPct / 100 / (c.lim * 100 * CFG.dayOptStop / 100))));
+      const qty = Math.max(0, Math.min(Math.floor(slBudget(kind) / (c.lim * 100)), Math.floor(equity * CFG.dayRiskPct * (G.budget || 1) / 100 / (c.lim * 100 * CFG.dayOptStop / 100))));
       if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(c.lim * 100)}) is above the day-trade risk or money budget — skipped`); continue; }
       await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(c.lim), time_in_force: 'day', client_order_id: encodeDayId(kind === 'put' ? 'sd-dp-' : 'sd-dc-', c.symbol, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label.replace('day trade:', `day trade ${kind.toUpperCase()}:`));
       dayState[c.symbol] = { stop: sg.stop };
@@ -177,6 +185,25 @@ async function pickDayContract(und, kind, px) {
   return { symbol: c.symbol, lim: tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02)), exp: ex, strike: +c.strike_price };
 }
 export const scanInfo = () => scanCache.info;
+// End-of-day summary to the phone: what happened today, what is still open, where the account stands.
+export async function eodReport() {
+  try {
+    const acct = await T('/v2/account'), positions = await T('/v2/positions');
+    const f = await T('/v2/account/activities/FILL?date=' + ymdDash(Date.now()) + '&direction=asc&page_size=100').catch(() => []);
+    const closed = buildJournal(f || [], []).closed, pl = closed.reduce((t, c) => t + c.pl, 0), wins = closed.filter(c => c.pl > 0).length;
+    const eq = +acct.equity, day = +acct.last_equity > 0 ? (eq / +acct.last_equity - 1) * 100 : 0;
+    const open = positions.map(p => `${p.symbol} ${(+p.unrealized_plpc * 100) >= 0 ? '+' : ''}${(+p.unrealized_plpc * 100).toFixed(1)}%`).join(', ');
+    const detail = CFG.alertDetail === false ? '' : ` · account $${Math.round(eq).toLocaleString('en-US')} (${day >= 0 ? '+' : ''}${day.toFixed(2)}% today)`;
+    alerts.push(`\ud83d\udcc5 Day done: ${closed.length} round trip${closed.length === 1 ? '' : 's'}${closed.length ? ` (${wins} won) ${pl >= 0 ? '+' : '\u2212'}$${Math.abs(pl).toFixed(0)}` : ''}${detail} · open: ${open || 'nothing'}${lastDay && lastDay.tradesToday ? ` · ${lastDay.tradesToday} day trade${lastDay.tradesToday === 1 ? '' : 's'}` : ''}`);
+    await flushAlerts();
+  } catch (e) { console.log('eod report failed', e.message); }
+}
+// Optional external heartbeat (e.g. a healthchecks.io ping URL in HEARTBEAT_URL): a service that alerts when pings stop.
+export async function heartbeat() {
+  const u = process.env.HEARTBEAT_URL; if (!u) return;
+  try { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 5000); await fetch(u, { method: 'POST', body: 'ok', signal: ac.signal }); clearTimeout(t); } catch (e) {}
+}
+
 export function loadConfigFile() { try { return JSON.parse(fs.readFileSync('bot/config.json', 'utf8')); } catch (e) { return null; } }
 applyConfig(loadConfigFile());
 
@@ -364,6 +391,9 @@ async function run() {
   G.spyPct = spyPct; G.newsOk = newsCache.ok;
   const RG = regimeOf(spyPrev && spyPrev.closes);
   G.regime = RG.regime; G.longSize = 1;
+  // real money starts small: every budget and risk figure is scaled by the live size setting (paper is always 100%)
+  const liveScale = CFG.mode === 'live' ? CFG.liveSizePct / 100 : 1;
+  if (liveScale < 1) { G.budget = (G.budget || 1) * liveScale; G.reasons.push(`Live trading at ${CFG.liveSizePct}% of the paper size (ramp-up setting)`); }
   if (RG.regime === 'bear') G.reasons.push('Bear market regime (SPY below its 50- and 200-day averages) \u2014 fewer stocks qualify, since each must be above its own 200-day');   // reported, not enforced: the filter did not improve RSI-2 in the research
   // (neutral regime: no size change for RSI-2)
   // circuit breakers: losing streak today, weekly drawdown
@@ -432,9 +462,14 @@ async function run() {
     for (const { p, e } of swingStk) {
       if (sellsFor(p.symbol).some(o => o.type === 'market')) continue;
       const day8 = cid(e).split('-')[4], plpc = +p.unrealized_plpc * 100, px = lastU[p.symbol] && lastU[p.symbol].p;
-      const out = why => send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why);
+      const legs = sellsFor(p.symbol), brokerStop = legs.some(o => /stop/.test(o.type));
+      const out = async why => { for (const o of legs) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
       const livePl = px ? (px / +p.avg_entry_price - 1) * 100 : plpc;
-      if (HOLD_FLOOR > 0 && Math.min(plpc, livePl) <= -HOLD_FLOOR) { await out(`${p.symbol} down ${Math.min(plpc, livePl).toFixed(1)}% \u2014 hit the ${HOLD_FLOOR}% hard floor`); continue; }
+      if (HOLD_FLOOR > 0 && !brokerStop && Math.min(plpc, livePl) <= -HOLD_FLOOR) { await out(`${p.symbol} down ${Math.min(plpc, livePl).toFixed(1)}% \u2014 hit the ${HOLD_FLOOR}% hard floor`); continue; }
+      if (HOLD_FLOOR > 0 && !brokerStop && !legs.length && px && MINS < 955) {           // a position without a broker stop (older entry, or the leg was rejected): put one on
+        const fp = tick(+p.avg_entry_price * (1 - HOLD_FLOOR / 100));
+        await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'stop', stop_price: String(fp), time_in_force: 'gtc', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} \u2014 protective stop placed at the broker (${fp})`);
+      }
       if (MINS < 950 || !px) continue;                                  // exits happen in the last 10 minutes, like a closing order
       const h = held(p.symbol, day8); if (h === 0) continue;             // never sell on the day it was bought
       const x = rsi2Exit(completed(bars0, p.symbol).map(b => b.c), px, h, CFG.maxHold);
@@ -589,8 +624,11 @@ async function run() {
       if (qty < 1) { if (SL.stock.cap > 0) act(`${s.sym}: no room left in the stock money ceiling \u2014 skipped${capNote('stock')}`); continue; }
       const add = qty * s.riskUnit;
       if (heat + add > heatCap) { act(`${s.sym} skipped \u2014 total risk would exceed ${MAX_HEAT}% of the account`); continue; }
-      await send({ symbol: s.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
-        client_order_id: `sd-r-${s.sym}-${Math.round(s.riskUnit * 100)}-${TODAY}-${rid()}` }, `${s.sym} RSI-2 dip buy (RSI-2 ${s.r2}, above 200-day ${s.s200})`);
+      // the hard-floor stop travels with the order (OTO leg, good-till-cancelled) so the broker enforces it even if the bot is down
+      const floorPx = HOLD_FLOOR > 0 ? tick(lim * (1 - HOLD_FLOOR / 100)) : null;
+      await send({ symbol: s.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: floorPx ? 'gtc' : 'day',
+        ...(floorPx ? { order_class: 'oto', stop_loss: { stop_price: String(floorPx) } } : {}),
+        client_order_id: `sd-r-${s.sym}-${Math.round(s.riskUnit * 100)}-${TODAY}-${rid()}` }, `${s.sym} RSI-2 dip buy (RSI-2 ${s.r2}, above 200-day ${s.s200})${floorPx ? ' · broker stop at ' + floorPx : ''}`);
       SL.stock.used += qty * lim; heat += add; sectorCount[sectorOf(s.sym)] = (sectorCount[sectorOf(s.sym)] || 0) + 1; slots--;
     }
   }
@@ -656,10 +694,10 @@ async function writeJournal() {
     const subtle = (await import('node:crypto')).webcrypto.subtle, enc = new TextEncoder();
     const salt = (await import('node:crypto')).randomBytes(16), iv = (await import('node:crypto')).randomBytes(12);
     const km = await subtle.importKey('raw', enc.encode(process.env.JOURNAL_KEY), 'PBKDF2', false, ['deriveKey']);
-    const key = await subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+    const key = await subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
     const ct = Buffer.from(await subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(j))));
     const sigH = (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16);   // change-detector only, reveals nothing
-    fs.writeFileSync('bot/journal.json', JSON.stringify({ enc: 1, kdf: 'PBKDF2-SHA256', iter: 200000, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64'), at: j.at, sig: sigH, paper: j.paper, stream: j.stream }));
+    fs.writeFileSync('bot/journal.json', JSON.stringify({ enc: 1, kdf: 'PBKDF2-SHA256', iter: 600000, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64'), at: j.at, sig: sigH, paper: j.paper, stream: j.stream }));
     console.log('journal written (encrypted)');
   } else {
     fs.writeFileSync('bot/journal.json', JSON.stringify(j));

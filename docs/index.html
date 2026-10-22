@@ -386,7 +386,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   end
   Browser -->|libsodium sealed box, SRI-pinned| Secrets
   Secrets -.->|env vars, in memory only| Bot[Bot run]
-  Bot -->|AES-256-GCM, PBKDF2 200k| P4</pre></figure>
+  Bot -->|AES-256-GCM, PBKDF2 600k| P4</pre></figure>
 <ul>
   <li><b>Keys never touch the page or the repo.</b> Bot settings seals them with GitHub's public key in the browser; only a workflow run can read them.</li>
   <li><b>Paper and live are separate credentials.</b> Live trading requires live mode, live keys and the typed phrase; a paper key is rejected by the live endpoint.</li>
@@ -450,6 +450,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Real-money readiness: broker-side stops and targets on every stock entry, watchdog dead-man's switch, end-of-day summary, live size ramp (25%), go-live checklist in Bot settings §7, live-vs-research line, PBKDF2 600k</td><td>05, 06, 07, 08</td></tr>
 <tr><td>2026-10-22</td><td>Day-trading research on all available intraday history (5-minute bars since 2016) replaying the live rules over a parameter grid; monthly workflow; results card; apply-best button; opening-range setting</td><td>03, 05, 08</td></tr>
 <tr><td>2026-10-22</td><td>Day trading (experimental, off): 5-minute bars, SPY-VWAP market filter, opening-range breakout and VWAP-pullback setups, risk sizing, stop/target/breakeven/time-stop/flat exits, PUTs for shorts, optional CALLs, daily limits, PDT guard; settings §4b; watch card block; Performance split; <a href="daytrading-rules.html">rulebook</a></td><td>03, 05, 08</td></tr>
 <tr><td>2026-10-22</td><td>Phone header reworked into one control row; tiles wrap, no sideways scroll</td><td>02</td></tr>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-S6t5JguPejb9iZTDo5+7eDiDtgA+WQrah5wmwFctyfI=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-iefTp8QIT5pgeOU+TWumvP1DuRmkga7bfoBGeD95/Gc=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -897,7 +897,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792712187';
+const BUILD_V = '1792713057';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1075,9 +1075,9 @@ async function jEncrypt(obj, pass) {
   const enc = new TextEncoder(), s = x => btoa(String.fromCharCode(...x));
   const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
   const km = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
-  const key = await crypto.subtle.deriveKey({name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256'}, km, {name: 'AES-GCM', length: 256}, false, ['encrypt']);
+  const key = await crypto.subtle.deriveKey({name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256'}, km, {name: 'AES-GCM', length: 256}, false, ['encrypt']);   // OWASP 2023 guidance; old blobs carry their own count
   const ct = new Uint8Array(await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, enc.encode(JSON.stringify(obj))));
-  return {enc: 1, kdf: 'pbkdf2-sha256', iter: 200000, salt: s(salt), iv: s(iv), ct: s(ct)};
+  return {enc: 1, kdf: 'pbkdf2-sha256', iter: 600000, salt: s(salt), iv: s(iv), ct: s(ct)};
 }
 const syDev = () => { const u = navigator.userAgent; return /iPhone|iPad/.test(u) ? 'iPhone/iPad' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows PC' : 'device'; };
 function syncUi() { const el = document.getElementById('syStat'); if (el) el.textContent = syMsg; }
@@ -2285,6 +2285,7 @@ async function botLoad(force) {
   }
   botBusy = false;
   if (app === 'desk' && tab === 'BOT') renderAll(true);
+  else if (app === 'desk' && tab === 'SET' && !stBusy) renderAll();     // the readiness checklist in section 7 uses the journal too
 }
 setInterval(() => { if (app === 'desk' && tab === 'BOT' && !document.hidden) botLoad(); }, 60000);
 function botView() {
@@ -2403,6 +2404,7 @@ ${lvBox('Avg win / avg loss', `<span class="pos">${$$(S.aw)}</span> / <span clas
 ${lvBox('Worst drawdown', `<span class="neg">−$${fmt(dd, 2)}</span>`)}
 </div>
 <div class="tw" style="margin-top:10px"><table style="min-width:460px"><thead><tr><th class="lt">Type</th><th>Trades</th><th>Win rate</th><th>Expectancy</th><th>Profit factor</th><th>Net P/L</th></tr></thead><tbody>${[['Day trades (same day)', c => c.inT && c.outT && c.inT.slice(0, 10) === c.outT.slice(0, 10)], ['Swing (held overnight)', c => !(c.inT && c.outT && c.inT.slice(0, 10) === c.outT.slice(0, 10))]].map(([k, f]) => { const s = st(closed.filter(f)); return s.n ? `<tr><td class="lt"><b>${k}</b></td><td>${s.n}</td><td>${fmt(s.win, 0)}%</td><td class="${cls(s.exp)}">${$$(s.exp)}</td><td>${s.pf == null ? '–' : fmt(s.pf, 2)}</td><td class="${cls(s.net)}"><b>${$$(s.net)}</b></td></tr>` : ''; }).join('')}${kinds.map(k => { const s = st(closed.filter(c => c.kind === k)); return s.n ? `<tr><td class="lt"><b>${k}</b></td><td>${s.n}</td><td>${fmt(s.win, 0)}%</td><td class="${cls(s.exp)}">${$$(s.exp)}</td><td>${s.pf == null ? '–' : fmt(s.pf, 2)}</td><td class="${cls(s.net)}"><b>${$$(s.net)}</b></td></tr>` : ''; }).join('')}</tbody></table></div>
+${(() => { const r = btJ && (btJ.results || []).find(x => x.key === 'rsi2' && !x.regime); if (!r) return ''; const sw = closed.filter(c => !(c.inT && c.outT && c.inT.slice(0, 10) === c.outT.slice(0, 10)) && c.kind === 'Stock'); const n = sw.length, exp = n ? sw.reduce((t, c) => t + c.plPct, 0) / n : null, win = n ? sw.filter(c => c.pl > 0).length / n * 100 : null; const light = n < 30 ? ['mut', 'too early to judge (needs 30+)'] : exp >= r.t.exp / 2 ? ['pos', 'in line with the research'] : exp > 0 ? ['', 'weaker than the research — watch it'] : ['neg', 'losing — the edge may not be there live']; return `<div style="margin-top:8px;font-size:12.5px;padding-top:8px;border-top:1px dashed var(--line)"><b>Live vs research (RSI-2 stock trades):</b> research +${r.t.exp.toFixed(2)}% per trade, ${r.t.win.toFixed(0)}% wins over ${r.t.n.toLocaleString()} trades · live ${exp == null ? '–' : (exp >= 0 ? '+' : '') + exp.toFixed(2) + '% per trade, ' + win.toFixed(0) + '% wins over ' + n} <span class="${light[0]}">· ${light[1]}</span></div>`; })()}
 <div class="mut" style="font-size:11.5px;margin-top:6px">Expectancy above $0 and profit factor above 1.0, held over 50+ trades, is what a real edge looks like. Fewer trades than that is mostly noise.</div></div>`;
   }
   const RS = btJ && btJ.results, pick = (k, rg) => RS && RS.find(r => r.key === k && r.regime === rg);
@@ -2438,7 +2440,7 @@ const ST_PRESETS = {
   conservative: {riskPct: 0.25, optRiskPct: 0.25, maxHeat: 1.5, perSector: 1, maxPositions: 4, maxOptions: 1, dayCap: 2, weekCap: 4, streak: 2, stockPct: 8, optPct: 1},
   balanced: {riskPct: 0.5, optRiskPct: 0.5, maxHeat: 3, perSector: 2, maxPositions: 6, maxOptions: 4, dayCap: 3, weekCap: 6, streak: 3, stockPct: 10, optPct: 2},
   aggressive: {riskPct: 1, optRiskPct: 1, maxHeat: 6, perSector: 3, maxPositions: 8, maxOptions: 6, dayCap: 5, weekCap: 10, streak: 4, stockPct: 12, optPct: 3}};
-const ST_DEF = {mode: 'paper', preset: 'balanced', ...ST_PRESETS.balanced, stocks: true, options: true, puts: false, intraday: false, universe: 'list', scanSize: 200, scanMinPrice: 5, dayTrade: false, dayStock: true, dayCalls: false, dayPuts: true, dayOrMin: 15, dayMaxTrades: 3, dayStreak: 2, dayRiskPct: 0.5, dayTarget: 2, dayRvol: 1.2, dayTimeStop: 60, dayOptTp: 50, dayOptStop: 40, dayOptDteMax: 7, dayStart: '09:45', dayEnd: '15:30', stockUnit: 'pct', callUnit: 'pct', putUnit: 'pct', putPct: 1, stockUsd: 10000, callUsd: 2000, putUsd: 1000, stockCapPct: 0, callCapPct: 0, putCapPct: 0, stockCapUsd: 0, callCapUsd: 0, putCapUsd: 0, rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, staleMin: 45, newsGuard: true, eventGuard: true, alerts: true, alertDetail: true,
+const ST_DEF = {mode: 'paper', preset: 'balanced', ...ST_PRESETS.balanced, stocks: true, options: true, puts: false, intraday: false, universe: 'list', scanSize: 200, scanMinPrice: 5, dayTrade: false, dayStock: true, dayCalls: false, dayPuts: true, dayOrMin: 15, dayMaxTrades: 3, dayStreak: 2, dayRiskPct: 0.5, dayTarget: 2, dayRvol: 1.2, dayTimeStop: 60, dayOptTp: 50, dayOptStop: 40, dayOptDteMax: 7, dayStart: '09:45', dayEnd: '15:30', liveSizePct: 25, stockUnit: 'pct', callUnit: 'pct', putUnit: 'pct', putPct: 1, stockUsd: 10000, callUsd: 2000, putUsd: 1000, stockCapPct: 0, callCapPct: 0, putCapPct: 0, stockCapUsd: 0, callCapUsd: 0, putCapUsd: 0, rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, staleMin: 45, newsGuard: true, eventGuard: true, alerts: true, alertDetail: true,
   symbols: ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'META', 'GOOGL', 'TSLA', 'AMD', 'JPM', 'BAC', 'XOM', 'CVX', 'KO', 'PEP', 'WMT', 'HD', 'DIS', 'INTC', 'CSCO', 'QCOM', 'ORCL', 'CRM', 'ADBE', 'NFLX', 'UBER', 'PLTR', 'SHOP', 'COIN', 'SOFI', 'F']};
 const ST_FIELDS = {
   risk: [['riskPct', 'Risk per stock trade', '% of account lost if the trade hits its stop', 0.05, 3, 0.05], ['optRiskPct', 'Risk per option trade', '% of account lost at the option stop', 0.05, 3, 0.05], ['maxHeat', 'Total risk cap', '% of account at risk across everything open', 0.5, 15, 0.5], ['perSector', 'Max positions per sector', 'e.g. only 2 Tech names at once', 1, 10, 1], ['dayCap', 'Daily loss limit', '% down on the day → stop for the day', 0.5, 20, 0.5], ['weekCap', 'Weekly loss limit', '% down in a week → no new trades', 1, 30, 0.5], ['streak', 'Losing streak limit', 'losses in a row → done for the day', 1, 10, 1]],
@@ -2536,6 +2538,7 @@ function stRead() {
   for (const k of ['stockUnit', 'callUnit', 'putUnit']) { const u = v(k); if (u === 'pct' || u === 'usd') c[k] = u; }
   c.entryEnd = v('entryEnd') || '11:00';
   c.dayStart = v('dayStart') || '09:45'; c.dayEnd = v('dayEnd') || '15:30';
+  { const x = parseFloat(v('liveSizePct')); if (isFinite(x)) c.liveSizePct = x; }
   c.symbols = (v('symbols') || '').split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
   c.mode = document.getElementById('st-live') && document.getElementById('st-live').checked ? 'live' : 'paper';
   c.liveConfirm = c.mode === 'live' ? (v('liveConfirm') || '') : '';
@@ -2639,8 +2642,32 @@ document.addEventListener('change', e => { const el = e.target; if (el && el.id 
   const structural = el.type === 'checkbox' || el.type === 'radio' || el.tagName === 'SELECT' || c.preset !== was;
   if (structural) renderAll(); else { const d = document.getElementById('stDirty'); if (d) d.style.display = ''; }
 } });
+// Go-live readiness: the standard checklist, computed from real data (journal, research, secrets, settings).
+function readiness(c) {
+  const J = botJ, closed = (J && J.closed) || [], research = (btJ && (btJ.results || []).find(r => r.key === 'rsi2' && !r.regime)) || null;
+  const swing = closed.filter(x => !(x.inT && x.outT && x.inT.slice(0, 10) === x.outT.slice(0, 10)));
+  const first = closed.length ? closed.map(x => x.inT).sort()[0] : null;
+  const tradingDays = first ? Math.round((Date.now() - Date.parse(first)) / 864e5 * 5 / 7) : 0;
+  const expLive = swing.length ? swing.reduce((t, x) => t + x.plPct, 0) / swing.length : null, expRes = research ? research.t.exp : null;
+  const eq = J && J.account ? J.account.equity : 0;
+  let run = 0, pk = 0, dd = 0; [...closed].sort((a, b) => a.outT < b.outT ? -1 : 1).forEach(x => { run += x.pl; pk = Math.max(pk, run); dd = Math.max(dd, pk - run); });
+  const ddPct = eq ? dd / eq * 100 : 0;
+  const items = [
+    ['Paper track record of at least 60 trading days', tradingDays >= 60, first ? `${tradingDays} trading days so far (since ${first.slice(0, 10)})` : 'no closed trades yet'],
+    ['At least 50 closed trades', closed.length >= 50, `${closed.length} closed`],
+    ['Live expectancy positive and at least half of the research figure', expLive != null && swing.length >= 30 && expLive > 0 && (expRes == null || expLive >= expRes / 2), expLive == null ? 'needs 30+ swing trades' : `live ${expLive >= 0 ? '+' : ''}${expLive.toFixed(2)}% per trade on ${swing.length}${expRes != null ? ` · research +${expRes.toFixed(2)}%` : ''}`],
+    ['Worst drawdown so far under 10% of the account', closed.length >= 20 && ddPct < 10, closed.length ? `${ddPct.toFixed(1)}% worst run` : '–'],
+    ['Protective stops placed at the broker with every stock entry', true, 'built in (OTO / bracket legs)'],
+    ['Phone alerts and the watchdog switched on', !!has('NTFY_TOPIC') && !!c.alerts, has('NTFY_TOPIC') ? (c.alerts ? 'alert topic set, alerts on' : 'alerts are switched off in Guards') : 'no alert topic in section 1'],
+    ['Live keys saved', !!(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET')), has('ALPACA_LIVE_KEY') ? 'set' : 'not set'],
+    ['Start at a quarter of the size or less', (c.liveSizePct || 25) <= 25, `${c.liveSizePct || 25}% of paper size`],
+    ['Experimental sleeves small or off (PUTs, intraday, day trading)', !c.puts && !c.intraday && !c.dayTrade || ((c.putUnit === 'usd' && c.putCapUsd > 0) && !c.intraday && (!c.dayTrade || c.dayRiskPct <= 0.25)), [c.puts ? 'PUTs on' : null, c.intraday ? 'intraday on' : null, c.dayTrade ? 'day trading on' : null].filter(Boolean).join(', ') || 'all off'],
+  ];
+  return { items, ready: items.filter(i => i[1]).length, total: items.length };
+}
 function settingsView() {
-  if (!stCfg) stLoad();                                  // first visit only; Reload from GitHub re-reads on demand, and a save never gets clobbered by a background refresh
+  if (!stCfg) stLoad();
+  if (!botJ && !botBusy) botLoad();                     // journal + research feed the go-live checklist                                  // first visit only; Reload from GitHub re-reads on demand, and a save never gets clobbered by a background refresh
   const keep = {}; if (!stKeysClear) ['st-akey', 'st-asec', 'st-ntfy', 'st-jkey', 'st-lkey', 'st-lsec'].forEach(id => { const el = document.getElementById(id); if (el && el.value) keep[id] = el.value; }); stKeysClear = false;
   setTimeout(() => { for (const id in keep) { const el = document.getElementById(id); if (el && !el.value) el.value = keep[id]; } }, 0);
   const c = stCfg || {...ST_DEF}, connected = !!ghTok();
@@ -2686,7 +2713,11 @@ ${rdJ && rdJ.best ? `<div style="margin-top:10px;padding:8px 10px;border:1px sol
   const radio = (v, lab, help) => `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:8px"><input type="radio" name="st-universe" value="${v}" ${(c.universe || 'list') === v ? 'checked' : ''} style="width:18px;height:18px;flex:none"> <span><b>${lab}</b> <span class="mut" style="font-size:12px">${help}</span></span></label>`;
   const uni = sec('6. Stocks it watches', `${radio('scan', 'Scan the whole market', 'every morning the bot ranks every tradable US stock by trading volume and watches the most-traded ones — the list below is ignored')}${scanOn ? grid(ST_FIELDS.scan) : ''}${radio('list', 'Only my list', 'the tickers below, nothing else')}<textarea id="st-symbols" rows="3" ${inp.replace('style="', 'style="font-family:var(--font-mono),monospace;margin-top:8px;' + (scanOn ? 'opacity:.5;' : ''))}>${esc((c.symbols || []).join(', '))}</textarea><div class="mut" style="font-size:12px;margin-top:4px">${scanOn ? 'Market scan is on: the Bot trades tab shows the stocks it picked today. Sector limits only apply to stocks the bot knows the sector of.' : 'US tickers, comma-separated, up to 60. Liquid large-caps work best — the rules were tested on them.'}</div>`, 'the universe');
   const mode = sec('7. Mode', `<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px"><input id="st-live" type="checkbox" ${c.mode === 'live' ? 'checked' : ''} style="width:18px;height:18px"> <b>Trade real money</b> <span class="mut" style="font-size:12px">(uses the Live keys from section 1 \u2014 paper keys never trade real money)</span></label>
-${c.mode === 'live' || (document.getElementById('st-live') && document.getElementById('st-live').checked) ? `<div style="margin-top:8px;padding:10px 12px;border-radius:8px;background:var(--ts-bg);font-size:12.5px;line-height:1.5"><b class="neg">Real money.</b> Losses are real and yours. Only do this after months of paper results that match the research. Type <b>I UNDERSTAND THE RISK</b> to confirm:<input id="st-liveConfirm" ${inp} style="margin-top:6px" value="${esc(c.liveConfirm || '')}" autocomplete="off"></div>` : '<div class="mut" style="font-size:12px;margin-top:4px">Currently <b>paper</b> — fake money, real prices.</div>'}`, 'paper or real money');
+${c.mode === 'live' || (document.getElementById('st-live') && document.getElementById('st-live').checked) ? `<div style="margin-top:8px;padding:10px 12px;border-radius:8px;background:var(--ts-bg);font-size:12.5px;line-height:1.5"><b class="neg">Real money.</b> Losses are real and yours. Only do this after months of paper results that match the research. Type <b>I UNDERSTAND THE RISK</b> to confirm:<input id="st-liveConfirm" ${inp} style="margin-top:6px" value="${esc(c.liveConfirm || '')}" autocomplete="off"></div>` : '<div class="mut" style="font-size:12px;margin-top:4px">Currently <b>paper</b> — fake money, real prices.</div>'}
+${(() => { const R = readiness(c); return `<div style="margin-top:10px;font-size:12.5px"><b>Ready for real money? ${R.ready}/${R.total}</b> <span class="mut">— the standard checklist, from your actual data</span>
+<div style="margin-top:6px;display:grid;gap:4px">${R.items.map(([t, ok, d]) => `<div style="display:flex;gap:8px;align-items:flex-start"><span style="flex:none;width:18px;text-align:center;color:${ok ? 'var(--tb)' : 'var(--ts)'}">${ok ? '✓' : '✗'}</span><span><b style="font-weight:600">${esc(t)}</b> <span class="mut">· ${esc(d)}</span></span></div>`).join('')}</div>
+<div style="margin-top:8px"><label style="font-size:12.5px"><b>Live size</b> <input id="st-liveSizePct" type="number" min="5" max="100" step="5" value="${c.liveSizePct || 25}" style="width:70px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--text)"> <span class="mut">% of the paper size — start at 25, raise it month by month while results hold. Paper mode is always 100%.</span></label></div>
+<div class="mut" style="font-size:11.5px;margin-top:6px">The checklist does not block anything — the decision is yours — but switching to real money with red items is how most accounts get hurt. The full procedure is in <a href="docs/#operations" target="_blank" rel="noopener">Operations → Going live</a>.</div></div>`; })()}`, 'paper or real money');
   const ctl = sec('8. Controls', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${stStop ? '<button class="btn" type="button" data-st="resume">▶ Resume trading</button>' : '<button class="btn" type="button" data-st="pause" style="background:var(--ts)">⏸ Pause — sell everything now</button>'}<button class="btn ghost" type="button" data-st="run">Run the bot now</button><button class="btn ghost" type="button" data-st="research">Re-run 33-year research</button><button class="btn ghost" type="button" data-st="reload">Reload from GitHub</button></div>
 <div class="mut" style="font-size:12px;margin-top:8px">${stStop ? '<b class="neg">Paused</b> — the bot has sold everything and is idle.' : 'Running normally.'} Pause creates <code>bot/STOP</code> in the repo; the bot sees it within seconds.</div>`, 'pause, resume, run');
   const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span id="stDirty" class="pill r-Sell" style="font-size:11px;${stDirty ? '' : 'display:none'}">unsaved changes</span><span style="font-size:12.5px">${stBusy ? `<span id="stWait" class="mut" style="font-variant-numeric:tabular-nums;margin-right:6px">${Math.round((Date.now() - stT0) / 1000)} s</span>` : ''}${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span>${stBusy ? `<div id="stSteps" class="mut" style="flex-basis:100%;font-size:11.5px;font-family:var(--font-mono),monospace;white-space:pre-wrap">${stStepsHtml()}</div>` : ''}${stFailed && !stBusy ? `<div style="flex-basis:100%;font-size:12.5px;border-top:1px solid var(--line);padding-top:8px"><b>Can't reach GitHub from here?</b> Save another way: <button class="btn ghost" type="button" data-st="copyjson" style="font-size:12px">Copy settings</button> then <a href="https://github.com/${esc(ghRepo())}/edit/main/bot/config.json" target="_blank" rel="noopener">open bot/config.json on GitHub</a>, select all, paste, Commit changes.${stJsonBox ? `<textarea readonly rows="6" style="width:100%;margin-top:6px;font-family:var(--font-mono),monospace;font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text)">${esc(stJsonBox)}</textarea>` : ''}</div>` : ''}</div>`;

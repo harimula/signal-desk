@@ -16,7 +16,8 @@ export const DEFAULTS = {
   // Day trading (experimental, OFF): rules in docs/daytrading-rules.html. Longs as shares (or CALLs), shorts as PUTs.
   dayTrade: false, dayStock: true, dayCalls: false, dayPuts: true,
   dayOrMin: 15, dayMaxTrades: 3, dayStreak: 2, dayRiskPct: 0.5, dayTarget: 2, dayRvol: 1.2, dayTimeStop: 60, dayOptTp: 50, dayOptStop: 40, dayOptDteMax: 7,
-  dayStart: '09:45', dayEnd: '15:30',   // 'scan' = build the list daily from every tradable US stock, ranked by volume
+  dayStart: '09:45', dayEnd: '15:30',
+  liveSizePct: 25,                       // real-money mode starts at a quarter of the paper size; raise it month by month   // 'scan' = build the list daily from every tradable US stock, ranked by volume
   // Money per trade and a total ceiling for each sleeve (stock / CALL / PUT). Each sleeve uses either % of the account or
   // a fixed dollar amount, whichever its Unit says. A cap of 0 means no ceiling beyond the position-count limits.
   stockUnit: 'pct', callUnit: 'pct', putUnit: 'pct',
@@ -30,7 +31,7 @@ export const RANGES = {
   putPct: [0.5, 10], stockUsd: [0, 1e7], callUsd: [0, 1e7], putUsd: [0, 1e7],
   stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
   scanSize: [50, 400], scanMinPrice: [1, 500],
-  dayOrMin: [5, 60], dayMaxTrades: [1, 10], dayStreak: [1, 5], dayRiskPct: [0.1, 2], dayTarget: [1, 4], dayRvol: [0.5, 3], dayTimeStop: [15, 180], dayOptTp: [10, 200], dayOptStop: [20, 80], dayOptDteMax: [1, 14],
+  liveSizePct: [5, 100], dayOrMin: [5, 60], dayMaxTrades: [1, 10], dayStreak: [1, 5], dayRiskPct: [0.1, 2], dayTarget: [1, 4], dayRvol: [0.5, 3], dayTimeStop: [15, 180], dayOptTp: [10, 200], dayOptStop: [20, 80], dayOptDteMax: [1, 14],
   rsiThreshold: [2, 30], maxHold: [1, 30], optTakeProfit: [10, 300], optStop: [20, 90], holdFloor: [5, 60], staleMin: [5, 240],
 };
 const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
@@ -54,4 +55,4 @@ export function normalize(raw) {
 }
 export const entryEndMin = c => { const [h, m] = c.entryEnd.split(':').map(Number); return h * 60 + m; };
 const money = (c, unit, pct, usd) => c[unit] === 'usd' ? '$' + c[usd] : c[pct] + '%';
-export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;
+export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''}${c.mode === 'live' ? ' · LIVE at ' + c.liveSizePct + '% size' : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;

@@ -179,6 +179,7 @@ signal-desk/
 ├── news.mjs                news fetcher (RSS + Benzinga) used by refresh-prices
 ├── worker.js               optional Cloudflare worker: CORS proxy for Yahoo
 ├── bot/
+│   ├── watchdog.mjs        dead-man's switch: alerts when the bot has not checked in during market hours (watchdog.yml)
 │   ├── live.mjs            session runner: websockets, event loop, config hot-reload
 │   ├── bot.mjs             decision cycle: entries, exits, floors, breakers, journal
 │   ├── strategy.mjs        indicators and signals (SMA, RSI-2, exits)
@@ -199,6 +200,8 @@ signal-desk/
 │   ├── trade.yml           paper-trade-bot
 │   ├── research.yml        strategy-research
 │   ├── backtest.yml        backtest
+│   ├── research-day.yml    day-trading-research
+│   ├── watchdog.yml        watchdog (dead-man's switch)
 │   └── test.yml            bot-tests
 ├── MIGRATION.md            moving to another account or repo name
 ├── docs/
@@ -244,7 +247,9 @@ sequenceDiagram
 | `paper-trade-bot` | cron `*/5 13-21 * * 1-5`, manual; `concurrency` so only one session runs | `node bot/live.mjs` for up to 345 min; exits early if `bot/STOP` exists | 358 min timeout |
 | `strategy-research` | manual | `node bot/research.mjs` → `research.json`, `research_report.md` | 40 min |
 | `backtest` | manual | `node bot/backtest.mjs` → `backtest.json`, `backtest_report.md` | 30 min |
-| `bot-tests` | push / PR | `node bot/test.mjs` and `node bot/test-orders.mjs` | 8 min |
+| `day-trading-research` | manual, monthly (1st, 06:17 UTC) | `node bot/research-day.mjs` (Alpaca keys) → `research-day.json`, `research_day_report.md` | 120 min |
+| `watchdog` | cron `*/15 13-20 * * 1-5`, manual | `node bot/watchdog.mjs`: journal older than 25 min in market hours → phone alert (hourly while down; skips holidays via the broker clock) | 3 min |
+| `bot-tests` | push / PR | stamp check, ESLint, `node bot/test.mjs`, `node bot/test-orders.mjs`; `page` job: headless Chromium page tests | 10 / 12 min |
 
 All actions are pinned to exact commit SHAs (`actions/checkout@11bd719… # v4.2.2`,
 `actions/setup-node@49933ea… # v4.4.0`).
@@ -366,6 +371,7 @@ Measured in tests against a mock broker: fill → take-profit order 40 ms; crash
 | `universe`, `scanSize`, `scanMinPrice` | `list` = the `symbols` below; `scan` = each morning rank every tradable US stock (NYSE/NASDAQ/ARCA/AMEX, no OTC, plain tickers) by 20-day average dollar volume on the IEX feed and watch the top `scanSize` priced ≥ `scanMinPrice` (`bot/scan.mjs`); the scan is re-used for the day, falls back to yesterday's or the list on failure | list / 200 / $5 |
 | `dayTrade`, `dayStock`, `dayCalls`, `dayPuts` | day-trading master switch and instrument per side | false / true / false / true |
 | `dayOrMin`, `dayMaxTrades`, `dayStreak`, `dayRiskPct`, `dayTarget`, `dayRvol`, `dayTimeStop` | opening-range minutes, trades/day, loss streak, risk %, target in R, min relative volume, time stop minutes | 15 / 3 / 2 / 0.5 / 2 / 1.2 / 60 |
+| `liveSizePct` | real-money ramp: all budgets and risk figures × this % while `mode` is live (paper always 100 %) | 25 |
 | `dayOptTp`, `dayOptStop`, `dayOptDteMax`, `dayStart`, `dayEnd` | option take-profit %, option stop %, max days to expiry, entry window | 50 / 40 / 7 / 09:45 / 15:30 |
 | `alertDetail` | phone alerts include size and limit price on buys; entry price, exit price and open profit on sells | true |
 | `intraday` | experimental: stock/CALL/PUT signals use today's live price as a provisional close (`liveSignal` in strategy.mjs) instead of waiting for the close; yesterday's close still drives the 1 % bounce rule | **false** |
@@ -405,15 +411,16 @@ flowchart TB
   end
   Browser -->|libsodium sealed box, SRI-pinned| Secrets
   Secrets -.->|env vars, in memory only| Bot[Bot run]
-  Bot -->|AES-256-GCM, PBKDF2 200k| P4
+  Bot -->|AES-256-GCM, PBKDF2 600k| P4
 ```
 
 - **Keys never touch the page or the repo.** The Bot settings tab seals them with GitHub's public key in the browser; only a workflow run can read them.
 - **Paper and live are separate credentials.** Live trading requires `mode: live` **and** live keys **and** the typed phrase; a paper key is rejected by the live endpoint.
-- **Device settings and sign-in.** Holdings, watchlist, keys and the GitHub token are stored in the public repo as one AES-256-GCM blob (PBKDF2-SHA256, 200k rounds) under the owner's passphrase (≥ 12 characters); without the passphrase it is opaque. Because the blob is public on the site, **any device can sign in with the passphrase alone** (header → 👤 Sign in): it downloads the blob, decrypts it, installs the token and data, and syncs from then on. **Sign out and wipe** clears the browser. The passphrase is therefore the account password — the owner's checklist asks for a long, unique one.
+- **Device settings and sign-in.** Holdings, watchlist, keys and the GitHub token are stored in the public repo as one AES-256-GCM blob (PBKDF2-SHA256, 600,000 rounds — OWASP 2023; older blobs carry their own count and still open) under the owner's passphrase (≥ 12 characters); without the passphrase it is opaque. Because the blob is public on the site, **any device can sign in with the passphrase alone** (header → 👤 Sign in): it downloads the blob, decrypts it, installs the token and data, and syncs from then on. **Sign out and wipe** clears the browser. The passphrase is therefore the account password — the owner's checklist asks for a long, unique one.
 - **Private journal:** with `JOURNAL_KEY` set, the journal is AES-256-GCM encrypted and all numbers are scrubbed from Actions logs; the page decrypts locally with the passphrase.
 - **Content-Security-Policy:** the page ships a CSP `<meta>` that allows only its own two inline scripts (whitelisted by SHA-256 hash), the SRI-pinned libsodium and the optional Firebase SDK; connections are limited to GitHub, the price and news APIs, the price relays and Firebase. A script that is not the page's own — injected through a bug, a poisoned feed or an extension — is refused by the browser. `tools/stamp.mjs` rewrites the hashes (and the build number) after every edit; CI fails if they are stale. Feed links are only clickable when they are `http(s)`; `referrer` is `strict-origin-when-cross-origin`.
 - **Supply chain:** the only third-party scripts are pinned by hash; Actions are pinned to commit SHAs and watched by Dependabot; the bot has no npm dependencies.
+- **Protective orders live at the broker:** every swing stock buy is an OTO order with a good-till-cancelled stop leg at the hard floor; every day-trade stock buy is a bracket (stop + target). Rule-based exits cancel the legs first, then sell at market; the day-trade breakeven rule moves the stop leg with a replace call; the bot's own stop check runs only where no leg exists. A dead-man's switch (`watchdog.yml`, every 15 min in market hours) alerts the phone when the journal has not been updated for 25 minutes; the bot sends an end-of-day summary; an optional `HEARTBEAT_URL` is pinged every minute.
 - **Broker calls:** every request has a 15 s deadline; reads are retried with backoff on 429 / 5xx / network faults; order placement is never retried (the `client_order_id` and the in-process duplicate guard cover the slow-broker case). A cancelled run (SIGTERM) finishes its cycle, writes the journal and pushes it.
 - **Broker API keys can trade but cannot withdraw funds** (verify in your own Alpaca settings).
 - **Owner checklist** (`SECURITY.md`): 2FA everywhere (no SMS), sole collaborator on the repo, token scoped to one repo with ≤ 90-day expiry, random ntfy topic, never paste keys into chat or issues.
@@ -440,9 +447,34 @@ The bot starts on the next market morning. Nothing on the owner's devices needs 
 | Alerts on the phone | ntfy app subscribed to the `NTFY_TOPIC` |
 | Re-run research or backtest | Actions tab → workflow → Run workflow |
 
-### 7.3 Going live
-Run paper 2–3 months. Then add `ALPACA_LIVE_KEY` / `ALPACA_LIVE_SECRET`, switch Mode to Live in
-Bot settings, type the confirmation. Lower the risk profile first. Mind the pattern-day-trader rule (< $25 000), real slippage, overnight gaps and taxes (`SECURITY.md`).
+### 7.3 Going live — the procedure
+
+Going live is a decision the owner makes once the checklist in **Bot settings → 7. Mode** is green. The page computes it from real data; it never blocks the switch.
+
+**The checklist (what "ready" means)**
+
+| # | Check | Why | Where it is measured |
+|---|---|---|---|
+| 1 | ≥ 60 trading days of paper history | fills, slippage and the guards must be seen across different market weeks | first closed trade in the journal |
+| 2 | ≥ 50 closed trades | fewer is noise; the research edge is a +0.57 % average on thousands of trades | journal |
+| 3 | live expectancy > 0 and ≥ half the research figure (on 30+ swing trades) | the first sign an edge is not there live | Performance card → *Live vs research* |
+| 4 | worst drawdown so far < 10 % of the account | the bot's limits are working | journal |
+| 5 | protective stops at the broker | survives bot downtime: OTO stop leg on every swing buy (GTC, at the hard floor), bracket (stop + target) on every day-trade buy | code, since 2026-10-22 |
+| 6 | phone alerts on + watchdog | you hear about every trade and every silence (watchdog alerts after 25 min without a check-in in market hours) | `NTFY_TOPIC` secret, `watchdog.yml` |
+| 7 | live keys saved | `ALPACA_LIVE_KEY` / `ALPACA_LIVE_SECRET`, trading-only permissions | section 1 |
+| 8 | live size ≤ 25 % | the ramp-up: every budget and risk figure is multiplied by `liveSizePct` in live mode | section 7 |
+| 9 | experimental sleeves off or tiny | PUTs, intraday, day trading have no long record | sections 3, 4, 4b |
+
+**Steps**
+
+1. Checklist green (or you accept each red item knowingly).
+2. On the Alpaca live account: enable options only if you intend to trade them; set the account's own daily loss limit if offered; confirm the API key cannot withdraw funds.
+3. Bot settings: section 1 → paste the live keys → Save keys. Section 7 → Live size 25 → tick *Trade real money* → type `I UNDERSTAND THE RISK` → Save. The bot picks it up within a minute and reconnects to the live endpoint (`account switched to LIVE` in the log).
+4. First live day: watch the Bot trades tab and the phone. Every entry should show *broker stop at …* in its line. Press **Pause — sell everything now** at the first sign of anything you do not understand.
+5. Weekly: compare *Live vs research* and the drawdown. Monthly, if expectancy holds and the drawdown stays under 10 %, raise Live size: 25 → 50 → 75 → 100.
+6. Never run two bots on one account; never leave `bot/STOP` in place by accident (it sells everything each cycle).
+
+**What stays true even when "ready":** the research universe is today's survivors, so expect live results somewhat below the backtest; the IEX feed is a sample of the market (consider the consolidated feed for live money); GitHub Actions is a convenient runtime, not a guaranteed one — the broker-side stops exist because of that; taxes and wash sales are the owner's job (`SECURITY.md`).
 
 ### 7.4 Troubleshooting
 | Symptom | Check |
@@ -475,6 +507,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | **Real-money readiness:** protective stops/targets at the broker (OTO leg on swing buys, bracket on day-trade buys; exits cancel legs first; breakeven via replace; bot stop check only where no leg exists); `watchdog.yml` dead-man's switch + end-of-day summary alert + optional heartbeat ping; `liveSizePct` ramp (25 % default) applied to every budget in live mode; go-live checklist computed from real data in Bot settings §7 with a Live size field; *Live vs research* expectancy line on the Performance card; PBKDF2 raised to 600k rounds (bot journal, page sync); §7.3 rewritten as the go-live procedure | §5.2, §5.4, §6, §7.3, §8 |
 | 2026-10-22 | Day-trading **research** on all available intraday history (5-min IEX bars since 2016): `bot/research-day.mjs` replays the live rules, parameter grid, verdict; workflow `day-trading-research` (manual + monthly); results card on the Bot trades tab; “Put these values in the form” in §4b; `dayOrMin` setting; rulebook gains an Evidence section | §3.2, §5.4, §8 |
 | 2026-10-22 | **Day trading** (experimental, off): `bot/daytrade.mjs` + `dayTradeCycle` in bot.mjs (5-min bars, SPY-VWAP market filter, ORB and VWAP-pullback setups, risk sizing, stop/target/breakeven/time-stop/flat exits, PUTs for shorts, optional CALLs, daily limits, PDT guard); Bot settings §4b; watch card “⚡ Day trading” block (setups, open day trades); Performance split same-day vs swing; rulebook `docs/daytrading-rules.html`; 7 unit tests, 9 order checks | §3.2, §5.2, §5.4, §5.5, §8 |
 | 2026-10-22 | Phone header: one control row (Sign in · refresh mode · Refresh), clock and duplicate live dot hidden, tiles and key/value rows wrap so the page never scrolls sideways | §2.5 |
