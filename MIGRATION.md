@@ -4,7 +4,11 @@ The code no longer contains the repo name: the page works out which repo it belo
 address it is served from, and the bot from the repo it runs in. So a move is: copy the repo,
 switch the services back on, and re-point your devices. About 20 minutes, nothing is lost.
 
-Throughout: **OLD** = `harimula/signal-desk`, **NEW** = `<new-account>/<new-repo>`.
+Throughout: **OLD** = the repo you are leaving (currently `harimula/signal-desk`),
+**NEW** = `<new-account>/<new-repo>`.
+
+> Done once already: the project moved from `hmula-fbin/signal-desk` to `harimula/signal-desk`
+> on 2026-10-22.
 
 ---
 
@@ -13,7 +17,7 @@ Throughout: **OLD** = `harimula/signal-desk`, **NEW** = `<new-account>/<new-repo
 1. Sign up at github.com if the account does not exist yet, and turn on 2FA (passkey or
    authenticator app, not SMS) before anything else.
 2. github.com → **+** → **Import repository**.
-   - *The URL for your source repository:* `https://github.com/harimula/signal-desk`
+   - *The URL for your source repository:* the OLD repo's URL, e.g. `https://github.com/harimula/signal-desk`
    - *Owner:* the new account · *Repository name:* whatever you want (`signal-desk` is fine)
    - *Public* — GitHub Pages is free only on public repos.
 3. Click **Begin import** and wait about a minute.
