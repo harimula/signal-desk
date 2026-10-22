@@ -852,7 +852,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792681150';
+const BUILD_V = '1792681883';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1078,7 +1078,7 @@ function syncCard(sec, dot) {
 <div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
 <div style="margin-top:8px"><button class="btn ghost" type="button" data-sy="now">Sync now</button> <span class="mut" style="font-size:11.5px">${what} Encrypted with your passphrase before it leaves this device; the token and passphrase themselves never sync.</span></div>`
     : `<div style="margin-top:8px;font-size:13px">${dot(false)}Off on this ${syDev()}. ${tok ? '' : 'Connect GitHub above, then '}${pass ? '' : 'enter your passphrase'}${!tok && !pass ? '' : ''}${tok && !pass ? ' — the same one you chose for the journal' : ''}.</div>
-${tok && !pass ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px;max-width:520px"><input id="sy-pass" type="password" autocomplete="off" placeholder="passphrase" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" data-sy="pass">Turn on sync</button></div>` : ''}
+${tok && !pass ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px;max-width:520px"><input id="sy-pass" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="passphrase" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" data-sy="pass">Turn on sync</button></div>` : ''}
 <div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
 <div class="mut" style="font-size:11.5px;margin-top:6px">${what} Everything is encrypted with your passphrase before it is saved to your repo, so a new laptop or phone needs only the token and the passphrase — the rest arrives by itself.</div>`;
   return sec('Sync across devices', body, 'your settings follow you');
@@ -2107,8 +2107,14 @@ document.addEventListener('click', async e => {
   const b = e.target.closest && e.target.closest('#jkeyBtn'); if (!b) return;
   const pass = (document.getElementById('jkeyIn') || {}).value || '';
   if (!pass) return;
-  try { const d = await jDecrypt(botLocked, pass); save('sd-jkey', pass); botJ = {...botLocked, ...d}; botLocked = null; botErr = ''; renderAll(); }
-  catch (e2) { const m = document.getElementById('jkeyMsg'); if (m) m.textContent = 'That passphrase does not open this journal.'; }
+  // Phone keyboards often add a trailing space, change the first letter's case or use a different Unicode form,
+  // so try the exact text first and then those harmless variants.
+  const t = pass.trim(), nfc = t.normalize('NFC');
+  const tries = [...new Set([pass, t, nfc, nfc.charAt(0).toLowerCase() + nfc.slice(1), nfc.charAt(0).toUpperCase() + nfc.slice(1)])];
+  for (const cand of tries) {
+    try { const d = await jDecrypt(botLocked, cand); save('sd-jkey', cand); botJ = {...botLocked, ...d}; botLocked = null; botErr = ''; renderAll(); return; } catch (e2) {}
+  }
+  const m = document.getElementById('jkeyMsg'); if (m) m.textContent = 'That passphrase does not open this journal. Tick \u201cShow what I type\u201d to check for a wrong capital letter or a stray space.';
 });
 let botJ = null, botErr = '', botBusy = false, botAt = 0, btJ = null;
 async function botLoad(force) {
@@ -2131,7 +2137,7 @@ setInterval(() => { if (app === 'desk' && tab === 'BOT' && !document.hidden) bot
 function botView() {
   botLoad();
   const head = `<h2 style="margin-bottom:6px">Bot trades</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Every trade the bot took — RSI-2 dip buys in stocks (held 1–10 days) and CALLs on the same dips — with when it bought and when it sold. Paper money on Alpaca. Updates about every 30 minutes and after each trade. Not advice.</div>`;
-  if (!botJ && botLocked) return head + `<div class="card" style="padding:16px 18px;max-width:560px"><b style="font-size:14px">\ud83d\udd12 This bot journal is encrypted</b><div class="mut" style="font-size:12.5px;margin:6px 0 10px;line-height:1.5">Your trades, positions and account value are stored encrypted on the public site. Enter the journal passphrase you set in Bot settings to view them on this device. Last update ${botLocked.at ? new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(new Date(botLocked.at)) : '\u2013'} ET.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="jkeyIn" type="password" placeholder="Journal passphrase" autocomplete="off" style="flex:1;min-width:200px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" id="jkeyBtn">Unlock</button></div><div class="mut" id="jkeyMsg" style="font-size:12px;margin-top:6px"></div></div>`;
+  if (!botJ && botLocked) return head + `<div class="card" style="padding:16px 18px;max-width:560px"><b style="font-size:14px">\ud83d\udd12 This bot journal is encrypted</b><div class="mut" style="font-size:12.5px;margin:6px 0 10px;line-height:1.5">Your trades, positions and account value are stored encrypted on the public site. Enter the journal passphrase you set in Bot settings to view them on this device. Last update ${botLocked.at ? new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(new Date(botLocked.at)) : '\u2013'} ET.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="jkeyIn" type="password" placeholder="Journal passphrase" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" style="flex:1;min-width:200px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" id="jkeyBtn">Unlock</button></div><label class="mut" style="display:block;font-size:12px;margin-top:8px"><input type="checkbox" onchange="document.getElementById('jkeyIn').type=this.checked?'text':'password'"> Show what I type</label><div class="mut" id="jkeyMsg" style="font-size:12px;margin-top:6px"></div></div>`;
   if (!botJ) return head + `<div class="card empty" style="line-height:1.6">${botErr || 'Loading the bot journal…'}</div>`;
   const J = botJ, $$ = v => (v >= 0 ? '+' : '−') + '$' + fmt(Math.abs(v), 2);
   const cls = v => v >= 0 ? 'pos' : 'neg';
@@ -2377,7 +2383,7 @@ function settingsView() {
 <label style="font-size:12px"><b>Alpaca API key</b><input id="st-akey" ${inp} autocomplete="off" placeholder="${has('ALPACA_KEY') ? 'set — paste to replace' : 'paste key'}"></label>
 <label style="font-size:12px"><b>Alpaca secret</b><input id="st-asec" type="password" ${inp} autocomplete="off" placeholder="${has('ALPACA_SECRET') ? 'set — paste to replace' : 'paste secret'}"></label>
 <label style="font-size:12px"><b>Phone alert topic</b> <span class="mut">(ntfy app)</span><input id="st-ntfy" ${inp} autocomplete="off" placeholder="e.g. signaldesk-7f3k29q"></label>
-<label style="font-size:12px"><b>Journal passphrase</b> <span class="mut">(encrypts your trades on the public site)</span><input id="st-jkey" type="password" ${inp} autocomplete="off" placeholder="${has('JOURNAL_KEY') ? 'set \u2014 enter to replace' : 'choose a strong passphrase'}"></label>
+<label style="font-size:12px"><b>Journal passphrase</b> <span class="mut">(encrypts your trades on the public site)</span><input id="st-jkey" type="password" ${inp} autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="${has('JOURNAL_KEY') ? 'set \u2014 enter to replace' : 'choose a strong passphrase'}"></label>
 <label style="font-size:12px"><b>Live API key</b> <span class="mut">(real money only)</span><input id="st-lkey" ${inp} autocomplete="off" placeholder="${has('ALPACA_LIVE_KEY') ? 'set \u2014 paste to replace' : 'leave empty for paper'}"></label>
 <label style="font-size:12px"><b>Live secret</b> <span class="mut">(real money only)</span><input id="st-lsec" type="password" ${inp} autocomplete="off" placeholder="${has('ALPACA_LIVE_SECRET') ? 'set \u2014 paste to replace' : 'leave empty for paper'}"></label></div>
 <div style="margin-top:10px"><button class="btn" type="button" data-st="keys" ${stBusy ? 'disabled' : ''}>Save keys to GitHub secrets</button> <span class="mut" style="font-size:11.5px">Encrypted in your browser with GitHub’s public key, stored only as repository secrets. Nothing is kept on this page.</span></div>`
