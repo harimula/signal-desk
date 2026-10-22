@@ -852,7 +852,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792682345';
+const BUILD_V = '1792683428';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1990,7 +1990,7 @@ async function nwLoad(force) {
   for (const x of all.sort((a, b) => b.t - a.t)) {
     const key = (x.h || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').slice(0, 70);
     if (!x.h || seen.has(key) || Date.now() - x.t > 3 * 864e5) continue;
-    seen.add(key); out.push({...x, c: nwCats(x.h + ' ' + (x.sum || ''))});
+    seen.add(key); out.push({...x, c: nwCats(x.h)});
   }
   nwItems = out;
   evHeads = out.filter(x => x.c.some(c => ['war', 'policy', 'fed', 'macro', 'crisis'].includes(c)) && Date.now() - x.t < 6 * 3600e3).slice(0, 6);

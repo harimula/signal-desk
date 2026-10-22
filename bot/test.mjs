@@ -67,6 +67,14 @@ test('drops industry-report spam', () => { assert.equal(relevant({ h: 'Global Ma
 test('RSS parsing decodes entities and tags', () => { const x = parseRss('<item><title>A &amp; B</title><link>u</link><pubDate>Wed, 21 Oct 2026 18:30:00 GMT</pubDate><description>&lt;p&gt;Hi&lt;/p&gt;</description></item>', 'S'); assert.equal(x[0].h, 'A & B'); assert.equal(x[0].sum, 'Hi'); });
 
 console.log('News classifier');
+test('a war mentioned only in the summary does not pause the market', () => {
+  const g = guard({ events: [], todayDash: '2026-10-22', mins: 11 * 60 + 33, spyPct: -1.2,
+    headlines: [{ headline: 'EIF Guarantee Enables EUR 143 Million in ProCredit Lending to Ukrainian SMEs', summary: 'supports small businesses hurt by the war in Ukraine', created_at: new Date().toISOString() }] });
+  assert.equal(g.block, false);
+  const g2 = guard({ events: [], todayDash: '2026-10-22', mins: 11 * 60 + 33, spyPct: -1.2,
+    headlines: [{ headline: 'Russia launches missile attack on Kyiv', summary: '', created_at: new Date().toISOString() }] });
+  assert.equal(g2.block, true);
+});
 test('keywords match whole words only', () => {
   assert.equal(classify('Stewart Information Servs Q3 Earnings Call Transcript').length, 0);
   assert.equal(classify('Upgrade Legacy Applications, Software Delivery').length, 0);

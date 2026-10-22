@@ -58,7 +58,8 @@ export function guard({ events, todayDash, mins, headlines = [], spyPct = null, 
   }
   // live headlines: anything high-impact in the last 30 minutes pauses new entries
   for (const h of headlines) {
-    const cats = classify(h.headline + ' ' + (h.summary || ''));
+    // headline only: a story summary often mentions "the war" as background (a bank loan, a charity) without being war news
+    const cats = classify(h.headline);
     if (!cats.length) continue;
     const age = Math.max(0, (nowMs - Date.parse(h.created_at)) / 60000);
     if (age > 90) continue;
