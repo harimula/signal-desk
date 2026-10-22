@@ -852,7 +852,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792687430';
+const BUILD_V = '1792688038';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2212,6 +2212,19 @@ ${R ? `<div style="margin-top:8px;font-size:13px"><b>Money at risk to the stops:
 <div style="height:8px;background:var(--surface2);border-radius:4px;margin-top:4px;overflow:hidden"><div style="height:100%;width:${heatBar}%;background:${heatBar > 85 ? 'var(--ts)' : heatBar > 60 ? 'var(--s)' : 'var(--tb)'}"></div></div></div>
 ${Object.keys(R.sectors || {}).length ? `<div class="mut" style="font-size:12px;margin-top:6px">Positions by sector: ${Object.entries(R.sectors).map(([k, v]) => `${esc(k)} ${v}/${L.perSector}`).join(' · ')}</div>` : ''}` : ''}
 <div class="mut" style="font-size:12px;margin-top:8px;line-height:1.6">Rules in force: each stock trade risks at most <b>${L.riskPct}%</b> of the account at its stop (option trades ${L.optRiskPct}%) · total risk cap <b>${L.maxHeat}%</b> · max <b>${L.perSector}</b> positions per sector · stop for the day after <b>${L.streak}</b> losses in a row or <b>−${L.dayCap}%</b> on the day · no new trades after <b>−${L.weekCap}%</b> in a week · unfilled entries cancelled after 45 min.</div></div>` : '';
+  const W = J.watch;
+  const watchCard = W ? (() => {
+    const chips = (arr, cl) => arr.length ? arr.map(x => `<b class="${cl}" style="margin-right:8px">${esc(x)}</b>`).join('') : '<span class="mut">none right now</span>';
+    const line = (ico, lab, on, arr, cl, why) => `<div style="margin-top:7px;font-size:13px"><b>${ico} ${lab}:</b> ${on ? chips(arr, cl) : `<span class="mut">switched off in Bot settings</span>`} ${on ? `<span class="mut" style="font-size:11.5px">· ${why}</span>` : ''}</div>`;
+    const near = [...W.rows].sort((a, b) => a.up === b.up ? (a.up ? a.r2 - b.r2 : b.r2 - a.r2) : (a.up ? -1 : 1));
+    const rowsHtml = near.map(r => { const tag = W.buy.includes(r.s) || W.call.includes(r.s) ? '<span class="pos">dip — qualifies</span>' : W.put.includes(r.s) ? '<span class="neg">pop — qualifies</span>' : r.up ? (r.r2 < W.thr + 15 ? 'uptrend, close to a dip' : 'uptrend, waiting for a dip') : (r.r2 > 100 - W.thr - 15 ? 'downtrend, close to a pop' : 'downtrend, nothing to do'); return `<tr><td class="lt"><b>${esc(r.s)}</b></td><td>${fmt(r.px)}</td><td>${r.r2}</td><td>${r.up ? 'above' : 'below'} 200-day</td><td class="lt">${tag}</td></tr>`; }).join('');
+    return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">👀 What the bot is watching</b> <span class="mut" style="font-size:11.5px">· ${W.rows.length} of ${W.total} stocks have enough history · updated ${tET(W.at)} ET</span>
+${line('🟢', 'Trade (buy shares)', W.on.stocks, W.buy, 'pos', `uptrend stocks whose RSI-2 fell below ${W.thr}`)}
+${line('📈', 'CALL (bet on a bounce)', W.on.calls, W.call, 'pos', `same dips as the share buys, using options`)}
+${line('📉', 'PUT (bet on a fall)', W.on.puts, W.put, 'neg', `downtrend stocks whose RSI-2 jumped above ${100 - W.thr}`)}
+<div class="mut" style="font-size:12px;margin-top:8px">A stock on a list is a candidate, not a trade: it still has to pass the news guard, the entry window, the risk limits and the money limits.</div>
+<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px"><b>See every stock it watches</b></summary><div class="tw" style="margin-top:8px"><table style="min-width:460px"><thead><tr><th class="lt">Stock</th><th>Price</th><th>RSI-2</th><th>Trend</th><th class="lt">Status</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></details></div>`;
+  })() : '';
   const kinds = ['Stock', 'Call', 'Put'];
   const st = arr => { const w = arr.filter(c => c.pl > 0), l = arr.filter(c => c.pl <= 0), gw = w.reduce((t, c) => t + c.pl, 0), gl = -l.reduce((t, c) => t + c.pl, 0); return {n: arr.length, win: arr.length ? w.length / arr.length * 100 : 0, exp: arr.length ? (gw - gl) / arr.length : 0, pf: gl > 0 ? gw / gl : null, aw: w.length ? gw / w.length : 0, al: l.length ? -gl / l.length : 0, net: gw - gl}; };
   let perfCard = '';
@@ -2241,7 +2254,7 @@ ${lvBox('Worst drawdown', `<span class="neg">−$${fmt(dd, 2)}</span>`)}
 <tr><td class="lt">Trend breakout — out-of-sample</td>${bt(brk && brk.oos)}</tr>
 <tr><td class="lt">SPY buy &amp; hold — out-of-sample</td>${bt(btJ.spy && btJ.spy.oos)}</tr></tbody></table></div>
 <div class="mut" style="font-size:11.5px;margin-top:6px">RSI-2: ${live.t.n.toLocaleString()} trades · ${fmt(live.t.win, 1)}% won · ${sgn(live.t.exp)}% per trade after costs · profit factor ${fmt(live.t.pf, 2)}. Stocks only (no free historical option prices, so the CALL side is untested). Today’s big companies looking back flatters every result — treat it as an upper bound. Past results do not predict future results.</div></div>` : '';
-  return head + statusLine + evCard() + envCard + boxes + riskCard + perfCard + btCard + openTbl +
+  return head + statusLine + evCard() + envCard + boxes + watchCard + riskCard + perfCard + btCard + openTbl +
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? '' : ' · paper account (fake money)'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }

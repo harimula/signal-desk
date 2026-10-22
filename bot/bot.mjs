@@ -12,7 +12,7 @@
 //    all at -50%, all by 3:40pm the next session, never into expiry day.
 // Safety: paper endpoint by default; bot/STOP file flattens and halts; daily loss cap.
 import fs from 'node:fs';
-import { signalAt, signalShortAt, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
+import { sma, rsi2, signalAt, signalShortAt, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
 import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
@@ -76,7 +76,7 @@ const act = m => {                                          // same message with
   if (seen.has(k) && Date.now() - seen.get(k) < 10 * 60000) return;
   seen.set(k, Date.now()); console.log(redact(m)); acts.push({ t: new Date().toISOString(), m });
 };
-let lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
+let lastWatch = null, lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
 let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [] }, lastRisk = null;
 const alerts = [];
 
@@ -369,6 +369,17 @@ async function run() {
     const s = rsi2ShortSignal(B, B.map(b => b.c), B.length - 1, CFG.rsiThreshold); if (s) shortSigs.push({ sym, ...s, px: last[sym] && last[sym].p });
   }
   shortSigs.sort((a, b) => b.r2 - a.r2);                                 // most stretched pop first
+  {  // what the bot is looking at, for the Bot trades tab: every watched stock with its RSI-2 and trend, plus who qualifies for each kind of trade
+    const rows = [];
+    for (const sym of UNIVERSE) {
+      const B = completed(bars, sym); if (B.length < 205) continue;
+      const cl = B.map(b => b.c), r = rsi2(cl), m = sma(cl, 200);
+      if (r == null || m == null) continue;
+      rows.push({ s: sym, px: r2d((last[sym] && last[sym].p) || cl[cl.length - 1]), r2: Math.round(r * 10) / 10, up: cl[cl.length - 1] > m });
+    }
+    lastWatch = { at: new Date().toISOString(), thr: CFG.rsiThreshold, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+      buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
+  }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
   lastSignals = { longs: [], shorts: [], rsi2: sigs, at: Date.now() };
   if (sigs.length) act(`RSI-2 dips today: ${sigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
@@ -447,7 +458,7 @@ async function writeJournal() {
   if (prev.sig === sigCmp && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: /paper/.test(BASE),
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
-    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, risk: lastRisk, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
+    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, risk: lastRisk, watch: lastWatch || prev.watch || null, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {
     // Public site, private data: AES-256-GCM with a key derived from your passphrase (PBKDF2-SHA256, 200k rounds).
     // Only the timestamp, paper/live flag and stream health stay readable; the page decrypts the rest with the same passphrase.

@@ -71,7 +71,8 @@ if (process.argv[2] === 'child') {
   bot.applyConfig({ symbols: ['DIP', 'POP'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
   await bot.botCycle();
   server.close();
-  console.log('RESULT ' + JSON.stringify({ orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  let watch = null; try { watch = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).watch; } catch (e) {}
+  console.log('RESULT ' + JSON.stringify({ watch, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
@@ -107,6 +108,14 @@ const E = run({ stocks: true, options: true, puts: true, stockUnit: 'usd', stock
 check('dollars: stock buy never exceeds the fixed dollar amount', () => { const o = E.orders.find(x => x.symbol === 'DIP'); assert.ok(o); assert.ok(+o.qty * +o.limit_price <= 1000, o.qty + ' x ' + o.limit_price); });
 check('dollars: CALL skipped when one contract costs more than the call amount', () => assert.ok(!E.orders.some(o => /^DIP\d{6}C/.test(o.symbol))));
 check('dollars: PUT placed when one contract fits the put amount', () => assert.ok(E.orders.some(o => /^POP\d{6}P/.test(o.symbol))));
+
+check('watch list: published with RSI-2 for each stock, and who qualifies for BUY / CALL / PUT', () => {
+  assert.ok(B.watch, 'no watch data in the journal');
+  assert.deepEqual(B.watch.buy, ['DIP']); assert.deepEqual(B.watch.call, ['DIP']); assert.deepEqual(B.watch.put, ['POP']);
+  const dip = B.watch.rows.find(r => r.s === 'DIP'), pop = B.watch.rows.find(r => r.s === 'POP');
+  assert.ok(dip.up && dip.r2 < 10); assert.ok(!pop.up && pop.r2 > 90);
+  assert.deepEqual(A.watch.put, []);
+});
 
 const F = run({ stocks: true, options: true, puts: true, stockUnit: 'usd', stockUsd: 5000, stockCapUsd: 50, callCapPct: 0.1, putUnit: 'usd', putUsd: 5000, putCapUsd: 100 });
 check('ceilings: nothing bought when each sleeve ceiling is below one unit', () => assert.equal(F.orders.length, 0, JSON.stringify(F.orders.map(o => o.symbol))));
