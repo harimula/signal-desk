@@ -852,7 +852,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792681883';
+const BUILD_V = '1792682215';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1069,6 +1069,15 @@ document.addEventListener('click', e => {
   const a = b.dataset.sy;
   if (a === 'now') { syMsg = 'Syncing…'; syncUi(); syncPull(true).then(() => { if (!syBusy && syncOn()) syncPush(); }); }
   if (a === 'pass') { const v = (document.getElementById('sy-pass') || {}).value || ''; if (!v) return; save('sd-jkey', v); syMsg = 'Passphrase saved on this device. Syncing…'; renderAll(); }
+  if (a === 'reveal') {
+    const box = document.getElementById('syRev'); if (!box) return;
+    if (box.dataset.open === '1') { box.dataset.open = '0'; box.textContent = ''; return; }
+    box.dataset.open = '1'; box.innerHTML = '';
+    const code = document.createElement('code'); code.textContent = load('sd-jkey', ''); code.style.cssText = 'display:block;margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:6px;word-break:break-all;user-select:all';
+    const cp = document.createElement('button'); cp.className = 'btn ghost'; cp.type = 'button'; cp.textContent = 'Copy'; cp.dataset.sy = 'copy';
+    box.append(code, cp);
+  }
+  if (a === 'copy') { const t = load('sd-jkey', ''); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = 'Copied'; }, () => { b.textContent = 'Select the text and copy it'; }); }
 });
 function syncCard(sec, dot) {
   const on = syncOn(), tok = !!ghTok(), pass = !!load('sd-jkey', ''), at = +(localStorage.getItem('sd-syncat') || 0);
@@ -1081,7 +1090,8 @@ function syncCard(sec, dot) {
 ${tok && !pass ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px;max-width:520px"><input id="sy-pass" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="passphrase" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" data-sy="pass">Turn on sync</button></div>` : ''}
 <div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
 <div class="mut" style="font-size:11.5px;margin-top:6px">${what} Everything is encrypted with your passphrase before it is saved to your repo, so a new laptop or phone needs only the token and the passphrase — the rest arrives by itself.</div>`;
-  return sec('Sync across devices', body, 'your settings follow you');
+  const rev = pass ? `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><button class="btn ghost" type="button" data-sy="reveal">Show / copy the passphrase saved on this device</button><div class="mut" style="font-size:11.5px;margin-top:6px">Use this on a device where the passphrase already works, then paste it on your phone instead of typing it. It is only shown on screen, never sent anywhere. Hide it again when you are done.</div><div id="syRev"></div></div>` : '';
+  return sec('Sync across devices', body + rev, 'your settings follow you');
 }
 
 $('#acctBtn').addEventListener('click', () => {
