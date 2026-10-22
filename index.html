@@ -2218,7 +2218,7 @@ let stCfg = null, stSha = null, stMsg = '', stBusy = false, stSecrets = null, st
 // Which repo this copy belongs to: taken from the GitHub Pages address it is served from,
 // so moving the project to another account or repo name needs no code change.
 const repoFromUrl = () => { try { const h = location.hostname, m = /^([a-z0-9-]+)\.github\.io$/i.exec(h); if (!m) return ''; const seg = location.pathname.split('/').filter(Boolean)[0]; return seg ? m[1] + '/' + seg : ''; } catch (e) { return ''; } };
-const FALLBACK_REPO = 'hmula-fbin/signal-desk';   // only used when the page is NOT served from its own GitHub Pages site (e.g. the claude.ai copy)
+const FALLBACK_REPO = 'harimula/signal-desk';   // only used when the page is NOT served from its own GitHub Pages site (e.g. the claude.ai copy)
 const DEFAULT_REPO = repoFromUrl() || FALLBACK_REPO;
 const ghTok = () => load('sd-ghtok', ''), ghRepo = () => load('sd-ghrepo', '') || DEFAULT_REPO;
 async function ghApi(path, opt = {}) {

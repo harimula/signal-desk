@@ -30,7 +30,7 @@ no orders; the bot places orders only on a brokerage account whose keys its owne
 
 | Part | What it is | Where it runs | Cost |
 |---|---|---|---|
-| **Website** | One static HTML page with three apps: *Signal Desk* (stocks), *Retirement* calculator, *Rent vs EMI* calculator | GitHub Pages (`https://hmula-fbin.github.io/signal-desk/`) and a private copy on claude.ai | $0 |
+| **Website** | One static HTML page with three apps: *Signal Desk* (stocks), *Retirement* calculator, *Rent vs EMI* calculator | GitHub Pages (`https://harimula.github.io/signal-desk/`) and a private copy on claude.ai | $0 |
 | **Data refresh** | Fetches prices and news every 10–15 minutes during market hours, commits them to the repo | GitHub Actions | $0 |
 | **Trading bot** | Event-driven rules engine trading an Alpaca account (paper by default) during US market hours | GitHub Actions | $0 |
 | **Research** | 33-year backtest harness that chose the strategy, re-runnable on demand | GitHub Actions | $0 |

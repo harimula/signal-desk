@@ -33,7 +33,7 @@ This is what guarantees users cannot read each other's data.
 5. Project overview → gear icon → **Project settings** → Your apps → **</>** (Web) → nickname `signal-desk` → Register. Copy the `firebaseConfig` object it shows.
 
 ## 6. Allow your domain
-6. **Authentication → Settings → Authorized domains** → Add domain → `hmula-fbin.github.io`.
+6. **Authentication → Settings → Authorized domains** → Add domain → `harimula.github.io`.
 
 ## 7. Wire the config into the site
 Open `index.html` and replace `const FB_CONFIG = null;` with your config, e.g.:
