@@ -17,7 +17,7 @@
  "options": true,
  "rsiThreshold": 10,
  "maxHold": 10,
- "entryEnd": "15:00",
+ "entryEnd": "15:30",
  "optTakeProfit": 50,
  "optStop": 50,
  "holdFloor": 25,
@@ -57,7 +57,7 @@
   "SOFI",
   "F"
  ],
- "updatedAt": "2026-10-22T17:54:54.728Z",
+ "updatedAt": "2026-10-22T18:00:50.871Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "puts": true,
@@ -67,5 +67,6 @@
  "callUnit": "pct",
  "putUnit": "pct",
  "scanSize": 50,
- "scanMinPrice": 50
+ "scanMinPrice": 50,
+ "putPct": 2
 }
