@@ -205,6 +205,24 @@ ul.why{margin:6px 0 0;padding-left:18px}
   body{padding:0 10px 44px}h1{font-size:17px}.mpx{font-size:20px}
   dialog{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;border-radius:0;margin:0;border:0}
 }
+@media (max-width:560px){
+  .twwrap{padding:0}
+  .twbtn{width:26px;height:46px;font-size:18px;opacity:.9;border-radius:7px}
+  .twl{left:0}.twr{right:0}
+  table{font-size:12px}th,td{padding:7px 7px}
+  #tb td:nth-child(1),#tb th:nth-child(1){padding-left:4px;padding-right:2px}
+  #tb td:nth-child(2),#tb th:nth-child(2){left:30px}
+  .nm2{display:none}
+  .srcnote{display:none}
+  #golive{display:none!important}
+  header{padding:8px 0 0;gap:4px 10px}
+  .hright{gap:8px}#rfBtn{padding:7px 11px;min-height:36px}#arSel{min-height:36px!important;padding:4px 6px!important}
+  .subhead{margin:0 0 2px}
+  #pxBox{margin:0 0 2px}
+  .banner{padding:8px 11px;margin:8px 0;font-size:12px}
+  .card{border-radius:8px}
+  .dh{padding:12px 12px 8px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
@@ -632,7 +650,7 @@ function chrome() {
   if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && tab !== 'SET' && !pfOf(tab)) {
     if (f.level === 'stale') h += `<div class="banner warn"><b>Stale data. Entry zones are for reference only.</b> This snapshot is ${ageText(f.age)} old and prices have likely moved. Press ↻ Refresh prices.</div>`;
     else if (f.level === 'aging') h += `<div class="banner warn"><b>Snapshot is ageing.</b> Pulled ${ageText(f.age)} ago. Press ↻ Refresh prices.</div>`;
-    h += `<div class="banner info">${esc(m.stamp.note)} Prices update when you press ↻ Refresh prices or on the auto-refresh schedule you pick (Yahoo data can lag ~15 minutes). Signals are rule-based readouts, not advice. The page places no orders.</div>`;
+    h += `<div class="banner info srcnote">${esc(m.stamp.note)} Prices update when you press ↻ Refresh prices or on the auto-refresh schedule you pick (Yahoo data can lag ~15 minutes). Signals are rule-based readouts, not advice. The page places no orders.</div>`;
   }
   $('#banners').innerHTML = h;
   $('#maHelp').textContent = `Adds a ${maN}-day ${maT} column to every table and to the stock chart. It uses daily closes (last ${DATA.maxN} available) and compares them with the latest price.`;
@@ -825,7 +843,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792630813';
+const BUILD_V = '1792633568';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1139,7 +1157,7 @@ ${pl != null ? `<div class="kv"><span>Cost basis</span><b>${c}${fmt(cost, 0)}</b
   const trs = list.map(r => {
     const h = r.h, s = r.s, c = s ? (s.cur || '$') : (h.market === 'IN' ? '₹' : '$');
     if (!s) return `<tr><td><b>${esc(showSym(h.sym))}</b> <span class="tag">waiting for data</span></td><td>–</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
-    return `<tr data-s="${esc(s.sym)}" data-m="${s.market}"><td><b>${esc(showSym(s.sym))}</b> <span class="mut">${esc((s.name || '').slice(0, 18))}</span></td><td>${pill(s.rating)}</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>${c}${fmt(s.px)}</td><td>${c}${fmt(r.val, 0)}</td><td class="${s.chg >= 0 ? 'pos' : 'neg'}">${sgn(s.chg)}%</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null ? '–' : sgn(r.pl)}</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null || !r.cost ? '–' : sgn(r.pl / r.cost * 100) + '%'}</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
+    return `<tr data-s="${esc(s.sym)}" data-m="${s.market}"><td><b>${esc(showSym(s.sym))}</b> <span class="mut nm2">${esc((s.name || '').slice(0, 18))}</span></td><td>${pill(s.rating)}</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>${c}${fmt(s.px)}</td><td>${c}${fmt(r.val, 0)}</td><td class="${s.chg >= 0 ? 'pos' : 'neg'}">${sgn(s.chg)}%</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null ? '–' : sgn(r.pl)}</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null || !r.cost ? '–' : sgn(r.pl / r.cost * 100) + '%'}</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
   }).join('');
   const tbl = list.length ? `<div class="tw card" style="margin-top:12px"><table id="pftab"><thead><tr><th>Holding</th><th>Rating</th><th>Shares</th><th>Avg cost</th><th>Price</th><th>Value</th><th>Day %</th><th>P&amp;L</th><th>P&amp;L %</th><th></th></tr></thead><tbody>${trs}</tbody></table></div>` : '<div class="card empty">No holdings yet. Add your first one above: ticker, how many shares, and what you paid on average.</div>';
   return `<h2>${esc(pfName(pfid))}</h2>${note}${form}${tiles ? `<div class="grid regime" style="margin-top:4px">${tiles}</div>` : ''}${tbl}
@@ -1733,7 +1751,7 @@ function board(stocks, keepOrder) {
     const rcC = rc ? `<span class="${rc.good === null ? (rc.chg >= 0 ? 'pos' : 'neg') : rc.good ? 'pos' : 'neg'}">${sgn(rc.chg)}%</span>${rc.good === false ? ' <span class="tag">against</span>' : ''}` : '–';
     const x = a ? `<span class="${a.above ? 'pos' : 'neg'}">${a.above ? '▲' : '▼'} ${sgn(a.diff)}%</span>${a.crossed ? `<span class="tag">${a.crossed === 'up' ? 'crossed up' : 'crossed down'}</span>` : ''}` : '–';
     return `<tr data-s="${esc(s.sym)}" data-m="${s.market}"${s.custom ? ' data-c="1"' : ''}><td><button class="star ${wl.has(s.sym) ? 'on' : ''}" data-star="${esc(s.sym)}" aria-label="Watch ${esc(s.sym)}">${wl.has(s.sym) ? '★' : '☆'}</button></td>
-<td><b>${esc(showSym(s.sym))}</b> <span class="mut">${esc((s.name || '').slice(0, 26))}</span></td><td>${pill(s.rating)}</td><td class="${s.score >= 0 ? 'pos' : 'neg'}">${s.score}</td>
+<td><b>${esc(showSym(s.sym))}</b> <span class="mut nm2">${esc((s.name || '').slice(0, 26))}</span></td><td>${pill(s.rating)}</td><td class="${s.score >= 0 ? 'pos' : 'neg'}">${s.score}</td>
 ${(si => si.has ? `<td>${c}${fmt(s.lastClose)}<div class="${(si.extPct || 0) >= 0 ? 'pos' : 'neg'}" style="font-size:10.5px;white-space:nowrap;line-height:1.3">${si.phase === 'after' ? '\u263e' : '\u2600\ufe0e'} ${fmt(s.px)} ${sgn(si.extPct)}%</div></td><td class="${(si.dayPct || 0) >= 0 ? 'pos' : 'neg'}">${sgn(si.dayPct)}</td>` : `<td>${c}${fmt(s.px)}</td><td class="${(si.mainPct || 0) >= 0 ? 'pos' : 'neg'}">${sgn(si.mainPct)}</td>`)(sessInfo(s))}<td>${rcP}</td><td>${rcC}</td><td>${an && an.key ? esc(an.key) + ' <span class="mut">' + an.n + '</span>' : '–'}</td><td class="${an && an.up >= 0 ? 'pos' : 'neg'}">${an && an.up != null ? sgn(an.up) + '%' : '–'}</td><td class="spc">${spark(s.closes, 84, 24, 60)}</td><td>${fmt(s.rsi, 0)}</td>
 <td>${a ? fmt(a.v) : '–'}</td><td>${x}</td>
 <td class="${s.r20 >= 0 ? 'pos' : 'neg'}">${sgn(s.r20)}</td><td class="${s.r60 >= 0 ? 'pos' : 'neg'}">${sgn(s.r60)}</td><td>${fmt(s.fromHi, 1)}%</td><td>${en}</td><td>${st}</td><td class="mut">${esc(s.industry)}</td></tr>`;
