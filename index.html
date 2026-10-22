@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-+uYvBv0wug17Thsp7rlYP61dp7W3/p15mKamHm6hgCU=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-/gKGvByoRPC7HkU2ihpKJkGnMUghCEOU/t7MJ8jlUUs=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -750,7 +750,7 @@ async function refreshAll(auto) {
   let LJ = null;
   try { const lr = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (lr.ok) LJ = await lr.json(); } catch (e) {}
   // commodities and the USD→INR quote come only from live.json (they are not part of the built-in stock universe)
-  if (LJ && LJ.rows) for (const k of Object.keys(LJ.rows)) if (k.includes('=') && !DATA.rows[k]) { DATA.rows[k] = LJ.rows[k]; if (!syms.includes(k)) syms.push(k); total = syms.length + cids.length; }
+  if (LJ && LJ.rows) for (const k of Object.keys(LJ.rows)) if (!DATA.rows[k]) { DATA.rows[k] = LJ.rows[k]; if (!syms.includes(k)) syms.push(k); total = syms.length + cids.length; }
   await pickRoute();
   const slowRelay = feedRoute && feedRoute.name === 'a free relay';
   const useLJ = (!feedRoute || slowRelay) && !!(LJ && LJ.rows);
@@ -787,16 +787,17 @@ async function refreshAll(auto) {
     const pri = [];
     try { dtRows('US').forEach(r2 => { if (r2.rt !== 'Skip') pri.push(r2.s.sym); }); } catch (e) {}
     ['SPY', 'QQQ'].forEach(s2 => { if (!pri.includes(s2)) pri.push(s2); });
-    Object.values(pf || {}).forEach(h => { if (h.market !== 'IN' && !pri.includes(h.sym) && DATA.rows[h.sym]) pri.push(h.sym); });
-    return pri.slice(0, 40);
+    Object.values(pf || {}).forEach(h => { if (h.market !== 'IN' && h.market !== 'CM' && !pri.includes(h.sym) && (DATA.rows[h.sym] || custom[idOf(h.sym)])) pri.push(h.sym); });
+    custUS().forEach(sy => { if (!pri.includes(sy)) pri.push(sy); });
+    return pri.slice(0, 60);
   };
   if (fmpKey && !usExt) {
     msg.textContent = 'Getting live quotes via your FMP key\u2026';
-    const all = Object.keys(DATA.rows);
+    const all = Object.keys(DATA.rows).concat(custUS());
     for (let ci = 0; ci < all.length; ci += 40) {
       try {
         const q = await tryJson('https://financialmodelingprep.com/api/v3/quote/' + all.slice(ci, ci + 40).map(encodeURIComponent).join(',') + '?apikey=' + encodeURIComponent(fmpKey), 15000);
-        if (Array.isArray(q)) for (const it of q) { const sy = it.symbol; if (it.price > 0 && DATA.rows[sy]) { DATA.rows[sy][1] = r2n(it.price); BASE_PX[sy] = r2n(it.price); fhLiveN++; const mk3 = mktOf(sy); if (it.timestamp > newest[mk3]) newest[mk3] = it.timestamp; } }
+        if (Array.isArray(q)) for (const it of q) { const sy = it.symbol; if (setLivePx(sy, it.price)) { fhLiveN++; const mk3 = mktOf(sy); if (it.timestamp > newest[mk3]) newest[mk3] = it.timestamp; } }
       } catch (e) {}
     }
     if (fhLiveN) qSrc = 'FMP';
@@ -807,7 +808,7 @@ async function refreshAll(auto) {
     let qi = 0;
     await Promise.all(Array.from({length: 6}, async () => { while (qi < list.length) { const sy = list[qi++]; try {
       const q = await tryJson('https://finnhub.io/api/v1/quote?symbol=' + encodeURIComponent(sy) + '&token=' + encodeURIComponent(fhKey), 8000);
-      if (q && q.c > 0 && DATA.rows[sy]) { DATA.rows[sy][1] = r2n(q.c); BASE_PX[sy] = r2n(q.c); fhLiveN++; if (q.t > newest.US) newest.US = q.t; }
+      if (q && setLivePx(sy, q.c)) { fhLiveN++; if (q.t > newest.US) newest.US = q.t; }
     } catch (e) {} } }));
     if (fhLiveN) qSrc = usExt ? 'Finnhub, after-hours' : 'Finnhub';
   }
@@ -870,7 +871,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792696545';
+const BUILD_V = '1792696760';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -917,6 +918,7 @@ function fhConnect() {
     fhBadge(true);
     const us = [];
     try { dtRows('US').forEach(r2 => { if (r2.rt !== 'Skip') us.push(r2.s.sym); }); } catch (e) {}
+    custUS().forEach(k => { if (!us.includes(k)) us.push(k); });
     Object.keys(DATA.rows).filter(k => mktOf(k) === 'US' && !k.startsWith('^')).forEach(k => { if (!us.includes(k)) us.push(k); });
     us.slice(0, 48).forEach(sym => ws.send(JSON.stringify({type: 'subscribe', symbol: sym})));
   };
@@ -931,7 +933,7 @@ setInterval(() => {
   const ks = Object.keys(fhPend); if (!ks.length || rfBusy) return;
   const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) return;
   const flash = [];
-  for (const sym of ks) { const px = fhPend[sym]; const row = DATA.rows[sym]; if (row && px > 0) { if (r2n(px) !== row[1]) flash.push([sym, px - row[1]]); row[1] = r2n(px); BASE_PX[sym] = r2n(px); } }
+  for (const sym of ks) { const px = fhPend[sym]; const row = DATA.rows[sym]; if (row && px > 0) { if (r2n(px) !== row[1]) flash.push([sym, px - row[1]]); row[1] = r2n(px); BASE_PX[sym] = r2n(px); } else setLivePx(sym, px); }
   fhPend = {};
   const nowS = Math.floor(Date.now() / 1000);
   if (nowS > BASE_STAMP.US.liveAt) { BASE_STAMP.US.liveAt = nowS; BASE_STAMP.US.liveLocal = tzFmt(Date.now(), DATA.markets.US.tz, 'ET') + ' (live)'; BASE_STAMP.US.note = 'US prices are streaming live from Finnhub; indicators use daily bars through the last completed session.'; }
@@ -1153,6 +1155,14 @@ $('#maT').addEventListener('change', e => { maT = e.target.value; save('sd-mat',
 let db = null, reqs = {}, custom = {}, dbState = 'loading', reqAt = 0;
 let recsDocs = {}, recsReady = false, recsWritable = true, recsSyncing = false;
 const idOf = s => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+// Live price for a symbol wherever it lives: a built-in row, or one of the owner's own symbols (portfolio / My tickers).
+const custUS = () => Object.values(custom || {}).filter(c => c.rec && c.market !== 'IN' && !/[=^]/.test(c.sym)).map(c => c.sym);
+function setLivePx(sy, px) {
+  if (!(px > 0)) return false;
+  const row = DATA.rows[sy]; if (row) { row[1] = r2n(px); BASE_PX[sy] = r2n(px); return true; }
+  const c = custom[idOf(sy)]; if (c && c.rec) { c.rec[1] = r2n(px); return true; }
+  return false;
+}
 // Commodities for the Portfolio tab: Yahoo continuous-futures prices, shown in the unit people actually hold.
 // Gram / kilo rupee versions convert the dollar-per-troy-ounce price with the USD→INR rate (31.1035 g per troy oz).
 const OZ_G = 31.1035;
@@ -3047,7 +3057,7 @@ window.addEventListener('popstate', () => { const d = $('#dlg'); if (d.open) { d
 $('#foot').innerHTML = `<b>How this works.</b> The <b>Rules</b> tab spells out every rule on this page: the full scoring table, rating bands, entry/stop/target construction, industry blending and call tracking. Signals are rule-based readouts of public daily data — a screen, not a forecast, and not financial advice. The page places no orders. <a href="docs/" target="_blank" rel="noopener" style="color:var(--tb);font-weight:700">📘 System documentation</a>`;
 renderAll(); refreshInfo();
 // commodities + USD→INR live only in live.json: pull them once at start so the Portfolio tab has them before the first refresh
-(async () => { try { const r = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const j = await r.json(); let n = 0; for (const k of Object.keys(j.rows || {})) if (k.includes('=') && !DATA.rows[k]) { DATA.rows[k] = j.rows[k]; n++; } if (n && pfOf(tab)) renderAll(); } catch (e) {} })();
+(async () => { try { const r = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const j = await r.json(); let n = 0; for (const k of Object.keys(j.rows || {})) if (!DATA.rows[k]) { DATA.rows[k] = j.rows[k]; n++; } if (n) renderAll(); } catch (e) {} })();
 setTimeout(() => { try { syncPull(); } catch (e) {} }, 800);
 setInterval(chrome, 60000);
 </script>
