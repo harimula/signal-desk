@@ -8,6 +8,7 @@ import { keysFor, relevant, parseRss } from '../news.mjs';
 import { normalize } from './config.mjs';
 import http from 'node:http';
 import { rankByLiquidity } from './scan.mjs';
+import { collectSignals, evaluate } from './research-day.mjs';
 import { vwap, atr, openingRange, relVolume, daySetup, marketMode, dayShares, dayExit, dayTrail, encodeDayId, decodeDayId } from './daytrade.mjs';
 
 let passed = 0, failed = 0;
@@ -241,6 +242,19 @@ test('trigger prices: the close that makes RSI-2 cross the buy / put level, and 
     assert.equal(decodeDayId('sd-r-AAPL-100-20261022-xx'), null);
   });
 }
+
+test('day-trading research: replays the live rules over synthetic sessions and scores them', () => {
+  // 30 sessions of a stock that breaks out of a flat 15-minute range at 9:50 and runs to the target; SPY trends up all day
+  const mk = (d, run) => { const out = []; let px = 100; for (let m = 570; m < 960; m += 5) { const i = (m - 570) / 5; let o = px, c; if (i < 3) c = 100.5 + (i % 2 ? -0.3 : 0.3); else c = 100.5 + run * (i - 2) * 0.12; out.push({ m, o, h: Math.max(o, c) + 0.1, l: Math.min(o, c) - 0.1, c, v: 60000 }); px = c; } return out; };
+  const sessions = new Map(), spy = new Map();
+  for (let k = 1; k <= 30; k++) { const d = '2025-01-' + String(k).padStart(2, '0'); sessions.set(d, mk(d, k % 5 === 0 ? -1 : 1)); spy.set(d, mk(d, k % 5 === 0 ? -1 : 1).map(b => ({ ...b, o: b.o * 5, h: b.h * 5, l: b.l * 5, c: b.c * 5, v: 1e6 }))); }
+  const sig = collectSignals('TST', sessions, spy);
+  assert.ok(sig.some(x => x.setup === 'ORB' && x.side === 'long'), 'ORB longs recorded');
+  const S = evaluate(sig, new Map([['TST', sessions]]), { orMin: 15, rvol: 0.5, target: 2, timeStop: 60, start: 585, end: 930, maxTrades: 3, streak: 2, filter: true, setups: 'both', sides: 'both' });
+  assert.ok(S.n >= 20 && S.n <= 30, 'one trade per day: ' + S.n);
+  assert.ok(S.winRate > 60 && S.avgR > 0.5, JSON.stringify({ n: S.n, win: S.winRate, avgR: S.avgR, exits: S.byExit }));
+  assert.ok(S.years['2025'] && S.years['2025'].n === S.n);
+});
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -62,6 +62,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
     <li><a href="#r7">7 · CALLs and PUTs</a></li>
     <li><a href="#r8">8 · Daily limits & PDT</a></li>
     <li><a href="#r9">9 · Review</a></li>
+    <li><a href="#evidence">Evidence</a></li>
     <li><a href="#map">How the bot applies it</a></li>
   </ol>
 </nav>
@@ -161,6 +162,15 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <div class="rule"><b class="n">9.3</b> <b>Keep the proven rule running at full size</b> (RSI-2 swing) and run day trading small beside it until it earns more.</div>
 </section>
 
+
+<section id="evidence">
+<h2>Evidence<small>what the data says, and its limits</small></h2>
+<div class="rule"><p><b>Intraday history is short.</b> No public feed has 5-minute bars from 30 or 40 years ago; the broker's IEX feed starts in 2016. So this rulebook is tested on roughly ten years of 5-minute bars, every bar, for the bot's universe plus SPY, using the <i>same code</i> the live engine runs. The swing rule (RSI-2) is the one with 33–40 years of daily data behind it.</p>
+<p><b>Where to read it:</b> Bot trades tab → “🧪 Day-trading test”. It shows the verdict, the bot's defaults next to the best-tested combination, what happens without the market filter or with one setup only, and every year's result. The study refreshes on the first of each month and whenever it is re-run from GitHub Actions (<code>day-trading-research</code>).</p>
+<p><b>How to read it:</b> expectancy per trade in R (profit as a multiple of the risk) and in dollars at $500 risk; profit factor above 1.1 and most years positive is the bar for calling it an edge. Shorts are simulated as stock shorts, a stand-in for PUTs that ignores the option's spread and time decay — the real PUT result will be somewhat worse.</p>
+<p><b>Using it:</b> Bot settings → 4b → “Put these values in the form”, then Save. Judge the live paper results after 50+ trades before trusting either the test or the defaults.</p></div>
+</section>
+
 <section id="map">
 <h2>How the bot applies it<small>rule → setting or code</small></h2>
 <div class="tw"><table>
@@ -175,7 +185,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <tr><td>Relative volume (1.2)</td><td><b>Minimum relative volume</b></td><td>1.2×</td></tr>
 <tr><td>Window (2.1–2.3)</td><td><b>Entries from / until</b>; flat 15:50 (options 15:45) fixed</td><td>09:45–15:30</td></tr>
 <tr><td>Market filter (3.1)</td><td>SPY vs its VWAP, code</td><td>always on</td></tr>
-<tr><td>Setups (4)</td><td><code>daySetup()</code>: ORB 15 min, VWAP pullback</td><td>both</td></tr>
+<tr><td>Setups (4)</td><td><code>daySetup()</code>: ORB (<b>Opening range</b> minutes), VWAP pullback</td><td>both, 15 min</td></tr>
 <tr><td>Breakeven / time stop (6.3–6.4)</td><td>code / <b>Time stop</b></td><td>+1R / 60 min, 0.3R</td></tr>
 <tr><td>Options (7)</td><td><b>Option expiry max</b>, <b>Option take-profit</b>, <b>Option stop</b>; ATM strike, spread ≤ 10 % in code</td><td>7 days, +50 %, −40 %</td></tr>
 <tr><td>PDT (8.1)</td><td>code, from the broker's day-trade count</td><td>always on</td></tr>

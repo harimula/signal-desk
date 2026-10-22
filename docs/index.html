@@ -211,7 +211,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 │   ├── journal.mjs / .json <span class="c">FIFO trade pairing; trade journal (encrypted when JOURNAL_KEY set)</span>
 │   ├── research.mjs        <span class="c">4-strategy simulator, out-of-sample split</span>
 │   ├── backtest.mjs        <span class="c">single-strategy backtest</span>
-│   ├── test.mjs            <span class="c">52 unit tests (CI)</span>
+│   ├── test.mjs            <span class="c">53 unit tests (CI)</span>
 │   └── test-orders.mjs     <span class="c">fake-broker check of the orders one cycle places (CI)</span>
 ├── .github/workflows/      <span class="c">refresh, trade, research, backtest, test</span>
 ├── docs/                   <span class="c">ARCHITECTURE.md · index.html (this page) · architecture.pptx</span>
@@ -438,7 +438,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <h2><span class="k">08</span>Testing and quality</h2>
 <ul>
   <li><code>bot/test-orders.mjs</code>: a fake broker serves a just-dipped and a just-popped stock and the test checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked). Runs in CI.</li>
-  <li><code>bot/test.mjs</code>: 52 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
+  <li><code>bot/test.mjs</code>: 53 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
   <li>Integration tests against mock brokers (REST + websocket) with a fake clock: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.</li>
   <li>Page checks in headless Chromium at desktop and phone widths for every tab, including scroll preservation during live ticks.</li>
   <li>Research and backtest workflows produce reproducible reports committed to the repo.</li>
@@ -450,6 +450,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Day-trading research on all available intraday history (5-minute bars since 2016) replaying the live rules over a parameter grid; monthly workflow; results card; apply-best button; opening-range setting</td><td>03, 05, 08</td></tr>
 <tr><td>2026-10-22</td><td>Day trading (experimental, off): 5-minute bars, SPY-VWAP market filter, opening-range breakout and VWAP-pullback setups, risk sizing, stop/target/breakeven/time-stop/flat exits, PUTs for shorts, optional CALLs, daily limits, PDT guard; settings §4b; watch card block; Performance split; <a href="daytrading-rules.html">rulebook</a></td><td>03, 05, 08</td></tr>
 <tr><td>2026-10-22</td><td>Phone header reworked into one control row; tiles wrap, no sideways scroll</td><td>02</td></tr>
 <tr><td>2026-10-22</td><td>Sign in anywhere with the passphrase (header 👤 Sign in): token travels inside the encrypted sync blob; new devices need only the passphrase; sign out wipes the device; CI test</td><td>02, 06, 08</td></tr>

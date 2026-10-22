@@ -82,7 +82,7 @@ async function load5m(syms) {
 }
 async function dayTradeCycle(ctx) {
   const { equity, acct, positions, hist, liveOrders, G, capHit, slBudget, sellsFor, cid } = ctx;
-  const dayC = { start: hhmm(CFG.dayStart), end: hhmm(CFG.dayEnd), rvol: CFG.dayRvol, target: CFG.dayTarget, timeStop: CFG.dayTimeStop };
+  const dayC = { start: hhmm(CFG.dayStart), end: hhmm(CFG.dayEnd), rvol: CFG.dayRvol, target: CFG.dayTarget, timeStop: CFG.dayTimeStop, orMin: CFG.dayOrMin };
   // open day trades: entry order id tells us side, stop, target and when it opened
   const dayPos = [];
   for (const p of positions) {
