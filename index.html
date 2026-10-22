@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-YqEa0jqNJCAHKnrWs/rJbVrdgZlNZdRVvrgjiV8TpuM=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-zVc/vfErKNqNb44klvPkyAVAP99QAafQvWMHYxYH85Q=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -586,11 +586,15 @@ const load = (k, d) => { try { const v = localStorage.getItem(k); return v == nu
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} try { syncTouch(k); } catch (e) {} };
 try {
   if (location.hash.indexOf('#setup=') === 0) {
-    const st9 = JSON.parse(atob(decodeURIComponent(location.hash.slice(7))));
+    const st9 = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(location.hash.slice(7))))));
     if (st9 && typeof st9 === 'object') {
       if (st9.fh) localStorage.setItem('sd-fh', JSON.stringify(String(st9.fh)));
       if (st9.fmp) localStorage.setItem('sd-fmp', JSON.stringify(String(st9.fmp)));
       if (st9.px) localStorage.setItem('sd-proxy', JSON.stringify(String(st9.px)));
+      if (st9.tok) localStorage.setItem('sd-ghtok', JSON.stringify(String(st9.tok)));
+      if (st9.repo) localStorage.setItem('sd-ghrepo', JSON.stringify(String(st9.repo)));
+      if (st9.jk) localStorage.setItem('sd-jkey', JSON.stringify(String(st9.jk)));
+      if (st9.tok || st9.jk) sessionStorage.setItem('sd-linked', '1');
       history.replaceState(null, '', location.pathname + location.search);
     }
   }
@@ -674,7 +678,7 @@ function chrome() {
   $('#mdots').innerHTML = ['US', 'IN'].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
   $('#asof').innerHTML = (tab === 'SET' ? 'Control panel \u2014 risk, capital, strategy, keys' : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'BOT' ? 'Paper-trading bot — every trade it took' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
   $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
-  let h = '';
+  let h = linkedNote ? `<div class="banner info">${linkedNote}</div>` : '';
   if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && tab !== 'SET' && !pfOf(tab)) {
     if (f.level === 'stale') h += `<div class="banner warn"><b>Stale data. Entry zones are for reference only.</b> This snapshot is ${ageText(f.age)} old and prices have likely moved. Press ↻ Refresh prices.</div>`;
     else if (f.level === 'aging') h += `<div class="banner warn"><b>Snapshot is ageing.</b> Pulled ${ageText(f.age)} ago. Press ↻ Refresh prices.</div>`;
@@ -874,7 +878,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792700155';
+const BUILD_V = '1792700671';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -949,11 +953,28 @@ const fmpi = $('#fmpIn'); if (fmpi) { fmpi.value = load('sd-fmp', ''); $('#fmpSa
 function goliveCheck() { const el = $('#golive'); if (el) el.style.display = (fhKey || load('sd-fmp', '')) ? 'none' : ''; }
 goliveCheck();
 $('#goliveBtn').addEventListener('click', () => { const bx = $('#pxBox'); bx.open = true; bx.scrollIntoView({behavior: 'smooth', block: 'start'}); setTimeout(() => $('#fhIn').focus(), 400); });
+// Everything another device needs to become this one: price keys always; token + passphrase when asked (the sync QR).
+function linkPayload(full) {
+  const o = {fh: load('sd-fh', ''), fmp: load('sd-fmp', ''), px: load('sd-proxy', '')};
+  if (full) { o.tok = load('sd-ghtok', ''); o.repo = load('sd-ghrepo', ''); o.jk = load('sd-jkey', ''); }
+  for (const k of Object.keys(o)) if (!o[k]) delete o[k];
+  return o;
+}
+const linkUrl = o => location.origin + location.pathname + '#setup=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(o)))));
+async function linkQr(box) {
+  const o = linkPayload(true);
+  if (!o.tok || !o.jk) { box.innerHTML = '<div class="mut" style="font-size:12px;margin-top:6px">Connect GitHub (section 1) and enter the passphrase here first — the QR code carries both.</div>'; return; }
+  if (!window.qrcode) await new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; sc.onload = ok; sc.onerror = () => bad(new Error('could not load the QR library')); document.head.appendChild(sc); });
+  const url = linkUrl(o), q = window.qrcode(0, 'M'); q.addData(url); q.make();
+  box.innerHTML = `<div style="margin-top:10px;display:inline-block;background:#fff;padding:12px;border-radius:10px;line-height:0">${q.createSvgTag({cellSize: 4, margin: 0, scalable: true})}</div><div class="mut" style="font-size:11.5px;margin-top:6px">Point the phone's camera at it and tap the link that pops up. <button class="btn ghost" type="button" data-sy="qrcopy" style="font-size:11.5px;padding:4px 8px">Copy the link instead</button> (only send it to yourself).</div>`;
+  const svg = box.querySelector('svg'); if (svg) { svg.style.width = 'min(260px, 80vw)'; svg.style.height = 'auto'; }
+  box.dataset.url = url;
+}
 const slB = $('#setupLink');
 if (slB) slB.addEventListener('click', async () => {
-  const o9 = {fh: load('sd-fh', ''), fmp: load('sd-fmp', ''), px: load('sd-proxy', '')};
+  const o9 = linkPayload(false);
   if (!o9.fh && !o9.fmp && !o9.px) { $('#setupMsg').textContent = 'Save a key above first, then copy the link.'; return; }
-  const u9 = location.origin + location.pathname + '#setup=' + encodeURIComponent(btoa(JSON.stringify(o9)));
+  const u9 = linkUrl(o9);
   try { await navigator.clipboard.writeText(u9); $('#setupMsg').textContent = 'Copied. Open it once on the other device \u2014 keys install themselves and the link cleans out of the address bar. Anyone with this link can use your keys, so send it only to yourself.'; }
   catch (e) { $('#setupMsg').textContent = 'Could not copy automatically \u2014 long-press to copy: ' + u9; }
 });
@@ -1092,6 +1113,7 @@ document.addEventListener('click', e => {
   const a = b.dataset.sy;
   if (a === 'now') { syMsg = 'Syncing…'; syncUi(); syncPull(true).then(() => { if (!syBusy && syncOn()) syncPush(); }); }
   if (a === 'pass') { const v = (document.getElementById('sy-pass') || {}).value || ''; if (!v) return; save('sd-jkey', v); syMsg = 'Passphrase saved on this device. Syncing…'; renderAll(); }
+  if (a === 'qr') { const box = document.getElementById('syQr'); if (!box) return; if (box.innerHTML) { box.innerHTML = ''; b.textContent = '📱 Link a phone — show QR code'; return; } linkQr(box).then(() => { b.textContent = 'Hide the QR code'; }, e => { box.innerHTML = '<div class="neg" style="font-size:12px">Could not make the code: ' + esc(e.message || e) + '</div>'; }); return; }
   if (a === 'reveal') {
     const box = document.getElementById('syRev'); if (!box) return;
     if (box.dataset.open === '1') { box.dataset.open = '0'; box.textContent = ''; return; }
@@ -1101,6 +1123,7 @@ document.addEventListener('click', e => {
     const cnt = document.createElement('div'); cnt.className = 'mut'; cnt.style.cssText = 'font-size:11.5px;margin-bottom:6px'; const kv = load('sd-jkey', ''); cnt.textContent = [...kv].length + ' characters' + (/[^\x20-\x7e]/.test(kv) ? ', includes a non-standard character' : '') + (kv !== kv.trim() ? ', has a space at the start or end' : '');
     box.append(code, cnt, cp);
   }
+  if (a === 'qrcopy') { const u = (document.getElementById('syQr') || {}).dataset.url || ''; (navigator.clipboard && u ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => { b.textContent = 'Copied'; }, () => { b.textContent = 'Could not copy'; }); return; }
   if (a === 'copy') { const t = load('sd-jkey', ''); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = 'Copied'; }, () => { b.textContent = 'Select the text and copy it'; }); }
 });
 function syncCard(sec, dot) {
@@ -1114,7 +1137,8 @@ function syncCard(sec, dot) {
 ${tok && !pass ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px;max-width:520px"><input id="sy-pass" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="passphrase" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" data-sy="pass">Turn on sync</button></div>` : ''}
 <div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
 <div class="mut" style="font-size:11.5px;margin-top:6px">${what} Everything is encrypted with your passphrase before it is saved to your repo, so a new laptop or phone needs only the token and the passphrase — the rest arrives by itself.</div>`;
-  const rev = pass ? `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><button class="btn ghost" type="button" data-sy="reveal">Show / copy the passphrase saved on this device</button><div class="mut" style="font-size:11.5px;margin-top:6px">Use this on a device where the passphrase already works, then paste it on your phone instead of typing it. It is only shown on screen, never sent anywhere. Hide it again when you are done.</div><div id="syRev"></div></div>` : '';
+  const rev = pass ? `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><button class="btn ghost" type="button" data-sy="reveal">Show / copy the passphrase saved on this device</button><div class="mut" style="font-size:11.5px;margin-top:6px">Use this on a device where the passphrase already works, then paste it on your phone instead of typing it. It is only shown on screen, never sent anywhere. Hide it again when you are done.</div><div id="syRev"></div>
+<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><button class="btn" type="button" data-sy="qr">📱 Link a phone — show QR code</button><div class="mut" style="font-size:11.5px;margin-top:6px">Scan it with the phone's camera: the site opens there with your GitHub token, passphrase and price keys already installed, and your holdings, watchlist and settings arrive within seconds. From then on every change on either device syncs by itself. The code carries your secrets — show it only to your own phone, never screenshot or send it.</div><div id="syQr"></div></div></div>` : '';
   return sec('Sync across devices', body + rev, 'your settings follow you');
 }
 
@@ -1184,6 +1208,7 @@ const CMD = [
 const cmdOf = k => CMD.find(c => c.k === k);
 // USD→INR: the owner's own rate wins; otherwise the live USDINR=X quote from the price feed; otherwise a sane fallback.
 let fxManual = +load('sd-fx', 0) || 0;
+let linkedNote = '';
 const fxLive = () => { const r = DATA.rows && DATA.rows['USDINR=X']; const px = r && +r[1]; return px > 0 ? px : 0; };
 const fxRate = () => fxManual > 0 ? fxManual : (fxLive() || 84);
 const cmdPx = sym => { const r = DATA.rows && DATA.rows[sym]; if (r) return { px: +r[1], chg: r[2] > 0 ? (+r[1] / +r[2] - 1) * 100 : 0 }; const c = Object.values(custom).find(x => x.sym === sym && x.rec); return c ? { px: +c.rec[1], chg: c.rec[2] > 0 ? (+c.rec[1] / +c.rec[2] - 1) * 100 : 0 } : null; };
@@ -3062,6 +3087,7 @@ renderAll(); refreshInfo();
 // commodities + USD→INR live only in live.json: pull them once at start so the Portfolio tab has them before the first refresh
 (async () => { try { const r = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const j = await r.json(); let n = 0; for (const k of Object.keys(j.rows || {})) if (!DATA.rows[k]) { DATA.rows[k] = j.rows[k]; n++; } if (n) renderAll(); } catch (e) {} })();
 setTimeout(() => { try { syncPull(); } catch (e) {} }, 800);
+if (sessionStorage.getItem('sd-linked')) { sessionStorage.removeItem('sd-linked'); linkedNote = 'This device is now linked: your token, passphrase and keys are installed. Your holdings, watchlist and settings arrive in a few seconds, and from now on changes on any linked device sync automatically.'; try { chrome(); } catch (e) {} setTimeout(() => { linkedNote = ''; try { chrome(); } catch (e) {} }, 30000); }
 setInterval(chrome, 60000);
 </script>
 </body>
