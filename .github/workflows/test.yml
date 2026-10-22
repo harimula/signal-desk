@@ -22,3 +22,14 @@ jobs:
         run: node bot/test.mjs
       - name: Order tests against a fake broker
         run: node bot/test-orders.mjs
+  page:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version-file: .nvmrc }
+      - name: Headless Chromium
+        run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: Page tests (every tab, CSP, settings save)
+        run: node tools/page-test.mjs

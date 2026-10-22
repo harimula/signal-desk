@@ -448,6 +448,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Fix: Bot settings Save hung forever — a Screener binding ran on every tab and threw, aborting the save. Page error strip added; save independent of redraws; headless page tests in CI</td><td>02, 08</td></tr>
 <tr><td>2026-10-22</td><td>Bot settings: no live-price redraws on the tab, step log under Save, Copy settings → paste on github.com fallback</td><td>02</td></tr>
 <tr><td>2026-10-22</td><td>Bot settings: 12 s GitHub call limit with seconds counter, plain-language failure diagnosis, Test connection button, conflict-only re-read on save, parallel first-visit load, no redraw on typed edits, unsaved-changes marker</td><td>02, 04</td></tr>
 <tr><td>2026-10-22</td><td>Market scan universe option: every tradable US stock ranked by volume each morning, top N watched instead of a fixed list; Settings §6 radio; watch card shows the scan</td><td>03, 05, 08</td></tr>
