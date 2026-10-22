@@ -357,6 +357,7 @@ Measured in tests against a mock broker: fill → take-profit order 40 ms; crash
 | `dayCap`, `weekCap`, `streak` | circuit breakers (% loss, % loss, losses in a row) | 3 / 6 / 3 |
 | `stockPct`, `optPct` | max % of equity per stock position / option budget | 10 / 2 |
 | `stocks`, `options`, `puts` | enable each instrument (CALLs, PUTs) | true / true / **false** |
+| `intraday` | experimental: stock/CALL/PUT signals use today's live price as a provisional close (`liveSignal` in strategy.mjs) instead of waiting for the close; yesterday's close still drives the 1 % bounce rule | **false** |
 | `stockUnit`, `callUnit`, `putUnit` | size each sleeve in `pct` (% of account) or `usd` (fixed dollars) | pct |
 | `stockPct`, `optPct`, `putPct` / `stockUsd`, `callUsd`, `putUsd` | money per trade for each sleeve, in the chosen unit | 10 / 2 / 1 % · $10,000 / $2,000 / $1,000 |
 | `stockCap*`, `callCap*`, `putCap*` (`Pct` or `Usd`) | ceiling on everything that sleeve holds plus its waiting buy orders; 0 = no ceiling | 0 |
@@ -458,6 +459,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | **Intraday signals** option (off by default): same RSI-2 rules evaluated on the live price during the day; order test proves a stock that only dips intraday is bought with it on and ignored with it off | §5.2, §5.4 |
 | 2026-10-22 | Bot trades tab: **What the bot is watching** card — the journal now carries a `watch` block (every watched stock's price, RSI-2, above/below 200-day, and who qualifies for stock buy / CALL / PUT); end-to-end test covers it | §5.5, §8 |
 | 2026-10-22 | Capital allocation settings: each of stocks, CALLs and PUTs sized in % of account or fixed dollars, with a per-trade amount and an optional total ceiling per sleeve | §5.4 |
 | 2026-10-22 | PUT options added as an experiment, OFF by default (**Trade PUT options** switch): RSI-2 mirror rule, shared option caps, put exits; short-side strategy added to the research workflow; end-to-end order test with a fake broker (runs in CI) | §3.2, §5.2, §5.4, §8 |

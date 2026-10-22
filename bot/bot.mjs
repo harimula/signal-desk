@@ -12,7 +12,7 @@
 //    all at -50%, all by 3:40pm the next session, never into expiry day.
 // Safety: paper endpoint by default; bot/STOP file flattens and halts; daily loss cap.
 import fs from 'node:fs';
-import { sma, rsi2, signalAt, signalShortAt, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
+import { sma, rsi2, liveSignal, signalAt, signalShortAt, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
 import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
@@ -360,29 +360,30 @@ async function run() {
   const sigs = [];
   for (const sym of UNIVERSE) {
     const B = completed(bars, sym); if (B.length < 205) continue;
-    const s = rsi2Signal(B, B.map(b => b.c), B.length - 1, CFG.rsiThreshold); if (s) sigs.push({ sym, ...s, px: last[sym] && last[sym].p });
+    const px0 = last[sym] && last[sym].p, s = CFG.intraday && px0 ? liveSignal(B, px0, 'long', CFG.rsiThreshold) : rsi2Signal(B, B.map(b => b.c), B.length - 1, CFG.rsiThreshold); if (s) sigs.push({ sym, ...s, px: last[sym] && last[sym].p });
   }
   sigs.sort((a, b) => a.r2 - b.r2);                                      // deepest dip first, like the backtest
   const shortSigs = [];                                                  // PUT candidates (switch is OFF unless Trade puts is ticked)
   if (PUT_ON) for (const sym of UNIVERSE) {
     const B = completed(bars, sym); if (B.length < 205) continue;
-    const s = rsi2ShortSignal(B, B.map(b => b.c), B.length - 1, CFG.rsiThreshold); if (s) shortSigs.push({ sym, ...s, px: last[sym] && last[sym].p });
+    const px0 = last[sym] && last[sym].p, s = CFG.intraday && px0 ? liveSignal(B, px0, 'short', CFG.rsiThreshold) : rsi2ShortSignal(B, B.map(b => b.c), B.length - 1, CFG.rsiThreshold); if (s) shortSigs.push({ sym, ...s, px: last[sym] && last[sym].p });
   }
   shortSigs.sort((a, b) => b.r2 - a.r2);                                 // most stretched pop first
   {  // what the bot is looking at, for the Bot trades tab: every watched stock with its RSI-2 and trend, plus who qualifies for each kind of trade
     const rows = [];
     for (const sym of UNIVERSE) {
       const B = completed(bars, sym); if (B.length < 205) continue;
-      const cl = B.map(b => b.c), r = rsi2(cl), m = sma(cl, 200);
+      const cl = B.map(b => b.c); if (CFG.intraday && last[sym] && last[sym].p > 0) cl.push(last[sym].p);
+      const r = rsi2(cl), m = sma(cl, 200);
       if (r == null || m == null) continue;
       rows.push({ s: sym, px: r2d((last[sym] && last[sym].p) || cl[cl.length - 1]), r2: Math.round(r * 10) / 10, up: cl[cl.length - 1] > m });
     }
-    lastWatch = { at: new Date().toISOString(), thr: CFG.rsiThreshold, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+    lastWatch = { at: new Date().toISOString(), thr: CFG.rsiThreshold, intraday: !!CFG.intraday, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
       buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
   }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
   lastSignals = { longs: [], shorts: [], rsi2: sigs, at: Date.now() };
-  if (sigs.length) act(`RSI-2 dips today: ${sigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
+  if (sigs.length) act(`RSI-2 dips ${CFG.intraday ? 'right now (intraday)' : 'today'}: ${sigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
   const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
 
   if (STK_ON) {

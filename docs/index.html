@@ -349,6 +349,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <tr><td><code>dayCap</code>, <code>weekCap</code>, <code>streak</code></td><td>circuit breakers: % loss, % loss, losses in a row</td><td>3 / 6 / 3</td></tr>
 <tr><td><code>stockPct</code>, <code>optPct</code></td><td>max % of equity per stock position / option budget</td><td>10 / 2</td></tr>
 <tr><td><code>stocks</code>, <code>options</code>, <code>puts</code></td><td>enable each instrument (CALLs, PUTs)</td><td>true / true / <b>false</b></td></tr>
+<tr><td><code>intraday</code></td><td>experimental: signals use today's live price as a provisional close instead of waiting for the close</td><td><b>false</b></td></tr>
 <tr><td><code>stockUnit</code>, <code>callUnit</code>, <code>putUnit</code></td><td>size each sleeve in <code>pct</code> (% of account) or <code>usd</code> (fixed dollars)</td><td>pct</td></tr>
 <tr><td><code>stockPct</code>, <code>optPct</code>, <code>putPct</code> / <code>stockUsd</code>, <code>callUsd</code>, <code>putUsd</code></td><td>money per trade for each sleeve, in the chosen unit</td><td>10 / 2 / 1 % · $10,000 / $2,000 / $1,000</td></tr>
 <tr><td><code>stockCap*</code>, <code>callCap*</code>, <code>putCap*</code></td><td>ceiling on everything that sleeve holds plus its waiting buy orders; 0 = no ceiling</td><td>0</td></tr>
@@ -444,6 +445,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Intraday signals option (off by default): same RSI-2 rules on the live price during the day</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>Bot trades tab: "What the bot is watching" card — journal carries a <code>watch</code> block (price, RSI-2, trend per stock, and who qualifies for stock buy / CALL / PUT)</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>Capital allocation settings: stocks, CALLs and PUTs each sized in % of account or fixed dollars, with a per-trade amount and optional total ceiling per sleeve</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>PUT options added as an experiment, off by default (Trade PUT options switch); short-side research strategy; fake-broker order test in CI</td><td>05</td></tr>

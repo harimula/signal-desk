@@ -32,6 +32,7 @@ if (process.argv[2] === 'child') {
   const BARS = {
     DIP: series(80, 120, [-0.04, -0.04]),        // uptrend, two sharp down days  -> RSI-2 ~ 0, above 200-day
     POP: series(120, 80, [0.04, 0.04]),          // downtrend, two sharp up days  -> RSI-2 ~ 100, below 200-day
+    FALL: series(80, 120, [0.001, 0.001]),       // uptrend, quiet at yesterday's close; the live price below drops it 10%
     SPY: series(400, 520, [0.001, 0.001]),
   };
   const lastC = s => BARS[s][BARS[s].length - 1].c;
@@ -52,7 +53,7 @@ if (process.argv[2] === 'child') {
       if (p === '/v2/orders' && req.method === 'POST') { const o = JSON.parse(body); orders.push(o); return send({ id: 'o' + orders.length, status: 'accepted', ...o }); }
       if (p === '/v2/orders') return send([]);
       if (p === '/v2/stocks/bars') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS[s]) out[s] = BARS[s]; return send({ bars: out }); }
-      if (p === '/v2/stocks/trades/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS[s]) out[s] = { p: lastC(s), t: '2026-10-23T14:00:00Z' }; return send({ trades: out }); }
+      if (p === '/v2/stocks/trades/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS[s]) out[s] = { p: s === 'FALL' ? lastC(s) * 0.9 : lastC(s), t: '2026-10-23T14:00:00Z' }; return send({ trades: out }); }
       if (p === '/v1beta1/news') return send({ news: [] });
       if (p === '/v2/options/contracts') {
         const und = u.searchParams.get('underlying_symbols'), type = u.searchParams.get('type'), px = lastC(und);
@@ -68,7 +69,7 @@ if (process.argv[2] === 'child') {
   process.env.ALPACA_KEY = 'test'; process.env.ALPACA_SECRET = 'test';
   fs.mkdirSync('bot', { recursive: true });
   const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
-  bot.applyConfig({ symbols: ['DIP', 'POP'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
+  bot.applyConfig({ symbols: ['DIP', 'POP', 'FALL'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
   await bot.botCycle();
   server.close();
   let watch = null; try { watch = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).watch; } catch (e) {}
@@ -116,6 +117,12 @@ check('watch list: published with RSI-2 for each stock, and who qualifies for BU
   assert.ok(dip.up && dip.r2 < 10); assert.ok(!pop.up && pop.r2 > 90);
   assert.deepEqual(A.watch.put, []);
 });
+
+const I0 = run({ stocks: true, options: false, intraday: false });
+check('intraday off: a stock that only dips during the day is NOT bought', () => assert.ok(!I0.orders.some(o => o.symbol === 'FALL')));
+const I1 = run({ stocks: true, options: false, intraday: true });
+check('intraday on: the same stock IS bought on the live-price dip', () => assert.ok(I1.orders.some(o => o.symbol === 'FALL' && o.side === 'buy')));
+check('intraday on: stocks that qualified at the close still qualify, and the watch list says live', () => { assert.ok(I1.orders.some(o => o.symbol === 'DIP')); assert.equal(I1.watch.intraday, true); assert.ok(I1.watch.buy.includes('FALL')); });
 
 const F = run({ stocks: true, options: true, puts: true, stockUnit: 'usd', stockUsd: 5000, stockCapUsd: 50, callCapPct: 0.1, putUnit: 'usd', putUsd: 5000, putCapUsd: 100 });
 check('ceilings: nothing bought when each sleeve ceiling is below one unit', () => assert.equal(F.orders.length, 0, JSON.stringify(F.orders.map(o => o.symbol))));

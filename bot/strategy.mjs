@@ -112,3 +112,14 @@ export function rsi2ShortExit(completedCloses, price, sessionsHeld, maxHold = 10
   if (sessionsHeld >= maxHold) return { exit: true, why: `held ${sessionsHeld} sessions` };
   return { exit: false, s5: r2d(s5) };
 }
+
+// ---- Intraday variant (experiment, OFF by default) ----
+// Same RSI-2 rules, but today's live price stands in for today's close, so a stock that falls (or pops) during the day can
+// qualify during the day instead of the next morning. `prevClose` stays yesterday's real close so the 1% bounce rule is unchanged.
+export function liveSignal(bars, px, side = 'long', threshold = 10) {
+  if (!(px > 0) || bars.length < 200) return null;
+  const prev = bars[bars.length - 1].c;
+  const b2 = bars.concat([{ h: Math.max(px, prev), l: Math.min(px, prev), c: px }]), c2 = b2.map(b => b.c);
+  const s = (side === 'short' ? rsi2ShortSignal : rsi2Signal)(b2, c2, c2.length - 1, threshold);
+  return s ? { ...s, prevClose: prev, live: true } : null;
+}
