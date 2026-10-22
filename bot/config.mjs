@@ -10,7 +10,7 @@ export const DEFAULTS = {
   version: 1, mode: 'paper', preset: 'balanced', ...PRESETS.balanced,
   stocks: true, options: true, puts: false, intraday: false,   // puts: experimental mirror of the dip rule, OFF until ticked
   rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, staleMin: 45,
-  newsGuard: true, eventGuard: true, alerts: true,
+  newsGuard: true, eventGuard: true, alerts: true, alertDetail: true,
   symbols: DEFAULT_SYMBOLS,
   universe: 'list', scanSize: 200, scanMinPrice: 5,   // 'scan' = build the list daily from every tradable US stock, ranked by volume
   // Money per trade and a total ceiling for each sleeve (stock / CALL / PUT). Each sleeve uses either % of the account or
@@ -35,7 +35,7 @@ export function normalize(raw) {
   if (raw.preset && PRESETS[raw.preset]) { c.preset = raw.preset; Object.assign(c, PRESETS[raw.preset]); }
   else if (raw.preset === 'custom') c.preset = 'custom';
   for (const k of Object.keys(RANGES)) if (raw[k] != null && isFinite(+raw[k]) && (c.preset === 'custom' || !(k in PRESETS.balanced))) c[k] = clamp(+raw[k], RANGES[k]);
-  for (const k of ['stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
+  for (const k of ['stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
   if (raw.universe === 'scan' || raw.universe === 'list') c.universe = raw.universe;
   for (const k of ['stockUnit', 'callUnit', 'putUnit']) if (raw[k] === 'pct' || raw[k] === 'usd') c[k] = raw[k];
   c.mode = raw.mode === 'live' && raw.liveConfirm === 'I UNDERSTAND THE RISK' ? 'live' : 'paper';

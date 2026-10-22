@@ -360,6 +360,7 @@ Measured in tests against a mock broker: fill → take-profit order 40 ms; crash
 | `stockPct`, `optPct` | max % of equity per stock position / option budget | 10 / 2 |
 | `stocks`, `options`, `puts` | enable each instrument (CALLs, PUTs) | true / true / **false** |
 | `universe`, `scanSize`, `scanMinPrice` | `list` = the `symbols` below; `scan` = each morning rank every tradable US stock (NYSE/NASDAQ/ARCA/AMEX, no OTC, plain tickers) by 20-day average dollar volume on the IEX feed and watch the top `scanSize` priced ≥ `scanMinPrice` (`bot/scan.mjs`); the scan is re-used for the day, falls back to yesterday's or the list on failure | list / 200 / $5 |
+| `alertDetail` | phone alerts include size and limit price on buys; entry price, exit price and open profit on sells | true |
 | `intraday` | experimental: stock/CALL/PUT signals use today's live price as a provisional close (`liveSignal` in strategy.mjs) instead of waiting for the close; yesterday's close still drives the 1 % bounce rule | **false** |
 | `stockUnit`, `callUnit`, `putUnit` | size each sleeve in `pct` (% of account) or `usd` (fixed dollars) | pct |
 | `stockPct`, `optPct`, `putPct` / `stockUsd`, `callUsd`, `putUsd` | money per trade for each sleeve, in the chosen unit | 10 / 2 / 1 % · $10,000 / $2,000 / $1,000 |
@@ -467,6 +468,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Phone alerts carry prices and profit (`alertDetail`, on by default, switch in Guards): buys show size and limit price, sells show entry, exit and P/L | §5.4 |
 | 2026-10-22 | **Fix: Bot settings Save hung forever.** With the Screener sub-view remembered, every redraw of a non-market tab ran the Screener binding and threw (`MK[tab].stocks`), which aborted the save before it reached GitHub. Binding now limited to the market tabs. Added a page error strip (bottom of the page, with line number), save made independent of redraw errors, and `tools/page-test.mjs` in CI to catch this class of bug | §2.2, §8 |
 | 2026-10-22 | Bot settings: live-price redraws no longer touch the settings tab; step log under the Save bar; after a failed save, a **Copy settings** → paste on github.com fallback that needs no API access | §2.2 |
 | 2026-10-22 | Bot settings page: 12 s limit on every GitHub call with a live seconds counter, plain-language diagnosis of failures (network block / expired token / missing permission / rate limit), **Test connection** button (latency, token expiry, calls left), save uses the known file version and re-reads only on conflict, settings load in parallel and only on first visit (no background refresh clobbering edits), typed edits no longer redraw the form (cursor and scroll stay), “unsaved changes” marker | §2.2, §4.1 |

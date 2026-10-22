@@ -77,7 +77,8 @@ if (process.argv[2] === 'child') {
   await bot.botCycle();
   server.close();
   let watch = null; try { watch = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).watch; } catch (e) {}
-  console.log('RESULT ' + JSON.stringify({ watch, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  let acts = null; try { acts = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).acts.map(a => a.m); } catch (e) {}
+  console.log('RESULT ' + JSON.stringify({ acts, watch, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
@@ -95,6 +96,7 @@ const check = (name, fn) => { try { fn(); console.log('  ✓', name); passed++; 
 const A = run({ stocks: true, options: true });                       // default: puts off
 check('default: stock buy on the dip stock', () => assert.ok(A.orders.some(o => o.symbol === 'DIP' && o.side === 'buy')));
 check('default: CALL on the dip stock (sd-q-)', () => { assert.equal(A.options.length, 1); assert.match(A.options[0].symbol, /^DIP\d{6}C/); assert.equal(A.options[0].id, 'sd-q'); });
+check('alerts: a buy alert carries size and price', () => assert.ok((A.acts || []).some(m => /DIP RSI-2 dip buy .*\u00b7 \d+ shares @ \$[\d.]+ \(\$[\d,]+/.test(m)), JSON.stringify(A.acts)));
 check('default: no PUT is ever placed', () => assert.ok(!A.orders.some(o => /^POP\d{6}P/.test(o.symbol))));
 
 const B = run({ stocks: true, options: true, puts: true });

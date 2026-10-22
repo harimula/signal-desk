@@ -93,7 +93,20 @@ const T = (p, o) => call(BASE, p, o), D = (p, o) => call(DATA, p, o);
 export const httpCall = call;                               // for tests only
 // Idempotency: never send the same order twice, even if the broker is slow to list it.
 const placed = new Map();
-const send = async (body, why) => { const dk = body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); alerts.push((body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why); act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }); };
+// Price and profit detail for phone alerts (setting alertDetail, on by default). Buys show size and limit price;
+// sells show the position's entry price, the current price and the open profit at the moment the sell is sent.
+let posBySym = {};
+const money = n => (n < 0 ? '\u2212$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+function alertDetail(body) {
+  if (CFG.alertDetail === false) return '';
+  const opt = isOpt(body.symbol), mult = opt ? 100 : 1;
+  if (body.side === 'buy') return body.limit_price ? ` \u00b7 ${body.qty} ${opt ? 'contract' : 'share'}${+body.qty === 1 ? '' : 's'} @ $${body.limit_price}${+body.qty > 0 ? ' (' + money(+body.qty * +body.limit_price * mult) + ')' : ''}` : '';
+  const p = posBySym[body.symbol]; if (!p) return '';
+  const avg = +p.avg_entry_price, cur = +p.current_price, pl = +p.unrealized_pl, plpc = +p.unrealized_plpc * 100;
+  if (!(avg > 0) || !(cur > 0)) return '';
+  return ` \u00b7 bought $${avg.toFixed(2)}, selling \u2248$${cur.toFixed(2)} \u2192 ${pl >= 0 ? '+' : ''}${money(pl)} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(1)}%)`;
+}
+const send = async (body, why) => { why = why + alertDetail(body); const dk = body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); alerts.push((body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why); act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }); };
 
 // ---- time in New York ----
 const etParts = d => Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map(p => [p.type, p.value]));
@@ -200,6 +213,7 @@ async function run() {
   const acct = await T('/v2/account');
   const equity = +acct.equity, lastEq = +acct.last_equity || equity;
   const positions = await T('/v2/positions');
+  posBySym = Object.fromEntries(positions.map(p => [p.symbol, p]));
   const openOrders = await T('/v2/orders?status=open&limit=500');
   const hist = await T('/v2/orders?status=all&limit=500&direction=desc&after=' + new Date(Date.now() - 45 * 864e5).toISOString());
   const stockPos = positions.filter(p => !isOpt(p.symbol)), optPos = positions.filter(p => isOpt(p.symbol));
