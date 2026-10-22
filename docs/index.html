@@ -68,7 +68,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
-  <div class="stamp">System documentation · v1.2<br>Updated 2026-10-22</div>
+  <div class="stamp">System documentation · v1.3<br>Updated 2026-10-22</div>
   <ol>
     <li><a href="#what"><span class="k">01</span>What it is</a></li>
     <li><a href="#functional"><span class="k">02</span>Functional</a></li>
@@ -136,7 +136,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   C[Streaming ticks&lt;br/&gt;Finnhub websocket, user's own key&lt;br/&gt;2.5 s smoothed] --> P</pre></figure>
 <p>Price updates morph the existing page instead of rebuilding it: rows never jump, scroll position never moves, and a change shows as a brief green or red flash, like a broker app.</p>
 <h3>Settings follow you (device sync)</h3>
-<p>Everything the owner sets up (Finnhub/FMP keys, proxy URL, watchlist, portfolios, custom tickers, day-trade and option amounts, theme, calculator inputs) is encrypted in the browser with the owner's passphrase (AES-256-GCM, PBKDF2 × 200 000) and saved to the owner's own repo at <code>user/settings.enc.json</code>. A new laptop or phone needs only the GitHub token and the passphrase, entered once in Bot settings; the rest arrives by itself. Pushes 2.5 s after a change, pulls on load and when the tab returns; last write wins. The token and passphrase never sync.</p>
+<p>Everything the owner sets up (Finnhub/FMP keys, proxy URL, watchlist, portfolios, custom tickers, day-trade and option amounts, theme, calculator inputs) is encrypted in the browser with the owner's passphrase (AES-256-GCM, PBKDF2 × 200 000) and saved to the owner's own repo at <code>user/settings.enc.json</code>. A new laptop or phone needs only the GitHub token and the passphrase, entered once in Bot settings; the rest arrives by itself. Pushes settle 8 s after a change, never more often than once a minute, and are skipped when nothing changed; pulls on load and when the tab returns; last write wins. Derived per-render data (day-trade and option logs, cached recommendations) is excluded. The token and passphrase never sync.</p>
 <h3>Responsive behaviour</h3>
 <ul>
   <li>Desktop: full tables with ‹ › arrows beside each panel to scroll wide tables.</li>
@@ -436,6 +436,8 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Sync fix: exclude derived per-render keys, 1-minute minimum gap, skip when unchanged</td><td>02</td></tr>
+<tr><td>2026-10-22</td><td>Moved to <code>harimula/signal-desk</code>; page fallback repo and docs re-pointed</td><td>03</td></tr>
 <tr><td>2026-10-22</td><td>Portability: repo name derived from the Pages URL and <code>GITHUB_REPOSITORY</code>; MIGRATION.md added</td><td>03</td></tr>
 <tr><td>2026-10-22</td><td>Device sync: settings, quote keys, watchlist, portfolios and calculator inputs roam between devices through an encrypted file in the repo; Rent vs EMI inputs persist</td><td>02, 04, 06</td></tr>
 <tr><td>2026-10-21</td><td>Documentation set created (this page, ARCHITECTURE.md, architecture.pptx); docs link on the site</td><td>all</td></tr>
