@@ -18,6 +18,7 @@ import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
 import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
 import { scanUniverse } from './scan.mjs';
+import { daySetup, marketMode, dayShares, dayExit, dayTrail, encodeDayId, decodeDayId, SESSION_OPEN } from './daytrade.mjs';
 
 const PAPER = { key: process.env.ALPACA_KEY, secret: process.env.ALPACA_SECRET, url: process.env.ALPACA_URL || 'https://paper-api.alpaca.markets' };
 const LIVE = { key: process.env.ALPACA_LIVE_KEY, secret: process.env.ALPACA_LIVE_SECRET, url: 'https://api.alpaca.markets' };
@@ -57,6 +58,123 @@ async function ensureUniverse() {
     else act('market scan returned too few stocks (' + r.symbols.length + ') \u2014 keeping the previous list');
   } catch (e) { act('market scan failed (' + (e.message || e).slice(0, 80) + ') \u2014 using ' + (scanCache.symbols ? "yesterday's scan" : 'the listed stocks')); }
   if (!scanCache.symbols) UNIVERSE = CFG.symbols;
+}
+
+// =====================================================================================================================
+// Day trading (experimental, OFF by default) — rules in docs/daytrading-rules.html, logic in daytrade.mjs.
+// Separate order-id prefixes (sd-d-, sd-dc-, sd-dp-) keep it apart from the RSI-2 swing strategy.
+// =====================================================================================================================
+let barsCache5 = { at: 0, bars: null, day: '' }, dayState = {}, lastDay = null;
+const etMinsOf = iso => { const e = etParts(new Date(iso)); return (+e.hour % 24) * 60 + +e.minute; };
+const hhmm = s => { const [h, m] = String(s).split(':').map(Number); return h * 60 + m; };
+async function load5m(syms) {
+  const want = [...new Set(syms.concat(['SPY']))];
+  if (barsCache5.bars && barsCache5.day === TODAY && Date.now() - barsCache5.at < 55000 && want.every(x => x in barsCache5.bars)) return barsCache5.bars;
+  const out = {}; for (const x of want) out[x] = [];
+  let token = '';
+  for (let k = 0; k < 20; k++) {
+    const j = await D(`/v2/stocks/bars?symbols=${want.join(',')}&timeframe=5Min&start=${ymdDash(Date.now())}T12:00:00Z&limit=10000&feed=iex&sort=asc${token ? '&page_token=' + token : ''}`);
+    for (const [x, arr] of Object.entries(j.bars || {})) out[x] = (out[x] || []).concat(arr.map(b => ({ ...b, m: etMinsOf(b.t) })).filter(b => b.m >= SESSION_OPEN && b.m < 960));
+    token = j.next_page_token; if (!token) break;
+  }
+  barsCache5 = { at: Date.now(), bars: out, day: TODAY };
+  return out;
+}
+async function dayTradeCycle(ctx) {
+  const { equity, acct, positions, hist, liveOrders, G, capHit, slBudget, sellsFor, cid } = ctx;
+  const dayC = { start: hhmm(CFG.dayStart), end: hhmm(CFG.dayEnd), rvol: CFG.dayRvol, target: CFG.dayTarget, timeStop: CFG.dayTimeStop };
+  // open day trades: entry order id tells us side, stop, target and when it opened
+  const dayPos = [];
+  for (const p of positions) {
+    const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && /^sd-d[cp]?-/.test(cid(o)) && o.symbol === p.symbol);
+    const d = e && decodeDayId(cid(e)); if (!d) continue;
+    dayPos.push({ p, e, d, und: isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol, opt: isOpt(p.symbol) });
+  }
+  if (!CFG.dayTrade && !dayPos.length) { lastDay = null; return; }
+  const todayIds = hist.filter(o => o.side === 'buy' && /^sd-d[cp]?-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
+  const tradesToday = todayIds.length, tradedSyms = new Set(todayIds.map(o => isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol));
+  // cancel day entries that did not fill within 10 minutes (a day trade that is not filling has missed its moment)
+  for (const o of liveOrders) if (o.side === 'buy' && /^sd-d[cp]?-/.test(cid(o)) && Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 10 * 60000) {
+    act(`${o.symbol} day-trade buy at ${o.limit_price} unfilled for 10 min — cancelled`); if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
+  }
+  const unds = [...new Set(dayPos.map(x => x.und))];
+  const bars5 = await load5m(CFG.dayTrade ? UNIVERSE.concat(unds) : unds);
+  const last = await latestPrices([...new Set(UNIVERSE.concat(unds, ['SPY']))]);
+  const spyPx = last.SPY && last.SPY.p, market = marketMode(bars5.SPY, spyPx);
+
+  // ---- manage open day trades ----
+  for (const { p, d, und, opt } of dayPos) {
+    const sells = sellsFor(p.symbol); if (sells.some(o => o.type === 'market')) continue;
+    const px = last[und] && last[und].p; if (!px) continue;
+    const st = dayState[p.symbol] || (dayState[p.symbol] = { stop: d.stop });
+    const pos = { side: d.side, entry: opt ? d.entry : (+p.avg_entry_price || d.entry), stop: st.stop, target: d.target, openedMins: d.openMins };
+    const tr = dayTrail({ pos, px }); if (tr) { st.stop = tr.stop; act(`${p.symbol} ${tr.why} (${tr.stop})`); pos.stop = tr.stop; }
+    const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); delete dayState[p.symbol]; };
+    const plpc = +p.unrealized_plpc * 100;
+    if (opt) {
+      if (plpc >= CFG.dayOptTp) { await out(`${p.symbol} day trade +${plpc.toFixed(0)}% — option take-profit`); continue; }
+      if (plpc <= -CFG.dayOptStop) { await out(`${p.symbol} day trade ${plpc.toFixed(0)}% — option stop`); continue; }
+      if (MINS >= 945) { await out(`${p.symbol} day trade — options flat by 3:45 PM`); continue; }
+    }
+    const x = dayExit({ pos, px, mins: MINS, cfg: dayC });
+    if (x) { await out(`${p.symbol} day trade ${x.kind === 'flat' ? 'closed' : 'exit'} — ${x.why} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(1)}%)`); continue; }
+    if (!opt && !sells.length) await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'limit', limit_price: String(tick(d.target)), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} day trade — take-profit order at ${d.target}`);
+  }
+
+  // ---- new day trades ----
+  const dayClosed = (fillsCache.closed || []).filter(c => c.inT && c.outT && c.inT.slice(0, 10) === c.outT.slice(0, 10));
+  let streak = 0; for (const c of [...dayClosed].sort((a, b) => a.outT < b.outT ? 1 : -1)) { if (c.pl < 0) streak++; else break; }
+  const pdtBlock = equity < 25000 && +acct.daytrade_count >= 3 && !acct.pattern_day_trader;
+  const idle = !CFG.dayTrade ? 'day trading is off' : capHit ? 'daily loss cap hit' : G.block ? 'paused by the market check' : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.dayMaxTrades ? `${tradesToday} day trades today — daily maximum reached` : streak >= CFG.dayStreak ? `${streak} day-trade losses in a row — done for the day` : MINS < dayC.start ? 'before the day-trade window' : MINS >= dayC.end ? 'day-trade window closed' : market === 'flat' ? 'market undecided (SPY on its VWAP) — waiting' : null;
+  const setups = [];
+  if (CFG.dayTrade) {
+    const dailyBars = await loadBars();
+    const avgVol = sym => { const B = completed(dailyBars || {}, sym); const w = B.slice(-10); return w.length ? w.reduce((t, b) => t + (b.v || 0), 0) / w.length : 0; };
+    for (const sym of UNIVERSE) {
+      if (sym === 'SPY') continue;
+      const px = last[sym] && last[sym].p, B = bars5[sym] || [];
+      const sg = daySetup({ bars: B, px, mins: MINS, avgDailyVol: avgVol(sym), market, cfg: dayC });
+      if (sg) setups.push({ sym, ...sg, held: tradedSyms.has(sym) });
+    }
+    setups.sort((a, b) => (b.rvol || 0) - (a.rvol || 0));
+  }
+  let placed = 0;
+  if (!idle) for (const sg of setups) {
+    if (tradesToday + placed >= CFG.dayMaxTrades) break;
+    if (sg.held || positions.some(p => (isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol) === sg.sym) || liveOrders.some(o => (isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol) === sg.sym)) continue;
+    if (CFG.newsGuard && symbolRisk(sg.sym, newsCache.syms)) { act(`${sg.sym} day setup skipped — ${symbolRisk(sg.sym, newsCache.syms)}`); continue; }
+    const label = `${sg.sym} day trade: ${sg.setup} ${sg.side === 'long' ? 'long' : 'short'} — ${sg.why}; stop ${sg.stop}, target ${sg.target}`;
+    if (sg.side === 'long' && CFG.dayStock) {
+      const lim = r2d(sg.entry * 1.001), qty = dayShares({ equity, riskPct: CFG.dayRiskPct, entry: lim, stop: sg.stop, budget: slBudget('stock') });
+      if (qty < 1) { act(`${sg.sym} day setup skipped — 1 share is above the risk or money budget`); continue; }
+      await send({ symbol: sg.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: encodeDayId('sd-d-', sg.sym, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label);
+      placed++; continue;
+    }
+    if ((sg.side === 'long' && CFG.dayCalls) || (sg.side === 'short' && CFG.dayPuts)) {
+      const kind = sg.side === 'long' ? 'call' : 'put', c = await pickDayContract(sg.sym, kind, sg.entry); if (!c) { act(`${sg.sym} ${kind.toUpperCase()}: no liquid contract 1–${CFG.dayOptDteMax} days out — skipped`); continue; }
+      const qty = Math.max(0, Math.min(Math.floor(slBudget(kind) / (c.lim * 100)), Math.floor(equity * CFG.dayRiskPct / 100 / (c.lim * 100 * CFG.dayOptStop / 100))));
+      if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(c.lim * 100)}) is above the day-trade risk or money budget — skipped`); continue; }
+      await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(c.lim), time_in_force: 'day', client_order_id: encodeDayId(kind === 'put' ? 'sd-dp-' : 'sd-dc-', c.symbol, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label.replace('day trade:', `day trade ${kind.toUpperCase()}:`));
+      dayState[c.symbol] = { stop: sg.stop };
+      placed++;
+    }
+  }
+  lastDay = { at: new Date().toISOString(), on: CFG.dayTrade, market, spyVwap: bars5.SPY && bars5.SPY.length ? r2d(vwapOf(bars5.SPY)) : null, tradesToday: tradesToday + placed, max: CFG.dayMaxTrades, streak, idle,
+    window: `${CFG.dayStart}–${CFG.dayEnd} ET, flat by 3:50 PM`,
+    setups: setups.slice(0, 12).map(x => ({ sym: x.sym, setup: x.setup, side: x.side, entry: x.entry, stop: x.stop, target: x.target, rvol: x.rvol, why: x.why, held: x.held })),
+    open: dayPos.map(({ p, d, und, opt }) => ({ s: p.symbol, und, kind: opt ? (d.kind === 'dp' ? 'put' : 'call') : 'stock', side: d.side, qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * (opt ? 100 : 1)), cur: r2d(+p.current_price * (opt ? 100 : 1)), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, undPx: last[und] && last[und].p, stop: (dayState[p.symbol] || {}).stop || d.stop, target: d.target, opened: d.openMins })) };
+}
+const vwapOf = bars => { let pv = 0, vv = 0; for (const b of bars) { pv += (b.h + b.l + b.c) / 3 * (b.v || 0); vv += b.v || 0; } return vv ? pv / vv : bars[bars.length - 1].c; };
+// Nearest-the-money contract expiring 1–N trading days out, with a tight enough market.
+async function pickDayContract(und, kind, px) {
+  const from = new Date(Date.now() + 864e5), to = new Date(Date.now() + CFG.dayOptDteMax * 864e5);
+  const cj = await D(`/v2/options/contracts?underlying_symbols=${und}&type=${kind}&status=active&expiration_date_gte=${ymdDash(+from)}&expiration_date_lte=${ymdDash(+to)}&strike_price_gte=${r2d(px * 0.96)}&strike_price_lte=${r2d(px * 1.04)}&limit=200`).catch(() => ({}));
+  const cs = (cj.option_contracts || []).filter(c => c.tradable !== false); if (!cs.length) return null;
+  const ex = [...new Set(cs.map(c => c.expiration_date))].sort()[0];
+  const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - px) - Math.abs(+b.strike_price - px))[0];
+  const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[c.symbol];
+  if (!q || !(q.ap > 0) || !(q.bp > 0) || (q.ap - q.bp) / q.ap > 0.1) return null;                 // day trades need a spread under 10%
+  return { symbol: c.symbol, lim: tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02)), exp: ex, strike: +c.strike_price };
 }
 export const scanInfo = () => scanCache.info;
 export function loadConfigFile() { try { return JSON.parse(fs.readFileSync('bot/config.json', 'utf8')); } catch (e) { return null; } }
@@ -386,6 +504,10 @@ async function run() {
     else if (!sells.length) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
   }
 
+  // ---- day trading (own windows and limits; manages its open trades every beat, even when the switch is off) ----
+  try { await dayTradeCycle({ equity, acct, positions, hist, liveOrders, G, capHit, slBudget, sellsFor, cid }); }
+  catch (e) { act('Day-trade engine error: ' + (e.message || e).slice(0, 120)); }
+
   // ---- what the bot is looking at (always, even when it cannot enter: the Bot trades tab shows it) ----
   const gated = capHit || MINS < G.minStart || MINS >= ENTRY_END || G.block;
   if (gated && lastWatch && Date.now() - Date.parse(lastWatch.at) < 20000) return;   // nothing to enter: refresh the watch list every 20 s, not every beat
@@ -527,7 +649,7 @@ async function writeJournal() {
   if (prev.sig === sigCmp && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: /paper/.test(BASE),
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
-    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, risk: lastRisk, watch: lastWatch || prev.watch || null, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
+    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, risk: lastRisk, watch: lastWatch || prev.watch || null, day: lastDay, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {
     // Public site, private data: AES-256-GCM with a key derived from your passphrase (PBKDF2-SHA256, 200k rounds).
     // Only the timestamp, paper/live flag and stream health stay readable; the page decrypts the rest with the same passphrase.

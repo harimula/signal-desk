@@ -8,6 +8,7 @@ import { keysFor, relevant, parseRss } from '../news.mjs';
 import { normalize } from './config.mjs';
 import http from 'node:http';
 import { rankByLiquidity } from './scan.mjs';
+import { vwap, atr, openingRange, relVolume, daySetup, marketMode, dayShares, dayExit, dayTrail, encodeDayId, decodeDayId } from './daytrade.mjs';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => { try { fn(); passed++; console.log('  ✓ ' + name); } catch (e) { failed++; console.log('  ✗ ' + name + '\n      ' + e.message); } };
@@ -183,6 +184,63 @@ test('trigger prices: the close that makes RSI-2 cross the buy / put level, and 
   assert.equal(rsi2ExitLevel([1, 2, 3, 10, 20, 30, 40]), 25);                 // average of the last 4 closes
   const ex = rsi2Exit([10, 20, 30, 40], 25.01, 1); assert.equal(ex.exit, true); assert.equal(rsi2Exit([10, 20, 30, 40], 24.99, 1).exit, false);
 });
+
+// ---- day trading ----
+{
+  // 5-minute bars from 9:30: a flat opening range 100–101, then a breakout to 102 on heavy volume
+  const bar = (m, o, h, l, c, v) => ({ t: 'x', m, o, h, l, c, v });
+  const orb = [bar(570, 100.2, 101, 100, 100.6, 60000), bar(575, 100.6, 100.9, 100.1, 100.4, 50000), bar(580, 100.4, 100.8, 100.2, 100.7, 50000),
+    bar(585, 100.7, 100.95, 100.5, 100.9, 55000), bar(590, 100.9, 101.6, 100.8, 101.5, 90000)];
+  test('day trading: VWAP, ATR and the opening range come out right', () => {
+    const or = openingRange(orb, 15); assert.deepEqual(or, { high: 101, low: 100 });
+    assert.ok(Math.abs(vwap(orb) - 100.76) < 0.1, 'vwap ' + vwap(orb)); assert.ok(atr(orb) > 0.5 && atr(orb) < 1.2, 'atr ' + atr(orb));
+    assert.equal(openingRange(orb.slice(0, 2), 15), null);                                 // range not complete yet
+    assert.ok(relVolume(orb, 1e6, 595) > 1.5, 'rvol ' + relVolume(orb, 1e6, 595));
+  });
+  test('day trading: ORB long fires only with the market up and after 9:45; stop under the range, target 2R', () => {
+    const sg = daySetup({ bars: orb, px: 101.55, mins: 595, avgDailyVol: 1e6, market: 'up', cfg: {} });
+    assert.ok(sg && sg.side === 'long' && sg.setup === 'ORB', JSON.stringify(sg));
+    assert.ok(sg.stop < 101 && sg.stop >= 99.5, 'stop ' + sg.stop); assert.ok(Math.abs((sg.target - sg.entry) - 2 * (sg.entry - sg.stop)) < 0.02, 'target is 2R');
+    assert.equal(daySetup({ bars: orb, px: 101.55, mins: 595, avgDailyVol: 1e6, market: 'down', cfg: {} }), null);   // market down: no longs
+    assert.equal(daySetup({ bars: orb, px: 101.55, mins: 580, avgDailyVol: 1e6, market: 'up', cfg: {} }), null);     // before 9:45
+    assert.equal(daySetup({ bars: orb, px: 101.55, mins: 595, avgDailyVol: 5e7, market: 'up', cfg: {} }), null);     // volume too light for this stock
+  });
+  test('day trading: ORB short is the mirror and becomes a PUT candidate', () => {
+    const brk = orb.map(b => ({ ...b, o: 201 - b.o + 100, h: 201 - b.l + 100, l: 201 - b.h + 100, c: 201 - b.c + 100 }));   // flip around 100.5 → breakdown
+    const sg = daySetup({ bars: brk, px: 99.45, mins: 595, avgDailyVol: 1e6, market: 'down', cfg: {} });
+    assert.ok(sg && sg.side === 'short' && sg.setup === 'ORB', JSON.stringify(sg)); assert.ok(sg.stop > 100 && sg.target < sg.entry);
+  });
+  test('day trading: VWAP pullback long after a trend day', () => {
+    const b = [];
+    for (let i = 0; i < 12; i++) b.push(bar(570 + i * 5, 100 + i * 0.3, 100.4 + i * 0.3, 99.9 + i * 0.3, 100.3 + i * 0.3, 40000));
+    const vw = vwap(b);
+    b.push(bar(630, 103.4, 103.5, vw - 0.02, vw + 0.05, 40000));                            // dips to VWAP
+    b.push(bar(635, vw + 0.05, 103.8, vw, 103.7, 60000));                                    // turns back up, above the dip bar's high
+    const sg = daySetup({ bars: b, px: 103.75, mins: 640, avgDailyVol: 1e6, market: 'up', cfg: {} });
+    assert.ok(sg && sg.setup === 'VWAP' && sg.side === 'long', JSON.stringify(sg)); assert.ok(sg.stop < vw);
+  });
+  test('day trading: market mode from SPY vs its VWAP', () => {
+    const spy = [bar(570, 500, 501, 499, 500.5, 1e6), bar(575, 500.5, 501, 500, 500.8, 1e6), bar(580, 500.8, 501.5, 500.5, 501.2, 1e6)];
+    assert.equal(marketMode(spy, 502), 'up'); assert.equal(marketMode(spy, 499), 'down'); assert.equal(marketMode(spy, vwap(spy)), 'flat');
+  });
+  test('day trading: sizing by risk, exits by stop / target / time / flat, breakeven trail at 1R', () => {
+    assert.equal(dayShares({ equity: 100000, riskPct: 0.5, entry: 101.5, stop: 100.5, budget: 10000 }), 98);       // $500 risk / $1 = 500, capped by $10k budget → 98
+    const pos = { side: 'long', entry: 101.5, stop: 100.5, target: 103.5, openedMins: 600 };
+    assert.equal(dayExit({ pos, px: 100.4, mins: 620, cfg: {} }).kind, 'stop');
+    assert.equal(dayExit({ pos, px: 103.6, mins: 620, cfg: {} }).kind, 'target');
+    assert.equal(dayExit({ pos, px: 101.6, mins: 670, cfg: {} }).kind, 'time');              // 70 min, up only 0.1R
+    assert.equal(dayExit({ pos, px: 102.0, mins: 951, cfg: {} }).kind, 'flat');
+    assert.equal(dayExit({ pos, px: 102.0, mins: 640, cfg: {} }), null);
+    assert.equal(dayTrail({ pos, px: 102.4 }), null); assert.deepEqual(dayTrail({ pos, px: 102.5 }).stop, 101.5);
+    const sh = { side: 'short', entry: 99.5, stop: 100.5, target: 97.5, openedMins: 600 };
+    assert.equal(dayExit({ pos: sh, px: 100.6, mins: 620, cfg: {} }).kind, 'stop'); assert.equal(dayExit({ pos: sh, px: 97.4, mins: 620, cfg: {} }).kind, 'target');
+  });
+  test('day trading: the order id carries entry, stop, target, day and time', () => {
+    const id = encodeDayId('sd-dp-', 'AAPL261024P00230000', 229.5, 231.2, 226.1, '20261022', 612, 'ab1');
+    assert.deepEqual(decodeDayId(id), { kind: 'dp', sym: 'AAPL261024P00230000', entry: 229.5, stop: 231.2, target: 226.1, day8: '20261022', openMins: 612, side: 'short' });
+    assert.equal(decodeDayId('sd-r-AAPL-100-20261022-xx'), null);
+  });
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

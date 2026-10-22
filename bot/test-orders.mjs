@@ -14,8 +14,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 if (process.argv[2] === 'child') {
-  const cfg = JSON.parse(process.argv[3]);
-  const REAL = Date, FIXED = REAL.parse('2026-10-23T14:00:00Z');          // Fri 10:00 ET, inside the entry window
+  const cfg = JSON.parse(process.argv[3]), FAKE = JSON.parse(process.argv[4] || '{}');
+  const REAL = Date, FIXED = REAL.parse(FAKE.time || '2026-10-23T14:00:00Z');          // Fri 10:00 ET by default, inside the entry window
   globalThis.Date = class extends REAL { constructor(...a) { if (a.length) super(...a); else super(FIXED); } static now() { return FIXED; } };
 
   const weekdays = n => { const out = []; let d = new REAL('2026-10-22T04:00:00Z'); while (out.length < n) { if (d.getUTCDay() % 6) out.unshift(new REAL(d)); d = new REAL(d.getTime() - 864e5); } return out; };
@@ -35,10 +35,20 @@ if (process.argv[2] === 'child') {
     FALL: series(80, 120, [0.001, 0.001]),       // uptrend, quiet at yesterday's close; the live price below drops it 10%
     SPY: series(400, 520, [0.001, 0.001]),
     QUIET: series(200, 210, [0.001, 0.001]),      // ordinary liquid stock, no signal
+    ORB: series(95, 100.5, [0.001, 0.001]),        // day-trade stock: flat daily picture, action is intraday
+    BRK: series(105, 100.5, [-0.001, -0.001]),
     JUNK: series(2, 3, [-0.04, -0.04]),           // penny stock that also dipped: the scan must drop it (price < $5)
   };
   BARS.JUNK.forEach(b => b.v = 5e7); BARS.SPY.forEach(b => b.v = 5e6);
   const lastC = s => BARS[s][BARS[s].length - 1].c;
+  // intraday 5-minute bars for today (UTC times; 13:30Z = 9:30 ET on an EDT day)
+  const m5 = (hm, o, h, l, c, v) => ({ t: '2026-10-23T' + hm + ':00Z', o, h, l, c, v, n: 100, vw: c });
+  const ORB5 = [m5('13:30', 100.2, 101, 100, 100.6, 60000), m5('13:35', 100.6, 100.9, 100.1, 100.4, 50000), m5('13:40', 100.4, 100.8, 100.2, 100.7, 50000), m5('13:45', 100.7, 100.95, 100.5, 100.9, 55000), m5('13:50', 100.9, 101.6, 100.8, 101.5, 90000)];
+  const BRK5 = ORB5.map(b => ({ ...b, o: 201 - b.o, h: 201 - b.l, l: 201 - b.h, c: 201 - b.c }));
+  const SPY5 = (FAKE.spy || 'up') === 'up' ? [m5('13:30', 500, 501, 499.5, 500.6, 2e6), m5('13:35', 500.6, 501.2, 500.4, 501, 2e6), m5('13:40', 501, 501.8, 500.9, 501.6, 2e6), m5('13:45', 501.6, 502, 501.4, 501.9, 2e6), m5('13:50', 501.9, 502.5, 501.8, 502.3, 2e6)]
+    : [m5('13:30', 500, 500.5, 499, 499.4, 2e6), m5('13:35', 499.4, 499.6, 498.8, 499, 2e6), m5('13:40', 499, 499.1, 498.2, 498.4, 2e6), m5('13:45', 498.4, 498.6, 498, 498.1, 2e6), m5('13:50', 498.1, 498.2, 497.2, 497.5, 2e6)];
+  const BARS5 = { ORB: ORB5, BRK: BRK5, SPY: SPY5, ...(FAKE.bars5 || {}) };
+  const LIVE = { ORB: 101.55, BRK: 99.45, SPY: (FAKE.spy || 'up') === 'up' ? 502.4 : 497.4, ...(FAKE.live || {}) };
   const orders = [], unknown = [];
   const occ = (und, type, px) => und + '261113' + type[0].toUpperCase() + String(Math.round(px) * 1000).padStart(8, '0');
 
@@ -48,16 +58,17 @@ if (process.argv[2] === 'child') {
     req.on('data', c => body += c);
     req.on('end', () => {
       const send = o => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)); };
-      if (p === '/v2/clock') return send({ is_open: true, timestamp: '2026-10-23T10:00:00-04:00', next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
+      if (p === '/v2/clock') return send({ is_open: true, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
       if (p === '/v2/account') return send({ equity: '100000', last_equity: '100000', cash: '100000', buying_power: '400000', pattern_day_trader: false, daytrade_count: 0, status: 'ACTIVE', multiplier: '4' });
-      if (p === '/v2/positions') return send([]);
+      if (p === '/v2/positions') return send(FAKE.positions || []);
       if (p === '/v2/assets') return send(Object.keys(BARS).map(s => ({ symbol: s, tradable: true, exchange: 'NASDAQ' })).concat([{ symbol: 'OTCX', tradable: true, exchange: 'OTC' }, { symbol: 'WARR.WS', tradable: true, exchange: 'NYSE' }]));
       if (p === '/v2/account/activities/FILL') return send([]);
       if (p === '/v2/account/portfolio/history') return send({ equity: [100000, 100000], timestamp: [1, 2], base_value: 100000 });
       if (p === '/v2/orders' && req.method === 'POST') { const o = JSON.parse(body); orders.push(o); return send({ id: 'o' + orders.length, status: 'accepted', ...o }); }
-      if (p === '/v2/orders') return send([]);
+      if (p === '/v2/orders') return send(u.searchParams.get('status') === 'open' ? (FAKE.open || []) : (FAKE.hist || []));
+      if (p === '/v2/stocks/bars' && u.searchParams.get('timeframe') === '5Min') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS5[s]) out[s] = BARS5[s]; return send({ bars: out }); }
       if (p === '/v2/stocks/bars') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS[s]) out[s] = BARS[s]; return send({ bars: out }); }
-      if (p === '/v2/stocks/trades/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS[s]) out[s] = { p: s === 'FALL' ? lastC(s) * 0.9 : lastC(s), t: '2026-10-23T14:00:00Z' }; return send({ trades: out }); }
+      if (p === '/v2/stocks/trades/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (LIVE[s] != null) out[s] = { p: LIVE[s], t: '2026-10-23T14:00:00Z' }; else if (BARS[s]) out[s] = { p: s === 'FALL' ? lastC(s) * 0.9 : lastC(s), t: '2026-10-23T14:00:00Z' }; return send({ trades: out }); }
       if (p === '/v1beta1/news') return send({ news: [] });
       if (p === '/v2/options/contracts') {
         const und = u.searchParams.get('underlying_symbols'), type = u.searchParams.get('type'), px = lastC(und);
@@ -76,15 +87,15 @@ if (process.argv[2] === 'child') {
   bot.applyConfig({ symbols: ['DIP', 'POP', 'FALL'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
   await bot.botCycle();
   server.close();
-  let watch = null; try { watch = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).watch; } catch (e) {}
+  let watch = null, day = null; try { const jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); watch = jj.watch; day = jj.day; } catch (e) {}
   let acts = null; try { acts = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).acts.map(a => a.m); } catch (e) {}
-  console.log('RESULT ' + JSON.stringify({ acts, watch, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  console.log('RESULT ' + JSON.stringify({ acts, watch, day, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
-function run(cfg) {
+function run(cfg, fake) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sd-orders-'));
-  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), 'child', JSON.stringify(cfg)], { cwd: tmp, encoding: 'utf8', timeout: 90000 });
+  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), 'child', JSON.stringify(cfg), JSON.stringify(fake || {})], { cwd: tmp, encoding: 'utf8', timeout: 90000 });
   const line = (r.stdout || '').split('\n').find(l => l.startsWith('RESULT '));
   if (!line) throw new Error('no result for ' + JSON.stringify(cfg) + '\n' + r.stdout + r.stderr);
   return JSON.parse(line.slice(7));
@@ -133,8 +144,33 @@ check('intraday on: stocks that qualified at the close still qualify, and the wa
 
 const S = run({ stocks: true, options: false, universe: 'scan', scanSize: 50, scanMinPrice: 5, symbols: ['AAPL'] });
 check('market scan: the list setting is ignored and the most-traded stocks are watched instead', () => { assert.equal(S.watch.universe, 'scan'); assert.ok(S.watch.rows.some(r => r.s === 'DIP')); assert.ok(!S.watch.rows.some(r => r.s === 'AAPL')); });
-check('market scan: a penny stock is dropped even though it dipped and trades heavily', () => { assert.ok(!S.orders.some(o => o.symbol === 'JUNK')); assert.ok(!S.watch.rows.some(r => r.s === 'JUNK')); assert.equal(S.watch.scanned, 6); });
+check('market scan: a penny stock is dropped even though it dipped and trades heavily', () => { assert.ok(!S.orders.some(o => o.symbol === 'JUNK')); assert.ok(!S.watch.rows.some(r => r.s === 'JUNK')); assert.equal(S.watch.scanned, 8); });
 check('market scan: the dip stock found by the scan is bought', () => assert.ok(S.orders.some(o => o.symbol === 'DIP' && o.side === 'buy')));
+
+// ---- day trading ----
+const DT = { stocks: false, options: false, puts: false, dayTrade: true, dayStock: true, dayPuts: true, dayCalls: false, symbols: ['ORB', 'BRK', 'QUIET'], dayRvol: 1.2 };
+const D0 = run({ stocks: true, options: true, symbols: ['ORB', 'BRK'] });
+check('day trading off: the breakout stock is NOT bought and no day ids appear', () => assert.ok(!D0.orders.some(o => /^sd-d/.test(o.client_order_id))));
+const D1 = run(DT);
+check('day trading on, market up: ORB long → stock buy with stop/target in the order id', () => {
+  const o = D1.orders.find(x => x.symbol === 'ORB' && x.side === 'buy'); assert.ok(o, JSON.stringify(D1.orders.map(x => x.symbol)) + ' ' + JSON.stringify(D1.acts));
+  const d = /^sd-d-ORB-(\d+)-(\d+)-(\d+)-20261023-600-/.exec(o.client_order_id); assert.ok(d, o.client_order_id);
+  const entry = +d[1] / 100, stop = +d[2] / 100, tgt = +d[3] / 100; assert.ok(stop < entry && tgt > entry && Math.abs((tgt - entry) - 2 * (entry - stop)) < 0.03, 'levels ' + [entry, stop, tgt]);
+});
+check('day trading on, market up: the breakdown stock is left alone (no shorting stock, PUTs only when the market is down)', () => assert.ok(!D1.orders.some(o => /^BRK/.test(o.symbol))));
+check('day trading: sizing never risks more than 0.5% at the stop nor more than the stock money budget', () => { const o = D1.orders.find(x => x.symbol === 'ORB'); const d = /-(\d+)-(\d+)-(\d+)-20261023/.exec(o.client_order_id); const risk = (+d[1] - +d[2]) / 100 * +o.qty; assert.ok(risk <= 500 && risk > 50, 'risk $' + risk); assert.ok(+o.qty * +o.limit_price <= 10000, 'spent ' + (+o.qty * +o.limit_price)); });
+const D2 = run(DT, { spy: 'down' });
+check('day trading on, market down: ORB breakdown → PUT (sd-dp-), no stock buy', () => { assert.ok(D2.orders.some(o => /^BRK\d{6}P/.test(o.symbol) && /^sd-dp-/.test(o.client_order_id)), JSON.stringify(D2.orders.map(o => o.symbol + ' ' + o.client_order_id)) + JSON.stringify(D2.acts)); assert.ok(!D2.orders.some(o => o.symbol === 'ORB')); });
+const D3 = run({ ...DT, dayMaxTrades: 1 }, { hist: [{ symbol: 'QUIET', side: 'buy', status: 'filled', client_order_id: 'sd-d-QUIET-20500-20300-20900-20261023-590-zz', qty: '10', limit_price: '205' }] });
+check('day trading: the daily maximum of trades is honoured', () => { assert.ok(!D3.orders.some(o => o.symbol === 'ORB'), JSON.stringify(D3.orders)); assert.ok(/daily maximum/.test(D3.day.idle || ''), D3.day.idle); });
+const openPos = { symbol: 'ORB', qty: '98', avg_entry_price: '101.6', current_price: '102.2', market_value: '10015', unrealized_pl: '58.8', unrealized_plpc: '0.0059' };
+const histBuy = { symbol: 'ORB', side: 'buy', status: 'filled', client_order_id: 'sd-d-ORB-10160-10040-10400-20261023-600-ab1', qty: '98', limit_price: '101.6' };
+const D4 = run(DT, { time: '2026-10-23T19:52:00Z', positions: [openPos], hist: [histBuy], live: { ORB: 102.2 } });
+check('day trading: an open day trade is sold flat at 3:50 PM whatever the price', () => assert.ok(D4.orders.some(o => o.symbol === 'ORB' && o.side === 'sell' && o.type === 'market'), JSON.stringify(D4.orders) + JSON.stringify(D4.acts)));
+const D5 = run(DT, { time: '2026-10-23T14:30:00Z', positions: [openPos], hist: [histBuy], live: { ORB: 100.3 } });
+check('day trading: the stop sells at market as soon as the price is through it', () => assert.ok(D5.orders.some(o => o.symbol === 'ORB' && o.side === 'sell' && o.type === 'market'), JSON.stringify(D5.orders)));
+const D6 = run(DT, { time: '2026-10-23T14:30:00Z', positions: [openPos], hist: [histBuy], live: { ORB: 102.2 } });
+check('day trading: while the trade is working, a take-profit order rests at the target and nothing is sold', () => { const s = D6.orders.filter(o => o.symbol === 'ORB' && o.side === 'sell'); assert.equal(s.length, 1, JSON.stringify(s)); assert.equal(s[0].type, 'limit'); assert.equal(+s[0].limit_price, 104); });
 
 const F = run({ stocks: true, options: true, puts: true, stockUnit: 'usd', stockUsd: 5000, stockCapUsd: 50, callCapPct: 0.1, putUnit: 'usd', putUsd: 5000, putCapUsd: 100 });
 check('ceilings: nothing bought when each sleeve ceiling is below one unit', () => assert.equal(F.orders.length, 0, JSON.stringify(F.orders.map(o => o.symbol))));

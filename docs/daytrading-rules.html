@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Day Trading Rulebook</title>
+<meta name="description" content="The rules Signal Desk's bot follows when it day-trades stocks and buys CALLs and PUTs intraday: risk, universe, market filter, setups, management, options, limits.">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" type="image/svg+xml" href="../icons/favicon.svg">
+<style>
+:root{--bg:#f6f7fb;--surface:#fff;--surface2:#eceff6;--line:#d9dee9;--fg:#17202e;--muted:#5b6678;--accent:#0e7c86;--pos:#067c68;--neg:#d30e1d;--warn:#8a5a00;--warn-bg:#fff3d6;
+  --body:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141c;--surface:#161d27;--surface2:#1e2733;--line:#2b3542;--fg:#e8edf5;--muted:#9aa7ba;--accent:#4fc3cc;--pos:#2dd4bf;--neg:#f5616d;--warn:#ffd47a;--warn-bg:#3a2d10;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f141c;--surface:#161d27;--surface2:#1e2733;--line:#2b3542;--fg:#e8edf5;--muted:#9aa7ba;--accent:#4fc3cc;--pos:#2dd4bf;--neg:#f5616d;--warn:#ffd47a;--warn-bg:#3a2d10;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--body);padding:0 max(16px,env(safe-area-inset-left)) 48px max(16px,env(safe-area-inset-right))}
+a{color:var(--accent)}
+.page{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:36px}
+@media (max-width:860px){.page{grid-template-columns:minmax(0,1fr)}}
+nav{position:sticky;top:0;align-self:start;padding-top:26px;font-size:14px}
+@media (max-width:860px){nav{position:static;padding-top:14px;border-bottom:1px solid var(--line);padding-bottom:8px}}
+nav ol{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
+@media (max-width:860px){nav ol{flex-direction:row;flex-wrap:wrap;gap:4px 14px}}
+nav a{text-decoration:none;color:var(--muted);display:block;padding:2px 0}
+nav a:hover,nav a:focus-visible{color:var(--accent)}
+main{min-width:0;padding-top:26px}
+h1{font-size:clamp(26px,4vw,36px);line-height:1.15;margin:0 0 6px}
+.lede{font-size:17px;color:var(--muted);max-width:66ch;margin:0 0 8px}
+.stamp{font-size:12px;color:var(--muted)}
+section{margin-top:40px;scroll-margin-top:12px}
+h2{font-size:clamp(20px,2.4vw,26px);margin:0 0 6px;padding-top:12px;border-top:2px solid var(--fg)}
+h2 small{display:block;font-size:13px;color:var(--muted);font-weight:400;margin-top:2px}
+h3{font-size:16px;margin:18px 0 6px}
+.rule{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:12px 16px;margin-top:10px}
+.rule b.n{display:inline-block;min-width:34px;color:var(--accent);font-family:var(--mono);font-size:13px}
+.rule p{margin:4px 0}
+.bot{font-size:13px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+.bot b{color:var(--fg);font-weight:600}
+.notice{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 14px;font-size:14px;margin:16px 0 0}
+table{border-collapse:collapse;width:100%;font-size:14px;margin-top:10px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12.5px}
+code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:1px 5px;border-radius:4px}
+.ex{background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:14px;margin-top:8px}
+.tw{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="page">
+<nav aria-label="Sections">
+  <div><b>Day trading rulebook</b></div>
+  <div class="stamp">Signal Desk · <a href="../">back to the site</a> · <a href="settings.html">settings guide</a> · <a href="./">full documentation</a></div>
+  <ol>
+    <li><a href="#r0">The non-negotiables</a></li>
+    <li><a href="#r1">1 · What to trade</a></li>
+    <li><a href="#r2">2 · When to trade</a></li>
+    <li><a href="#r3">3 · Market filter</a></li>
+    <li><a href="#r4">4 · The two setups</a></li>
+    <li><a href="#r5">5 · Position size</a></li>
+    <li><a href="#r6">6 · Managing the trade</a></li>
+    <li><a href="#r7">7 · CALLs and PUTs</a></li>
+    <li><a href="#r8">8 · Daily limits & PDT</a></li>
+    <li><a href="#r9">9 · Review</a></li>
+    <li><a href="#map">How the bot applies it</a></li>
+  </ol>
+</nav>
+<main>
+<h1>Day trading rules: stocks, CALLs and PUTs</h1>
+<p class="lede">The professional rulebook the bot follows when <b>Day-trade</b> is switched on in Bot settings. Every rule has a reason, and under each one is how the bot applies it. The bot never shorts stock: a short setup is traded with a PUT or not at all.</p>
+<p class="stamp">Kept in step with the engine (<code>bot/daytrade.mjs</code>) on every change · last updated 2026-10-22</p>
+<div class="notice"><b>Experimental.</b> Day trading was not part of the 33-year research that selected the RSI-2 swing rule. These rules are the industry's standard discipline, not a proven edge: paper-trade them for weeks, read the Performance table, and keep the size small. Not advice.</div>
+
+<section id="r0">
+<h2>The non-negotiables<small>the rules that keep an account alive; the setups come second</small></h2>
+<div class="rule"><b class="n">N1</b> <b>Know the stop before you enter.</b><p>No stop price, no trade. The stop goes where the setup is proven wrong (the other side of the range, below the pullback low), not at a round loss you can tolerate.</p><div class="bot">Bot: every entry carries its stop, target and entry price inside the order id; without a valid stop <code>daySetup</code> returns nothing.</div></div>
+<div class="rule"><b class="n">N2</b> <b>Risk a fixed small slice of the account per trade: 0.5 %, never above 1 %.</b><p>Ten losses in a row at 0.5 % is −5 %: survivable. At 5 % per trade it is −40 %.</p><div class="bot">Bot: <b>Risk per day trade</b> (default 0.5 %) sizes every trade so the stop loses at most that; the stock / CALL / PUT money limits cap it further.</div></div>
+<div class="rule"><b class="n">N3</b> <b>Only take trades that pay at least twice the risk.</b><p>With a 2R target you can be right only 40 % of the time and still make money. 1:1 trades need a 55 %+ hit rate, which almost nobody has.</p><div class="bot">Bot: <b>Target</b> default 2R; the setup is discarded if the risk is under 0.2 % or over 2.5 % of the price (too tight to survive noise, or too wide to size).</div></div>
+<div class="rule"><b class="n">N4</b> <b>A daily loss limit ends the day. Full stop.</b><p>The worst losses come from trying to win it back. 2–3 % down on the day: close the screen.</p><div class="bot">Bot: the account-wide <b>Daily loss limit</b> (3 %) blocks new day trades and closes options; <b>Losses in a row that end the day</b> (2) stops after two consecutive day-trade losses.</div></div>
+<div class="rule"><b class="n">N5</b> <b>Few trades. A handful of A-setups beats twenty B-setups.</b><p>Each trade costs spread and slippage; over-trading is the most common way accounts bleed.</p><div class="bot">Bot: <b>Max day trades per day</b> (3), one per stock per day, no re-entry after a stop.</div></div>
+<div class="rule"><b class="n">N6</b> <b>A day trade ends the same day. Never "let it become an investment".</b><p>Holding a loser overnight converts a planned small loss into an unplanned gap risk.</p><div class="bot">Bot: everything day-traded is sold at 3:50 PM ET (options 3:45) whatever the price.</div></div>
+<div class="rule"><b class="n">N7</b> <b>Never move a stop away from the price; never add to a loser.</b><div class="bot">Bot: stops only move toward the price (to breakeven at +1R); there is no averaging-down code path.</div></div>
+</section>
+
+<section id="r1">
+<h2>1 · What to trade<small>liquidity first</small></h2>
+<div class="rule"><b class="n">1.1</b> <b>Liquid, large names only:</b> price ≥ $10 (better $20), average volume ≥ 1 million shares a day, a spread of a few cents. Illiquid stocks make the stop a suggestion.<div class="bot">Bot: the universe is your list or the <b>market scan</b> (top N by dollar volume, minimum price); day trades inherit it. For day trading set the scan minimum price to $20+.</div></div>
+<div class="rule"><b class="n">1.2</b> <b>Only stocks that are "in play" today:</b> relative volume ≥ 1.2–1.5× a normal day by this time. Quiet stocks drift; busy stocks trend.<div class="bot">Bot: <b>Minimum relative volume</b> (1.2) against the stock's 10-day average, weighted for the time of day.</div></div>
+<div class="rule"><b class="n">1.3</b> <b>Skip stocks with their own news today</b> (earnings, FDA, guidance, halts): the levels do not hold and options are priced for a jump.<div class="bot">Bot: the breaking-news guard's per-stock check applies to day entries.</div></div>
+<div class="rule"><b class="n">1.4</b> <b>No penny stocks, no low-float runners, no stocks you cannot borrow or that are halted.</b><div class="bot">Bot: never shorts stock (short setups become PUTs), so borrow and halt risk on shorts do not arise; the price floor removes penny stocks.</div></div>
+</section>
+
+<section id="r2">
+<h2>2 · When to trade<small>the clock is a filter</small></h2>
+<div class="rule"><b class="n">2.1</b> <b>Do not trade the first 15 minutes.</b> The open is where the opening range is built, spreads are widest, and reversals are violent. Watch; do not act.<div class="bot">Bot: <b>Entries from</b> 9:45 (the 15-minute opening range must be complete).</div></div>
+<div class="rule"><b class="n">2.2</b> <b>Best hours: 9:45–11:30 and 2:00–3:30 ET.</b> Lunch (11:30–1:30) is chop: fewer setups qualify because volume dries up.<div class="bot">Bot: entries allowed 9:45–15:30 by default; the relative-volume rule naturally thins out lunchtime trades. Narrow the window in settings if you want the morning only.</div></div>
+<div class="rule"><b class="n">2.3</b> <b>No new trades in the last 30 minutes; flat before the closing auction.</b><div class="bot">Bot: no entries after <b>until</b> (15:30); flat at 15:50, options at 15:45.</div></div>
+<div class="rule"><b class="n">2.4</b> <b>Stand aside around scheduled shocks:</b> Fed decisions (2:00 PM), CPI and jobs reports (8:30 AM — the open after them is wild), Fed minutes.<div class="bot">Bot: the economic-calendar guard pauses all entries around these; options are closed before a Fed decision.</div></div>
+</section>
+
+<section id="r3">
+<h2>3 · Market filter<small>trade with the tide</small></h2>
+<div class="rule"><b class="n">3.1</b> <b>Longs only when the market is up on the day, shorts only when it is down.</b> The simplest definition: SPY above its VWAP = up, below = down. Most stocks move with the index; fighting it halves your odds.<div class="bot">Bot: <code>marketMode()</code> from SPY's 5-minute VWAP, re-checked every cycle. Within ±0.05 % of VWAP the market is "undecided" and nothing is entered.</div></div>
+<div class="rule"><b class="n">3.2</b> <b>Breaking news pauses trading.</b> A war, policy or crisis headline means the levels you planned around no longer apply.<div class="bot">Bot: the breaking-news guard pauses day entries for 30 minutes; open day trades keep their stops and targets.</div></div>
+</section>
+
+<section id="r4">
+<h2>4 · The two setups<small>mechanical, no discretion</small></h2>
+<h3>Setup A — Opening-range breakout (ORB)</h3>
+<div class="rule"><b class="n">A1</b> <b>Define the range:</b> the high and low of the first 15 minutes (9:30–9:45).</div>
+<div class="rule"><b class="n">A2</b> <b>Long entry:</b> a 5-minute bar <i>closes</i> above the range high, the previous bar had not, price is above VWAP, relative volume qualifies, and the market filter says up. The entry is the current price (limit +0.1 %). Short is the exact mirror (close below the range low, below VWAP, market down) and is taken as a PUT.</div>
+<div class="rule"><b class="n">A3</b> <b>Stop:</b> just under the range low (0.1 ATR below it), but never more than 1.5 ATR from the entry: if the range is huge, the stop tightens to 1.5 ATR. <b>Target:</b> 2R.<div class="bot">Bot: <code>stop = max(rangeLow − 0.1·ATR, entry − 1.5·ATR)</code>; ATR is the 14-bar average true range on 5-minute bars.</div></div>
+<div class="rule"><b class="n">A4</b> <b>Only the first breakout counts.</b> A second attempt after a failed breakout is a different, weaker trade — skipped.<div class="bot">Bot: "fresh" means the prior bar had not crossed; one trade per stock per day.</div></div>
+<h3>Setup B — VWAP pullback on a trend day</h3>
+<div class="rule"><b class="n">B1</b> <b>Trend day:</b> at least 70 % of the session's 5-minute closes have been on one side of VWAP (as VWAP stood at each bar).</div>
+<div class="rule"><b class="n">B2</b> <b>Pullback and reclaim:</b> the previous bar touched VWAP (within 0.15 %), and the current bar closed back on the trend side <i>and</i> above the pullback bar's high (longs). Mirror for shorts → PUT.</div>
+<div class="rule"><b class="n">B3</b> <b>Stop:</b> 0.25 ATR beyond the pullback low (high for shorts) or VWAP, whichever is further. <b>Target:</b> 2R.</div>
+<div class="rule"><b class="n">B4</b> <b>What is deliberately missing:</b> no counter-trend fades, no scalping, no news plays, no trading off Level 2 or the tape. Those need a human's judgment and reaction time, and are where most retail day traders lose.</div>
+</section>
+
+<section id="r5">
+<h2>5 · Position size<small>risk decides the size, not conviction</small></h2>
+<div class="rule"><b class="n">5.1</b> <b>Shares = (account × risk %) ÷ (entry − stop).</b> Then cap by the money allowed per trade.
+<div class="ex">$100,000 account, 0.5 % risk = $500. Entry $101.60, stop $100.40 → $1.20 per share → 416 shares. Capital cap 10 % = $10,000 → 98 shares. The bot buys <b>98</b>.</div>
+<div class="bot">Bot: <code>dayShares()</code>; the cap is the stock sleeve's <b>per trade</b> money in Capital allocation.</div></div>
+<div class="rule"><b class="n">5.2</b> <b>Options are sized on the option's own stop:</b> contracts = risk $ ÷ (premium × 100 × option-stop %). A $2.05 contract with a 40 % stop risks $82 per contract → 6 contracts for $500 of risk, then the CALL/PUT money cap applies.</div>
+</section>
+
+<section id="r6">
+<h2>6 · Managing the trade<small>decide once, then obey</small></h2>
+<div class="rule"><b class="n">6.1</b> <b>Stop hit → out at market, immediately.</b> No "wait for the close of the bar".<div class="bot">Bot: checks the live price every beat (about every 2 seconds); any resting take-profit order is cancelled first so the market sell can fill.</div></div>
+<div class="rule"><b class="n">6.2</b> <b>Target as a resting limit order</b> so it fills at exchange speed, not when a human notices.<div class="bot">Bot: a limit sell sits at the target from the moment the entry fills.</div></div>
+<div class="rule"><b class="n">6.3</b> <b>At +1R move the stop to breakeven.</b> A trade that went your way should not turn into a loss.</div>
+<div class="rule"><b class="n">6.4</b> <b>Time stop:</b> if the trade has not made at least 0.3R after 60 minutes, it is not working — take the small result and free the capital.<div class="bot">Bot: <b>Time stop</b> (60 min, 0.3R).</div></div>
+<div class="rule"><b class="n">6.5</b> <b>An entry that does not fill within minutes has missed its moment.</b><div class="bot">Bot: unfilled day-trade buys are cancelled after 10 minutes.</div></div>
+<div class="rule"><b class="n">6.6</b> <b>Flat by 3:50 PM</b> (options 3:45), no exceptions; no re-entry after a stop.</div>
+</section>
+
+<section id="r7">
+<h2>7 · CALLs and PUTs intraday<small>same setups, different instrument</small></h2>
+<div class="rule"><b class="n">7.1</b> <b>Buy options only. Never sell (write) them intraday</b> — unlimited risk has no place in a rulebook like this.</div>
+<div class="rule"><b class="n">7.2</b> <b>Never same-day expiry (0DTE).</b> Theta eats the premium by the hour and gamma makes the P/L a coin flip. Use the nearest expiry at least one trading day out, at most about a week.<div class="bot">Bot: <b>Option expiry, max days out</b> (7); the earliest expiry considered is tomorrow.</div></div>
+<div class="rule"><b class="n">7.3</b> <b>At-the-money strike (delta about 0.50).</b> It moves roughly half a dollar per dollar of the stock, with the least time-decay drag per unit of movement for a one-day hold.<div class="bot">Bot: the strike nearest the current price.</div></div>
+<div class="rule"><b class="n">7.4</b> <b>Spread discipline:</b> the bid-ask spread must be under 10 % of the ask (professionals want under 5 %). A wide spread is a loss you pay twice.<div class="bot">Bot: contracts with a spread over 10 % are skipped; the buy limit is the mid plus 2 %, never above the ask.</div></div>
+<div class="rule"><b class="n">7.5</b> <b>Exits on the option:</b> take profit at +50 %, stop at −40 %, and exit when the <i>stock</i> hits the trade's stop or target or the time stop fires. Whichever comes first.<div class="bot">Bot: <b>Option take-profit</b> / <b>Option stop</b>, plus the stock-level rules carried in the order id.</div></div>
+<div class="rule"><b class="n">7.6</b> <b>Avoid IV traps:</b> no options on a stock with earnings today or tomorrow (implied volatility collapses after the event), none held into a Fed decision.<div class="bot">Bot: news guard skips stocks with fresh news/earnings; options are closed before a Fed decision; everything is flat by 3:45 anyway.</div></div>
+<div class="rule"><b class="n">7.7</b> <b>Keep the option sleeve small</b> until it has 50+ trades of history: a fixed-dollar per-trade and total cap in Capital allocation does that.</div>
+</section>
+
+<section id="r8">
+<h2>8 · Daily limits and the pattern-day-trader rule<small>the rules outside your control</small></h2>
+<div class="rule"><b class="n">8.1</b> <b>Pattern-day-trader (FINRA):</b> an account under $25,000 that makes four or more day trades in five business days is restricted. Three per rolling week is the practical limit for small accounts.<div class="bot">Bot: no new day trades once the broker reports 3 day trades in 5 days on an account under $25,000. The paper account is $100,000, so this does not bind there.</div></div>
+<div class="rule"><b class="n">8.2</b> <b>Weekly loss limit</b> (6 %) and the losing-streak rule apply to day trades as to everything else.</div>
+<div class="rule"><b class="n">8.3</b> <b>Costs are real:</b> commissions may be zero but spread and slippage are not; the 10-minute fill cancel and the 10 % option-spread rule exist to keep them bounded.</div>
+</section>
+
+<section id="r9">
+<h2>9 · Review<small>what to expect, how to judge it</small></h2>
+<div class="rule"><b class="n">9.1</b> <b>Judge after 50+ trades, not 5.</b> With 2R targets a 40–50 % win rate is normal and profitable; a run of six losses in a row is statistically ordinary.<div class="bot">Bot: the Performance table on the Bot trades tab splits <b>Day trades (same day)</b> from <b>Swing</b> and shows expectancy and profit factor per group.</div></div>
+<div class="rule"><b class="n">9.2</b> <b>One change at a time.</b> If you tweak the target and the volume filter together you learn nothing.</div>
+<div class="rule"><b class="n">9.3</b> <b>Keep the proven rule running at full size</b> (RSI-2 swing) and run day trading small beside it until it earns more.</div>
+</section>
+
+<section id="map">
+<h2>How the bot applies it<small>rule → setting or code</small></h2>
+<div class="tw"><table>
+<thead><tr><th>Rule</th><th>Where</th><th>Default</th></tr></thead>
+<tbody>
+<tr><td>Master switch</td><td>Bot settings 4b → <b>Day-trade</b></td><td>off</td></tr>
+<tr><td>Instrument per side</td><td>Long setups → shares and/or CALL; short setups → PUT</td><td>shares on, CALL off, PUT on</td></tr>
+<tr><td>Risk per trade (N2)</td><td><b>Risk per day trade</b></td><td>0.5 %</td></tr>
+<tr><td>Reward (N3)</td><td><b>Target</b> in R</td><td>2</td></tr>
+<tr><td>Trades per day (N5)</td><td><b>Max day trades per day</b></td><td>3</td></tr>
+<tr><td>Streak (N4)</td><td><b>Losses in a row that end the day</b></td><td>2</td></tr>
+<tr><td>Relative volume (1.2)</td><td><b>Minimum relative volume</b></td><td>1.2×</td></tr>
+<tr><td>Window (2.1–2.3)</td><td><b>Entries from / until</b>; flat 15:50 (options 15:45) fixed</td><td>09:45–15:30</td></tr>
+<tr><td>Market filter (3.1)</td><td>SPY vs its VWAP, code</td><td>always on</td></tr>
+<tr><td>Setups (4)</td><td><code>daySetup()</code>: ORB 15 min, VWAP pullback</td><td>both</td></tr>
+<tr><td>Breakeven / time stop (6.3–6.4)</td><td>code / <b>Time stop</b></td><td>+1R / 60 min, 0.3R</td></tr>
+<tr><td>Options (7)</td><td><b>Option expiry max</b>, <b>Option take-profit</b>, <b>Option stop</b>; ATM strike, spread ≤ 10 % in code</td><td>7 days, +50 %, −40 %</td></tr>
+<tr><td>PDT (8.1)</td><td>code, from the broker's day-trade count</td><td>always on</td></tr>
+<tr><td>Review (9)</td><td>Bot trades → Performance → Day trades (same day)</td><td>—</td></tr>
+</tbody></table></div>
+<p class="stamp" style="margin-top:10px">Order ids: <code>sd-d-</code> stock day trade, <code>sd-dc-</code> / <code>sd-dp-</code> CALL / PUT day trade, each carrying entry, stop, target, date and time of entry so the bot can manage the trade after a restart.</p>
+</section>
+</main>
+</div>
+</body>
+</html>
