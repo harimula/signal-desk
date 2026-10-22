@@ -187,7 +187,7 @@ const variants = {
   'Without the market filter': evaluate(signals, sessionsBySym, { ...best.P, filter: false }), 'Morning only (entries until 11:30)': evaluate(signals, sessionsBySym, { ...best.P, end: 690 }),
 };
 const verdict = best.S.n >= 300 && best.S.avgR > 0.05 && best.S.profitFactor > 1.1 && best.S.posYears / best.S.totalYears >= 0.6
-  ? 'edge' : best.S.n >= 300 && best.S.avgR > 0 ? 'marginal' : 'none';
+  ? 'edge' : best.S.n >= 300 && best.S.avgR > 0.02 && best.S.profitFactor > 1.03 ? 'marginal' : 'none';
 const out = { at: new Date().toISOString(), start: START, end: END, symbols: SYMS, bars: barCount, rawSignals: signals.length, slippagePerSide: SLIP, riskUsd: RISK_USD,
   verdict, default: def, best, top: results.slice(0, 12), variants,
   note: 'Entry at the close of the signal bar + slippage; stop assumed hit before target inside a bar; flat at the 15:45 bar close; 1 trade per stock per day, max per day and 2-loss streak applied in time order. Shorts are simulated as stock shorts (a proxy for PUTs: no option spread or time decay included). IEX volume is a slice of the market but consistent across the test.' };

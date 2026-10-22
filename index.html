@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-iefTp8QIT5pgeOU+TWumvP1DuRmkga7bfoBGeD95/Gc=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-XxOyK+tNrtjPjB9Gro/YZ3rXnZZNavp+E2Uf88UHpLY=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -897,7 +897,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792713057';
+const BUILD_V = '1792713133';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2421,15 +2421,16 @@ ${(() => { const r = btJ && (btJ.results || []).find(x => x.key === 'rsi2' && !x
   const rdCard = rdJ && rdJ.best ? (() => {
     const row = (name, S, hl) => S && S.n ? `<tr${hl ? ' style="background:var(--surface2)"' : ''}><td class="lt">${name}</td><td>${S.n}</td><td>${S.winRate}%</td><td class="${S.avgR >= 0 ? 'pos' : 'neg'}">${S.avgR >= 0 ? '+' : ''}${S.avgR}R</td><td class="${S.expectancyUsd >= 0 ? 'pos' : 'neg'}">${S.expectancyUsd >= 0 ? '+' : '−'}$${Math.abs(S.expectancyUsd)}</td><td>${S.profitFactor ?? '–'}</td><td>${S.maxDrawdownR}R</td><td>${S.posYears}/${S.totalYears}</td></tr>` : '';
     const fmtP = P => `range ${P.orMin} min · vol ≥ ${P.rvol}× · target ${P.target}R · time stop ${P.timeStop} min · until ${mins2hhmm(P.end)} · market filter ${P.filter ? 'on' : 'off'}`;
-    const v = rdJ.verdict, vTxt = v === 'edge' ? '<span class="pos">the rules showed an edge on this data</span>' : v === 'marginal' ? '<span style="color:var(--s)">marginal — positive but thin; paper-trade before trusting it</span>' : '<span class="neg">no edge found — leave day trading off or keep it tiny</span>';
+    const yrsAll = Object.keys(rdJ.best.S.years || {}).sort(), firstYear = yrsAll[0] || rdJ.start.slice(0, 4), B = rdJ.best.S;
+    const v = B.n >= 300 && B.avgR > 0.05 && B.profitFactor > 1.1 && B.posYears / B.totalYears >= 0.6 ? 'edge' : B.n >= 300 && B.avgR > 0.02 && B.profitFactor > 1.03 ? 'marginal' : 'none', vTxt = v === 'edge' ? '<span class="pos">the rules showed an edge on this data</span>' : v === 'marginal' ? '<span style="color:var(--s)">marginal — positive but thin; paper-trade before trusting it</span>' : '<span class="neg">no edge found — leave day trading off or keep it tiny</span>';
     const yrs = Object.entries(rdJ.best.S.years || {});
-    return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">🧪 Day-trading test — every 5-minute bar since ${esc(rdJ.start.slice(0, 4))}</b> <span class="mut" style="font-size:11.5px">· ${(rdJ.symbols || []).length} stocks + SPY · ${(rdJ.bars || 0).toLocaleString()} bars · run ${tET(rdJ.at)} ET</span>
+    return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">🧪 Day-trading test — every 5-minute bar since ${esc(firstYear)}</b> <span class="mut" style="font-size:11.5px">· ${(rdJ.symbols || []).length} stocks + SPY · ${(rdJ.bars || 0).toLocaleString()} bars · run ${tET(rdJ.at)} ET</span>
 <div style="margin-top:6px;font-size:13px"><b>Verdict:</b> ${vTxt}. Each trade risks $${rdJ.riskUsd} (0.5% of $100k); “R” is profit as a multiple of that risk. Shorts are simulated as stock shorts, a stand-in for PUTs.</div>
 <div class="tw" style="margin-top:8px"><table style="min-width:640px"><thead><tr><th class="lt">Rules</th><th>Trades</th><th>Win</th><th>Avg R</th><th>Per trade</th><th>Profit factor</th><th>Worst run</th><th>Years +</th></tr></thead><tbody>
 ${row('Bot defaults — ' + esc(fmtP(rdJ.default.P)), rdJ.default.S)}${row('<b>Best found</b> — ' + esc(fmtP(rdJ.best.P)), rdJ.best.S, true)}
 ${Object.entries(rdJ.variants || {}).map(([k, S]) => row('<span class="mut">Best, but</span> ' + esc(k), S)).join('')}</tbody></table></div>
 ${yrs.length ? `<div class="mut" style="font-size:12px;margin-top:8px"><b>Best found, year by year:</b> ${yrs.map(([y, x]) => `${y} <span class="${x.R >= 0 ? 'pos' : 'neg'}">${x.R >= 0 ? '+' : ''}${x.R}R</span> (${x.n})`).join(' · ')}</div>` : ''}
-<div class="mut" style="font-size:11.5px;margin-top:6px">Entry at the close of the signal bar plus 0.03% slippage; when one bar touches both the stop and the target the stop is assumed first; flat at 3:45 PM; one trade per stock per day, the daily maximum and the two-loss stop applied in order. Intraday history does not exist before ${esc(rdJ.start.slice(0, 4))} in any public feed. Full report: <a href="bot/research_day_report.md" target="_blank" rel="noopener">research_day_report.md</a>. To use the best values: Bot settings → 4b → “Put these values in the form”.</div></div>`;
+<div class="mut" style="font-size:11.5px;margin-top:6px">Entry at the close of the signal bar plus 0.03% slippage; when one bar touches both the stop and the target the stop is assumed first; flat at 3:45 PM; one trade per stock per day, the daily maximum and the two-loss stop applied in order. The broker's intraday history for these stocks starts in ${esc(firstYear)}; nothing older exists in any public feed. Full report: <a href="bot/research_day_report.md" target="_blank" rel="noopener">research_day_report.md</a>. To use the best values: Bot settings → 4b → “Put these values in the form”.</div></div>`;
   })() : '';
   return head + statusLine + evCard() + envCard + boxes + watchCard + riskCard + perfCard + btCard + rdCard + openTbl +
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
