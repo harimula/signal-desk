@@ -57,13 +57,15 @@
   "SOFI",
   "F"
  ],
- "updatedAt": "2026-10-22T17:54:13.170Z",
+ "updatedAt": "2026-10-22T17:54:54.728Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "puts": true,
- "intraday": false,
- "universe": "list",
+ "intraday": true,
+ "universe": "scan",
  "stockUnit": "pct",
  "callUnit": "pct",
- "putUnit": "pct"
+ "putUnit": "pct",
+ "scanSize": 50,
+ "scanMinPrice": 50
 }
