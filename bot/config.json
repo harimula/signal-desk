@@ -57,7 +57,7 @@
   "SOFI",
   "F"
  ],
- "updatedAt": "2026-10-22T18:07:47.022Z",
+ "updatedAt": "2026-10-22T18:19:46.445Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "puts": true,
@@ -68,5 +68,6 @@
  "putUnit": "pct",
  "scanSize": 50,
  "scanMinPrice": 50,
- "putPct": 2
+ "putPct": 2,
+ "alertDetail": true
 }
