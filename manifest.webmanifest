@@ -1,7 +1,7 @@
 {
   "name": "Signal Desk",
   "short_name": "Signal Desk",
-  "description": "Stock signals, paper-trading bot, retirement and rent-vs-EMI calculators",
+  "description": "Stock signals, retirement and rent-vs-EMI calculators",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

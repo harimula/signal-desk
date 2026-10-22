@@ -12,5 +12,5 @@
     <circle cx="367" cy="76" r="38" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="8"/>
   </g>
   <text x="222" y="112" font-family="Manrope,'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif" font-size="76" font-weight="800" letter-spacing="-1.5" fill="#131722">Signal <tspan fill="#2962ff">Desk</tspan></text>
-  <text x="224" y="152" font-family="Manrope,'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif" font-size="26" font-weight="600" letter-spacing="4" fill="#6a7180">STOCK SIGNALS · PAPER BOT</text>
+  <text x="224" y="152" font-family="Manrope,'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif" font-size="26" font-weight="600" letter-spacing="4" fill="#6a7180">STOCK SIGNALS</text>
 </svg>
