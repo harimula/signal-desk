@@ -1,5 +1,7 @@
 # Signal Desk
 
+Moving this to another GitHub account or repo name? See [MIGRATION.md](MIGRATION.md).
+
 **Documentation:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (functional, architectural and technical, with diagrams) · [web version](https://hmula-fbin.github.io/signal-desk/docs/) · [architecture slides](docs/architecture.pptx). Updated with every change.
 
 USA + India stock signal board: Top Buy / Buy / Hold / Sell / Top Sell, entry and exit levels,

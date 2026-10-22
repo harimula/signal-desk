@@ -18,8 +18,10 @@ const queue = [];                                             // reasons to run 
 const wake = why => { if (!queue.includes(why)) queue.push(why); };
 
 // ---- settings hot-reload (Settings tab -> bot/config.json) ----
-const CONFIG_URL = process.env.CONFIG_URL || 'https://hmula-fbin.github.io/signal-desk/bot/config.json';
+const ghPagesBase = () => { const r = process.env.GITHUB_REPOSITORY || ''; const [o, n] = r.split('/'); return o && n ? `https://${o.toLowerCase()}.github.io/${n}/` : ''; };
+const CONFIG_URL = process.env.CONFIG_URL || (ghPagesBase() ? ghPagesBase() + 'bot/config.json' : '');
 async function pollConfig() {
+  if (!CONFIG_URL) return;                                    // no Pages URL known: settings stay as the repo file had them
   if (Date.now() - lastCfg < (+process.env.CONFIG_POLL_MS || 60000)) return; lastCfg = Date.now();
   try {
     const r = await fetch(CONFIG_URL + '?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;

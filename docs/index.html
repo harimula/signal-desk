@@ -68,7 +68,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
-  <div class="stamp">System documentation · v1.1<br>Updated 2026-10-22</div>
+  <div class="stamp">System documentation · v1.2<br>Updated 2026-10-22</div>
   <ol>
     <li><a href="#what"><span class="k">01</span>What it is</a></li>
     <li><a href="#functional"><span class="k">02</span>Functional</a></li>
@@ -187,6 +187,8 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   RS --> REPO</pre>
 <figcaption>Everything runs on GitHub's free tier; the owner's devices only read the site and change settings.</figcaption></figure>
 
+<h3>Portability — no repo name in the code</h3>
+<p>Nothing in the code names a particular account or repository. The page works out which repo it belongs to from the GitHub Pages address it is served from (<code>&lt;owner&gt;.github.io/&lt;repo&gt;/</code>), and the bot from <code>GITHUB_REPOSITORY</code>, which Actions sets for the repo it runs in. A copy served from anywhere else (the claude.ai artifact) falls back to the <code>FALLBACK_REPO</code> constant near the top of the page script — the one line to change when the project moves. Step-by-step: <code>MIGRATION.md</code>.</p>
 <h3>Repository layout</h3>
 <pre class="tree">signal-desk/
 ├── index.html              <span class="c">the website (all three apps + app bar)</span>
@@ -210,7 +212,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 │   └── test.mjs            <span class="c">29 unit tests (CI)</span>
 ├── .github/workflows/      <span class="c">refresh, trade, research, backtest, test</span>
 ├── docs/                   <span class="c">ARCHITECTURE.md · index.html (this page) · architecture.pptx</span>
-└── BOT.md  SECURITY.md  ACCOUNTS.md  FAMILY.md  README.md</pre>
+└── BOT.md  SECURITY.md  ACCOUNTS.md  FAMILY.md  MIGRATION.md  README.md</pre>
 
 <h3>Data flow</h3>
 <figure><pre class="mermaid">sequenceDiagram
@@ -434,6 +436,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Portability: repo name derived from the Pages URL and <code>GITHUB_REPOSITORY</code>; MIGRATION.md added</td><td>03</td></tr>
 <tr><td>2026-10-22</td><td>Device sync: settings, quote keys, watchlist, portfolios and calculator inputs roam between devices through an encrypted file in the repo; Rent vs EMI inputs persist</td><td>02, 04, 06</td></tr>
 <tr><td>2026-10-21</td><td>Documentation set created (this page, ARCHITECTURE.md, architecture.pptx); docs link on the site</td><td>all</td></tr>
 <tr><td>2026-10-21</td><td>Mobile layout: full-width tables, symbol-only column, compact header; arrows hidden on touch</td><td>02</td></tr>

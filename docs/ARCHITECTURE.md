@@ -1,6 +1,6 @@
 # Signal Desk — System Documentation
 
-**Version:** 1.1 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
+**Version:** 1.2 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
 
 Signal Desk is a personal stock-signal website with an attached rules-based trading bot.
 This document is the single place that explains **what it does** (functional), **how it is
@@ -147,6 +147,15 @@ flowchart TB
   RS & BT -->|reports| REPO
 ```
 
+### 3.1.1 Portability — no repo name in the code
+
+Nothing in the code names a particular account or repository. The page works out which repo it
+belongs to from the GitHub Pages address it is served from (`<owner>.github.io/<repo>/`), and the
+bot from `GITHUB_REPOSITORY`, which Actions sets for the repo it is running in. A copy served from
+anywhere else (the claude.ai artifact) falls back to the `FALLBACK_REPO` constant near the top of
+the page script — the one line to change when the project moves. Moving to another account or
+repo name is therefore a copy plus re-enabling the services: see `MIGRATION.md`.
+
 ### 3.2 Repository layout
 
 ```
@@ -183,11 +192,12 @@ signal-desk/
 │   ├── research.yml        strategy-research
 │   ├── backtest.yml        backtest
 │   └── test.yml            bot-tests
+├── MIGRATION.md            moving to another account or repo name
 ├── docs/
 │   ├── ARCHITECTURE.md     this document
 │   ├── index.html          the same documentation as a web page (/docs/)
 │   └── architecture.pptx   architecture slides
-├── BOT.md  SECURITY.md  ACCOUNTS.md  FAMILY.md  README.md
+├── BOT.md  SECURITY.md  ACCOUNTS.md  FAMILY.md  MIGRATION.md  README.md
 ```
 
 ### 3.3 Data flow
@@ -440,6 +450,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Portability: repo name derived from the Pages URL (page) and `GITHUB_REPOSITORY` (bot); MIGRATION.md added | §3.1.1 |
 | 2026-10-22 | Device sync: settings, quote keys, watchlist, portfolios and calculator inputs roam between devices through an encrypted file in the repo; Rent vs EMI inputs now persist | §2.4, §4.1, §4.2, §6 |
 | 2026-10-21 | Documentation set created: ARCHITECTURE.md, docs/index.html, architecture.pptx; docs link on the page | all |
 | 2026-10-21 | Mobile layout: full-width tables, symbol-only column, compact header; arrows hidden on touch screens | §2.4 |
