@@ -75,8 +75,9 @@ let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spy
 const alerts = [];
 
 // One full decision cycle: manage every position, then look for new entries.
-export async function botCycle({ journal = false } = {}) {
-  setNow();
+let hooks = {};
+export async function botCycle({ journal = false, floors = null, held = null } = {}) {
+  setNow(); hooks = { floors, held };
   const before = acts.length;
   try { await run(); } catch (e) { act('Error: ' + (e.message || e)); const k = 'err:' + (e.message || '').slice(0, 40); if (!seen.has(k) || Date.now() - seen.get(k) > 30 * 60000) { seen.set(k, Date.now()); alerts.push('\u26a0\ufe0f Bot error: ' + (e.message || e)); } }
   await flushAlerts();
@@ -109,6 +110,17 @@ export async function fastCheck() {
   return false;
 }
 export const clockInfo = () => lastClock;
+// Live prices pushed by the market-data stream (live.mjs). Fresh = under 5 seconds old.
+export const livePx = {};
+export const streamStats = { ticks: 0, fills: 0, lastTick: 0 };
+export function pushPrice(sym, px, t) { livePx[sym] = { p: px, at: t || Date.now() }; streamStats.ticks++; streamStats.lastTick = Date.now(); }
+async function latestPrices(syms) {
+  const out = {}, miss = [];
+  for (const s of syms) { const v = livePx[s]; if (v && Date.now() - v.at < 5000) out[s] = { p: v.p }; else miss.push(s); }
+  if (miss.length) { try { Object.assign(out, (await D(`/v2/stocks/trades/latest?symbols=${miss.join(',')}&feed=iex`)).trades || {}); } catch (e) {} }
+  return out;
+}
+export const endpoints = () => ({ trading: BASE, key: KEY, secret: SECRET, universe: UNIVERSE });
 
 // Daily bars for the universe + anything we hold; refreshed every 30 minutes (~230 sessions).
 async function loadBars(extra = []) {
@@ -140,7 +152,8 @@ async function flushAlerts() {
 }
 
 async function run() {
-  const clock = lastClock = await T('/v2/clock');
+  if (!lastClock || Date.now() - (lastClock._at || 0) > 30000) { lastClock = await T('/v2/clock'); lastClock._at = Date.now(); }
+  const clock = lastClock;
   if (!clock.is_open) { console.log('Market closed.'); return; }
   const acct = await T('/v2/account');
   const equity = +acct.equity, lastEq = +acct.last_equity || equity;
@@ -148,6 +161,8 @@ async function run() {
   const openOrders = await T('/v2/orders?status=open&limit=500');
   const hist = await T('/v2/orders?status=all&limit=500&direction=desc&after=' + new Date(Date.now() - 45 * 864e5).toISOString());
   const stockPos = positions.filter(p => !isOpt(p.symbol)), optPos = positions.filter(p => isOpt(p.symbol));
+  if (hooks.held) { hooks.held.clear(); positions.forEach(p => hooks.held.add(isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol)); }
+  if (hooks.floors) { const seenF = new Set(); for (const p of stockPos) { seenF.add(p.symbol); hooks.floors(p.symbol, HOLD_FLOOR > 0 ? +p.avg_entry_price * (1 - HOLD_FLOOR / 100) : null); } }
 
   // ---- news & events guard (calendar + live headlines + SPY tone) ----
   if (Date.now() - newsCache.at > 60000) {
@@ -166,7 +181,7 @@ async function run() {
       const prev = done[done.length - 1];
       spyPrev = prev ? { day: TODAY, c: prev.c, closes: done.map(b => b.c) } : null;
     }
-    const st = (((await D('/v2/stocks/trades/latest?symbols=SPY&feed=iex')).trades) || {}).SPY;
+    const st = (await latestPrices(['SPY'])).SPY;
     if (spyPrev && st) spyPct = (st.p / spyPrev.c - 1) * 100;
   } catch (e) {}
   const G = lastGuard = guard({ events: CFG.eventGuard ? loadEvents() : [], todayDash: ymdDash(Date.now()), mins: MINS, headlines: CFG.newsGuard ? newsCache.market : [], spyPct });
@@ -222,13 +237,14 @@ async function run() {
   if (swingStk.length || swingOpt.length) {
     const unds = [...new Set(swingStk.map(x => x.p.symbol).concat(swingOpt.map(x => OPT_RE.exec(x.p.symbol)[1])))];
     const bars0 = await loadBars(unds);
-    const lastU = (await D(`/v2/stocks/trades/latest?symbols=${unds.join(',')}&feed=iex`)).trades || {};
+    const lastU = await latestPrices(unds);
     const held = (sym, day8) => { if (day8 === TODAY) return 0; return completed(bars0, sym).filter(b => b.d > dash8(day8)).length + 1; };
     for (const { p, e } of swingStk) {
       if (sellsFor(p.symbol).some(o => o.type === 'market')) continue;
       const day8 = cid(e).split('-')[4], plpc = +p.unrealized_plpc * 100, px = lastU[p.symbol] && lastU[p.symbol].p;
       const out = why => send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why);
-      if (HOLD_FLOOR > 0 && plpc <= -HOLD_FLOOR) { await out(`${p.symbol} down ${plpc.toFixed(1)}% \u2014 hit the ${HOLD_FLOOR}% hard floor`); continue; }
+      const livePl = px ? (px / +p.avg_entry_price - 1) * 100 : plpc;
+      if (HOLD_FLOOR > 0 && Math.min(plpc, livePl) <= -HOLD_FLOOR) { await out(`${p.symbol} down ${Math.min(plpc, livePl).toFixed(1)}% \u2014 hit the ${HOLD_FLOOR}% hard floor`); continue; }
       if (MINS < 950 || !px) continue;                                  // exits happen in the last 10 minutes, like a closing order
       const h = held(p.symbol, day8); if (h === 0) continue;             // never sell on the day it was bought
       const x = rsi2Exit(completed(bars0, p.symbol).map(b => b.c), px, h, CFG.maxHold);
@@ -320,7 +336,7 @@ async function run() {
 
   // ---- RSI-2 entries (selected by the 33-year out-of-sample research) ----
   const bars = await loadBars();
-  const last = (await D(`/v2/stocks/trades/latest?symbols=${UNIVERSE.join(',')}&feed=iex`)).trades || {};
+  const last = await latestPrices(UNIVERSE);
   const sigs = [];
   for (const sym of UNIVERSE) {
     const B = completed(bars, sym); if (B.length < 205) continue;
@@ -398,7 +414,7 @@ async function writeJournal() {
   if (prev.sig === sig && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: !process.env.ALPACA_URL || /paper/.test(process.env.ALPACA_URL),
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
-    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, risk: lastRisk, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
+    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, risk: lastRisk, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   fs.writeFileSync('bot/journal.json', JSON.stringify(j));
   console.log('journal written:', closed.length, 'closed,', open.length, 'open');
 }
