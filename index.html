@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-6MHqD7B49hQ9v6d21JTsepg9FJZ1kvRFrhnw+gKgRo4=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-9V2xaIg72TCugVDVVAiUAOFrLWgJ104G+qK3QcoMdrE=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -858,7 +858,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792689933';
+const BUILD_V = '1792690442';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2277,24 +2277,54 @@ const ST_FIELDS = {
   scan: [['scanSize', 'How many stocks to watch', 'the most-traded ones, ranked each morning', 50, 400, 10], ['scanMinPrice', 'Minimum share price', '$ — skips penny stocks', 1, 500, 1]],
   money: [['stockPct', '', '', 1, 30, 1], ['optPct', '', '', 0.5, 10, 0.5], ['putPct', '', '', 0.5, 10, 0.5], ['stockUsd', '', '', 0, 1e7, 1], ['callUsd', '', '', 0, 1e7, 1], ['putUsd', '', '', 0, 1e7, 1], ['stockCapPct', '', '', 0, 100, 1], ['callCapPct', '', '', 0, 100, 1], ['putCapPct', '', '', 0, 100, 1], ['stockCapUsd', '', '', 0, 1e7, 1], ['callCapUsd', '', '', 0, 1e7, 1], ['putCapUsd', '', '', 0, 1e7, 1]],
   strat: [['rsiThreshold', 'RSI-2 buy level', 'buy when RSI-2 is below this (10 = tested value)', 2, 30, 1], ['maxHold', 'Max hold', 'sessions before a forced exit', 1, 30, 1], ['optTakeProfit', 'Option take-profit', '% gain that sells the option', 10, 300, 5], ['optStop', 'Option stop', '% loss that sells the option', 20, 90, 5], ['holdFloor', 'Hard floor', '% loss on a stock that forces a sale', 5, 60, 1], ['staleMin', 'Cancel unfilled entries after', 'minutes', 5, 240, 5]]};
-let stCfg = null, stSha = null, stMsg = '', stBusy = false, stSecrets = null, stRepoInfo = null, stLoadedAt = 0;
+let stCfg = null, stSha = null, stMsg = '', stBusy = false, stDirty = false, stSecrets = null, stRepoInfo = null, stLoadedAt = 0;
 // Which repo this copy belongs to: taken from the GitHub Pages address it is served from,
 // so moving the project to another account or repo name needs no code change.
 const repoFromUrl = () => { try { const h = location.hostname, m = /^([a-z0-9-]+)\.github\.io$/i.exec(h); if (!m) return ''; const seg = location.pathname.split('/').filter(Boolean)[0]; return seg ? m[1] + '/' + seg : ''; } catch (e) { return ''; } };
 const FALLBACK_REPO = 'harimula/signal-desk';   // only used when the page is NOT served from its own GitHub Pages site (e.g. the claude.ai copy)
 const DEFAULT_REPO = repoFromUrl() || FALLBACK_REPO;
 const ghTok = () => load('sd-ghtok', ''), ghRepo = () => load('sd-ghrepo', '') || DEFAULT_REPO;
+let ghLast = { at: 0, ms: 0, status: 0, remaining: null, expires: null };
+const GH_TIMEOUT = 12000;
 async function ghApi(path, opt = {}) {
-  // 25 s limit so a stuck request ends with a message instead of "Saving…" forever
-  const ac = new AbortController(), to = setTimeout(() => ac.abort(), 25000);
+  // Every call has a 12 s limit so a stuck request ends with a message instead of "Saving…" forever
+  const ac = new AbortController(), to = setTimeout(() => ac.abort(), GH_TIMEOUT), t0 = Date.now();
   let r;
-  try { r = await fetch('https://api.github.com/repos/' + ghRepo() + path, {...opt, signal: ac.signal, headers: {Authorization: 'Bearer ' + ghTok(), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opt.headers || {})}}); }
-  catch (e) { throw new Error(e && e.name === 'AbortError' ? 'GitHub did not answer within 25 seconds' : (e.message || 'network error')); }
+  try { r = await fetch('https://api.github.com/repos/' + ghRepo() + path, {...opt, signal: ac.signal, cache: 'no-store', headers: {Authorization: 'Bearer ' + ghTok(), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opt.headers || {})}}); }
+  catch (e) { ghLast = {at: Date.now(), ms: Date.now() - t0, status: 0, remaining: null, expires: null}; throw new Error(e && e.name === 'AbortError' ? `GitHub did not answer within ${GH_TIMEOUT / 1000} seconds` : 'could not reach GitHub (' + (e.message || 'network error') + ')'); }
   finally { clearTimeout(to); }
+  ghLast = {at: Date.now(), ms: Date.now() - t0, status: r.status, remaining: r.headers.get('x-ratelimit-remaining'), expires: r.headers.get('github-authentication-token-expiration')};
   if (r.status === 204) return null;
   const j = await r.json().catch(() => null);
   if (!r.ok) throw new Error((j && j.message) || ('HTTP ' + r.status));
   return j;
+}
+// Plain-language diagnosis of the last failure, shown under Save / Save keys / Test connection
+function ghWhy(e) {
+  const m = String((e && e.message) || e);
+  if (/did not answer|could not reach/.test(m)) return m + '. Your network is not letting this page talk to api.github.com — common on office networks, VPNs and some ad-blockers. Try your phone on mobile data, or home Wi-Fi. The bot itself is unaffected.';
+  if (/Bad credentials|401/.test(m)) return 'GitHub rejected the token (' + m + '). It has probably expired — make a new fine-grained token on GitHub and paste it in section 1.';
+  if (/Resource not accessible|403/.test(m)) return 'The token is valid but lacks permission (' + m + '). It needs Contents, Secrets and Actions: Read and write on this repo.';
+  if (/rate limit/i.test(m)) return 'GitHub rate limit hit (' + m + '). Close other Signal Desk tabs and try again in a few minutes.';
+  return m;
+}
+// a live "n s" counter next to Saving…, so a slow GitHub never looks like a frozen page
+let stTick = null, stT0 = 0;
+function stWait(on) {
+  clearInterval(stTick); stTick = null;
+  if (!on) return;
+  stT0 = Date.now();
+  stTick = setInterval(() => { const el = document.getElementById('stWait'); if (el) el.textContent = Math.round((Date.now() - stT0) / 1000) + ' s'; }, 500);
+}
+async function stTest() {
+  stBusy = true; stMsg = 'Testing the connection to GitHub…'; renderAll(); stWait(true);
+  try {
+    const info = await ghApi('');
+    const exp = ghLast.expires ? new Date(ghLast.expires) : null;
+    stMsg = `GitHub answered in ${ghLast.ms} ms. Token OK for ${esc(info.full_name || ghRepo())}${exp ? ', expires ' + exp.toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'}) + (exp - Date.now() < 7 * 864e5 ? ' — SOON, make a new one' : '') : ''}${ghLast.remaining != null ? ' · ' + ghLast.remaining + ' API calls left this hour' : ''}.`;
+    try { await ghApi('/contents/bot/config.json?ref=main'); stMsg += ' Settings file readable.'; } catch (e) { stMsg += ' But the settings file could not be read: ' + ghWhy(e); }
+  } catch (e) { stMsg = 'Connection test failed after ' + ghLast.ms + ' ms: ' + ghWhy(e); }
+  stWait(false); stBusy = false; renderAll();
 }
 const b64 = s => btoa(unescape(encodeURIComponent(s)));
 async function stLoad(force) {
@@ -2302,15 +2332,13 @@ async function stLoad(force) {
   stBusy = true; stLoadedAt = Date.now();
   try {
     if (ghTok()) {
-      const f = await ghApi('/contents/bot/config.json?ref=main'); stSha = f.sha;
-      stCfg = JSON.parse(decodeURIComponent(escape(atob(f.content.replace(/\n/g, '')))));
-      try { stRepoInfo = await ghApi(''); } catch (e) {}
-      try { stSecrets = (await ghApi('/actions/secrets?per_page=100')).secrets.map(s => s.name); } catch (e) { stSecrets = null; }
-      try { stStop = !!(await ghApi('/contents/bot/STOP?ref=main')); } catch (e) { stStop = false; }
+      const [f, info, sec, stop] = await Promise.all([ghApi('/contents/bot/config.json?ref=main'), ghApi('').catch(() => null), ghApi('/actions/secrets?per_page=100').catch(() => null), ghApi('/contents/bot/STOP?ref=main').catch(() => null)]);
+      stSha = f.sha; stCfg = JSON.parse(decodeURIComponent(escape(atob(f.content.replace(/\n/g, '')))));
+      stRepoInfo = info; stSecrets = sec ? sec.secrets.map(s => s.name) : null; stStop = !!stop;
     } else {
       const r = await fetch('bot/config.json?t=' + Date.now(), {cache: 'no-store'}); if (r.ok) stCfg = await r.json();
     }
-  } catch (e) { stMsg = 'Could not load settings: ' + e.message; }
+  } catch (e) { stMsg = 'Could not load settings from GitHub: ' + ghWhy(e); }
   if (!stCfg) stCfg = {...ST_DEF};
   stBusy = false;
   if (app === 'desk' && tab === 'SET') renderAll();
@@ -2335,18 +2363,22 @@ async function stSave() {
   const c = stRead();
   if (c.mode === 'live' && c.liveConfirm !== 'I UNDERSTAND THE RISK') { stMsg = 'To switch to LIVE you must type exactly: I UNDERSTAND THE RISK'; renderAll(); return; }
   c.updatedAt = new Date().toISOString(); c.updatedBy = 'settings page';
-  stBusy = true; stMsg = 'Saving…'; renderAll();
+  stBusy = true; stMsg = 'Saving…'; renderAll(); stWait(true);
   try {
-    // other commits landing on main at the same moment can make GitHub answer 409; re-read the file's version and try again
-    let r;
+    // use the file version we already know; only if GitHub says it moved (another commit landed) re-read it once and retry
+    let r, sha = stSha;
     for (let attempt = 1; ; attempt++) {
-      let sha = stSha; try { const f = await ghApi('/contents/bot/config.json?ref=main'); sha = f.sha; } catch (e) { sha = null; }
       try { r = await ghApi('/contents/bot/config.json', {method: 'PUT', body: JSON.stringify({message: 'Bot settings: ' + c.preset + (c.mode === 'live' ? ' LIVE' : ''), content: b64(JSON.stringify(c, null, 1)), sha: sha || undefined, branch: 'main'})}); break; }
-      catch (e) { if (attempt >= 4 || !/409|does not match|expected|conflict|sha|reference/i.test(e.message || '')) throw e; stMsg = 'Saving… (retry ' + attempt + ')'; renderAll(); await new Promise(z => setTimeout(z, 800 * attempt)); }
+      catch (e) {
+        if (attempt >= 3 || !/409|does not match|expected|conflict|sha|reference/i.test(e.message || '')) throw e;
+        stMsg = 'Saving… another change just landed, retrying'; renderAll();
+        try { sha = (await ghApi('/contents/bot/config.json?ref=main')).sha; } catch (e2) { throw e; }
+      }
     }
-    stSha = r.content.sha; stCfg = c; stMsg = 'Saved ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + ' — the bot applies it within about a minute (GitHub Pages publishes the file first).';
-  } catch (e) { stMsg = 'Save failed: ' + e.message; }
-  stBusy = false; renderAll();
+    stSha = r.content.sha; stCfg = c; stLoadedAt = Date.now(); stDirty = false;
+    stMsg = 'Saved ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + ' — the bot applies it within about a minute (GitHub Pages publishes the file first).';
+  } catch (e) { stMsg = 'Save failed: ' + ghWhy(e); }
+  stWait(false); stBusy = false; renderAll();
 }
 async function stSecret(name, value, label) {
   if (!value) return;
@@ -2369,7 +2401,7 @@ async function stSaveKeys() {
   if (!k && !s && !n && !jk && !lk && !ls) { stMsg = 'Nothing to save.'; renderAll(); return; }
   if ((lk && !ls && !has('ALPACA_LIVE_SECRET')) || (ls && !lk && !has('ALPACA_LIVE_KEY'))) { stMsg = 'Live keys come as a pair \u2014 enter both.'; renderAll(); return; }
   if (jk && jk.length < 12) { stMsg = 'Journal passphrase: use at least 12 characters.'; renderAll(); return; }
-  stBusy = true; stMsg = 'Encrypting and saving to GitHub secrets…'; renderAll();
+  stBusy = true; stMsg = 'Encrypting and saving to GitHub secrets…'; renderAll(); stWait(true);
   try {
     const done = [];
     if (k) done.push(await stSecret('ALPACA_KEY', k, 'Alpaca key'));
@@ -2381,20 +2413,20 @@ async function stSaveKeys() {
     stMsg = 'Saved as encrypted GitHub secrets: ' + done.join(', ') + '. They never touch this page or the repo in the clear.';
     stKeysClear = true;
     try { stSecrets = (await ghApi('/actions/secrets?per_page=100')).secrets.map(x => x.name); } catch (e) {}
-  } catch (e) { stMsg = 'Saving keys failed: ' + e.message + ' \u2014 your keys are still in the boxes, nothing was sent.'; }
-  stBusy = false; renderAll();
+  } catch (e) { stMsg = 'Saving keys failed: ' + ghWhy(e) + ' \u2014 your keys are still in the boxes, nothing was sent.'; }
+  stWait(false); stBusy = false; renderAll();
 }
 let stKeysClear = false;
 async function stControl(what) {
   if (!ghTok()) { stMsg = 'Connect GitHub first.'; renderAll(); return; }
-  stBusy = true; stMsg = 'Working…'; renderAll();
+  stBusy = true; stMsg = 'Working…'; renderAll(); stWait(true);
   try {
     if (what === 'pause') { await ghApi('/contents/bot/STOP', {method: 'PUT', body: JSON.stringify({message: 'Pause bot', content: b64('stop'), branch: 'main'})}); stStop = true; stMsg = 'Paused. Within seconds the bot cancels every order and sells every position, then stays idle until you resume.'; }
     if (what === 'resume') { const f = await ghApi('/contents/bot/STOP?ref=main'); await ghApi('/contents/bot/STOP', {method: 'DELETE', body: JSON.stringify({message: 'Resume bot', sha: f.sha, branch: 'main'})}); stStop = false; stMsg = 'Resumed. Trading continues on the next cycle.'; }
     if (what === 'run') { await ghApi('/actions/workflows/trade.yml/dispatches', {method: 'POST', body: JSON.stringify({ref: 'main'})}); stMsg = 'Bot run requested — check the Actions tab on GitHub in a minute.'; }
     if (what === 'research') { await ghApi('/actions/workflows/research.yml/dispatches', {method: 'POST', body: JSON.stringify({ref: 'main'})}); stMsg = 'Strategy research started (about 15 minutes). Results appear on the Bot trades tab.'; }
-  } catch (e) { stMsg = 'Failed: ' + e.message; }
-  stBusy = false; renderAll();
+  } catch (e) { stMsg = 'Failed: ' + ghWhy(e); }
+  stWait(false); stBusy = false; renderAll();
 }
 document.addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('[data-st]'); if (!b) return;
@@ -2403,15 +2435,24 @@ document.addEventListener('click', e => {
   else if (a === 'keys') stSaveKeys();
   else if (a === 'connect') { save('sd-ghtok', document.getElementById('st-tok').value.trim()); save('sd-ghrepo', (document.getElementById('st-repo').value.trim() || DEFAULT_REPO)); stCfg = null; stMsg = ''; stLoad(true); }
   else if (a === 'disconnect') { save('sd-ghtok', ''); stSecrets = null; stRepoInfo = null; stMsg = 'Disconnected on this device.'; renderAll(); }
-  else if (a === 'preset') { stCfg = {...stRead(), preset: b.dataset.v, ...ST_PRESETS[b.dataset.v]}; renderAll(); }
-  else if (a === 'reload') { stLoad(true); }
+  else if (a === 'preset') { stCfg = {...stRead(), preset: b.dataset.v, ...ST_PRESETS[b.dataset.v]}; stDirty = true; renderAll(); }
+  else if (a === 'reload') { stDirty = false; stLoad(true); }
+  else if (a === 'test') stTest();
   else stControl(a);
 });
 document.addEventListener('change', e => { if (e.target && e.target.name === 'st-universe') { stCfg = stRead(); renderAll(); } });
 document.addEventListener('change', e => { if (e.target && e.target.id === 'jkeyShow') { const i = document.getElementById('jkeyIn'); if (i) i.type = e.target.checked ? 'text' : 'password'; } });
-document.addEventListener('change', e => { const el = e.target; if (el && el.id && el.id.startsWith('st-') && el.id !== 'st-tok' && el.id !== 'st-repo' && !['st-akey', 'st-asec', 'st-ntfy', 'st-jkey', 'st-lkey', 'st-lsec', 'st-liveConfirm'].includes(el.id)) { const c = stRead(); if (el.id !== 'st-preset' && Object.keys(ST_PRESETS.balanced).includes(el.id.slice(3))) c.preset = 'custom'; stCfg = c; renderAll(); } });
+// A typed number just updates the draft (no re-render, so the cursor and scroll stay put). Only controls that
+// show or hide other parts of the form — checkboxes, radios, dropdowns, a profile flipping to Custom — redraw it.
+document.addEventListener('change', e => { const el = e.target; if (el && el.id && el.id.startsWith('st-') && el.id !== 'st-tok' && el.id !== 'st-repo' && !['st-akey', 'st-asec', 'st-ntfy', 'st-jkey', 'st-lkey', 'st-lsec', 'st-liveConfirm'].includes(el.id)) {
+  const c = stRead(), was = stCfg && stCfg.preset;
+  if (el.id !== 'st-preset' && Object.keys(ST_PRESETS.balanced).includes(el.id.slice(3))) c.preset = 'custom';
+  stCfg = c; stDirty = true;
+  const structural = el.type === 'checkbox' || el.type === 'radio' || el.tagName === 'SELECT' || c.preset !== was;
+  if (structural) renderAll(); else { const d = document.getElementById('stDirty'); if (d) d.style.display = ''; }
+} });
 function settingsView() {
-  stLoad();
+  if (!stCfg) stLoad();                                  // first visit only; Reload from GitHub re-reads on demand, and a save never gets clobbered by a background refresh
   const keep = {}; if (!stKeysClear) ['st-akey', 'st-asec', 'st-ntfy', 'st-jkey', 'st-lkey', 'st-lsec'].forEach(id => { const el = document.getElementById(id); if (el && el.value) keep[id] = el.value; }); stKeysClear = false;
   setTimeout(() => { for (const id in keep) { const el = document.getElementById(id); if (el && !el.value) el.value = keep[id]; } }, 0);
   const c = stCfg || {...ST_DEF}, connected = !!ghTok();
@@ -2423,7 +2464,7 @@ function settingsView() {
   const dot = ok => `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${ok ? 'var(--tb)' : 'var(--line)'};margin-right:5px"></span>`;
   const presetBtn = k => `<button class="btn ${c.preset === k ? '' : 'ghost'}" type="button" data-st="preset" data-v="${k}" style="flex:1;min-width:150px;text-align:left;padding:10px 12px"><b style="text-transform:capitalize">${k}</b><div style="font-size:11.5px;font-weight:400;margin-top:2px;opacity:.85${c.preset === k ? ';color:#fff' : ''}" class="${c.preset === k ? '' : 'mut'}">${ST_PRESETS[k].riskPct}% per trade · cap ${ST_PRESETS[k].maxHeat}% · day limit −${ST_PRESETS[k].dayCap}%</div></button>`;
   const connect = sec('1. Connection', connected
-    ? `<div style="margin-top:8px;font-size:13px">${dot(true)}Connected to <b>${esc(ghRepo())}</b>${stRepoInfo ? ` <span class="mut">(${stRepoInfo.private ? 'private' : 'public'} repo)</span>` : ''} <button class="btn ghost" type="button" data-st="disconnect" style="margin-left:8px;font-size:12px">Disconnect</button></div>
+    ? `<div style="margin-top:8px;font-size:13px">${dot(true)}Connected to <b>${esc(ghRepo())}</b>${stRepoInfo ? ` <span class="mut">(${stRepoInfo.private ? 'private' : 'public'} repo)</span>` : ''} <button class="btn ghost" type="button" data-st="test" style="margin-left:8px;font-size:12px" ${stBusy ? 'disabled' : ''}>Test connection</button> <button class="btn ghost" type="button" data-st="disconnect" style="font-size:12px">Disconnect</button></div>
 <div style="margin-top:10px;font-size:13px">${dot(has('ALPACA_KEY') && has('ALPACA_SECRET'))}Alpaca keys ${has('ALPACA_KEY') && has('ALPACA_SECRET') ? 'set' : '<b>not set</b> — the bot cannot trade yet'} &nbsp; ${dot(has('NTFY_TOPIC'))}Phone alerts ${has('NTFY_TOPIC') ? 'set' : 'not set'} &nbsp; ${dot(has('JOURNAL_KEY'))}Journal ${has('JOURNAL_KEY') ? 'encrypted' : '<b>public</b>'} &nbsp; ${dot(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET'))}Live keys ${has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET') ? 'set' : 'not set'}</div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px">
 <label style="font-size:12px"><b>Alpaca API key</b><input id="st-akey" ${inp} autocomplete="off" placeholder="${has('ALPACA_KEY') ? 'set — paste to replace' : 'paste key'}"></label>
@@ -2454,7 +2495,7 @@ function settingsView() {
 ${c.mode === 'live' || (document.getElementById('st-live') && document.getElementById('st-live').checked) ? `<div style="margin-top:8px;padding:10px 12px;border-radius:8px;background:var(--ts-bg);font-size:12.5px;line-height:1.5"><b class="neg">Real money.</b> Losses are real and yours. Only do this after months of paper results that match the research. Type <b>I UNDERSTAND THE RISK</b> to confirm:<input id="st-liveConfirm" ${inp} style="margin-top:6px" value="${esc(c.liveConfirm || '')}" autocomplete="off"></div>` : '<div class="mut" style="font-size:12px;margin-top:4px">Currently <b>paper</b> — fake money, real prices.</div>'}`, 'paper or real money');
   const ctl = sec('8. Controls', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${stStop ? '<button class="btn" type="button" data-st="resume">▶ Resume trading</button>' : '<button class="btn" type="button" data-st="pause" style="background:var(--ts)">⏸ Pause — sell everything now</button>'}<button class="btn ghost" type="button" data-st="run">Run the bot now</button><button class="btn ghost" type="button" data-st="research">Re-run 33-year research</button><button class="btn ghost" type="button" data-st="reload">Reload from GitHub</button></div>
 <div class="mut" style="font-size:12px;margin-top:8px">${stStop ? '<b class="neg">Paused</b> — the bot has sold everything and is idle.' : 'Running normally.'} Pause creates <code>bot/STOP</code> in the repo; the bot sees it within seconds.</div>`, 'pause, resume, run');
-  const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span style="font-size:12.5px">${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span></div>`;
+  const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span id="stDirty" class="pill r-Sell" style="font-size:11px;${stDirty ? '' : 'display:none'}">unsaved changes</span><span style="font-size:12.5px">${stBusy ? '<span id="stWait" class="mut" style="font-variant-numeric:tabular-nums;margin-right:6px">0 s</span>' : ''}${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span></div>`;
   return `<h2 style="margin-bottom:6px">Bot settings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.</div>${bar}${connect}${syncC}${risk}${alloc}${strat}${guards}${uni}${mode}${ctl}`;
 }
 function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
