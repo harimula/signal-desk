@@ -123,3 +123,20 @@ export function liveSignal(bars, px, side = 'long', threshold = 10) {
   const s = (side === 'short' ? rsi2ShortSignal : rsi2Signal)(b2, c2, c2.length - 1, threshold);
   return s ? { ...s, prevClose: prev, live: true } : null;
 }
+
+// ---- trigger prices, for the "what the bot is watching" card ----
+// The close today at which RSI-2 would equal `threshold` (long: falling to it; short: rising to it). RSI-2 looks at the
+// last two day-to-day moves, and today's move is the only unknown, so the level is found by bisection.
+export function rsi2Trigger(closes, threshold = 10, side = 'long') {
+  const n = closes.length; if (n < 3) return null;
+  const prev = closes[n - 1], at = p => rsi2(closes.concat([p]));
+  const ok = p => side === 'long' ? at(p) < threshold : at(p) > 100 - threshold;
+  let lo = prev * 0.5, hi = prev * 1.5;                       // long: ok below the level; short: ok above it
+  const okLo = ok(lo), okHi = ok(hi);
+  if (side === 'long' ? !okLo : !okHi) return null;           // not reachable with a 50% move
+  if (okLo && okHi) return r2d(side === 'long' ? hi : lo);    // qualifies at any close in range (after a very large move yesterday)
+  for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (ok(mid) === (side === 'long')) lo = mid; else hi = mid; }
+  return r2d(side === 'long' ? lo : hi);
+}
+// The price above which the RSI-2 exit fires (today's close counts as the 5th day): close > avg of the last 4 closes.
+export const rsi2ExitLevel = completedCloses => { const l4 = completedCloses.slice(-4); return l4.length < 4 ? null : r2d(l4.reduce((a, b) => a + b, 0) / 4); };

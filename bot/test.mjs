@@ -1,6 +1,6 @@
 // Unit tests for the bot's rules. Run: node bot/test.mjs  (also runs on every push via GitHub Actions)
 import assert from 'node:assert/strict';
-import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
+import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit, rsi2Trigger, rsi2ExitLevel } from './strategy.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf } from './risk.mjs';
 import { buildJournal, parseSym } from './journal.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
@@ -172,6 +172,16 @@ test('market scan ranking: by average dollar volume, minimum price, top N', () =
   const top = rankByLiquidity({ BIG: bar(100, 1e6), MID: bar(50, 1e6), SMALL: bar(10, 1e6), PENNY: bar(2, 1e9), SHORT: [{ c: 100, v: 1e9 }] }, { size: 2, minPrice: 5 });
   assert.deepEqual(top.map(r => r.sym), ['BIG', 'MID']);
   assert.equal(normalize({ universe: 'scan', scanSize: 9999 }).scanSize, 400); assert.equal(normalize({ universe: 'nope' }).universe, 'list');
+});
+test('trigger prices: the close that makes RSI-2 cross the buy / put level, and the exit level', () => {
+  const up = [100, 101, 102, 103, 104, 105, 106];
+  const buyAt = rsi2Trigger(up, 10, 'long');
+  assert.ok(buyAt < 106 && rsi2(up.concat([buyAt - 0.01])) < 10 && rsi2(up.concat([buyAt + 0.05])) >= 10, 'buy level ' + buyAt);
+  const putAt = rsi2Trigger(up, 10, 'short');
+  assert.ok(rsi2(up.concat([putAt + 0.01])) > 90 && rsi2(up.concat([putAt - 0.05])) <= 90, 'put level ' + putAt);
+  assert.equal(rsi2Trigger([100, 120], 10, 'long'), null);                     // would need more than a 50% drop
+  assert.equal(rsi2ExitLevel([1, 2, 3, 10, 20, 30, 40]), 25);                 // average of the last 4 closes
+  const ex = rsi2Exit([10, 20, 30, 40], 25.01, 1); assert.equal(ex.exit, true); assert.equal(rsi2Exit([10, 20, 30, 40], 24.99, 1).exit, false);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

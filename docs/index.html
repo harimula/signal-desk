@@ -211,7 +211,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 │   ├── journal.mjs / .json <span class="c">FIFO trade pairing; trade journal (encrypted when JOURNAL_KEY set)</span>
 │   ├── research.mjs        <span class="c">4-strategy simulator, out-of-sample split</span>
 │   ├── backtest.mjs        <span class="c">single-strategy backtest</span>
-│   ├── test.mjs            <span class="c">44 unit tests (CI)</span>
+│   ├── test.mjs            <span class="c">45 unit tests (CI)</span>
 │   └── test-orders.mjs     <span class="c">fake-broker check of the orders one cycle places (CI)</span>
 ├── .github/workflows/      <span class="c">refresh, trade, research, backtest, test</span>
 ├── docs/                   <span class="c">ARCHITECTURE.md · index.html (this page) · architecture.pptx</span>
@@ -437,7 +437,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <h2><span class="k">08</span>Testing and quality</h2>
 <ul>
   <li><code>bot/test-orders.mjs</code>: a fake broker serves a just-dipped and a just-popped stock and the test checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked). Runs in CI.</li>
-  <li><code>bot/test.mjs</code>: 44 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
+  <li><code>bot/test.mjs</code>: 45 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
   <li>Integration tests against mock brokers (REST + websocket) with a fake clock: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.</li>
   <li>Page checks in headless Chromium at desktop and phone widths for every tab, including scroll preservation during live ticks.</li>
   <li>Research and backtest workflows produce reproducible reports committed to the repo.</li>
@@ -449,6 +449,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Watch card shows trigger prices per stock (close that would trigger a buy / put) and, per holding, the sell level, hard floor, option take-profit, stop and expiry</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>Phone alerts carry prices and profit (alertDetail switch in Guards)</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>Fix: Bot settings Save hung forever — a Screener binding ran on every tab and threw, aborting the save. Page error strip added; save independent of redraws; headless page tests in CI</td><td>02, 08</td></tr>
 <tr><td>2026-10-22</td><td>Bot settings: no live-price redraws on the tab, step log under Save, Copy settings → paste on github.com fallback</td><td>02</td></tr>
