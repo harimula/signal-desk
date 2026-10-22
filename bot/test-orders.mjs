@@ -1,0 +1,106 @@
+// End-to-end check against a fake broker: which orders does one decision cycle place?
+//   node bot/test-orders.mjs
+// A stock that just dipped (uptrend, RSI-2 ~0) and one that just popped (downtrend, RSI-2 ~100) are served
+// at 10:00 ET on a Friday, and the bot runs once for each combination of the CALL and PUT switches.
+// Each case runs in its own process and its own temp folder, so the real journal is never touched.
+import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+if (process.argv[2] === 'child') {
+  const cfg = JSON.parse(process.argv[3]);
+  const REAL = Date, FIXED = REAL.parse('2026-10-23T14:00:00Z');          // Fri 10:00 ET, inside the entry window
+  globalThis.Date = class extends REAL { constructor(...a) { if (a.length) super(...a); else super(FIXED); } static now() { return FIXED; } };
+
+  const weekdays = n => { const out = []; let d = new REAL('2026-10-22T04:00:00Z'); while (out.length < n) { if (d.getUTCDay() % 6) out.unshift(new REAL(d)); d = new REAL(d.getTime() - 864e5); } return out; };
+  const days = weekdays(300);
+  const series = (start, end, tail) => days.map((d, i) => {
+    const base = i < 298 ? start + (end - start) * i / 297 : null;
+    return { d, base };
+  }).reduce((acc, x, i) => {
+    let c;
+    if (x.base != null) c = x.base; else c = acc.length ? acc[acc.length - 1].c * (1 + tail[i - 298]) : end;
+    acc.push({ t: x.d.toISOString().slice(0, 10) + 'T04:00:00Z', o: c, h: c * 1.004, l: c * 0.996, c, v: 1e6 });
+    return acc;
+  }, []);
+  const BARS = {
+    DIP: series(80, 120, [-0.04, -0.04]),        // uptrend, two sharp down days  -> RSI-2 ~ 0, above 200-day
+    POP: series(120, 80, [0.04, 0.04]),          // downtrend, two sharp up days  -> RSI-2 ~ 100, below 200-day
+    SPY: series(400, 520, [0.001, 0.001]),
+  };
+  const lastC = s => BARS[s][BARS[s].length - 1].c;
+  const orders = [], unknown = [];
+  const occ = (und, type, px) => und + '261113' + type[0].toUpperCase() + String(Math.round(px) * 1000).padStart(8, '0');
+
+  const server = http.createServer((req, res) => {
+    const u = new URL(req.url, 'http://x'), p = u.pathname;
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      const send = o => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)); };
+      if (p === '/v2/clock') return send({ is_open: true, timestamp: '2026-10-23T10:00:00-04:00', next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
+      if (p === '/v2/account') return send({ equity: '100000', last_equity: '100000', cash: '100000', buying_power: '400000', pattern_day_trader: false, daytrade_count: 0, status: 'ACTIVE', multiplier: '4' });
+      if (p === '/v2/positions') return send([]);
+      if (p === '/v2/account/activities/FILL') return send([]);
+      if (p === '/v2/account/portfolio/history') return send({ equity: [100000, 100000], timestamp: [1, 2], base_value: 100000 });
+      if (p === '/v2/orders' && req.method === 'POST') { const o = JSON.parse(body); orders.push(o); return send({ id: 'o' + orders.length, status: 'accepted', ...o }); }
+      if (p === '/v2/orders') return send([]);
+      if (p === '/v2/stocks/bars') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS[s]) out[s] = BARS[s]; return send({ bars: out }); }
+      if (p === '/v2/stocks/trades/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS[s]) out[s] = { p: lastC(s), t: '2026-10-23T14:00:00Z' }; return send({ trades: out }); }
+      if (p === '/v1beta1/news') return send({ news: [] });
+      if (p === '/v2/options/contracts') {
+        const und = u.searchParams.get('underlying_symbols'), type = u.searchParams.get('type'), px = lastC(und);
+        return send({ option_contracts: [{ symbol: occ(und, type, px), expiration_date: '2026-11-13', strike_price: String(Math.round(px)), tradable: true, type }] });
+      }
+      if (p === '/v1beta1/options/quotes/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) out[s] = { ap: 2.05, bp: 2.0 }; return send({ quotes: out }); }
+      unknown.push(req.method + ' ' + p); send({});
+    });
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = 'http://127.0.0.1:' + server.address().port;
+  process.env.ALPACA_URL = url; process.env.ALPACA_DATA_URL = url;
+  process.env.ALPACA_KEY = 'test'; process.env.ALPACA_SECRET = 'test';
+  fs.mkdirSync('bot', { recursive: true });
+  const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
+  bot.applyConfig({ symbols: ['DIP', 'POP'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
+  await bot.botCycle();
+  server.close();
+  console.log('RESULT ' + JSON.stringify({ orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  process.exit(0);
+}
+
+function run(cfg) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sd-orders-'));
+  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), 'child', JSON.stringify(cfg)], { cwd: tmp, encoding: 'utf8', timeout: 90000 });
+  const line = (r.stdout || '').split('\n').find(l => l.startsWith('RESULT '));
+  if (!line) throw new Error('no result for ' + JSON.stringify(cfg) + '\n' + r.stdout + r.stderr);
+  return JSON.parse(line.slice(7));
+}
+
+let passed = 0;
+const check = (name, fn) => { try { fn(); console.log('  ✓', name); passed++; } catch (e) { console.log('  ✗', name, '\n   ', e.message); process.exitCode = 1; } };
+
+const A = run({ stocks: true, options: true });                       // default: puts off
+check('default: stock buy on the dip stock', () => assert.ok(A.orders.some(o => o.symbol === 'DIP' && o.side === 'buy')));
+check('default: CALL on the dip stock (sd-q-)', () => { assert.equal(A.options.length, 1); assert.match(A.options[0].symbol, /^DIP\d{6}C/); assert.equal(A.options[0].id, 'sd-q'); });
+check('default: no PUT is ever placed', () => assert.ok(!A.orders.some(o => /^POP\d{6}P/.test(o.symbol))));
+
+const B = run({ stocks: true, options: true, puts: true });
+check('puts on: CALL still placed on the dip stock', () => assert.ok(B.options.some(o => /^DIP\d{6}C/.test(o.symbol) && o.id === 'sd-q')));
+check('puts on: PUT placed on the pop stock (sd-p-)', () => assert.ok(B.options.some(o => /^POP\d{6}P/.test(o.symbol) && o.id === 'sd-p')));
+check('puts on: no stock order for the pop stock (no shorting stock)', () => assert.ok(!B.orders.some(o => o.symbol === 'POP')));
+check('puts on: PUT is a limit buy of whole contracts', () => { const o = B.orders.find(x => /^POP\d{6}P/.test(x.symbol)); assert.equal(o.side, 'buy'); assert.equal(o.type, 'limit'); assert.ok(+o.qty >= 1 && Number.isInteger(+o.qty)); });
+
+const C = run({ stocks: false, options: false, puts: true });
+check('puts only: just the PUT, nothing else', () => { assert.equal(C.orders.length, 1); assert.match(C.orders[0].symbol, /^POP\d{6}P/); });
+
+const D = run({ stocks: true, options: false, puts: false });
+check('options off, puts off: stock only', () => { assert.ok(D.orders.every(o => !/\d{6}[CP]\d{8}$/.test(o.symbol))); });
+
+console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

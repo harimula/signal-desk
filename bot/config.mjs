@@ -8,7 +8,7 @@ export const PRESETS = {
 export const DEFAULT_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'META', 'GOOGL', 'TSLA', 'AMD', 'JPM', 'BAC', 'XOM', 'CVX', 'KO', 'PEP', 'WMT', 'HD', 'DIS', 'INTC', 'CSCO', 'QCOM', 'ORCL', 'CRM', 'ADBE', 'NFLX', 'UBER', 'PLTR', 'SHOP', 'COIN', 'SOFI', 'F'];
 export const DEFAULTS = {
   version: 1, mode: 'paper', preset: 'balanced', ...PRESETS.balanced,
-  stocks: true, options: true,
+  stocks: true, options: true, puts: false,   // puts: experimental mirror of the dip rule, OFF until ticked
   rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, staleMin: 45,
   newsGuard: true, eventGuard: true, alerts: true,
   symbols: DEFAULT_SYMBOLS,
@@ -26,7 +26,7 @@ export function normalize(raw) {
   if (raw.preset && PRESETS[raw.preset]) { c.preset = raw.preset; Object.assign(c, PRESETS[raw.preset]); }
   else if (raw.preset === 'custom') c.preset = 'custom';
   for (const k of Object.keys(RANGES)) if (raw[k] != null && isFinite(+raw[k]) && (c.preset === 'custom' || !(k in PRESETS.balanced))) c[k] = clamp(+raw[k], RANGES[k]);
-  for (const k of ['stocks', 'options', 'newsGuard', 'eventGuard', 'alerts']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
+  for (const k of ['stocks', 'options', 'puts', 'newsGuard', 'eventGuard', 'alerts']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
   c.mode = raw.mode === 'live' && raw.liveConfirm === 'I UNDERSTAND THE RISK' ? 'live' : 'paper';
   if (/^\d{1,2}:\d{2}$/.test(raw.entryEnd || '')) { const [h, m] = raw.entryEnd.split(':').map(Number); if (h * 60 + m >= 600 && h * 60 + m <= 900) c.entryEnd = raw.entryEnd; }
   if (Array.isArray(raw.symbols)) { const s = [...new Set(raw.symbols.map(x => String(x).trim().toUpperCase()).filter(x => /^[A-Z.]{1,6}$/.test(x)))]; if (s.length) c.symbols = s.slice(0, 60); }
@@ -34,4 +34,4 @@ export function normalize(raw) {
   return c;
 }
 export const entryEndMin = c => { const [h, m] = c.entryEnd.split(':').map(Number); return h * 60 + m; };
-export const summary = c => `${c.preset} · stocks ${c.stocks ? c.stockPct + '%/position' : 'off'} · options ${c.options ? c.optPct + '%/trade' : 'off'} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;
+export const summary = c => `${c.preset} · stocks ${c.stocks ? c.stockPct + '%/position' : 'off'} · options ${c.options ? c.optPct + '%/trade' : 'off'}${c.puts ? ' + PUTs' : ''} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;

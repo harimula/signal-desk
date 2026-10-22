@@ -31,6 +31,10 @@ const STRATS = {
   rsi2stop: { label: 'RSI-2 mean reversion + 3× range stop', kind: 'swing',
     plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); if (!(s200 && r != null && C[i] > s200 && r < 10)) return null; let rg = 0; for (let k = i - 9; k <= i; k++) rg += B[k].h - B[k].l; return { rank: r, stopDist: 3 * rg / 10 }; },
     exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
+  // Short side (stock short is the cleanest proxy for buying puts: same direction, no decay or option spread).
+  rsi2short: { label: 'RSI-2 short (mirror of the bot): below 200-day, RSI-2 > 90, short at next open, cover when close < 5-day avg (max 10 days)', kind: 'swing', short: true,
+    plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] < s200 && r > 90 ? { rank: -r } : null; },
+    exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] < s5) || held >= 10; } },
   breakout: { label: 'Trend breakout: close at a 50-day high above the 200-day, exit on a 20-day low', kind: 'swing',
     plan(B, C, i) { const s200 = sma(C, 200, i); if (!s200 || C[i] <= s200) return null; let hi = -1; for (let k = i - 50; k < i; k++) hi = Math.max(hi, C[k]); return C[i] > hi ? { rank: -C[i] / s200 } : null; },
     exit(B, C, j) { let lo = 1e18; for (let k = j - 20; k < j; k++) lo = Math.min(lo, B[k].l); return C[j] < lo; } },
@@ -49,8 +53,12 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
       let exitPx = null;
       if (p.stop && b.l <= p.stop) exitPx = Math.min(b.o, p.stop);
       else { p.held++; if (S.exit(D.B, D.C, j, p.held)) exitPx = b.c; }
-      if (exitPx != null) { cash += p.sh * exitPx * (1 - COST); trades.push((exitPx * (1 - COST)) / (p.entryPx * (1 + COST)) - 1); p.done = true; }
-      else p.px = b.c;
+      if (exitPx != null) {
+        if (S.short) { const r = (p.entryPx - exitPx) / p.entryPx - 2 * COST; cash += p.alloc * (1 + r); trades.push(r); }
+        else { cash += p.sh * exitPx * (1 - COST); trades.push((exitPx * (1 - COST)) / (p.entryPx * (1 + COST)) - 1); }
+        p.done = true;
+      }
+      else p.px = S.short ? 2 * p.entryPx - b.c : b.c;          // a short is marked as margin plus the gain or loss
     }
     open = open.filter(p => !p.done);
     // 2) new entries from plans made at yesterday's close
@@ -74,7 +82,7 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
         } else {
           const fill = b.o, sh = alloc / (fill * (1 + COST));
           cash -= alloc;
-          const p = { sym: c.sym, sh, px: b.c, entryPx: fill, held: 0, stop: c.pl.stopDist ? fill - c.pl.stopDist : null };
+          const p = { sym: c.sym, sh, px: S.short ? 2 * fill - b.c : b.c, entryPx: fill, held: 0, alloc, stop: c.pl.stopDist ? fill - c.pl.stopDist : null };
           if (p.stop && b.l <= p.stop) { cash += sh * p.stop * (1 - COST); trades.push((p.stop * (1 - COST)) / (fill * (1 + COST)) - 1); }
           else open.push(p);
         }
@@ -107,7 +115,7 @@ for (const s of UNIVERSE) {
 }
 const split = calendar[Math.floor(calendar.length * 0.7)];
 const results = [];
-for (const key of Object.keys(STRATS)) for (const rg of [false, true]) {
+for (const key of Object.keys(STRATS)) for (const rg of (STRATS[key].short ? [false] : [false, true])) {   // the bear-market block would defeat a short strategy
   const { days, trades } = simulate(key, data, calendar, regimeOn, rg);
   results.push({ key, regime: rg, label: STRATS[key].label, all: stats(days, trades), ins: stats(days, trades, null, split), oos: stats(days, trades, split), t: tstats(trades) });
   console.log(key, rg ? 'regime' : 'plain', JSON.stringify(results[results.length - 1].oos));

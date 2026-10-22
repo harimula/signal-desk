@@ -94,3 +94,21 @@ export function rsi2Exit(completedCloses, price, sessionsHeld, maxHold = 10) {
   if (sessionsHeld >= maxHold) return { exit: true, why: `held ${sessionsHeld} sessions` };
   return { exit: false, s5: r2d(s5) };
 }
+
+// ---- RSI-2 mirror for PUTs (an experiment: the research chose the long side only) ----
+// Put: completed close BELOW its 200-day average AND RSI-2 above 100 - threshold (a sharp pop in a downtrend).
+// Exit: once price is below its 5-day average, or after maxHold sessions.
+export function rsi2ShortSignal(bars, closes, i = closes.length - 1, threshold = 10) {
+  if (i < 200) return null;
+  const s200 = sma(closes, 200, i), r = rsi2(closes, i);
+  if (s200 == null || r == null || !(closes[i] < s200 && r > 100 - threshold)) return null;
+  return { r2: Math.round(r * 10) / 10, prevClose: closes[i], s200: r2d(s200) };
+}
+export function rsi2ShortExit(completedCloses, price, sessionsHeld, maxHold = 10) {
+  const last4 = completedCloses.slice(-4);
+  if (last4.length < 4) return { exit: sessionsHeld >= maxHold, why: 'max hold' };
+  const s5 = (last4.reduce((a, b) => a + b, 0) + price) / 5;
+  if (price < s5) return { exit: true, why: `closed below its 5-day average (${r2d(s5)})` };
+  if (sessionsHeld >= maxHold) return { exit: true, why: `held ${sessionsHeld} sessions` };
+  return { exit: false, s5: r2d(s5) };
+}

@@ -852,7 +852,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792685762';
+const BUILD_V = '1792687199';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2300,7 +2300,7 @@ function stRead() {
   const v = id => { const el = document.getElementById('st-' + id); return el ? el.value : null; };
   c.preset = v('preset') || 'balanced';
   for (const g of Object.values(ST_FIELDS)) for (const [k] of g) { const x = parseFloat(v(k)); if (isFinite(x)) c[k] = x; }
-  for (const k of ['stocks', 'options', 'newsGuard', 'eventGuard', 'alerts']) { const el = document.getElementById('st-' + k); if (el) c[k] = el.checked; }
+  for (const k of ['stocks', 'options', 'puts', 'newsGuard', 'eventGuard', 'alerts']) { const el = document.getElementById('st-' + k); if (el) c[k] = el.checked; }
   c.entryEnd = v('entryEnd') || '11:00';
   c.symbols = (v('symbols') || '').split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
   c.mode = document.getElementById('st-live') && document.getElementById('st-live').checked ? 'live' : 'paper';
@@ -2414,7 +2414,7 @@ function settingsView() {
   const syncC = syncCard(sec, dot);
   const risk = sec('2. Risk profile', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${['conservative', 'balanced', 'aggressive'].map(presetBtn).join('')}</div>
 <div class="mut" style="font-size:12px;margin-top:8px">${c.preset === 'custom' ? '<b>Custom</b> — you changed a value below. Pick a profile to reset.' : 'Editing any value below switches to Custom.'}</div>${grid(ST_FIELDS.risk)}<input type="hidden" id="st-preset" value="${c.preset}">`, 'how much the bot may lose, per trade and in total');
-  const alloc = sec('3. Capital allocation', `${chk('stocks', 'Trade stocks', 'RSI-2 dip buys, held 1–10 days')}${chk('options', 'Trade options', 'CALLs on the same dips — untested side, keep small')}${grid(ST_FIELDS.alloc)}
+  const alloc = sec('3. Capital allocation', `${chk('stocks', 'Trade stocks', 'RSI-2 dip buys, held 1–10 days')}${chk('options', 'Trade CALL options', 'CALLs on the same dips — untested side, keep small')}${chk('puts', 'Trade PUT options', 'experimental: PUTs when a stock below its 200-day average pops (RSI-2 above 90) — never backtested, keep small')}${grid(ST_FIELDS.alloc)}
 <div class="mut" style="font-size:12px;margin-top:8px">Position size is the <i>smaller</i> of the capital % and the risk % — the risk rule usually decides.</div>`, 'stocks vs options, and how many at once');
   const strat = sec('4. Strategy', `${grid(ST_FIELDS.strat)}<div style="margin-top:10px;font-size:12px"><b>Entry window closes at</b> <input id="st-entryEnd" type="time" value="${esc(c.entryEnd || '11:00')}" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;color:var(--text)"> <span class="mut">ET (opens 9:45, or 10:15 on CPI/jobs days)</span></div>`, 'the tested values are the defaults — change with care');
   const guards = sec('5. Guards', `${chk('eventGuard', 'Economic calendar guard', 'Fed days, CPI/jobs mornings, Fed minutes')}${chk('newsGuard', 'Breaking-news guard', 'war, policy, crisis headlines pause trading; stocks with fresh news skipped')}${chk('alerts', 'Phone alerts', 'every trade, halt and error (needs the alert topic above)')}`, 'what makes the bot stand aside');

@@ -1,6 +1,6 @@
 # Signal Desk — System Documentation
 
-**Version:** 1.3 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
+**Version:** 1.4 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
 
 Signal Desk is a personal stock-signal website with an attached rules-based trading bot.
 This document is the single place that explains **what it does** (functional), **how it is
@@ -187,7 +187,8 @@ signal-desk/
 │   ├── research.mjs        4-strategy portfolio simulator, out-of-sample split
 │   ├── research.json / research_report.md   research results (shown on Bot tab)
 │   ├── backtest.json / backtest_report.md   backtest results
-│   └── test.mjs            29 unit tests (run in CI)
+│   ├── test.mjs            38 unit tests (run in CI)
+│   └── test-orders.mjs     end-to-end check against a fake broker: which orders one cycle places (CI)
 ├── .github/workflows/
 │   ├── refresh.yml         refresh-prices
 │   ├── trade.yml           paper-trade-bot
@@ -238,7 +239,7 @@ sequenceDiagram
 | `paper-trade-bot` | cron `*/5 13-21 * * 1-5`, manual; `concurrency` so only one session runs | `node bot/live.mjs` for up to 345 min; exits early if `bot/STOP` exists | 358 min timeout |
 | `strategy-research` | manual | `node bot/research.mjs` → `research.json`, `research_report.md` | 40 min |
 | `backtest` | manual | `node bot/backtest.mjs` → `backtest.json`, `backtest_report.md` | 30 min |
-| `bot-tests` | push / PR | `node bot/test.mjs` | 5 min |
+| `bot-tests` | push / PR | `node bot/test.mjs` and `node bot/test-orders.mjs` | 8 min |
 
 All actions are pinned to exact commit SHAs (`actions/checkout@11bd719… # v4.2.2`,
 `actions/setup-node@49933ea… # v4.4.0`).
@@ -324,6 +325,7 @@ flowchart TD
 - **Entries:** 9:45–11:00 ET (after 10:15 on CPI/jobs days); limit orders at the broker.
 - **Exits:** last 10 minutes once the close is above the 5-day average, or after 10 sessions. A 25 % hard floor is a disaster brake (fires within a second off the stream).
 - **Options:** CALL nearest strike, 14–35 days to expiry, same dips; take-profit +50 % as a resting order, stop −50 %, closed 3 days before expiry. Skipped under the pattern-day-trader guard when equity < $25 000.
+- **Puts (experimental, OFF by default):** with **Trade PUT options** ticked, the mirror rule buys a PUT on a stock *below* its 200-day average whose RSI-2 is above 90 (a sharp pop in a downtrend), skipped once the pop has already fallen 1 %+ today. Same option rules as the CALLs (14–35 days, nearest strike, spread ≤ 20 %, shared 4-option cap and risk budget); exits when the stock closes below its 5-day average, after 10 sessions, or on the option take-profit / stop / expiry rules. Never backtested on options; the research workflow tests a stock-short proxy.
 - **Guards:** FOMC/CPI/jobs calendar windows, live headline scan (war, White House, Fed, crisis keywords — matched on whole words, so "Stewart" and "Software" are not war headlines; a single company halting is tagged `single` and skips only that ticker), SPY tone; daily (−3 %) and weekly (−6 %) loss caps; 3-loss streak pause; stale orders cancelled after 45 min.
 
 ### 5.3 Real-time engine
@@ -354,7 +356,7 @@ Measured in tests against a mock broker: fill → take-profit order 40 ms; crash
 | `perSector`, `maxPositions`, `maxOptions` | caps | 2 / 6 / 4 |
 | `dayCap`, `weekCap`, `streak` | circuit breakers (% loss, % loss, losses in a row) | 3 / 6 / 3 |
 | `stockPct`, `optPct` | max % of equity per stock position / option budget | 10 / 2 |
-| `stocks`, `options` | enable each instrument | true / true |
+| `stocks`, `options`, `puts` | enable each instrument (CALLs, PUTs) | true / true / **false** |
 | `rsiThreshold`, `maxHold`, `entryEnd` | strategy parameters | 10 / 10 / 11:00 |
 | `optTakeProfit`, `optStop`, `holdFloor`, `staleMin` | exits | 50 / 50 / 25 / 45 |
 | `newsGuard`, `eventGuard`, `alerts` | guards and alerts | true |
@@ -439,7 +441,8 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 ## 8. Testing and quality
 
-- `bot/test.mjs`: 33 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.
+- `bot/test-orders.mjs`: serves a just-dipped stock and a just-popped stock from a fake broker and checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked). Runs in CI.
+- `bot/test.mjs`: 38 unit tests (indicators, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.
 - Integration tests against **mock brokers** (REST + websocket) with a fake clock, covering: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.
 - Page checks in headless Chromium at desktop and phone widths for every tab, including scroll-position preservation during live ticks.
 - Research/backtest workflows produce reproducible reports committed to the repo.
@@ -452,6 +455,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | PUT options added as an experiment, OFF by default (**Trade PUT options** switch): RSI-2 mirror rule, shared option caps, put exits; short-side strategy added to the research workflow; end-to-end order test with a fake broker (runs in CI) | §3.2, §5.2, §5.4, §8 |
 | 2026-10-22 | War keywords tightened: bare "missile", "troops" and "nuclear" no longer pause trading (defense contracts, power plants); conflict phrases such as "missile strike", "airstrikes", "nuclear weapon" still do | §5.2 |
 | 2026-10-22 | Settings save: 25-second limit on GitHub calls (no more endless "Saving…") and automatic retry when another commit lands at the same moment | §4.1 |
 | 2026-10-22 | News guard reads headlines only (not story summaries) for the market-wide pause and the page's tags, so a bank-loan story that mentions "the war" no longer stops trading for 30 minutes | §5.2 |

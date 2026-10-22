@@ -1,10 +1,11 @@
 // Unit tests for the bot's rules. Run: node bot/test.mjs  (also runs on every push via GitHub Actions)
 import assert from 'node:assert/strict';
-import { rsi2Signal, rsi2Exit, rsi2, sma } from './strategy.mjs';
+import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf } from './risk.mjs';
 import { buildJournal, parseSym } from './journal.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
+import { normalize } from './config.mjs';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => { try { fn(); passed++; console.log('  ✓ ' + name); } catch (e) { failed++; console.log('  ✗ ' + name + '\n      ' + e.message); } };
@@ -83,6 +84,29 @@ test('defense contracts and power news are not war news', () => {
   assert.ok(classify('Missiles fired at tanker in the Red Sea').includes('war'));
   assert.ok(classify('Airstrikes reported near the border').includes('war'));
 });
+test('PUT rule is the mirror of the dip rule', () => {
+  const mk = (start, end, tail) => { const c = []; for (let i = 0; i < 298; i++) c.push(start + (end - start) * i / 297); for (const g of tail) c.push(c[c.length - 1] * (1 + g)); return c; };
+  const bars = c => c.map(x => ({ o: x, h: x * 1.004, l: x * 0.996, c: x }));
+  const pop = mk(120, 80, [0.04, 0.04]), dip = mk(80, 120, [-0.04, -0.04]);
+  assert.ok(rsi2ShortSignal(bars(pop), pop, pop.length - 1, 10), 'downtrend + sharp pop = put candidate');
+  assert.equal(rsi2ShortSignal(bars(dip), dip, dip.length - 1, 10), null, 'an uptrend dip is not a put');
+  assert.equal(rsi2Signal(bars(pop), pop, pop.length - 1, 10), null, 'a pop is not a call');
+  assert.ok(rsi2ShortSignal(bars(pop), pop, pop.length - 1, 1), 'a perfect pop (RSI-2 100) still passes a strict threshold of 1');
+  assert.equal(rsi2ShortSignal(bars(pop), pop, pop.length - 1, 0), null, 'threshold 0 can never be met');
+  assert.equal(rsi2ShortSignal(bars(pop.slice(0, 150)), pop.slice(0, 150), 149, 10), null, 'needs 200 days of history');
+});
+test('PUT exit: below the 5-day average, or after max hold', () => {
+  assert.equal(rsi2ShortExit([100, 101, 102, 103], 90, 2, 10).exit, true);
+  assert.equal(rsi2ShortExit([100, 101, 102, 103], 110, 2, 10).exit, false);
+  assert.equal(rsi2ShortExit([100, 101, 102, 103], 110, 10, 10).exit, true);
+});
+test('puts switch is OFF unless explicitly ticked', () => {
+  assert.equal(normalize(null).puts, false);
+  assert.equal(normalize({}).puts, false);
+  assert.equal(normalize({ puts: 'yes' }).puts, false);
+  assert.equal(normalize({ puts: true }).puts, true);
+});
+
 test('keywords match whole words only', () => {
   assert.equal(classify('Stewart Information Servs Q3 Earnings Call Transcript').length, 0);
   assert.equal(classify('Upgrade Legacy Applications, Software Delivery').length, 0);
