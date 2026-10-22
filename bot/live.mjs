@@ -6,7 +6,7 @@
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { execSync } from 'node:child_process';
-import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats } from './bot.mjs';
+import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact } from './bot.mjs';
 import { summary } from './config.mjs';
 
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
@@ -24,7 +24,12 @@ async function pollConfig() {
   try {
     const r = await fetch(CONFIG_URL + '?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
     const c = applyConfig(await r.json()), s = JSON.stringify(c);
-    if (s !== cfgSeen) { cfgSeen = s; console.log('⚙️ settings applied:', summary(c)); lastJournal = 0; wake('settings changed'); resubscribe(); }
+    if (s !== cfgSeen) {
+      cfgSeen = s; console.log('\u2699\ufe0f settings applied:', summary(c)); lastJournal = 0; wake('settings changed');
+      const e2 = endpoints();
+      if (e2.trading !== EP.trading || e2.key !== EP.key) { console.log('account switched to', /paper/.test(e2.trading) ? 'PAPER' : 'LIVE', '\u2014 reconnecting streams'); Object.assign(EP, e2); try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); } catch (x) {} }
+      else resubscribe();
+    }
   } catch (e) { console.log('config poll failed', e.message); }
 }
 function commit() {
@@ -35,7 +40,7 @@ function commit() {
 
 // ---- streams ----
 const EP = endpoints();
-const TRADE_WS = process.env.ALPACA_TRADE_WS || EP.trading.replace(/^http/, 'ws') + '/stream';
+const tradeWsUrl = () => process.env.ALPACA_TRADE_WS || EP.trading.replace(/^http/, 'ws') + '/stream';
 const DATA_WS = process.env.ALPACA_DATA_WS || 'wss://stream.data.alpaca.markets/v2/iex';
 let tradeWs = null, dataWs = null, subscribed = [], tradeOk = false, dataOk = false;
 const heldUnds = new Set();                                   // underlyings of open positions (kept subscribed)
@@ -55,11 +60,11 @@ function openWs(url, onOpen, onMsg, label) {
 }
 function connectStreams(which = 'both') {
   if (process.env.NO_STREAMS === '1') return;
-  if (which === 'both' || which === 'trade-stream') tradeWs = openWs(TRADE_WS, ws => ws.send(JSON.stringify({ action: 'auth', key: EP.key, secret: EP.secret })), m => {
+  if (which === 'both' || which === 'trade-stream') tradeWs = openWs(tradeWsUrl(), ws => ws.send(JSON.stringify({ action: 'auth', key: EP.key, secret: EP.secret })), m => {
     if (m.stream === 'authorization') { tradeOk = m.data && m.data.status === 'authorized'; if (tradeOk) tradeWs.send(JSON.stringify({ action: 'listen', data: { streams: ['trade_updates'] } })); else console.log('trade-stream auth failed'); }
     if (m.stream === 'trade_updates' && m.data) {
       const ev = m.data.event, o = m.data.order || {};
-      if (['fill', 'partial_fill', 'canceled', 'expired', 'rejected'].includes(ev)) { streamStats.fills++; console.log('⚡', ev, o.side, o.qty, o.symbol, m.data.price ? '@ ' + m.data.price : ''); wake(ev + ' ' + o.symbol); }
+      if (['fill', 'partial_fill', 'canceled', 'expired', 'rejected'].includes(ev)) { streamStats.fills++; console.log('\u26a1', redact(ev + ' ' + o.side + ' ' + o.qty + ' ' + o.symbol + (m.data.price ? ' @ ' + m.data.price : ''))); wake(ev + ' ' + o.symbol); }
     }
   }, 'trade-stream');
   if (which === 'both' || which === 'data-stream') dataWs = openWs(DATA_WS, ws => ws.send(JSON.stringify({ action: 'auth', key: EP.key, secret: EP.secret })), arr => {

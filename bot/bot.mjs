@@ -18,8 +18,12 @@ import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
 import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
 
-const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
-export const HAVE_KEYS = !!(KEY && SECRET);
+const PAPER = { key: process.env.ALPACA_KEY, secret: process.env.ALPACA_SECRET, url: process.env.ALPACA_URL || 'https://paper-api.alpaca.markets' };
+const LIVE = { key: process.env.ALPACA_LIVE_KEY, secret: process.env.ALPACA_LIVE_SECRET, url: 'https://api.alpaca.markets' };
+export const HAVE_KEYS = !!(PAPER.key && PAPER.secret) || !!(LIVE.key && LIVE.secret);
+let KEY, SECRET, H;
+const PRIVATE = !!process.env.JOURNAL_KEY;                  // privacy mode: encrypted journal, redacted logs
+export const redact = s => PRIVATE ? String(s).replace(/\$?\d[\d,]*(\.\d+)?/g, '\u2022') : String(s);
 const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
 const DRY = process.env.BOT_DRY === '1';
 const NTFY = process.env.NTFY_TOPIC || '';
@@ -30,8 +34,11 @@ export let CFG = normalize(null);
 let BASE, STK_ON, OPT_ON, MAX_POS, MAX_OPT, OPT_TP, LOSS_CAP, HOLD_FLOOR, UNIVERSE, RISK_PCT, OPT_RISK_PCT, MAX_HEAT, MAX_PER_SECTOR, MAX_STREAK, WEEK_CAP, STALE_MIN, ENTRY_END;
 export function applyConfig(raw) {
   CFG = normalize(raw);
-  const live = CFG.mode === 'live' && process.env.ALPACA_LIVE_URL;          // live needs the live endpoint secret too
-  BASE = live ? process.env.ALPACA_LIVE_URL : (process.env.ALPACA_URL || 'https://paper-api.alpaca.markets');
+  const wantLive = CFG.mode === 'live', canLive = !!(LIVE.key && LIVE.secret);
+  const acct = wantLive && canLive ? LIVE : PAPER;
+  if (wantLive && !canLive) console.log('Live mode requested but no live keys are set \u2014 staying on paper.');
+  BASE = acct.url; KEY = acct.key; SECRET = acct.secret;
+  H = { 'APCA-API-KEY-ID': KEY, 'APCA-API-SECRET-KEY': SECRET, 'content-type': 'application/json' };
   STK_ON = CFG.stocks; OPT_ON = CFG.options; MAX_POS = CFG.maxPositions; MAX_OPT = CFG.maxOptions; OPT_TP = CFG.optTakeProfit;
   LOSS_CAP = CFG.dayCap; HOLD_FLOOR = CFG.holdFloor; UNIVERSE = CFG.symbols; RISK_PCT = CFG.riskPct; OPT_RISK_PCT = CFG.optRiskPct;
   MAX_HEAT = CFG.maxHeat; MAX_PER_SECTOR = CFG.perSector; MAX_STREAK = CFG.streak; WEEK_CAP = CFG.weekCap; STALE_MIN = CFG.staleMin; ENTRY_END = entryEndMin(CFG);
@@ -40,7 +47,6 @@ export function applyConfig(raw) {
 export function loadConfigFile() { try { return JSON.parse(fs.readFileSync('bot/config.json', 'utf8')); } catch (e) { return null; } }
 applyConfig(loadConfigFile());
 
-const H = { 'APCA-API-KEY-ID': KEY, 'APCA-API-SECRET-KEY': SECRET, 'content-type': 'application/json' };
 async function call(base, path, opt = {}) {
   let r = await fetch(base + path, { headers: H, ...opt });
   if (r.status === 429) { await new Promise(z => setTimeout(z, 3000)); r = await fetch(base + path, { headers: H, ...opt }); }   // rate limited: back off once
@@ -68,7 +74,7 @@ const acts = [], seen = new Map();
 const act = m => {                                          // same message within 10 min is logged once
   const k = m.replace(/[-+]?\d+(\.\d+)?%/g, '#');
   if (seen.has(k) && Date.now() - seen.get(k) < 10 * 60000) return;
-  seen.set(k, Date.now()); console.log(m); acts.push({ t: new Date().toISOString(), m });
+  seen.set(k, Date.now()); console.log(redact(m)); acts.push({ t: new Date().toISOString(), m });
 };
 let lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
 let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [] }, lastRisk = null;
@@ -217,6 +223,9 @@ async function run() {
     return;
   }
   const dayPct = lastEq > 0 ? (equity - lastEq) / lastEq * 100 : 0;
+  // Pattern-day-trader rule: under $25k, a 4th same-day round trip in 5 business days gets the account restricted.
+  const pdtNear = equity < 25000 && +acct.daytrade_count >= 3 && !acct.pattern_day_trader;
+  if (pdtNear) act(`Day-trade limit reached (${acct.daytrade_count} in 5 days, account under $25k) \u2014 no same-day exits today except emergencies`);
   const bud = equity * CFG.stockPct / 100, obud = equity * CFG.optPct / 100;
   const capHit = dayPct <= -LOSS_CAP;
 
@@ -262,7 +271,7 @@ async function run() {
       else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options`);
       else if (daysToExp <= 3) await out(`${p.symbol} ${daysToExp} days to expiry \u2014 out before time decay accelerates`);
       else if (MINS >= 950 && px && held(und, day8) > 0) { const x = rsi2Exit(completed(bars0, und).map(b => b.c), px, held(und, day8), CFG.maxHold); if (x.exit) await out(`${p.symbol} stock ${x.why} \u2014 selling the CALL`); }
-      else if (!sells.length) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
+      else if (!sells.length && !(pdtNear && day8 === TODAY)) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
     }
   }
 
@@ -408,15 +417,29 @@ async function writeJournal() {
   const { closed, open } = buildJournal(fills, positions);
   let prev = {};
   try { prev = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); } catch (e) {}
-  const allActs = (prev.acts || []).concat(acts).slice(-80);
+  const allActs = (PRIVATE ? (globalThis.__acts || []) : (prev.acts || [])).concat(acts).slice(-80); globalThis.__acts = allActs;
   const env = lastGuard ? { at: new Date().toISOString(), block: lastGuard.block, regime: lastGuard.regime, reasons: lastGuard.reasons, today: lastGuard.today, upcoming: lastGuard.upcoming, flagged: lastGuard.flagged, spyPct: lastGuard.spyPct, newsOk: lastGuard.newsOk } : (prev.env || null);
   const sig = JSON.stringify([closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), acts.length, env && env.reasons, env && env.flagged && env.flagged.length]);
-  if (prev.sig === sig && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
-  const j = { at: new Date().toISOString(), sig, paper: !process.env.ALPACA_URL || /paper/.test(process.env.ALPACA_URL),
+  const sigCmp = PRIVATE ? (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16) : sig;
+  if (prev.sig === sigCmp && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
+  const j = { at: new Date().toISOString(), sig, paper: /paper/.test(BASE),
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
     settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, risk: lastRisk, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
-  fs.writeFileSync('bot/journal.json', JSON.stringify(j));
-  console.log('journal written:', closed.length, 'closed,', open.length, 'open');
+  if (PRIVATE) {
+    // Public site, private data: AES-256-GCM with a key derived from your passphrase (PBKDF2-SHA256, 200k rounds).
+    // Only the timestamp, paper/live flag and stream health stay readable; the page decrypts the rest with the same passphrase.
+    const subtle = (await import('node:crypto')).webcrypto.subtle, enc = new TextEncoder();
+    const salt = (await import('node:crypto')).randomBytes(16), iv = (await import('node:crypto')).randomBytes(12);
+    const km = await subtle.importKey('raw', enc.encode(process.env.JOURNAL_KEY), 'PBKDF2', false, ['deriveKey']);
+    const key = await subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+    const ct = Buffer.from(await subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(j))));
+    const sigH = (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16);   // change-detector only, reveals nothing
+    fs.writeFileSync('bot/journal.json', JSON.stringify({ enc: 1, kdf: 'PBKDF2-SHA256', iter: 200000, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64'), at: j.at, sig: sigH, paper: j.paper, stream: j.stream }));
+    console.log('journal written (encrypted)');
+  } else {
+    fs.writeFileSync('bot/journal.json', JSON.stringify(j));
+    console.log('journal written:', closed.length, 'closed,', open.length, 'open');
+  }
 }
 
 if (import.meta.url === 'file://' + process.argv[1]) {

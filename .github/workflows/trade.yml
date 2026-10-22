@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 358
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: 20 }
       - run: |
           git config user.name "signal-desk-bot"
@@ -28,7 +28,9 @@ jobs:
           ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
           ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          ALPACA_LIVE_URL: ${{ secrets.ALPACA_LIVE_URL }}
+          ALPACA_LIVE_KEY: ${{ secrets.ALPACA_LIVE_KEY }}
+          ALPACA_LIVE_SECRET: ${{ secrets.ALPACA_LIVE_SECRET }}
+          JOURNAL_KEY: ${{ secrets.JOURNAL_KEY }}
           BOT_RISK_PCT: ${{ vars.BOT_RISK_PCT }}
           BOT_MAX_HEAT: ${{ vars.BOT_MAX_HEAT }}
           BOT_MAX_PER_SECTOR: ${{ vars.BOT_MAX_PER_SECTOR }}

@@ -78,6 +78,10 @@ equity) · `BOT_OPT_BUDGET` (0 = 2% of equity) · `BOT_OPT_TAKE_PROFIT` (50) · 
 · `BOT_MAX_OPTIONS` (4) · `BOT_HOLD_FLOOR` (25) · `BOT_STOCKS` / `BOT_OPTIONS` (0 = off) · `BOT_SYMBOLS`.
 
 ## Real money
-Run paper for at least 2–3 months and compare live results with the research. If you ever
-switch (`ALPACA_URL=https://api.alpaca.markets` + live keys), that decision and those keys are
-yours alone, losses included. This is a rules engine, not financial advice.
+Run paper for at least 2–3 months and compare live results with the research first.
+Live trading uses **separate** credentials: add `ALPACA_LIVE_KEY` and `ALPACA_LIVE_SECRET` as
+repository secrets (the paper keys stay as they are), then flip Mode to **Live** in Bot settings
+and type the confirmation phrase. The bot only talks to the live endpoint when both the mode is
+`live` and live keys exist — a paper key can never reach the live account. That decision and
+those keys are yours alone, losses included. This is a rules engine, not financial advice.
+See `SECURITY.md` for the full checklist (2FA, private journal, PDT rule, what stays public).
