@@ -359,6 +359,7 @@ Measured in tests against a mock broker: fill → take-profit order 40 ms; crash
 | `dayCap`, `weekCap`, `streak` | circuit breakers (% loss, % loss, losses in a row) | 3 / 6 / 3 |
 | `stockPct`, `optPct` | max % of equity per stock position / option budget | 10 / 2 |
 | `stocks`, `options`, `puts` | enable each instrument (CALLs, PUTs) | true / true / **false** |
+| `universe`, `scanSize`, `scanMinPrice` | `list` = the `symbols` below; `scan` = each morning rank every tradable US stock (NYSE/NASDAQ/ARCA/AMEX, no OTC, plain tickers) by 20-day average dollar volume on the IEX feed and watch the top `scanSize` priced ≥ `scanMinPrice` (`bot/scan.mjs`); the scan is re-used for the day, falls back to yesterday's or the list on failure | list / 200 / $5 |
 | `intraday` | experimental: stock/CALL/PUT signals use today's live price as a provisional close (`liveSignal` in strategy.mjs) instead of waiting for the close; yesterday's close still drives the 1 % bounce rule | **false** |
 | `stockUnit`, `callUnit`, `putUnit` | size each sleeve in `pct` (% of account) or `usd` (fixed dollars) | pct |
 | `stockPct`, `optPct`, `putPct` / `stockUsd`, `callUsd`, `putUsd` | money per trade for each sleeve, in the chosen unit | 10 / 2 / 1 % · $10,000 / $2,000 / $1,000 |
@@ -450,7 +451,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 ## 8. Testing and quality
 
 - `bot/test-orders.mjs`: serves a just-dipped stock and a just-popped stock from a fake broker and checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked). Runs in CI.
-- `bot/test.mjs`: 43 unit tests (indicators, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing, broker HTTP wrapper: retry, timeout, never-retry-an-order). Runs in CI on every push.
+- `bot/test.mjs`: 44 unit tests (indicators, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing, broker HTTP wrapper: retry, timeout, never-retry-an-order). Runs in CI on every push.
 - `npm run verify` = `tools/stamp.mjs --check` (build number matches `ver.txt`, CSP hashes current, inline scripts parse) + ESLint on the bot and tools + both test files. CI (`bot-tests`) runs the same four steps on every push that touches the bot, the page or the tooling.
 - Accessibility: audited with axe-core in headless Chromium across every tab — landmarks (`header`, `nav`, `main`), proper `tablist`/`tab` roles, labelled inputs, and all text colours at WCAG AA contrast (≥ 4.5 : 1) in both themes.
 - Integration tests against **mock brokers** (REST + websocket) with a fake clock, covering: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.
@@ -465,6 +466,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | **Market scan** universe option: the bot ranks every tradable US stock by trading volume each morning and watches the top N (default 200) instead of a fixed list; per-symbol news checks and the price stream narrow to candidates + held names in scan mode; Settings §6 radio; watch card shows the scan | §3.2, §5.2, §5.4, §8 |
 | 2026-10-22 | Industry-standards pass: CSP with hashed inline scripts (`tools/stamp.mjs`), referrer/description/color-scheme meta, http(s)-only feed links, no inline event handlers; broker HTTP timeout + retry/backoff (never for orders), graceful SIGTERM shutdown; accessibility fixes (landmarks, tablist roles, labels, AA contrast in both themes); `package.json` scripts, `.nvmrc`, ESLint, Dependabot, CI runs stamp check + lint + both test files | §3.2, §6, §8, §9 |
 | 2026-10-22 | **Intraday signals** option (off by default): same RSI-2 rules evaluated on the live price during the day; order test proves a stock that only dips intraday is bought with it on and ignored with it off | §5.2, §5.4 |
 | 2026-10-22 | Bot trades tab: **What the bot is watching** card — the journal now carries a `watch` block (every watched stock's price, RSI-2, above/below 200-day, and who qualifies for stock buy / CALL / PUT); end-to-end test covers it | §5.5, §8 |

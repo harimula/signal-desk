@@ -7,6 +7,7 @@ import { guard, symbolRisk, classify } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
 import { normalize } from './config.mjs';
 import http from 'node:http';
+import { rankByLiquidity } from './scan.mjs';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => { try { fn(); passed++; console.log('  ✓ ' + name); } catch (e) { failed++; console.log('  ✗ ' + name + '\n      ' + e.message); } };
@@ -166,6 +167,12 @@ test('money settings: defaults are % of account with no ceiling; units and caps 
   await atest('HTTP: an order (POST) is never retried', async () => { await assert.rejects(httpCall(base, '/order', { method: 'POST', body: '{}' }), /HTTP 500/); assert.equal(hits['/order'], 1); });
   srv.close();
 }
+test('market scan ranking: by average dollar volume, minimum price, top N', () => {
+  const bar = (c, v) => Array.from({ length: 20 }, () => ({ c, v }));
+  const top = rankByLiquidity({ BIG: bar(100, 1e6), MID: bar(50, 1e6), SMALL: bar(10, 1e6), PENNY: bar(2, 1e9), SHORT: [{ c: 100, v: 1e9 }] }, { size: 2, minPrice: 5 });
+  assert.deepEqual(top.map(r => r.sym), ['BIG', 'MID']);
+  assert.equal(normalize({ universe: 'scan', scanSize: 9999 }).scanSize, 400); assert.equal(normalize({ universe: 'nope' }).universe, 'list');
+});
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

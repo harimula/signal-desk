@@ -17,6 +17,7 @@ import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
 import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
+import { scanUniverse } from './scan.mjs';
 
 const PAPER = { key: process.env.ALPACA_KEY, secret: process.env.ALPACA_SECRET, url: process.env.ALPACA_URL || 'https://paper-api.alpaca.markets' };
 const LIVE = { key: process.env.ALPACA_LIVE_KEY, secret: process.env.ALPACA_LIVE_SECRET, url: 'https://api.alpaca.markets' };
@@ -40,10 +41,24 @@ export function applyConfig(raw) {
   BASE = acct.url; KEY = acct.key; SECRET = acct.secret;
   H = { 'APCA-API-KEY-ID': KEY, 'APCA-API-SECRET-KEY': SECRET, 'content-type': 'application/json' };
   STK_ON = CFG.stocks; OPT_ON = CFG.options; PUT_ON = !!CFG.puts; MAX_POS = CFG.maxPositions; MAX_OPT = CFG.maxOptions; OPT_TP = CFG.optTakeProfit;
-  LOSS_CAP = CFG.dayCap; HOLD_FLOOR = CFG.holdFloor; UNIVERSE = CFG.symbols; RISK_PCT = CFG.riskPct; OPT_RISK_PCT = CFG.optRiskPct;
+  LOSS_CAP = CFG.dayCap; HOLD_FLOOR = CFG.holdFloor; UNIVERSE = CFG.universe === 'scan' && scanCache.symbols ? scanCache.symbols : CFG.symbols; RISK_PCT = CFG.riskPct; OPT_RISK_PCT = CFG.optRiskPct;
   MAX_HEAT = CFG.maxHeat; MAX_PER_SECTOR = CFG.perSector; MAX_STREAK = CFG.streak; WEEK_CAP = CFG.weekCap; STALE_MIN = CFG.staleMin; ENTRY_END = entryEndMin(CFG);
   return CFG;
 }
+// Market-scan universe: rebuilt once per trading day (and whenever the scan settings change).
+let scanCache = { day: '', key: '', symbols: null, info: null };
+async function ensureUniverse() {
+  if (CFG.universe !== 'scan') { UNIVERSE = CFG.symbols; return; }
+  const key = CFG.scanSize + ':' + CFG.scanMinPrice;
+  if (scanCache.symbols && scanCache.day === TODAY && scanCache.key === key) { UNIVERSE = scanCache.symbols; return; }
+  try {
+    const r = await scanUniverse({ T, D, size: CFG.scanSize, minPrice: CFG.scanMinPrice, log: m => act(m) });
+    if (r.symbols.length >= 5) { scanCache = { day: TODAY, key, symbols: r.symbols, info: r }; UNIVERSE = r.symbols; barsCache = { at: 0, bars: null }; }
+    else act('market scan returned too few stocks (' + r.symbols.length + ') \u2014 keeping the previous list');
+  } catch (e) { act('market scan failed (' + (e.message || e).slice(0, 80) + ') \u2014 using ' + (scanCache.symbols ? "yesterday's scan" : 'the listed stocks')); }
+  if (!scanCache.symbols) UNIVERSE = CFG.symbols;
+}
+export const scanInfo = () => scanCache.info;
 export function loadConfigFile() { try { return JSON.parse(fs.readFileSync('bot/config.json', 'utf8')); } catch (e) { return null; } }
 applyConfig(loadConfigFile());
 
@@ -146,7 +161,7 @@ async function latestPrices(syms) {
   if (miss.length) { try { Object.assign(out, (await D(`/v2/stocks/trades/latest?symbols=${miss.join(',')}&feed=iex`)).trades || {}); } catch (e) {} }
   return out;
 }
-export const endpoints = () => ({ trading: BASE, key: KEY, secret: SECRET, universe: UNIVERSE });
+export const endpoints = () => ({ trading: BASE, key: KEY, secret: SECRET, universe: CFG.universe === 'scan' ? [...new Set((lastWatch ? lastWatch.buy.concat(lastWatch.put) : []))].slice(0, 25) : UNIVERSE });
 
 // Daily bars for the universe + anything we hold; refreshed every 30 minutes (~230 sessions).
 async function loadBars(extra = []) {
@@ -178,6 +193,7 @@ async function flushAlerts() {
 }
 
 async function run() {
+  await ensureUniverse();
   if (!lastClock || Date.now() - (lastClock._at || 0) > 30000) { lastClock = await T('/v2/clock'); lastClock._at = Date.now(); }
   const clock = lastClock;
   if (!clock.is_open) { console.log('Market closed.'); return; }
@@ -195,7 +211,8 @@ async function run() {
     try {
       const since = h => new Date(Date.now() - h * 3600e3).toISOString();
       const mk = (await D(`/v1beta1/news?limit=50&sort=desc&start=${since(3)}`)).news || [];
-      const sy = (await D(`/v1beta1/news?symbols=${UNIVERSE.join(',')}&limit=50&sort=desc&start=${since(72)}`)).news || [];
+      const newsSyms = CFG.universe === 'scan' ? [...new Set((lastWatch ? lastWatch.buy.concat(lastWatch.put) : []).concat(positions.map(p => isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol)))] : UNIVERSE;
+      const sy = newsSyms.length ? (await D(`/v1beta1/news?symbols=${newsSyms.join(',')}&limit=50&sort=desc&start=${since(72)}`)).news || [] : [];
       newsCache = { at: Date.now(), market: mk, syms: sy, ok: true };
     } catch (e) { newsCache = { ...newsCache, at: Date.now(), ok: false }; act('News feed unavailable (' + e.message.slice(0, 60) + ') \u2014 calendar rules still apply'); }
   }
@@ -398,7 +415,7 @@ async function run() {
       if (r == null || m == null) continue;
       rows.push({ s: sym, px: r2d((last[sym] && last[sym].p) || cl[cl.length - 1]), r2: Math.round(r * 10) / 10, up: cl[cl.length - 1] > m });
     }
-    lastWatch = { at: new Date().toISOString(), thr: CFG.rsiThreshold, intraday: !!CFG.intraday, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+    lastWatch = { at: new Date().toISOString(), thr: CFG.rsiThreshold, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
       buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
   }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);

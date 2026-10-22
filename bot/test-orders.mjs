@@ -26,7 +26,7 @@ if (process.argv[2] === 'child') {
   }).reduce((acc, x, i) => {
     let c;
     if (x.base != null) c = x.base; else c = acc.length ? acc[acc.length - 1].c * (1 + tail[i - 298]) : end;
-    acc.push({ t: x.d.toISOString().slice(0, 10) + 'T04:00:00Z', o: c, h: c * 1.004, l: c * 0.996, c, v: 1e6 });
+    acc.push({ t: x.d.toISOString().slice(0, 10) + 'T04:00:00Z', o: c, h: c * 1.004, l: c * 0.996, c, v: 1e6 });   // volume patched per symbol below
     return acc;
   }, []);
   const BARS = {
@@ -34,7 +34,10 @@ if (process.argv[2] === 'child') {
     POP: series(120, 80, [0.04, 0.04]),          // downtrend, two sharp up days  -> RSI-2 ~ 100, below 200-day
     FALL: series(80, 120, [0.001, 0.001]),       // uptrend, quiet at yesterday's close; the live price below drops it 10%
     SPY: series(400, 520, [0.001, 0.001]),
+    QUIET: series(200, 210, [0.001, 0.001]),      // ordinary liquid stock, no signal
+    JUNK: series(2, 3, [-0.04, -0.04]),           // penny stock that also dipped: the scan must drop it (price < $5)
   };
+  BARS.JUNK.forEach(b => b.v = 5e7); BARS.SPY.forEach(b => b.v = 5e6);
   const lastC = s => BARS[s][BARS[s].length - 1].c;
   const orders = [], unknown = [];
   const occ = (und, type, px) => und + '261113' + type[0].toUpperCase() + String(Math.round(px) * 1000).padStart(8, '0');
@@ -48,6 +51,7 @@ if (process.argv[2] === 'child') {
       if (p === '/v2/clock') return send({ is_open: true, timestamp: '2026-10-23T10:00:00-04:00', next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
       if (p === '/v2/account') return send({ equity: '100000', last_equity: '100000', cash: '100000', buying_power: '400000', pattern_day_trader: false, daytrade_count: 0, status: 'ACTIVE', multiplier: '4' });
       if (p === '/v2/positions') return send([]);
+      if (p === '/v2/assets') return send(Object.keys(BARS).map(s => ({ symbol: s, tradable: true, exchange: 'NASDAQ' })).concat([{ symbol: 'OTCX', tradable: true, exchange: 'OTC' }, { symbol: 'WARR.WS', tradable: true, exchange: 'NYSE' }]));
       if (p === '/v2/account/activities/FILL') return send([]);
       if (p === '/v2/account/portfolio/history') return send({ equity: [100000, 100000], timestamp: [1, 2], base_value: 100000 });
       if (p === '/v2/orders' && req.method === 'POST') { const o = JSON.parse(body); orders.push(o); return send({ id: 'o' + orders.length, status: 'accepted', ...o }); }
@@ -123,6 +127,11 @@ check('intraday off: a stock that only dips during the day is NOT bought', () =>
 const I1 = run({ stocks: true, options: false, intraday: true });
 check('intraday on: the same stock IS bought on the live-price dip', () => assert.ok(I1.orders.some(o => o.symbol === 'FALL' && o.side === 'buy')));
 check('intraday on: stocks that qualified at the close still qualify, and the watch list says live', () => { assert.ok(I1.orders.some(o => o.symbol === 'DIP')); assert.equal(I1.watch.intraday, true); assert.ok(I1.watch.buy.includes('FALL')); });
+
+const S = run({ stocks: true, options: false, universe: 'scan', scanSize: 50, scanMinPrice: 5, symbols: ['AAPL'] });
+check('market scan: the list setting is ignored and the most-traded stocks are watched instead', () => { assert.equal(S.watch.universe, 'scan'); assert.ok(S.watch.rows.some(r => r.s === 'DIP')); assert.ok(!S.watch.rows.some(r => r.s === 'AAPL')); });
+check('market scan: a penny stock is dropped even though it dipped and trades heavily', () => { assert.ok(!S.orders.some(o => o.symbol === 'JUNK')); assert.ok(!S.watch.rows.some(r => r.s === 'JUNK')); assert.equal(S.watch.scanned, 6); });
+check('market scan: the dip stock found by the scan is bought', () => assert.ok(S.orders.some(o => o.symbol === 'DIP' && o.side === 'buy')));
 
 const F = run({ stocks: true, options: true, puts: true, stockUnit: 'usd', stockUsd: 5000, stockCapUsd: 50, callCapPct: 0.1, putUnit: 'usd', putUsd: 5000, putCapUsd: 100 });
 check('ceilings: nothing bought when each sleeve ceiling is below one unit', () => assert.equal(F.orders.length, 0, JSON.stringify(F.orders.map(o => o.symbol))));

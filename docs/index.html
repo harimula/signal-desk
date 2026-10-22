@@ -211,7 +211,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 │   ├── journal.mjs / .json <span class="c">FIFO trade pairing; trade journal (encrypted when JOURNAL_KEY set)</span>
 │   ├── research.mjs        <span class="c">4-strategy simulator, out-of-sample split</span>
 │   ├── backtest.mjs        <span class="c">single-strategy backtest</span>
-│   ├── test.mjs            <span class="c">43 unit tests (CI)</span>
+│   ├── test.mjs            <span class="c">44 unit tests (CI)</span>
 │   └── test-orders.mjs     <span class="c">fake-broker check of the orders one cycle places (CI)</span>
 ├── .github/workflows/      <span class="c">refresh, trade, research, backtest, test</span>
 ├── docs/                   <span class="c">ARCHITECTURE.md · index.html (this page) · architecture.pptx</span>
@@ -349,6 +349,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <tr><td><code>dayCap</code>, <code>weekCap</code>, <code>streak</code></td><td>circuit breakers: % loss, % loss, losses in a row</td><td>3 / 6 / 3</td></tr>
 <tr><td><code>stockPct</code>, <code>optPct</code></td><td>max % of equity per stock position / option budget</td><td>10 / 2</td></tr>
 <tr><td><code>stocks</code>, <code>options</code>, <code>puts</code></td><td>enable each instrument (CALLs, PUTs)</td><td>true / true / <b>false</b></td></tr>
+<tr><td><code>universe</code>, <code>scanSize</code>, <code>scanMinPrice</code></td><td><code>list</code> = the tickers below; <code>scan</code> = each morning rank every tradable US stock by 20-day dollar volume and watch the top N priced above the minimum (<code>bot/scan.mjs</code>)</td><td>list / 200 / $5</td></tr>
 <tr><td><code>intraday</code></td><td>experimental: signals use today's live price as a provisional close instead of waiting for the close</td><td><b>false</b></td></tr>
 <tr><td><code>stockUnit</code>, <code>callUnit</code>, <code>putUnit</code></td><td>size each sleeve in <code>pct</code> (% of account) or <code>usd</code> (fixed dollars)</td><td>pct</td></tr>
 <tr><td><code>stockPct</code>, <code>optPct</code>, <code>putPct</code> / <code>stockUsd</code>, <code>callUsd</code>, <code>putUsd</code></td><td>money per trade for each sleeve, in the chosen unit</td><td>10 / 2 / 1 % · $10,000 / $2,000 / $1,000</td></tr>
@@ -435,7 +436,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <h2><span class="k">08</span>Testing and quality</h2>
 <ul>
   <li><code>bot/test-orders.mjs</code>: a fake broker serves a just-dipped and a just-popped stock and the test checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked). Runs in CI.</li>
-  <li><code>bot/test.mjs</code>: 43 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
+  <li><code>bot/test.mjs</code>: 44 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
   <li>Integration tests against mock brokers (REST + websocket) with a fake clock: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.</li>
   <li>Page checks in headless Chromium at desktop and phone widths for every tab, including scroll preservation during live ticks.</li>
   <li>Research and backtest workflows produce reproducible reports committed to the repo.</li>
@@ -447,6 +448,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Market scan universe option: every tradable US stock ranked by volume each morning, top N watched instead of a fixed list; Settings §6 radio; watch card shows the scan</td><td>03, 05, 08</td></tr>
 <tr><td>2026-10-22</td><td>Industry-standards pass: Content-Security-Policy with hashed inline scripts (tools/stamp.mjs), http(s)-only feed links; broker HTTP timeout and retry (never for orders), graceful shutdown; accessibility (landmarks, tab roles, labels, AA contrast); npm scripts, ESLint, Dependabot, CI stamp check</td><td>03, 06, 08, 09</td></tr>
 <tr><td>2026-10-22</td><td>Intraday signals option (off by default): same RSI-2 rules on the live price during the day</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>Bot trades tab: "What the bot is watching" card — journal carries a <code>watch</code> block (price, RSI-2, trend per stock, and who qualifies for stock buy / CALL / PUT)</td><td>05</td></tr>
