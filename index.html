@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <title>Signal Desk</title>
+<link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="shortcut icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#11151f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Signal Desk">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -231,7 +239,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 <div class="wrap">
 <nav class="vnav" id="appbar" role="tablist" style="margin:10px 0 6px"></nav>
 <header>
-  <div class="brand"><h1>Signal Desk</h1><div class="dots" id="mdots"></div></div>
+  <div class="brand"><img src="icons/favicon.svg" alt="" width="26" height="26" style="border-radius:7px;margin-right:8px;vertical-align:-6px"><h1>Signal Desk</h1><div class="dots" id="mdots"></div></div>
   <div class="hright"><div class="asof" id="clock"></div><span id="cdown" class="mut" style="font-size:12px;font-weight:700;font-feature-settings:'tnum'"></span><button class="btn ghost" id="acctBtn" type="button">👤 Sign in</button><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="1">● Live</option><option value="2">Every 2 min</option><option value="5">Every 5 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
 </header>
 <div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
@@ -844,7 +852,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792679669';
+const BUILD_V = '1792681150';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;

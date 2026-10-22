@@ -168,6 +168,8 @@ signal-desk/
 ├── events.json             FOMC / CPI / jobs / PPI / minutes calendar through 2027
 ├── symbols.json            built-in universe (US + India)
 ├── ver.txt                 build stamp; the page polls it to self-update
+├── favicon.ico  manifest.webmanifest   browser-tab icon; installable-app manifest
+├── icons/                  logo.svg / logo.png, icon.svg, favicon, apple-touch, 192/512 and maskable PNGs
 ├── fetch.mjs               price fetcher (Yahoo) used by refresh-prices
 ├── news.mjs                news fetcher (RSS + Benzinga) used by refresh-prices
 ├── worker.js               optional Cloudflare worker: CORS proxy for Yahoo
@@ -450,6 +452,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Branding: Signal Desk logo, browser-tab icon and installable app icons (home-screen install on phone and desktop); web app manifest | §3.2 |
 | 2026-10-22 | News guard: whole-word keyword matching ("Stewart"/"Software" no longer read as war), single-name events skip only that ticker, everyday idioms ("war chest", "bidding war") ignored; page and bot use the same rule | §5.2 |
 | 2026-10-22 | Sync fix: exclude derived per-render keys, 1-minute minimum gap, skip when unchanged (was committing every ~20 s during market hours) | §2.4 |
 | 2026-10-22 | Moved to `harimula/signal-desk`; page fallback repo and docs re-pointed | §3.1.1 |

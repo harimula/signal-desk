@@ -197,6 +197,8 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 ├── live.json  news.json    <span class="c">price snapshot and news feed, written by refresh-prices</span>
 ├── events.json             <span class="c">FOMC / CPI / jobs / PPI / minutes calendar through 2027</span>
 ├── symbols.json  ver.txt   <span class="c">built-in universe; build stamp for self-update</span>
+├── favicon.ico  manifest.webmanifest   <span class="c">browser-tab icon; installable-app manifest</span>
+├── icons/                  <span class="c">logo, favicon, apple-touch, 192/512 and maskable icons</span>
 ├── fetch.mjs  news.mjs     <span class="c">fetchers used by refresh-prices</span>
 ├── worker.js               <span class="c">optional Cloudflare worker (CORS proxy for Yahoo)</span>
 ├── bot/
@@ -436,6 +438,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Branding: Signal Desk logo, browser-tab icon and installable app icons; web app manifest</td><td>03</td></tr>
 <tr><td>2026-10-22</td><td>News guard: whole-word keyword matching (&ldquo;Stewart&rdquo;/&ldquo;Software&rdquo; no longer read as war), single-name events skip only that ticker, everyday idioms (&ldquo;war chest&rdquo;, &ldquo;bidding war&rdquo;) ignored; page and bot share the rule</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>Sync fix: exclude derived per-render keys, 1-minute minimum gap, skip when unchanged</td><td>02</td></tr>
 <tr><td>2026-10-22</td><td>Moved to <code>harimula/signal-desk</code>; page fallback repo and docs re-pointed</td><td>03</td></tr>
