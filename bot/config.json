@@ -1,7 +1,7 @@
 {
  "version": 1,
  "mode": "paper",
- "preset": "aggressive",
+ "preset": "custom",
  "riskPct": 1,
  "optRiskPct": 1,
  "maxHeat": 6,
@@ -12,7 +12,7 @@
  "weekCap": 10,
  "streak": 4,
  "stockPct": 12,
- "optPct": 3,
+ "optPct": 5,
  "stocks": true,
  "options": true,
  "rsiThreshold": 10,
@@ -57,7 +57,7 @@
   "SOFI",
   "F"
  ],
- "updatedAt": "2026-10-22T18:47:55.938Z",
+ "updatedAt": "2026-10-22T18:55:53.244Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "puts": true,
@@ -69,5 +69,6 @@
  "scanSize": 50,
  "scanMinPrice": 50,
  "putPct": 2,
- "alertDetail": true
+ "alertDetail": true,
+ "stockUsd": 22
 }
