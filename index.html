@@ -852,7 +852,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792682215';
+const BUILD_V = '1792682345';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1075,7 +1075,8 @@ document.addEventListener('click', e => {
     box.dataset.open = '1'; box.innerHTML = '';
     const code = document.createElement('code'); code.textContent = load('sd-jkey', ''); code.style.cssText = 'display:block;margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:6px;word-break:break-all;user-select:all';
     const cp = document.createElement('button'); cp.className = 'btn ghost'; cp.type = 'button'; cp.textContent = 'Copy'; cp.dataset.sy = 'copy';
-    box.append(code, cp);
+    const cnt = document.createElement('div'); cnt.className = 'mut'; cnt.style.cssText = 'font-size:11.5px;margin-bottom:6px'; const kv = load('sd-jkey', ''); cnt.textContent = [...kv].length + ' characters' + (/[^\x20-\x7e]/.test(kv) ? ', includes a non-standard character' : '') + (kv !== kv.trim() ? ', has a space at the start or end' : '');
+    box.append(code, cnt, cp);
   }
   if (a === 'copy') { const t = load('sd-jkey', ''); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = 'Copied'; }, () => { b.textContent = 'Select the text and copy it'; }); }
 });
@@ -2124,7 +2125,7 @@ document.addEventListener('click', async e => {
   for (const cand of tries) {
     try { const d = await jDecrypt(botLocked, cand); save('sd-jkey', cand); botJ = {...botLocked, ...d}; botLocked = null; botErr = ''; renderAll(); return; } catch (e2) {}
   }
-  const m = document.getElementById('jkeyMsg'); if (m) m.textContent = 'That passphrase does not open this journal. Tick \u201cShow what I type\u201d to check for a wrong capital letter or a stray space.';
+  const m = document.getElementById('jkeyMsg'); if (m) m.textContent = 'That passphrase does not open this journal. You typed ' + [...pass].length + ' characters' + (/[^\x20-\x7e]/.test(pass) ? ' (including a non-standard character)' : '') + ' \u2014 compare with the count in Bot settings on the device where it works. Tick \u201cShow what I type\u201d to check for a wrong capital letter or a stray space.';
 });
 let botJ = null, botErr = '', botBusy = false, botAt = 0, btJ = null;
 async function botLoad(force) {
