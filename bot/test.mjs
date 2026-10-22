@@ -71,6 +71,9 @@ test('keywords match whole words only', () => {
   assert.equal(classify('Stewart Information Servs Q3 Earnings Call Transcript').length, 0);
   assert.equal(classify('Upgrade Legacy Applications, Software Delivery').length, 0);
   assert.equal(classify('Warner Bros opens a warehouse').length, 0);
+  assert.equal(classify("Agrees With Warning About 'Massive War Chest' for Democrats").length, 0);
+  assert.equal(classify('Streaming wars heat up as bidding war for rights ends').length, 0);
+  assert.ok(classify('Trade war tariffs hit stocks').includes('policy'));
   assert.ok(classify('Russia launches a missile attack on Kyiv').includes('war'));
   assert.ok(classify('Escalating airstrikes reported').includes('war'));
   assert.ok(classify('White House announces new tariffs').includes('policy'));

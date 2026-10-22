@@ -844,7 +844,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792677525';
+const BUILD_V = '1792679669';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1925,7 +1925,8 @@ const EV_KEYS = {war: ['war', 'wars', 'warfare', 'missile', 'missiles', 'invasio
 // Whole-word matching: substring matching tagged "Stewart" and "Software" as war headlines.
 const EV_RX = {};
 const evRx = w => EV_RX[w] || (EV_RX[w] = new RegExp('\\b' + w.replace(/\*$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (w.endsWith('*') ? '' : '\\b'), 'i'));
-const evCats = t => { t = ' ' + (t || '') + ' '; return Object.keys(EV_KEYS).filter(k => EV_KEYS[k].some(w => evRx(w).test(t))); };
+const EV_IDIOMS = /\b(war chests?|war rooms?|bidding wars?|price wars?|streaming wars?|turf wars?|culture wars?|star wars)\b/gi; // idioms, not conflict
+const evCats = t => { t = ' ' + String(t || '').replace(EV_IDIOMS, ' ') + ' '; return Object.keys(EV_KEYS).filter(k => EV_KEYS[k].some(w => evRx(w).test(t))); };
 async function evLoad() {
   nwLoad();
   if (evBusy || Date.now() - evAt < 120000) return;

@@ -20,8 +20,11 @@ const RX = {};
 const rxFor = w => RX[w] || (RX[w] = new RegExp(
   '\\b' + w.replace(/\*$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (w.endsWith('*') ? '' : '\\b'), 'i'));
 
+// Everyday idioms that contain a keyword but are not about the keyword ("war chest", "bidding war").
+const IDIOMS = /\b(war chests?|war rooms?|bidding wars?|price wars?|streaming wars?|turf wars?|culture wars?|star wars)\b/gi;
+
 export function classify(text) {
-  const t = ' ' + (text || '') + ' ';
+  const t = ' ' + String(text || '').replace(IDIOMS, ' ') + ' ';
   const hits = [];
   for (const [cat, words] of Object.entries(KEYWORDS)) if (words.some(w => rxFor(w).test(t))) hits.push(cat);
   return hits;
