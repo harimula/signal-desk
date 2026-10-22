@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-w80nuCJpPICAJkFBdPLD76CFWCvqVnjOm414Hh0H434=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-6Lba/KYuXKyuDzVRApW9J5STaurIFffPNGFPw/96A2U=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -868,7 +868,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792693528';
+const BUILD_V = '1792693898';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2237,9 +2237,9 @@ ${Object.keys(R.sectors || {}).length ? `<div class="mut" style="font-size:12px;
     const rowsHtml = near.map(r => {
       const q = W.buy.includes(r.s) || W.call.includes(r.s), qp = W.put.includes(r.s);
       const status = q ? '<span class="pos">dip — qualifies' + (r.px > r.prev * 1.01 ? ', but already bounced 1%+ (skipped)' : '') + '</span>' : qp ? '<span class="neg">pop — qualifies' + (r.px < r.prev * 0.99 ? ', but already fell 1%+ (skipped)' : '') + '</span>' : r.up ? (r.r2 < W.thr + 15 ? 'uptrend, close to a dip' : 'uptrend, waiting for a dip') : (W.on.puts && r.r2 > 100 - W.thr - 15 ? 'downtrend, close to a pop' : 'downtrend, no buys (below its 200-day)');
-      const buyCell = !r.up ? '<span class="mut">no — below 200-day</span>' : q ? '<span class="pos">now (closed at ' + $p(r.prev) + ')</span>' : r.buyAt == null ? '<span class="mut">would need a 50%+ drop</span>' : 'closes below <b>' + $p(r.buyAt) + '</b>' + (r.buyAt < r.s200 ? ' <span class="mut">(under its 200-day ' + $p(r.s200) + ' — no)</span>' : '');
-      const putCell = !W.on.puts ? '' : `<td>${r.up ? '<span class="mut">no — above 200-day</span>' : qp ? '<span class="neg">now (closed at ' + $p(r.prev) + ')</span>' : r.putAt == null ? '<span class="mut">–</span>' : 'closes above <b>' + $p(r.putAt) + '</b>'}</td>`;
-      return `<tr><td class="lt"><b>${esc(r.s)}</b></td><td>${$p(r.px)}</td><td>${r.r2}</td><td>${r.up ? '<span class="pos">above</span>' : '<span class="neg">below</span>'} ${$p(r.s200)}</td><td class="lt">${buyCell}</td>${putCell}<td class="lt">${status}</td></tr>`;
+      const buyCell = r.buyAt === undefined ? '<span class="mut">– <span style="font-size:11px">(levels arrive with the bot\'s next check-in)</span></span>' : !r.up ? '<span class="mut">no — below 200-day</span>' : q ? '<span class="pos">now (closed at ' + $p(r.prev) + ')</span>' : r.buyAt === null ? '<span class="mut">would need a 50%+ drop</span>' : 'closes below <b>' + $p(r.buyAt) + '</b>' + (r.buyAt < r.s200 ? ' <span class="mut">(under its 200-day ' + $p(r.s200) + ' — no)</span>' : '');
+      const putCell = !W.on.puts ? '' : `<td>${r.putAt === undefined ? '<span class="mut">–</span>' : r.up ? '<span class="mut">no — above 200-day</span>' : qp ? '<span class="neg">now (closed at ' + $p(r.prev) + ')</span>' : r.putAt == null ? '<span class="mut">–</span>' : 'closes above <b>' + $p(r.putAt) + '</b>'}</td>`;
+      return `<tr><td class="lt"><b>${esc(r.s)}</b></td><td>${$p(r.px)}</td><td>${r.r2}</td><td>${r.up ? '<span class="pos">above</span>' : '<span class="neg">below</span>'}${r.s200 != null ? ' ' + $p(r.s200) : ''}</td><td class="lt">${buyCell}</td>${putCell}<td class="lt">${status}</td></tr>`;
     }).join('');
     const H = W.held || [];
     const heldHtml = H.length ? `<div style="margin-top:12px"><b style="font-size:13px">📦 What it holds and when it sells</b><div class="tw" style="margin-top:6px"><table style="min-width:640px"><thead><tr><th class="lt">Position</th><th>Qty</th><th>Bought</th><th>Now</th><th>P/L</th><th class="lt">Sells when</th><th class="lt">Safety exits</th></tr></thead><tbody>${H.map(h => {
