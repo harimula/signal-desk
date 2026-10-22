@@ -452,6 +452,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Settings save: 25-second limit on GitHub calls (no more endless "Saving…") and automatic retry when another commit lands at the same moment | §4.1 |
 | 2026-10-22 | News guard reads headlines only (not story summaries) for the market-wide pause and the page's tags, so a bank-loan story that mentions "the war" no longer stops trading for 30 minutes | §5.2 |
 | 2026-10-22 | Passphrase diagnostics: failed unlock and the reveal box both show a character count (and flag odd characters / stray spaces) so a phone and a PC can be compared without exposing the passphrase | §4.1 |
 | 2026-10-22 | Bot settings: "Show / copy the passphrase saved on this device" so a working passphrase can be pasted onto a phone instead of retyped | §4.1 |

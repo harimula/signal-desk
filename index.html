@@ -852,7 +852,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792683428';
+const BUILD_V = '1792684186';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2264,7 +2264,12 @@ const FALLBACK_REPO = 'harimula/signal-desk';   // only used when the page is NO
 const DEFAULT_REPO = repoFromUrl() || FALLBACK_REPO;
 const ghTok = () => load('sd-ghtok', ''), ghRepo = () => load('sd-ghrepo', '') || DEFAULT_REPO;
 async function ghApi(path, opt = {}) {
-  const r = await fetch('https://api.github.com/repos/' + ghRepo() + path, {...opt, headers: {Authorization: 'Bearer ' + ghTok(), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opt.headers || {})}});
+  // 25 s limit so a stuck request ends with a message instead of "Saving…" forever
+  const ac = new AbortController(), to = setTimeout(() => ac.abort(), 25000);
+  let r;
+  try { r = await fetch('https://api.github.com/repos/' + ghRepo() + path, {...opt, signal: ac.signal, headers: {Authorization: 'Bearer ' + ghTok(), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opt.headers || {})}}); }
+  catch (e) { throw new Error(e && e.name === 'AbortError' ? 'GitHub did not answer within 25 seconds' : (e.message || 'network error')); }
+  finally { clearTimeout(to); }
   if (r.status === 204) return null;
   const j = await r.json().catch(() => null);
   if (!r.ok) throw new Error((j && j.message) || ('HTTP ' + r.status));
@@ -2309,8 +2314,13 @@ async function stSave() {
   c.updatedAt = new Date().toISOString(); c.updatedBy = 'settings page';
   stBusy = true; stMsg = 'Saving…'; renderAll();
   try {
-    let sha = stSha; try { const f = await ghApi('/contents/bot/config.json?ref=main'); sha = f.sha; } catch (e) { sha = null; }
-    const r = await ghApi('/contents/bot/config.json', {method: 'PUT', body: JSON.stringify({message: 'Bot settings: ' + c.preset + (c.mode === 'live' ? ' LIVE' : ''), content: b64(JSON.stringify(c, null, 1)), sha: sha || undefined, branch: 'main'})});
+    // other commits landing on main at the same moment can make GitHub answer 409; re-read the file's version and try again
+    let r;
+    for (let attempt = 1; ; attempt++) {
+      let sha = stSha; try { const f = await ghApi('/contents/bot/config.json?ref=main'); sha = f.sha; } catch (e) { sha = null; }
+      try { r = await ghApi('/contents/bot/config.json', {method: 'PUT', body: JSON.stringify({message: 'Bot settings: ' + c.preset + (c.mode === 'live' ? ' LIVE' : ''), content: b64(JSON.stringify(c, null, 1)), sha: sha || undefined, branch: 'main'})}); break; }
+      catch (e) { if (attempt >= 4 || !/409|does not match|expected|conflict|sha|reference/i.test(e.message || '')) throw e; stMsg = 'Saving… (retry ' + attempt + ')'; renderAll(); await new Promise(z => setTimeout(z, 800 * attempt)); }
+    }
     stSha = r.content.sha; stCfg = c; stMsg = 'Saved ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + ' — the bot applies it within about a minute (GitHub Pages publishes the file first).';
   } catch (e) { stMsg = 'Save failed: ' + e.message; }
   stBusy = false; renderAll();
