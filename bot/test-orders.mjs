@@ -103,4 +103,12 @@ check('puts only: just the PUT, nothing else', () => { assert.equal(C.orders.len
 const D = run({ stocks: true, options: false, puts: false });
 check('options off, puts off: stock only', () => { assert.ok(D.orders.every(o => !/\d{6}[CP]\d{8}$/.test(o.symbol))); });
 
+const E = run({ stocks: true, options: true, puts: true, stockUnit: 'usd', stockUsd: 1000, callUnit: 'usd', callUsd: 150, putUnit: 'usd', putUsd: 500 });
+check('dollars: stock buy never exceeds the fixed dollar amount', () => { const o = E.orders.find(x => x.symbol === 'DIP'); assert.ok(o); assert.ok(+o.qty * +o.limit_price <= 1000, o.qty + ' x ' + o.limit_price); });
+check('dollars: CALL skipped when one contract costs more than the call amount', () => assert.ok(!E.orders.some(o => /^DIP\d{6}C/.test(o.symbol))));
+check('dollars: PUT placed when one contract fits the put amount', () => assert.ok(E.orders.some(o => /^POP\d{6}P/.test(o.symbol))));
+
+const F = run({ stocks: true, options: true, puts: true, stockUnit: 'usd', stockUsd: 5000, stockCapUsd: 50, callCapPct: 0.1, putUnit: 'usd', putUsd: 5000, putCapUsd: 100 });
+check('ceilings: nothing bought when each sleeve ceiling is below one unit', () => assert.equal(F.orders.length, 0, JSON.stringify(F.orders.map(o => o.symbol))));
+
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

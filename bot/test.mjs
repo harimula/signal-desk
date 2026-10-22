@@ -135,6 +135,13 @@ test('a real war headline still pauses the bot', () => {
     headlines: [{ headline: 'Missile attack on Kyiv escalates', created_at: new Date().toISOString() }] });
   assert.equal(g.block, true);
 });
+test('money settings: defaults are % of account with no ceiling; units and caps are validated', () => {
+  const d = normalize({});
+  assert.equal(d.stockUnit, 'pct'); assert.equal(d.putUnit, 'pct'); assert.equal(d.stockCapUsd, 0); assert.equal(d.callCapPct, 0);
+  const c = normalize({ stockUnit: 'usd', stockUsd: 2500, callUnit: 'bogus', putCapPct: 500, putCapUsd: -5 });
+  assert.equal(c.stockUnit, 'usd'); assert.equal(c.stockUsd, 2500); assert.equal(c.callUnit, 'pct');
+  assert.equal(c.putCapPct, 100); assert.equal(c.putCapUsd, 0);
+});
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

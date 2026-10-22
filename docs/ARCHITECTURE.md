@@ -187,7 +187,7 @@ signal-desk/
 │   ├── research.mjs        4-strategy portfolio simulator, out-of-sample split
 │   ├── research.json / research_report.md   research results (shown on Bot tab)
 │   ├── backtest.json / backtest_report.md   backtest results
-│   ├── test.mjs            38 unit tests (run in CI)
+│   ├── test.mjs            39 unit tests (run in CI)
 │   └── test-orders.mjs     end-to-end check against a fake broker: which orders one cycle places (CI)
 ├── .github/workflows/
 │   ├── refresh.yml         refresh-prices
@@ -357,6 +357,9 @@ Measured in tests against a mock broker: fill → take-profit order 40 ms; crash
 | `dayCap`, `weekCap`, `streak` | circuit breakers (% loss, % loss, losses in a row) | 3 / 6 / 3 |
 | `stockPct`, `optPct` | max % of equity per stock position / option budget | 10 / 2 |
 | `stocks`, `options`, `puts` | enable each instrument (CALLs, PUTs) | true / true / **false** |
+| `stockUnit`, `callUnit`, `putUnit` | size each sleeve in `pct` (% of account) or `usd` (fixed dollars) | pct |
+| `stockPct`, `optPct`, `putPct` / `stockUsd`, `callUsd`, `putUsd` | money per trade for each sleeve, in the chosen unit | 10 / 2 / 1 % · $10,000 / $2,000 / $1,000 |
+| `stockCap*`, `callCap*`, `putCap*` (`Pct` or `Usd`) | ceiling on everything that sleeve holds plus its waiting buy orders; 0 = no ceiling | 0 |
 | `rsiThreshold`, `maxHold`, `entryEnd` | strategy parameters | 10 / 10 / 11:00 |
 | `optTakeProfit`, `optStop`, `holdFloor`, `staleMin` | exits | 50 / 50 / 25 / 45 |
 | `newsGuard`, `eventGuard`, `alerts` | guards and alerts | true |
@@ -442,7 +445,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 ## 8. Testing and quality
 
 - `bot/test-orders.mjs`: serves a just-dipped stock and a just-popped stock from a fake broker and checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked). Runs in CI.
-- `bot/test.mjs`: 38 unit tests (indicators, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.
+- `bot/test.mjs`: 39 unit tests (indicators, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.
 - Integration tests against **mock brokers** (REST + websocket) with a fake clock, covering: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.
 - Page checks in headless Chromium at desktop and phone widths for every tab, including scroll-position preservation during live ticks.
 - Research/backtest workflows produce reproducible reports committed to the repo.
@@ -455,6 +458,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Capital allocation settings: each of stocks, CALLs and PUTs sized in % of account or fixed dollars, with a per-trade amount and an optional total ceiling per sleeve | §5.4 |
 | 2026-10-22 | PUT options added as an experiment, OFF by default (**Trade PUT options** switch): RSI-2 mirror rule, shared option caps, put exits; short-side strategy added to the research workflow; end-to-end order test with a fake broker (runs in CI) | §3.2, §5.2, §5.4, §8 |
 | 2026-10-22 | War keywords tightened: bare "missile", "troops" and "nuclear" no longer pause trading (defense contracts, power plants); conflict phrases such as "missile strike", "airstrikes", "nuclear weapon" still do | §5.2 |
 | 2026-10-22 | Settings save: 25-second limit on GitHub calls (no more endless "Saving…") and automatic retry when another commit lands at the same moment | §4.1 |
