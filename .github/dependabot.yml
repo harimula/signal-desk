@@ -1,0 +1,6 @@
+# Keeps the pinned GitHub Actions (checkout, setup-node) current with a monthly pull request.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }

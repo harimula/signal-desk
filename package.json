@@ -1,0 +1,15 @@
+{
+  "name": "signal-desk",
+  "private": true,
+  "version": "1.5.0",
+  "description": "Stock signals site and RSI-2 paper-trading bot. No runtime dependencies.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node bot/test.mjs && node bot/test-orders.mjs",
+    "lint": "npx --yes eslint@9.39.1 bot/*.mjs news.mjs fetch.mjs tools/*.mjs",
+    "check": "node tools/stamp.mjs --check",
+    "stamp": "node tools/stamp.mjs",
+    "verify": "npm run check && npm run lint && npm test"
+  }
+}

@@ -48,7 +48,7 @@ function metrics(days, label) {            // days: [{d, ret}] sorted
   if (!days.length) return { label, years: 0 };
   let eq = 1, peak = 1, mdd = 0;
   for (const x of days) { eq *= 1 + x.ret; peak = Math.max(peak, eq); mdd = Math.max(mdd, 1 - eq / peak); }
-  const y0 = +days[0].d.slice(0, 4), y1 = +days[days.length - 1].d.slice(0, 4), years = Math.max(1, (Date.parse(days[days.length - 1].d) - Date.parse(days[0].d)) / (365.25 * 864e5));
+  const years = Math.max(1, (Date.parse(days[days.length - 1].d) - Date.parse(days[0].d)) / (365.25 * 864e5));
   const rs = days.map(x => x.ret), mean = rs.reduce((a, b) => a + b, 0) / rs.length;
   const sd = Math.sqrt(rs.reduce((a, b) => a + (b - mean) ** 2, 0) / rs.length), dsd = Math.sqrt(rs.reduce((a, b) => a + Math.min(0, b) ** 2, 0) / rs.length);
   return { label, from: days[0].d, to: days[days.length - 1].d, years: +years.toFixed(1), cagr: (eq ** (1 / years) - 1) * 100, sharpe: sd ? mean / sd * Math.sqrt(252) : 0, sortino: dsd ? mean / dsd * Math.sqrt(252) : 0, maxDD: mdd * 100, total: (eq - 1) * 100 };

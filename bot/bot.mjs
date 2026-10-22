@@ -12,7 +12,7 @@
 //    all at -50%, all by 3:40pm the next session, never into expiry day.
 // Safety: paper endpoint by default; bot/STOP file flattens and halts; daily loss cap.
 import fs from 'node:fs';
-import { sma, rsi2, liveSignal, signalAt, signalShortAt, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
+import { sma, rsi2, liveSignal, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
 import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
@@ -27,7 +27,7 @@ export const redact = s => PRIVATE ? String(s).replace(/\$?\d[\d,]*(\.\d+)?/g, '
 const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
 const DRY = process.env.BOT_DRY === '1';
 const NTFY = process.env.NTFY_TOPIC || '';
-const MAX_ENTRIES = 3, HOLD_LOSS = 1.5, MAX_HOLD_DAYS = 30, TP = 1;
+const HOLD_LOSS = 1.5, MAX_HOLD_DAYS = 30, TP = 1;
 
 // ---- settings: bot/config.json (written by the Settings tab), re-applied live by applyConfig() ----
 export let CFG = normalize(null);
@@ -47,15 +47,35 @@ export function applyConfig(raw) {
 export function loadConfigFile() { try { return JSON.parse(fs.readFileSync('bot/config.json', 'utf8')); } catch (e) { return null; } }
 applyConfig(loadConfigFile());
 
+// Every broker call has a deadline, and reads are retried with backoff on rate limits, server errors and network
+// faults. Order placement (POST) is never retried here: a repeat could double a position, and the idempotency
+// guard in send() plus the client_order_id already protect against the slow-broker case.
+const HTTP_TIMEOUT_MS = +process.env.HTTP_TIMEOUT_MS || 15000, HTTP_RETRIES = 3;
+const sleepMs = ms => new Promise(z => setTimeout(z, ms));
 async function call(base, path, opt = {}) {
-  let r = await fetch(base + path, { headers: H, ...opt });
-  if (r.status === 429) { await new Promise(z => setTimeout(z, 3000)); r = await fetch(base + path, { headers: H, ...opt }); }   // rate limited: back off once
-  if (r.status === 204) return null;
-  const tx = await r.text();
-  if (!r.ok) throw new Error(path.split('?')[0] + ' HTTP ' + r.status + ' ' + tx.slice(0, 200));
-  return tx ? JSON.parse(tx) : null;
+  const method = (opt.method || 'GET').toUpperCase(), retriable = method !== 'POST';
+  let lastErr = null;
+  for (let attempt = 0; attempt <= (retriable ? HTTP_RETRIES : 0); attempt++) {
+    if (attempt) await sleepMs(Math.min(8000, 1000 * 2 ** (attempt - 1)) + Math.random() * 300);
+    const ac = new AbortController(), timer = setTimeout(() => ac.abort(), HTTP_TIMEOUT_MS);
+    let again = false;
+    try {
+      const r = await fetch(base + path, { headers: H, ...opt, signal: ac.signal });
+      if (r.status === 204) return null;
+      const tx = await r.text();
+      if (r.ok) return tx ? JSON.parse(tx) : null;
+      lastErr = new Error(path.split('?')[0] + ' HTTP ' + r.status + ' ' + tx.slice(0, 200));
+      again = r.status === 429 || r.status >= 500;                                 // other 4xx: our mistake, retrying will not help
+    } catch (e) {
+      lastErr = new Error(path.split('?')[0] + ' ' + (e.name === 'AbortError' ? `timed out after ${HTTP_TIMEOUT_MS / 1000}s` : e.message));
+      again = e.name === 'AbortError' || /fetch failed|ECONN|ETIMEDOUT|EAI_AGAIN|socket/i.test(e.message);
+    } finally { clearTimeout(timer); }
+    if (!again || !retriable) break;
+  }
+  throw lastErr;
 }
 const T = (p, o) => call(BASE, p, o), D = (p, o) => call(DATA, p, o);
+export const httpCall = call;                               // for tests only
 // Idempotency: never send the same order twice, even if the broker is slow to list it.
 const placed = new Map();
 const send = async (body, why) => { const dk = body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); alerts.push((body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why); act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }); };

@@ -68,7 +68,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
-  <div class="stamp">System documentation · v1.4<br>Updated 2026-10-22</div>
+  <div class="stamp">System documentation · v1.5<br>Updated 2026-10-22</div>
   <ol>
     <li><a href="#what"><span class="k">01</span>What it is</a></li>
     <li><a href="#functional"><span class="k">02</span>Functional</a></li>
@@ -211,7 +211,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 │   ├── journal.mjs / .json <span class="c">FIFO trade pairing; trade journal (encrypted when JOURNAL_KEY set)</span>
 │   ├── research.mjs        <span class="c">4-strategy simulator, out-of-sample split</span>
 │   ├── backtest.mjs        <span class="c">single-strategy backtest</span>
-│   ├── test.mjs            <span class="c">39 unit tests (CI)</span>
+│   ├── test.mjs            <span class="c">43 unit tests (CI)</span>
 │   └── test-orders.mjs     <span class="c">fake-broker check of the orders one cycle places (CI)</span>
 ├── .github/workflows/      <span class="c">refresh, trade, research, backtest, test</span>
 ├── docs/                   <span class="c">ARCHITECTURE.md · index.html (this page) · architecture.pptx</span>
@@ -389,7 +389,9 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   <li><b>Paper and live are separate credentials.</b> Live trading requires live mode, live keys and the typed phrase; a paper key is rejected by the live endpoint.</li>
   <li><b>Device settings</b> live in the public repo only as an encrypted blob under the owner's passphrase.</li>
   <li><b>Private journal:</b> with <code>JOURNAL_KEY</code> set, the journal is AES-256-GCM encrypted and numbers are scrubbed from Actions logs; the page decrypts locally with the passphrase.</li>
-  <li><b>Supply chain:</b> the only third-party script is pinned by hash; Actions are pinned to commit SHAs; the bot has no npm dependencies.</li>
+  <li><b>Content-Security-Policy:</b> the page allows only its own inline scripts (by SHA-256 hash), the hash-pinned libsodium and optional Firebase; connections only to GitHub, the price/news APIs, the relays and Firebase. <code>tools/stamp.mjs</code> refreshes the hashes after every edit and CI fails if they are stale.</li>
+<li><b>Supply chain:</b> the only third-party script is pinned by hash; Actions are pinned to commit SHAs; the bot has no npm dependencies.</li>
+<li><b>Broker calls:</b> 15 s deadline on every request; reads retried with backoff; order placement never retried; a cancelled run finishes its cycle and saves the journal.</li>
   <li><b>Broker API keys can trade but cannot withdraw funds</b> (verify in your own Alpaca settings).</li>
   <li><b>Owner checklist</b> (<code>SECURITY.md</code>): 2FA everywhere, no SMS; sole collaborator on the repo; token scoped to one repo with ≤ 90-day expiry; random ntfy topic; never paste keys into chat or issues.</li>
 </ul>
@@ -433,7 +435,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <h2><span class="k">08</span>Testing and quality</h2>
 <ul>
   <li><code>bot/test-orders.mjs</code>: a fake broker serves a just-dipped and a just-popped stock and the test checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked). Runs in CI.</li>
-  <li><code>bot/test.mjs</code>: 39 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
+  <li><code>bot/test.mjs</code>: 43 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
   <li>Integration tests against mock brokers (REST + websocket) with a fake clock: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.</li>
   <li>Page checks in headless Chromium at desktop and phone widths for every tab, including scroll preservation during live ticks.</li>
   <li>Research and backtest workflows produce reproducible reports committed to the repo.</li>
@@ -445,6 +447,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Industry-standards pass: Content-Security-Policy with hashed inline scripts (tools/stamp.mjs), http(s)-only feed links; broker HTTP timeout and retry (never for orders), graceful shutdown; accessibility (landmarks, tab roles, labels, AA contrast); npm scripts, ESLint, Dependabot, CI stamp check</td><td>03, 06, 08, 09</td></tr>
 <tr><td>2026-10-22</td><td>Intraday signals option (off by default): same RSI-2 rules on the live price during the day</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>Bot trades tab: "What the bot is watching" card — journal carries a <code>watch</code> block (price, RSI-2, trend per stock, and who qualifies for stock buy / CALL / PUT)</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>Capital allocation settings: stocks, CALLs and PUTs each sized in % of account or fixed dollars, with a per-trade amount and optional total ceiling per sleeve</td><td>05</td></tr>

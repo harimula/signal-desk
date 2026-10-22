@@ -1,6 +1,6 @@
 # Signal Desk — System Documentation
 
-**Version:** 1.4 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
+**Version:** 1.5 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
 
 Signal Desk is a personal stock-signal website with an attached rules-based trading bot.
 This document is the single place that explains **what it does** (functional), **how it is
@@ -168,6 +168,8 @@ signal-desk/
 ├── events.json             FOMC / CPI / jobs / PPI / minutes calendar through 2027
 ├── symbols.json            built-in universe (US + India)
 ├── ver.txt                 build stamp; the page polls it to self-update
+├── tools/stamp.mjs         bumps the build stamp and rewrites the CSP script hashes (run after every index.html edit)
+├── package.json  .nvmrc  eslint.config.js   npm scripts (test / lint / check / verify), Node 20, lint rules — no dependencies
 ├── favicon.ico  manifest.webmanifest   browser-tab icon; installable-app manifest
 ├── icons/                  logo.svg / logo.png, icon.svg, favicon, apple-touch, 192/512 and maskable PNGs
 ├── fetch.mjs               price fetcher (Yahoo) used by refresh-prices
@@ -401,7 +403,9 @@ flowchart TB
 - **Paper and live are separate credentials.** Live trading requires `mode: live` **and** live keys **and** the typed phrase; a paper key is rejected by the live endpoint.
 - **Device settings** are stored in the public repo only as an encrypted blob under the owner's passphrase; without the passphrase it is opaque.
 - **Private journal:** with `JOURNAL_KEY` set, the journal is AES-256-GCM encrypted and all numbers are scrubbed from Actions logs; the page decrypts locally with the passphrase.
-- **Supply chain:** the only third-party script is pinned by hash; Actions are pinned to commit SHAs; the bot has no npm dependencies.
+- **Content-Security-Policy:** the page ships a CSP `<meta>` that allows only its own two inline scripts (whitelisted by SHA-256 hash), the SRI-pinned libsodium and the optional Firebase SDK; connections are limited to GitHub, the price and news APIs, the price relays and Firebase. A script that is not the page's own — injected through a bug, a poisoned feed or an extension — is refused by the browser. `tools/stamp.mjs` rewrites the hashes (and the build number) after every edit; CI fails if they are stale. Feed links are only clickable when they are `http(s)`; `referrer` is `strict-origin-when-cross-origin`.
+- **Supply chain:** the only third-party scripts are pinned by hash; Actions are pinned to commit SHAs and watched by Dependabot; the bot has no npm dependencies.
+- **Broker calls:** every request has a 15 s deadline; reads are retried with backoff on 429 / 5xx / network faults; order placement is never retried (the `client_order_id` and the in-process duplicate guard cover the slow-broker case). A cancelled run (SIGTERM) finishes its cycle, writes the journal and pushes it.
 - **Broker API keys can trade but cannot withdraw funds** (verify in your own Alpaca settings).
 - **Owner checklist** (`SECURITY.md`): 2FA everywhere (no SMS), sole collaborator on the repo, token scoped to one repo with ≤ 90-day expiry, random ntfy topic, never paste keys into chat or issues.
 
@@ -446,7 +450,9 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 ## 8. Testing and quality
 
 - `bot/test-orders.mjs`: serves a just-dipped stock and a just-popped stock from a fake broker and checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked). Runs in CI.
-- `bot/test.mjs`: 39 unit tests (indicators, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.
+- `bot/test.mjs`: 43 unit tests (indicators, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing, broker HTTP wrapper: retry, timeout, never-retry-an-order). Runs in CI on every push.
+- `npm run verify` = `tools/stamp.mjs --check` (build number matches `ver.txt`, CSP hashes current, inline scripts parse) + ESLint on the bot and tools + both test files. CI (`bot-tests`) runs the same four steps on every push that touches the bot, the page or the tooling.
+- Accessibility: audited with axe-core in headless Chromium across every tab — landmarks (`header`, `nav`, `main`), proper `tablist`/`tab` roles, labelled inputs, and all text colours at WCAG AA contrast (≥ 4.5 : 1) in both themes.
 - Integration tests against **mock brokers** (REST + websocket) with a fake clock, covering: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.
 - Page checks in headless Chromium at desktop and phone widths for every tab, including scroll-position preservation during live ticks.
 - Research/backtest workflows produce reproducible reports committed to the repo.
@@ -455,10 +461,11 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 ## 9. Change log and maintenance
 
-**Maintenance rule:** every change to the website, the bot or the workflows updates this document, `docs/index.html` and, when the architecture changes, `docs/architecture.pptx`, **in the same commit**. The "Last updated" line at the top and the table below are part of that commit.
+**Maintenance rule:** every change to the website, the bot or the workflows updates this document, `docs/index.html` and, when the architecture changes, `docs/architecture.pptx`, **in the same commit**. After any edit to `index.html` run `node tools/stamp.mjs` (new build number + CSP hashes), and `npm run verify` before pushing. The "Last updated" line at the top and the table below are part of that commit.
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Industry-standards pass: CSP with hashed inline scripts (`tools/stamp.mjs`), referrer/description/color-scheme meta, http(s)-only feed links, no inline event handlers; broker HTTP timeout + retry/backoff (never for orders), graceful SIGTERM shutdown; accessibility fixes (landmarks, tablist roles, labels, AA contrast in both themes); `package.json` scripts, `.nvmrc`, ESLint, Dependabot, CI runs stamp check + lint + both test files | §3.2, §6, §8, §9 |
 | 2026-10-22 | **Intraday signals** option (off by default): same RSI-2 rules evaluated on the live price during the day; order test proves a stock that only dips intraday is bought with it on and ignored with it off | §5.2, §5.4 |
 | 2026-10-22 | Bot trades tab: **What the bot is watching** card — the journal now carries a `watch` block (every watched stock's price, RSI-2, above/below 200-day, and who qualifies for stock buy / CALL / PUT); end-to-end test covers it | §5.5, §8 |
 | 2026-10-22 | Capital allocation settings: each of stocks, CALLs and PUTs sized in % of account or fixed dollars, with a per-trade amount and an optional total ceiling per sleeve | §5.4 |

@@ -6,6 +6,7 @@ import { buildJournal, parseSym } from './journal.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
 import { normalize } from './config.mjs';
+import http from 'node:http';
 
 let passed = 0, failed = 0;
 const test = (name, fn) => { try { fn(); passed++; console.log('  ✓ ' + name); } catch (e) { failed++; console.log('  ✗ ' + name + '\n      ' + e.message); } };
@@ -142,6 +143,29 @@ test('money settings: defaults are % of account with no ceiling; units and caps 
   assert.equal(c.stockUnit, 'usd'); assert.equal(c.stockUsd, 2500); assert.equal(c.callUnit, 'pct');
   assert.equal(c.putCapPct, 100); assert.equal(c.putCapUsd, 0);
 });
+
+// ---- broker HTTP wrapper: deadline, bounded retry, never retry an order ----
+{
+  process.env.HTTP_TIMEOUT_MS = '400';
+  const { httpCall } = await import('./bot.mjs');
+  let hits = {};
+  const srv = http.createServer((req, res) => {
+    hits[req.url] = (hits[req.url] || 0) + 1;
+    if (req.url === '/flaky') { if (hits[req.url] < 3) { res.statusCode = 503; return res.end('busy'); } return res.end('{"ok":1}'); }
+    if (req.url === '/hang') return;                                                          // never answers
+    if (req.url === '/bad') { res.statusCode = 422; return res.end('nope'); }
+    if (req.url === '/order') { res.statusCode = 500; return res.end('boom'); }
+    res.end('{}');
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const base = 'http://127.0.0.1:' + srv.address().port;
+  const atest = async (name, fn) => { try { await fn(); console.log('  \u2713', name); passed++; } catch (e) { console.log('  \u2717', name, '\n   ', e.message); failed++; } };
+  await atest('HTTP: a read that fails twice with 503 is retried and succeeds', async () => { assert.deepEqual(await httpCall(base, '/flaky'), { ok: 1 }); assert.equal(hits['/flaky'], 3); });
+  await atest('HTTP: a request that never answers times out instead of hanging the bot', async () => { const t0 = Date.now(); await assert.rejects(httpCall(base, '/hang'), /timed out/); assert.ok(Date.now() - t0 < 20000); });
+  await atest('HTTP: a 4xx is reported at once, not retried', async () => { await assert.rejects(httpCall(base, '/bad'), /HTTP 422/); assert.equal(hits['/bad'], 1); });
+  await atest('HTTP: an order (POST) is never retried', async () => { await assert.rejects(httpCall(base, '/order', { method: 'POST', body: '{}' }), /HTTP 500/); assert.equal(hits['/order'], 1); });
+  srv.close();
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

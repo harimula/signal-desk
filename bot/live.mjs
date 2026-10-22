@@ -91,12 +91,19 @@ export function setFloor(sym, px) { if (px) floorPx[sym] = px; else delete floor
 const floorFired = new Set();
 function onTick(sym, px) { if (floorPx[sym] && px <= floorPx[sym] && !floorFired.has(sym)) { floorFired.add(sym); wake('floor ' + sym); setTimeout(() => floorFired.delete(sym), 15000); } }
 
+// ---- graceful shutdown: GitHub (or a person) cancelling the run sends SIGINT/SIGTERM. Finish the cycle in flight,
+// write the journal and push it, then leave. Resting orders at the broker are untouched: they are day orders.
+let stopping = false;
+const onSignal = sig => { if (stopping) return; stopping = true; console.log(`${sig} received \u2014 finishing the current cycle, saving the journal`); };
+process.on('SIGTERM', () => onSignal('SIGTERM')); process.on('SIGINT', () => onSignal('SIGINT'));
+process.on('unhandledRejection', e => console.log('unhandled rejection', redact(String((e && e.message) || e))));
+
 // ---- main loop ----
 const m0 = setNow();
 if (m0 < 9 * 60 + 20 || m0 >= 16 * 60 + 5) { console.log('Outside 9:20-16:05 ET - next scheduled run will take over.'); process.exit(0); }
 connectStreams();
 await pollConfig();
-while (Date.now() - born < LIFE) {
+while (Date.now() - born < LIFE && !stopping) {
   const mins = setNow();
   if (mins >= 16 * 60 + 5) break;
   await pollConfig();
@@ -118,7 +125,7 @@ while (Date.now() - born < LIFE) {
   if (Date.now() - lastCommit >= COMMIT_EVERY) { commit(); lastCommit = Date.now(); }
   await sleep(queue.length ? 50 : 200);
 }
-await botCycle({ journal: true });
+try { await botCycle({ journal: true }); } catch (e) { console.log('final cycle error', e.message); }
 commit();
 try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); } catch (e) {}
 console.log('Session runner finished.');
