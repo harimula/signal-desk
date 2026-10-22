@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-9V2xaIg72TCugVDVVAiUAOFrLWgJ104G+qK3QcoMdrE=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-UJuWkgvOFG9jx0Y7D7IEgDRzE37BgOYw4UCC4ifsjL0=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -858,7 +858,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792690442';
+const BUILD_V = '1792691064';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2277,7 +2277,7 @@ const ST_FIELDS = {
   scan: [['scanSize', 'How many stocks to watch', 'the most-traded ones, ranked each morning', 50, 400, 10], ['scanMinPrice', 'Minimum share price', '$ — skips penny stocks', 1, 500, 1]],
   money: [['stockPct', '', '', 1, 30, 1], ['optPct', '', '', 0.5, 10, 0.5], ['putPct', '', '', 0.5, 10, 0.5], ['stockUsd', '', '', 0, 1e7, 1], ['callUsd', '', '', 0, 1e7, 1], ['putUsd', '', '', 0, 1e7, 1], ['stockCapPct', '', '', 0, 100, 1], ['callCapPct', '', '', 0, 100, 1], ['putCapPct', '', '', 0, 100, 1], ['stockCapUsd', '', '', 0, 1e7, 1], ['callCapUsd', '', '', 0, 1e7, 1], ['putCapUsd', '', '', 0, 1e7, 1]],
   strat: [['rsiThreshold', 'RSI-2 buy level', 'buy when RSI-2 is below this (10 = tested value)', 2, 30, 1], ['maxHold', 'Max hold', 'sessions before a forced exit', 1, 30, 1], ['optTakeProfit', 'Option take-profit', '% gain that sells the option', 10, 300, 5], ['optStop', 'Option stop', '% loss that sells the option', 20, 90, 5], ['holdFloor', 'Hard floor', '% loss on a stock that forces a sale', 5, 60, 1], ['staleMin', 'Cancel unfilled entries after', 'minutes', 5, 240, 5]]};
-let stCfg = null, stSha = null, stMsg = '', stBusy = false, stDirty = false, stSecrets = null, stRepoInfo = null, stLoadedAt = 0;
+let stCfg = null, stSha = null, stMsg = '', stBusy = false, stDirty = false, stFailed = false, stSecrets = null, stRepoInfo = null, stLoadedAt = 0;
 // Which repo this copy belongs to: taken from the GitHub Pages address it is served from,
 // so moving the project to another account or repo name needs no code change.
 const repoFromUrl = () => { try { const h = location.hostname, m = /^([a-z0-9-]+)\.github\.io$/i.exec(h); if (!m) return ''; const seg = location.pathname.split('/').filter(Boolean)[0]; return seg ? m[1] + '/' + seg : ''; } catch (e) { return ''; } };
@@ -2308,14 +2308,24 @@ function ghWhy(e) {
   if (/rate limit/i.test(m)) return 'GitHub rate limit hit (' + m + '). Close other Signal Desk tabs and try again in a few minutes.';
   return m;
 }
-// a live "n s" counter next to Saving…, so a slow GitHub never looks like a frozen page
-let stTick = null, stT0 = 0;
+// a live "n s" counter next to Saving… and a step log underneath, so a slow GitHub never looks like a frozen page
+let stTick = null, stT0 = 0, stSteps = [];
+const stStep = m => { stSteps.push([Date.now(), m]); const el = document.getElementById('stSteps'); if (el) el.innerHTML = stStepsHtml(); };
+const stStepsHtml = () => stSteps.map(([t, m]) => `<div>${esc(String(((t - stT0) / 1000).toFixed(1)).padStart(5))} s · ${esc(m)}</div>`).join('');
 function stWait(on) {
   clearInterval(stTick); stTick = null;
   if (!on) return;
-  stT0 = Date.now();
+  stT0 = Date.now(); stSteps = [];
   stTick = setInterval(() => { const el = document.getElementById('stWait'); if (el) el.textContent = Math.round((Date.now() - stT0) / 1000) + ' s'; }, 500);
 }
+// Fallback when the GitHub API cannot be reached from this network: copy the settings and paste them on github.com
+function stCopyJson() {
+  const c = stRead(); c.updatedAt = new Date().toISOString(); c.updatedBy = 'pasted on GitHub';
+  const txt = JSON.stringify(c, null, 1);
+  const done = ok => { stMsg = ok ? 'Settings copied. Now open bot/config.json on GitHub (link below), click the pencil, select all, paste, and Commit changes. The bot picks it up within a minute.' : 'Could not copy automatically — select the text in the box below and copy it yourself.'; stJsonBox = ok ? '' : txt; renderAll(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(() => done(true), () => done(false)); else done(false);
+}
+let stJsonBox = '';
 async function stTest() {
   stBusy = true; stMsg = 'Testing the connection to GitHub…'; renderAll(); stWait(true);
   try {
@@ -2363,7 +2373,7 @@ async function stSave() {
   const c = stRead();
   if (c.mode === 'live' && c.liveConfirm !== 'I UNDERSTAND THE RISK') { stMsg = 'To switch to LIVE you must type exactly: I UNDERSTAND THE RISK'; renderAll(); return; }
   c.updatedAt = new Date().toISOString(); c.updatedBy = 'settings page';
-  stBusy = true; stMsg = 'Saving…'; renderAll(); stWait(true);
+  stFailed = false; stJsonBox = ''; stBusy = true; stMsg = 'Saving…'; renderAll(); stWait(true); stStep('form read, ' + Object.keys(c).length + ' settings'); stStep('sending to GitHub (api.github.com)…');
   try {
     // use the file version we already know; only if GitHub says it moved (another commit landed) re-read it once and retry
     let r, sha = stSha;
@@ -2375,9 +2385,10 @@ async function stSave() {
         try { sha = (await ghApi('/contents/bot/config.json?ref=main')).sha; } catch (e2) { throw e; }
       }
     }
+    stStep('GitHub accepted the file (' + ghLast.ms + ' ms)');
     stSha = r.content.sha; stCfg = c; stLoadedAt = Date.now(); stDirty = false;
     stMsg = 'Saved ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + ' — the bot applies it within about a minute (GitHub Pages publishes the file first).';
-  } catch (e) { stMsg = 'Save failed: ' + ghWhy(e); }
+  } catch (e) { stStep('failed: ' + (e.message || e)); stMsg = 'Save failed: ' + ghWhy(e); stFailed = true; }
   stWait(false); stBusy = false; renderAll();
 }
 async function stSecret(name, value, label) {
@@ -2438,6 +2449,7 @@ document.addEventListener('click', e => {
   else if (a === 'preset') { stCfg = {...stRead(), preset: b.dataset.v, ...ST_PRESETS[b.dataset.v]}; stDirty = true; renderAll(); }
   else if (a === 'reload') { stDirty = false; stLoad(true); }
   else if (a === 'test') stTest();
+  else if (a === 'copyjson') stCopyJson();
   else stControl(a);
 });
 document.addEventListener('change', e => { if (e.target && e.target.name === 'st-universe') { stCfg = stRead(); renderAll(); } });
@@ -2495,7 +2507,7 @@ function settingsView() {
 ${c.mode === 'live' || (document.getElementById('st-live') && document.getElementById('st-live').checked) ? `<div style="margin-top:8px;padding:10px 12px;border-radius:8px;background:var(--ts-bg);font-size:12.5px;line-height:1.5"><b class="neg">Real money.</b> Losses are real and yours. Only do this after months of paper results that match the research. Type <b>I UNDERSTAND THE RISK</b> to confirm:<input id="st-liveConfirm" ${inp} style="margin-top:6px" value="${esc(c.liveConfirm || '')}" autocomplete="off"></div>` : '<div class="mut" style="font-size:12px;margin-top:4px">Currently <b>paper</b> — fake money, real prices.</div>'}`, 'paper or real money');
   const ctl = sec('8. Controls', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${stStop ? '<button class="btn" type="button" data-st="resume">▶ Resume trading</button>' : '<button class="btn" type="button" data-st="pause" style="background:var(--ts)">⏸ Pause — sell everything now</button>'}<button class="btn ghost" type="button" data-st="run">Run the bot now</button><button class="btn ghost" type="button" data-st="research">Re-run 33-year research</button><button class="btn ghost" type="button" data-st="reload">Reload from GitHub</button></div>
 <div class="mut" style="font-size:12px;margin-top:8px">${stStop ? '<b class="neg">Paused</b> — the bot has sold everything and is idle.' : 'Running normally.'} Pause creates <code>bot/STOP</code> in the repo; the bot sees it within seconds.</div>`, 'pause, resume, run');
-  const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span id="stDirty" class="pill r-Sell" style="font-size:11px;${stDirty ? '' : 'display:none'}">unsaved changes</span><span style="font-size:12.5px">${stBusy ? '<span id="stWait" class="mut" style="font-variant-numeric:tabular-nums;margin-right:6px">0 s</span>' : ''}${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span></div>`;
+  const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span id="stDirty" class="pill r-Sell" style="font-size:11px;${stDirty ? '' : 'display:none'}">unsaved changes</span><span style="font-size:12.5px">${stBusy ? '<span id="stWait" class="mut" style="font-variant-numeric:tabular-nums;margin-right:6px">${Math.round((Date.now() - stT0) / 1000)} s</span>' : ''}${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span>${stBusy && stSteps.length ? `<div id="stSteps" class="mut" style="flex-basis:100%;font-size:11.5px;font-family:var(--font-mono),monospace;white-space:pre-wrap">${stStepsHtml()}</div>` : ''}${stFailed && !stBusy ? `<div style="flex-basis:100%;font-size:12.5px;border-top:1px solid var(--line);padding-top:8px"><b>Can't reach GitHub from here?</b> Save another way: <button class="btn ghost" type="button" data-st="copyjson" style="font-size:12px">Copy settings</button> then <a href="https://github.com/${esc(ghRepo())}/edit/main/bot/config.json" target="_blank" rel="noopener">open bot/config.json on GitHub</a>, select all, paste, Commit changes.${stJsonBox ? `<textarea readonly rows="6" style="width:100%;margin-top:6px;font-family:var(--font-mono),monospace;font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text)">${esc(stJsonBox)}</textarea>` : ''}</div>` : ''}</div>`;
   return `<h2 style="margin-bottom:6px">Bot settings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.</div>${bar}${connect}${syncC}${risk}${alloc}${strat}${guards}${uni}${mode}${ctl}`;
 }
 function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
@@ -2533,7 +2545,7 @@ let rszT = null;
 window.addEventListener('resize', () => { clearTimeout(rszT); rszT = setTimeout(() => { try { if (app === 'desk') twNav2($('#view')); else fitTool(); } catch (e2) {} }, 250); });
 function renderAll(bg) {
   if (bg) {
-    if (app !== 'desk') return;
+    if (app !== 'desk' || tab === 'SET') return;          // settings do not depend on live prices; redrawing them would disturb typing and the save bar
     const v0 = $('#view');
     if (v0.dataset.rv === app + ':' + tab) {
       morphSet(v0, viewHTML());
