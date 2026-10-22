@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 
 export const KEYWORDS = {
-  war:    ['war', 'wars', 'warfare', 'missile', 'missiles', 'invasion', 'invade', 'invaded', 'airstrike', 'air strike', 'military strike', 'troops', 'nuclear', 'attack on', 'terror*', 'escalat*', 'blockade', 'ceasefire'],
+  war:    ['war', 'wars', 'warfare', 'missile attack*', 'missile strike*', 'missile launch*', 'missiles fired', 'invasion', 'invade', 'invaded', 'airstrike*', 'air strike*', 'military strike*', 'troops deployed', 'troops enter*', 'nuclear strike*', 'nuclear weapon*', 'nuclear threat*', 'attack on', 'terror*', 'escalat*', 'blockade', 'ceasefire'],   // conflict phrases, not bare "missile"/"troops"/"nuclear" (defense contracts, power plants)
   policy: ['white house', 'tariff*', 'executive order', 'trade war', 'export control*', 'sanction*', 'government shutdown', 'debt ceiling', 'impeach*'],
   fed:    ['fomc', 'federal reserve', 'fed chair', 'powell', 'rate hike', 'rate cut', 'emergency rate', 'fed minutes', 'fed holds', 'fed raises', 'fed cuts'],
   macro:  ['cpi', 'inflation', 'jobs report', 'payrolls', 'unemployment rate', 'gdp', 'recession', 'pce'],

@@ -75,6 +75,14 @@ test('a war mentioned only in the summary does not pause the market', () => {
     headlines: [{ headline: 'Russia launches missile attack on Kyiv', summary: '', created_at: new Date().toISOString() }] });
   assert.equal(g2.block, true);
 });
+test('defense contracts and power news are not war news', () => {
+  assert.equal(classify("Denmark Plans Procurement of Kongsberg's Joint Strike Missile").length, 0);
+  assert.equal(classify('Utility signs nuclear power plant supply deal').length, 0);
+  assert.equal(classify('Troops training exercise contract awarded to Lockheed').length, 0);
+  assert.ok(classify('Missile strike hits Kyiv overnight').includes('war'));
+  assert.ok(classify('Missiles fired at tanker in the Red Sea').includes('war'));
+  assert.ok(classify('Airstrikes reported near the border').includes('war'));
+});
 test('keywords match whole words only', () => {
   assert.equal(classify('Stewart Information Servs Q3 Earnings Call Transcript').length, 0);
   assert.equal(classify('Upgrade Legacy Applications, Software Delivery').length, 0);

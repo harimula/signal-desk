@@ -852,7 +852,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792684186';
+const BUILD_V = '1792685762';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1940,7 +1940,7 @@ function morphKids(t, f) {
 function morphSet(el, html) { const tpl = document.createElement('template'); tpl.innerHTML = html; morphKids(tpl.content, el); }
 // ---------- market events & headlines (events.json + Finnhub general news when a key is saved) ----------
 let evList = null, evHeads = [], evAt = 0, evBusy = false;
-const EV_KEYS = {war: ['war', 'wars', 'warfare', 'missile', 'missiles', 'invasion', 'invade', 'airstrike', 'air strike', 'troops', 'nuclear', 'attack on', 'terror*', 'escalat*', 'blockade', 'ceasefire'], policy: ['white house', 'tariff*', 'executive order', 'trade war', 'export control*', 'sanction*', 'government shutdown', 'debt ceiling', 'impeach*'], fed: ['fomc', 'federal reserve', 'fed chair', 'powell', 'rate hike', 'rate cut', 'fed minutes'], macro: ['cpi', 'inflation', 'jobs report', 'payrolls', 'unemployment rate', 'gdp', 'recession', 'pce'], crisis: ['bank failure', 'bank run', 'market crash', 'flash crash', 'contagion', 'systemic risk'], single: ['circuit breaker', 'trading halt', 'halted', 'bankrupt*', 'chapter 11', 'delisted']};
+const EV_KEYS = {war: ['war', 'wars', 'warfare', 'missile attack*', 'missile strike*', 'missile launch*', 'missiles fired', 'invasion', 'invade', 'invaded', 'airstrike*', 'air strike*', 'military strike*', 'troops deployed', 'troops enter*', 'nuclear strike*', 'nuclear weapon*', 'nuclear threat*', 'attack on', 'terror*', 'escalat*', 'blockade', 'ceasefire'], policy: ['white house', 'tariff*', 'executive order', 'trade war', 'export control*', 'sanction*', 'government shutdown', 'debt ceiling', 'impeach*'], fed: ['fomc', 'federal reserve', 'fed chair', 'powell', 'rate hike', 'rate cut', 'fed minutes'], macro: ['cpi', 'inflation', 'jobs report', 'payrolls', 'unemployment rate', 'gdp', 'recession', 'pce'], crisis: ['bank failure', 'bank run', 'market crash', 'flash crash', 'contagion', 'systemic risk'], single: ['circuit breaker', 'trading halt', 'halted', 'bankrupt*', 'chapter 11', 'delisted']};
 // Whole-word matching: substring matching tagged "Stewart" and "Software" as war headlines.
 const EV_RX = {};
 const evRx = w => EV_RX[w] || (EV_RX[w] = new RegExp('\\b' + w.replace(/\*$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (w.endsWith('*') ? '' : '\\b'), 'i'));
