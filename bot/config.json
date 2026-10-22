@@ -17,7 +17,7 @@
  "options": true,
  "rsiThreshold": 10,
  "maxHold": 10,
- "entryEnd": "11:00",
+ "entryEnd": "15:00",
  "optTakeProfit": 50,
  "optStop": 50,
  "holdFloor": 25,
@@ -57,7 +57,7 @@
   "SOFI",
   "F"
  ],
- "updatedAt": "2026-10-22T11:13:24.051Z",
- "updatedBy": "settings page",
+ "updatedAt": "2026-10-22T16:12:36.000Z",
+ "updatedBy": "Claude, at the owner's request",
  "liveConfirm": ""
 }
