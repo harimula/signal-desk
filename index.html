@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-gKB9Wc8oA3mQlq5yzXmlv3Sid5eGoYOO+ij3aaMrlTY=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-aTlRd1kqjqMgEnXxhIT3I4DqXvYHI9jdLQYyXFNokwQ=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -868,7 +868,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792694577';
+const BUILD_V = '1792694915';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2248,7 +2248,7 @@ ${Object.keys(R.sectors || {}).length ? `<div class="mut" style="font-size:12px;
       const safety = h.kind === 'stock' ? (h.floor ? 'hard floor at <b>' + $p(h.floor) + '</b>' : '–') : `take-profit at <b>${$p(h.tp)}</b>${unit} · stop at <b>${$p(h.stop)}</b>${unit} · out 3 days before ${esc(h.exp)}`;
       return `<tr><td class="lt"><b>${esc(h.s)}</b> <span class="mut">${h.kind.toUpperCase()}</span></td><td>${h.qty}</td><td>${$p(h.avg)}${unit}</td><td>${$p(h.cur)}${unit}</td><td class="${cls(h.pl)}">${$$(h.pl)} (${h.plpc >= 0 ? '+' : ''}${h.plpc}%)</td><td class="lt">${when}</td><td class="lt">${safety}</td></tr>`;
     }).join('')}</tbody></table></div></div>` : '<div class="mut" style="font-size:12px;margin-top:10px">Holding nothing right now.</div>';
-    return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">👀 What the bot is watching</b> <span class="mut" style="font-size:11.5px">· ${W.universe === 'scan' ? `market scan: the ${W.total} most-traded of ${(W.scanned || 0).toLocaleString()} US stocks, ranked ${tET(W.scanAt)} ET` : `your list of ${W.total} stocks`} · ${W.rows.length} have enough history · updated ${tET(W.at)} ET</span>
+    return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">👀 What the bot is watching</b> <span class="mut" style="font-size:11.5px">· ${W.universe === 'scan' ? `market scan: the ${W.total} most-traded of ${(W.scanned || 0).toLocaleString()} US stocks, ranked ${tET(W.scanAt)} ET` : `your list of ${W.total} stocks`} · ${W.rows.length} have enough history · updated ${tET(W.at)} ET${W.idle ? ` · <b class="neg">not entering now: ${esc(W.idle)}</b>` : ''}</span>
 ${line('🟢', 'Trade (buy shares)', W.on.stocks, W.buy, 'pos', `uptrend stocks whose RSI-2 fell below ${W.thr}${W.intraday ? ', using the live price' : ', as of the last close'}`)}
 ${line('📈', 'CALL (bet on a bounce)', W.on.calls, W.call, 'pos', `same dips as the share buys, using options`)}
 ${line('📉', 'PUT (bet on a fall)', W.on.puts, W.put, 'neg', `downtrend stocks whose RSI-2 jumped above ${100 - W.thr}`)}
