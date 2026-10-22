@@ -55,3 +55,7 @@
   re-bought within 30 days. Alpaca issues a 1099; keep the journal.
 
 Not financial advice. The bot places orders only on an account whose keys you choose to give it.
+
+
+## Passphrase = account password (since 2026-10-22)
+The encrypted settings file in this repo now carries the GitHub token, so anyone who learns the passphrase can sign in as you from any device. Use a long, unique passphrase (a few random words), never reuse it, and sign out on shared computers.

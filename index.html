@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-xJaSdi4qmymSlfWnUyCYDeSrVw/RmWNGv5kHy0Fz/C8=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-cbOk0DgyrrQpcOe7mZFZqj5KgeaButW5NUN3Y7Fe3F8=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -279,6 +279,18 @@ ul.why{margin:6px 0 0;padding-left:18px}
 <div id="acOut" style="display:none"><div style="font-weight:700" id="acWho"></div><div class="mut" style="font-size:12px;margin:4px 0 10px">Everything saves to your account automatically. Your Finnhub/FMP keys stay on this device only.</div><button class="btn ghost" id="acLogout" type="button">Log out</button></div>
 <div class="mut" id="acStat" style="font-size:12px;margin-top:10px"></div>
 <div style="margin-top:12px;text-align:right"><button class="btn ghost" id="acClose" type="button">Close</button></div>
+</dialog>
+<dialog id="signDlg" style="max-width:440px;width:92vw;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);padding:20px">
+<h3 style="margin:0 0 4px">Sign in on this device</h3>
+<p class="mut" style="font-size:12.5px;margin:0 0 12px">Your passphrase is the key to everything: holdings, watchlist, keys and bot access. Enter it once here and this device becomes yours — changes made anywhere then show up everywhere.</p>
+<div id="signIn">
+<input id="signPass" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="current-password" placeholder="passphrase (12+ characters)" aria-label="Passphrase" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;color:var(--text);font-size:14px">
+<label class="mut" style="display:block;font-size:12px;margin-top:6px"><input type="checkbox" id="signShow"> Show what I type</label>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" id="signGo" type="button">Sign in</button></div>
+</div>
+<div id="signOut" style="display:none"><div style="font-weight:700">Signed in on this device</div><div class="mut" style="font-size:12px;margin:4px 0 10px">Changes you make here sync to every signed-in device. On a shared or borrowed computer, sign out when you leave: it wipes everything from this browser; your data stays in your account.</div><button class="btn ghost" id="signLeave" type="button" style="color:var(--ts)">Sign out and wipe this device</button></div>
+<div class="mut" id="signStat" style="font-size:12px;margin-top:10px;min-height:16px"></div>
+<div style="margin-top:12px;text-align:right"><button class="btn ghost" id="signClose" type="button">Close</button></div>
 </dialog>
 <div id="banners"></div>
 
@@ -878,7 +890,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792701150';
+const BUILD_V = '1792701801';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1072,7 +1084,7 @@ async function syncPush() {
   syBusy = true; syDirty = false;
   try {
     const at = Date.now();
-    const body = await jEncrypt({v: 1, at, dev: syDev(), data: syncSnap()}, load('sd-jkey', ''));
+    const body = await jEncrypt({v: 2, at, dev: syDev(), data: syncSnap(), cred: {tok: ghTok(), repo: ghRepo()}}, load('sd-jkey', ''));   // the token rides inside the encrypted blob so a new device needs only the passphrase
     const put = sha => ghApi(SYNC_PATH, {method: 'PUT', body: JSON.stringify({message: 'Settings sync (' + syDev() + ')', content: b64(JSON.stringify(body)), sha: sha || undefined, branch: 'main'})});
     let r;
     try { r = await put(sySha); }
@@ -1098,6 +1110,8 @@ async function syncPull(announce) {
     if ((d.at || 0) > localAt) {
       let diff = false;
       for (const k of Object.keys(d.data || {})) if (syncKey(k) && localStorage.getItem(k) !== d.data[k]) { localStorage.setItem(k, d.data[k]); diff = true; }
+      if (d.cred && d.cred.tok && !ghTok()) { save('sd-ghtok', d.cred.tok); if (d.cred.repo) save('sd-ghrepo', d.cred.repo); diff = true; }
+      if (!d.cred && ghTok()) { syLastSnap = ''; setTimeout(syncPush, 500); }   // older blob without credentials: re-save so other devices can sign in with the passphrase alone
       try { localStorage.setItem('sd-syncat', String(d.at)); } catch (e) {}
       syLastSnap = JSON.stringify(syncSnap()); syLastPush = Date.now();
       syMsg = 'Settings loaded from your ' + (d.dev || 'other device') + '.'; syncUi();
@@ -1126,14 +1140,31 @@ document.addEventListener('click', e => {
   if (a === 'qrcopy') { const u = (document.getElementById('syQr') || {}).dataset.url || ''; (navigator.clipboard && u ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => { b.textContent = 'Copied'; }, () => { b.textContent = 'Could not copy'; }); return; }
   if (a === 'copy') { const t = load('sd-jkey', ''); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { b.textContent = 'Copied'; }, () => { b.textContent = 'Select the text and copy it'; }); }
 });
+// Sign in anywhere: the encrypted settings file is public on the site, so a device needs only the passphrase to
+// open it. The GitHub token rides inside the blob, so after sign-in the device can also save changes.
+const blobUrl = () => { const [o, n] = ghRepo().split('/'); const same = repoFromUrl() === ghRepo(); return (same ? location.origin + location.pathname.replace(/[^/]*$/, '') : `https://${(o || '').toLowerCase()}.github.io/${n}/`) + 'user/settings.enc.json?t=' + Date.now(); };
+async function signInWithPass(pass) {
+  pass = String(pass || '');
+  if (pass.length < 12) throw new Error('The passphrase is at least 12 characters.');
+  let j = null;
+  try { const r = await fetch(blobUrl(), {cache: 'no-store'}); if (r.status === 404) throw new Error('nf'); if (!r.ok) throw new Error('HTTP ' + r.status); j = await r.json(); }
+  catch (e) { if (ghTok()) { const f = await ghApi(SYNC_PATH + '?ref=main').catch(() => null); if (f) j = JSON.parse(decodeURIComponent(escape(atob((f.content || '').replace(/\s/g, ''))))); } if (!j) throw new Error(/nf/.test(e.message) ? 'No synced settings found for this site yet. On the device where everything is set up, open Bot settings → Sync across devices and press Sync now, then try again here.' : 'Could not reach the site: ' + (e.message || e)); }
+  let d; try { d = await jDecrypt(j, pass); } catch (e) { throw new Error('That passphrase does not open the saved settings (you typed ' + pass.length + ' characters). Check for a wrong capital letter or a stray space.'); }
+  for (const k of Object.keys(d.data || {})) if (syncKey(k)) { try { localStorage.setItem(k, d.data[k]); } catch (e) {} }
+  if (d.cred && d.cred.tok) { save('sd-ghtok', d.cred.tok); if (d.cred.repo) save('sd-ghrepo', d.cred.repo); }
+  save('sd-jkey', pass); try { localStorage.setItem('sd-syncat', String(d.at || Date.now())); } catch (e) {}
+  sessionStorage.setItem('sd-linked', '1');
+  return { hasTok: !!(d.cred && d.cred.tok), dev: d.dev || 'other device', at: d.at };
+}
+function signOutDevice() { try { const keep = localStorage.getItem('sd-theme'); localStorage.clear(); if (keep) localStorage.setItem('sd-theme', keep); } catch (e) {} location.reload(); }
 function syncCard(sec, dot) {
   const on = syncOn(), tok = !!ghTok(), pass = !!load('sd-jkey', ''), at = +(localStorage.getItem('sd-syncat') || 0);
   const what = 'Quote keys (Finnhub, FMP, proxy), watchlist, portfolios, your tickers, day-trade and option settings, theme, calculator inputs.';
   const body = on
     ? `<div style="margin-top:8px;font-size:13px">${dot(true)}On — this ${syDev()} shares settings with every device that has the same token and passphrase.${at ? ` <span class="mut">Last sync ${new Date(at).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})}.</span>` : ''}</div>
 <div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
-<div style="margin-top:8px"><button class="btn ghost" type="button" data-sy="now">Sync now</button> <span class="mut" style="font-size:11.5px">${what} Encrypted with your passphrase before it leaves this device; the token and passphrase themselves never sync.</span></div>`
-    : `<div style="margin-top:8px;font-size:13px">${dot(false)}Off on this ${syDev()}. ${tok ? '' : 'Connect GitHub above, then '}${pass ? '' : 'enter your passphrase'}${!tok && !pass ? '' : ''}${tok && !pass ? ' — the same one you chose for the journal' : ''}.</div>
+<div style="margin-top:8px"><button class="btn ghost" type="button" data-sy="now">Sync now</button> <span class="mut" style="font-size:11.5px">${what} Encrypted with your passphrase before it leaves this device (the GitHub token travels inside that encrypted file, so any device can sign in with the passphrase alone).</span></div>`
+    : `<div style="margin-top:8px;font-size:13px">${dot(false)}Off on this ${syDev()}. <b>Quickest:</b> press <b>👤 Sign in</b> at the top of the page and enter your passphrase — nothing else is needed. Or: ${tok ? '' : 'connect GitHub above, then '}${pass ? '' : 'enter your passphrase'}${!tok && !pass ? '' : ''}${tok && !pass ? ' — the same one you chose for the journal' : ''}.</div>
 ${tok && !pass ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px;max-width:520px"><input id="sy-pass" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="passphrase" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" data-sy="pass">Turn on sync</button></div>` : ''}
 <div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
 <div class="mut" style="font-size:11.5px;margin-top:6px">${what} Everything is encrypted with your passphrase before it is saved to your repo, so a new laptop or phone needs only the token and the passphrase — the rest arrives by itself.</div>`;
@@ -1157,7 +1188,7 @@ $('#acLogin').addEventListener('click', () => acDo((em, pw) => fbAuth.signInWith
 $('#acSign').addEventListener('click', () => acDo(async (em, pw) => { await fbAuth.createUserWithEmailAndPassword(em, pw); acctStat('Account created — you are signed in.'); }));
 $('#acForgot').addEventListener('click', () => acDo(async em => { await fbAuth.sendPasswordResetEmail(em); acctStat('Password reset email sent.'); }));
 $('#acLogout').addEventListener('click', async () => { if (fbAuth) { await fbAuth.signOut(); acctStat('Logged out. The data on this device stays on this device.'); } });
-if (FB_CONFIG) fbBoot(); else { const ab = $('#acctBtn'); if (ab) ab.style.display = 'none'; }
+if (FB_CONFIG) fbBoot();
 
 // ---------- tabs ----------
 function renderTabs() {
@@ -3081,6 +3112,16 @@ $('#dlg').addEventListener('close', () => { if (dlgHist) { dlgHist = false; try 
 window.addEventListener('popstate', () => { const d = $('#dlg'); if (d.open) { dlgHist = false; d.close(); } });
 
 $('#foot').innerHTML = `<b>How this works.</b> The <b>Rules</b> tab spells out every rule on this page: the full scoring table, rating bands, entry/stop/target construction, industry blending and call tracking. Signals are rule-based readouts of public daily data — a screen, not a forecast, and not financial advice. The page places no orders. <a href="docs/" target="_blank" rel="noopener" style="color:var(--tb);font-weight:700">📘 System documentation</a>`;
+if (!FB_CONFIG) {
+  // no Firebase: the header button opens the passphrase sign-in instead
+  const ab = $('#acctBtn'); if (ab) { ab.textContent = syncOn() ? '👤 Signed in' : '👤 Sign in'; ab.replaceWith(ab.cloneNode(true)); }
+  $('#acctBtn').addEventListener('click', () => { const on = syncOn(); $('#signIn').style.display = on ? 'none' : ''; $('#signOut').style.display = on ? '' : 'none'; $('#signStat').textContent = ''; $('#signDlg').showModal(); if (!on) setTimeout(() => $('#signPass').focus(), 50); });
+  $('#signClose').addEventListener('click', () => $('#signDlg').close());
+  $('#signShow').addEventListener('change', e => { $('#signPass').type = e.target.checked ? 'text' : 'password'; });
+  const go = async () => { const b = $('#signGo'); b.disabled = true; $('#signStat').textContent = 'Opening your settings…'; try { const r = await signInWithPass($('#signPass').value); $('#signStat').textContent = 'Signed in' + (r.hasTok ? '' : ' (read-only until your main device syncs once more)') + ' — loading…'; setTimeout(() => location.reload(), 600); } catch (e) { $('#signStat').textContent = e.message || String(e); b.disabled = false; } };
+  $('#signGo').addEventListener('click', go); $('#signPass').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  let leaveArmed = false; $('#signLeave').addEventListener('click', () => { if (!leaveArmed) { leaveArmed = true; $('#signLeave').textContent = 'Really wipe this device? Click again'; return; } signOutDevice(); });
+}
 renderAll(); refreshInfo();
 // commodities + USD→INR live only in live.json: pull them once at start so the Portfolio tab has them before the first refresh
 (async () => { try { const r = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const j = await r.json(); let n = 0; for (const k of Object.keys(j.rows || {})) if (!DATA.rows[k]) { DATA.rows[k] = j.rows[k]; n++; } if (n) renderAll(); } catch (e) {} })();

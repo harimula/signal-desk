@@ -76,6 +76,31 @@ async function session(label, prep) {
   check('settings: no script error during save', errors.length === 0, errors.join(' | '));
   await page.close();
 }
+// 3. sign in anywhere: device A syncs (token + holdings inside the encrypted blob), device B signs in with the passphrase only
+{
+  let blob = null, sha = null;
+  const gh = async route => { const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname.replace(/^\/repos\/[^/]+\/[^/]+/, '');
+    const json = (st, b) => route.fulfill({ status: st, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/contents/user/settings.enc.json' && m === 'PUT') { blob = Buffer.from(JSON.parse(route.request().postData()).content, 'base64').toString(); sha = 's' + Date.now(); return json(200, { content: { sha } }); }
+    if (p === '/contents/user/settings.enc.json') return blob ? json(200, { sha, content: Buffer.from(blob).toString('base64') }) : json(404, { message: 'Not Found' });
+    return json(404, { message: 'nf' }); };
+  const A = await browser.newContext(), a = await A.newPage(); const errA = []; a.on('pageerror', e => errA.push(e.message));
+  await a.route('https://api.github.com/**', gh); await a.goto(base, { waitUntil: 'networkidle' });
+  await a.evaluate(() => { localStorage.setItem('sd-ghtok', JSON.stringify('github_pat_TEST')); localStorage.setItem('sd-ghrepo', JSON.stringify('x/y')); localStorage.setItem('sd-jkey', JSON.stringify('correct horse battery')); localStorage.setItem('sd-pf', JSON.stringify({ A: { sym: 'AAPL', market: 'US', qty: 7, cost: 100, pfid: 'p1' } })); });
+  await a.reload({ waitUntil: 'networkidle' }); await a.waitForTimeout(2500);
+  check('sign-in: the first device saves an encrypted blob to the repo', !!blob && !/github_pat_TEST|AAPL/.test(blob), 'blob missing or not encrypted');
+  const B = await browser.newContext(), b = await B.newPage(); const errB = []; b.on('pageerror', e => errB.push(e.message));
+  await b.route('https://api.github.com/**', gh); await b.route(/https:\/\/[a-z0-9-]+\.github\.io\/.*settings\.enc\.json/, r => blob ? r.fulfill({ status: 200, contentType: 'application/json', body: blob }) : r.fulfill({ status: 404, body: 'nf' }));
+  await b.goto(base, { waitUntil: 'networkidle' }); await b.click('#acctBtn'); await b.waitForTimeout(300);
+  await b.fill('#signPass', 'wrong passphrase here'); await b.click('#signGo'); await b.waitForTimeout(1500);
+  check('sign-in: a wrong passphrase is refused with a clear message', /does not open/.test(await b.$eval('#signStat', e => e.textContent)));
+  await b.fill('#signPass', 'correct horse battery'); await b.click('#signGo'); await b.waitForTimeout(2500);
+  check('sign-in: the passphrase alone installs the token and the holdings on a new device', (await b.evaluate(() => localStorage.getItem('sd-ghtok'))) === JSON.stringify('github_pat_TEST') && /AAPL/.test(await b.evaluate(() => localStorage.getItem('sd-pf') || '')));
+  await b.click('#acctBtn'); await b.waitForTimeout(200); await b.click('#signLeave'); await b.click('#signLeave'); await b.waitForTimeout(1200);
+  check('sign-in: sign out wipes the device', (await b.evaluate(() => localStorage.getItem('sd-ghtok'))) === null && (await b.evaluate(() => localStorage.getItem('sd-pf'))) === null);
+  check('sign-in: no script errors on either device', errA.length + errB.length === 0, errA.concat(errB).join(' | '));
+  await A.close(); await B.close();
+}
 await browser.close(); srv.close();
 console.log(failed ? `\n${failed} page check(s) FAILED` : '\nall page checks passed');
 process.exit(failed ? 1 : 0);
