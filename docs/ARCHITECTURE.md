@@ -470,6 +470,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Phone header: one control row (Sign in · refresh mode · Refresh), clock and duplicate live dot hidden, tiles and key/value rows wrap so the page never scrolls sideways | §2.5 |
 | 2026-10-22 | **Sign in anywhere with the passphrase** (header 👤 Sign in): the GitHub token now travels inside the encrypted sync blob (v2), a new device reads the public blob with the passphrase alone and installs token + data; older v1 blobs are re-saved automatically; **Sign out and wipe this device**; `https://*.github.io` added to CSP connect-src for the artifact copy; CI page test covers A-syncs → B-signs-in → B-signs-out | §2.4, §6, §8 |
 | 2026-10-22 | Commodity price strip removed from the Portfolio tab at the owner's request (commodity holdings and the USD/INR tile stay) | §2.2 |
 | 2026-10-22 | **Link a phone by QR code** (Bot settings → Sync across devices): the desktop renders a QR (self-hosted `vendor/qrcode.js`, MIT) whose link carries the GitHub token, journal passphrase and price keys in the URL fragment; scanning it installs them on the phone, cleans the address bar, shows a "linked" banner and the first sync pull follows. Same `#setup=` receiver as the price-key setup link, now UTF-8 safe | §2.4, §3.2, §6 |

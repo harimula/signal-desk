@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-cbOk0DgyrrQpcOe7mZFZqj5KgeaButW5NUN3Y7Fe3F8=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-r/JDnNqCfM5Fo3NKt4bcOyTZMzL5H7LUiL3CrR0ytNg=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -230,8 +230,15 @@ ul.why{margin:6px 0 0;padding-left:18px}
   .nm2{display:none}
   .srcnote{display:none}
   #golive{display:none!important}
-  header{padding:8px 0 0;gap:4px 10px}
-  .hright{gap:8px}#rfBtn{padding:7px 11px;min-height:36px}#arSel{min-height:36px!important;padding:4px 6px!important}
+  header{padding:8px 0 0;gap:6px 10px}
+  .brand{gap:6px 10px;align-items:center}.dots{font-size:11px;gap:8px}
+  /* one tidy control row: Sign in | refresh mode | Refresh — the clock and the duplicate "live" dot are hidden on phones */
+  .hright{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:stretch}
+  #clock,#cdown{display:none!important}
+  #acctBtn{padding:7px 9px;min-height:36px;font-size:12.5px;white-space:nowrap}
+  #rfBtn{padding:7px 10px;min-height:36px;font-size:12.5px;white-space:nowrap}#arSel{min-height:36px!important;padding:4px 6px!important;font-size:12.5px;width:100%}
+  .subhead{font-size:12px}.subhead .asof{font-size:12px}
+  .mt{min-width:0}.mth{flex-wrap:wrap}.kv{flex-wrap:wrap}.kv>span{min-width:0;flex-wrap:wrap}.mpx{word-break:break-word}
   .subhead{margin:0 0 2px}
   #pxBox{margin:0 0 2px}
   .banner{padding:8px 11px;margin:8px 0;font-size:12px}
@@ -890,7 +897,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792701801';
+const BUILD_V = '1792703624';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1406,7 +1413,7 @@ ${pl != null ? `<div class="kv"><span>Cost basis</span><b>${c}${fmt(cost, 0)}</b
 <div class="mpx">$${fmt(totUsd, 0)} <span class="mut" style="font-size:14px;font-weight:600">· ₹${fmt(totUsd * fx, 0)}</span></div>
 <div class="mchg ${dayUsd >= 0 ? 'pos' : 'neg'}">${sgn(dayUsd)} · ₹${fmt(Math.abs(dayUsd * fx), 0)} in the last session</div>
 ${plUsd != null ? `<div class="kv"><span>Open P&amp;L</span><b class="${plUsd >= 0 ? 'pos' : 'neg'}">${sgn(plUsd)} · ₹${fmt(Math.abs(plUsd * fx), 0)}${costUsd ? ' · ' + sgn(plUsd / costUsd * 100) + '%' : ''}</b></div>` : ''}
-<div class="kv" style="align-items:center;gap:6px;flex-wrap:wrap"><span>USD→INR rate</span><span style="display:flex;gap:6px;align-items:center"><input id="pfFx" type="number" step="0.01" min="1" inputmode="decimal" value="${fxManual > 0 ? fxManual : ''}" placeholder="${fmt(fxLive() || 84, 2)}" aria-label="USD to INR rate" style="width:84px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--text)"><button class="btn ghost" id="pfFxSave" type="button" style="font-size:12px;padding:5px 10px">Set</button>${fxManual > 0 ? `<button class="btn ghost" id="pfFxLive" type="button" style="font-size:12px;padding:5px 10px" title="Use the live quote">Use live ${fxLive() ? fmt(fxLive(), 2) : ''}</button>` : `<span class="mut" style="font-size:11px">${fxLive() ? 'live quote' : 'no live quote yet — using 84'}</span>`}</span></div></div>` : '';
+<div class="kv" style="align-items:center;gap:6px;flex-wrap:wrap"><span>USD→INR rate</span><span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input id="pfFx" type="number" step="0.01" min="1" inputmode="decimal" value="${fxManual > 0 ? fxManual : ''}" placeholder="${fmt(fxLive() || 84, 2)}" aria-label="USD to INR rate" style="width:84px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--text)"><button class="btn ghost" id="pfFxSave" type="button" style="font-size:12px;padding:5px 10px">Set</button>${fxManual > 0 ? `<button class="btn ghost" id="pfFxLive" type="button" style="font-size:12px;padding:5px 10px" title="Use the live quote">Use live ${fxLive() ? fmt(fxLive(), 2) : ''}</button>` : `<span class="mut" style="font-size:11px">${fxLive() ? 'live quote' : 'no live quote yet — using 84'}</span>`}</span></div></div>` : '';
   const trs = list.map(r => {
     const h = r.h, s = r.s, c = s ? (s.cur || '$') : (h.market === 'IN' ? '₹' : '$');
     if (!s) return `<tr><td><b>${esc(h.cm && cmdOf(h.cm) ? cmdOf(h.cm).name : showSym(h.sym))}</b> <span class="tag">waiting for data</span></td><td>–</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
