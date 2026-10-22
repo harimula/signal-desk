@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bot Settings Guide</title>
+<meta name="description" content="What every setting on the Signal Desk Bot settings tab does, its default, and when to change it.">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" type="image/svg+xml" href="../icons/favicon.svg">
+<style>
+:root{--bg:#f6f7fb;--surface:#fff;--surface2:#eceff6;--line:#d9dee9;--fg:#17202e;--muted:#5b6678;--accent:#0e7c86;--pos:#067c68;--neg:#d30e1d;--warn:#8a5a00;--warn-bg:#fff3d6;
+  --body:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141c;--surface:#161d27;--surface2:#1e2733;--line:#2b3542;--fg:#e8edf5;--muted:#9aa7ba;--accent:#4fc3cc;--pos:#2dd4bf;--neg:#f5616d;--warn:#ffd47a;--warn-bg:#3a2d10;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f141c;--surface:#161d27;--surface2:#1e2733;--line:#2b3542;--fg:#e8edf5;--muted:#9aa7ba;--accent:#4fc3cc;--pos:#2dd4bf;--neg:#f5616d;--warn:#ffd47a;--warn-bg:#3a2d10;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--body);padding:0 max(16px,env(safe-area-inset-left)) 48px max(16px,env(safe-area-inset-right))}
+a{color:var(--accent)}
+.page{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:36px}
+@media (max-width:860px){.page{grid-template-columns:minmax(0,1fr)}}
+nav{position:sticky;top:0;align-self:start;padding-top:26px;font-size:14px}
+@media (max-width:860px){nav{position:static;padding-top:14px;border-bottom:1px solid var(--line);padding-bottom:8px}}
+nav ol{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
+@media (max-width:860px){nav ol{flex-direction:row;flex-wrap:wrap;gap:4px 14px}}
+nav a{text-decoration:none;color:var(--muted);display:block;padding:2px 0}
+nav a:hover,nav a:focus-visible{color:var(--accent)}
+main{min-width:0;padding-top:26px}
+h1{font-size:clamp(26px,4vw,36px);line-height:1.15;margin:0 0 6px}
+.lede{font-size:17px;color:var(--muted);max-width:64ch;margin:0 0 8px}
+.stamp{font-size:12px;color:var(--muted)}
+section{margin-top:40px;scroll-margin-top:12px}
+h2{font-size:clamp(20px,2.4vw,26px);margin:0 0 6px;padding-top:12px;border-top:2px solid var(--fg)}
+h2 small{display:block;font-size:13px;color:var(--muted);font-weight:400;margin-top:2px}
+.s{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-top:12px}
+.s h3{margin:0;font-size:16px}
+.s .meta{font-size:12.5px;color:var(--muted);margin:2px 0 8px}
+.s .meta b{color:var(--fg);font-weight:600}
+.s p{margin:6px 0}
+.s .when{font-size:14px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.tag{display:inline-block;font-size:11px;font-weight:700;border-radius:5px;padding:1px 7px;margin-left:6px;vertical-align:middle;background:var(--surface2);color:var(--muted)}
+.tag.exp{background:var(--warn-bg);color:var(--warn)}
+.tag.tested{background:#e2f4ef;color:var(--pos)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tag.tested{background:#0d2f2a}}
+code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:1px 5px;border-radius:4px}
+.notice{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 14px;font-size:14px;margin:16px 0 0}
+.ex{font-size:14px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="page">
+<nav aria-label="Sections">
+  <div><b>Bot settings guide</b></div>
+  <div class="stamp">Signal Desk · <a href="../">back to the site</a> · <a href="./">full documentation</a></div>
+  <ol>
+    <li><a href="#how">How settings work</a></li>
+    <li><a href="#s1">1 · Connection</a></li>
+    <li><a href="#sync">Sync across devices</a></li>
+    <li><a href="#s2">2 · Risk profile</a></li>
+    <li><a href="#s3">3 · Capital allocation</a></li>
+    <li><a href="#s4">4 · Strategy</a></li>
+    <li><a href="#s5">5 · Guards</a></li>
+    <li><a href="#s6">6 · Stocks it watches</a></li>
+    <li><a href="#s7">7 · Mode</a></li>
+    <li><a href="#s8">8 · Controls</a></li>
+    <li><a href="#recipes">Common setups</a></li>
+  </ol>
+</nav>
+<main>
+<h1>What every bot setting does</h1>
+<p class="lede">One entry per control on the <b>Bot settings</b> tab: what it changes, the default, and when you'd move it. Defaults marked <span class="tag tested">tested</span> are the values the 33-year research used; anything marked <span class="tag exp">experimental</span> was never backtested.</p>
+<p class="stamp">Kept in step with the settings tab on every change · last updated 2026-10-22</p>
+
+<section id="how">
+<h2>How settings work<small>where they live and when they take effect</small></h2>
+<div class="s"><p>Settings are saved to the file <code>bot/config.json</code> in your GitHub repo. The bot re-reads that file <b>once a minute</b> while it runs, so most changes take effect within about a minute, without a restart. Three things only happen when a bot session <b>starts</b> (9:20 AM ET on weekdays, or when you press <i>Run the bot now</i>): loading new bot code, reading the keys, and the market scan.</p>
+<p>Values outside the allowed range are clamped to the nearest limit. Anything you type that the bot doesn't recognise is ignored. The sticky bar at the top shows <b>unsaved changes</b> until you press <b>Save settings to the bot</b>.</p></div>
+</section>
+
+<section id="s1">
+<h2>1 · Connection<small>your GitHub repo, broker keys and alerts</small></h2>
+<div class="s"><h3>GitHub token</h3><div class="meta">Stored in this browser only</div><p>A fine-grained personal access token that lets this page write the settings file, the keys and the pause file to your repo. Needs <i>Contents</i>, <i>Secrets</i> and <i>Actions: Read and write</i> on this one repo. Make it expire within 90 days and make a new one when it does.</p><p class="when"><b>Test connection</b> tells you how fast GitHub answers, whether the token works, when it expires, and how many API calls are left this hour. Use it first whenever a save misbehaves.</p></div>
+<div class="s"><h3>Alpaca API key / secret</h3><div class="meta">Encrypted GitHub secrets · <b>paper</b> keys</div><p>The paper-trading keys from your Alpaca dashboard. They are sealed in your browser with GitHub's public key and stored as encrypted secrets; this page never sees them again and they are never written to the repo. The bot reads them when a session starts.</p></div>
+<div class="s"><h3>Phone alert topic</h3><div class="meta">Encrypted secret · optional</div><p>A secret channel name for the free <a href="https://ntfy.sh/app" rel="noopener">ntfy</a> app. Subscribe to the same name on your phone and every trade, stop and error arrives as a push notification. Pick something nobody could guess; anyone who knows the name can read the alerts.</p></div>
+<div class="s"><h3>Journal passphrase</h3><div class="meta">Encrypted secret + saved in this browser · 12+ characters</div><p>Encrypts the bot's trade journal before it is published on the (public) site, and encrypts your synced settings. The Bot trades tab asks for the same passphrase on each device to unlock. <b>Changing it means every device must enter the new one</b> — and the old journal file can no longer be opened by the page.</p></div>
+<div class="s"><h3>Live API key / secret</h3><div class="meta">Encrypted secrets · real money only</div><p>Leave empty for paper trading. Only used when section 7 is switched to real money; a paper key is rejected by the live endpoint, so the two can't be mixed up.</p></div>
+</section>
+
+<section id="sync">
+<h2>Sync across devices<small>settings follow you</small></h2>
+<div class="s"><p>With a token and the journal passphrase entered, your Finnhub/FMP keys, watchlist, portfolios and calculator inputs are encrypted with the passphrase and stored in the repo, so a second device with the same passphrase gets them automatically. <b>Show / copy the passphrase saved on this device</b> is the reliable way to move it to a phone — retyping it is where mistakes happen.</p></div>
+</section>
+
+<section id="s2">
+<h2>2 · Risk profile<small>how much the bot may lose, per trade and in total</small></h2>
+<div class="s"><h3>Profile: Conservative / Balanced / Aggressive</h3><div class="meta">Default <b>Balanced</b> <span class="tag tested">tested</span></div><p>A preset that fills in every number in this section and in Capital allocation at once. Editing any of those numbers switches the profile to <i>Custom</i>; picking a profile again resets them.</p>
+<p class="ex">Conservative: 0.25 % risk, 1.5 % cap, 4 stocks, 1 option. Balanced: 0.5 %, 3 %, 6 stocks, 4 options. Aggressive: 1 %, 6 %, 8 stocks, 6 options.</p></div>
+<div class="s"><h3>Risk per stock trade</h3><div class="meta">Default <b>0.5 %</b> · range 0.05–3 %</div><p>How much of the account one stock trade may lose if the price falls to its stop. The bot sizes the position so that (shares × distance to the stop) equals this. It is usually the number that decides how many shares get bought — smaller than the capital-per-position limit.</p><p class="when">Raise it to take bigger positions; lower it if a string of losses would bother you. 1 % is the common ceiling among professionals.</p></div>
+<div class="s"><h3>Risk per option trade</h3><div class="meta">Default <b>0.5 %</b> · range 0.05–3 %</div><p>Same idea for CALLs and PUTs: the number of contracts is chosen so that hitting the option stop (−50 %) loses at most this share of the account.</p></div>
+<div class="s"><h3>Total risk cap</h3><div class="meta">Default <b>3 %</b> · range 0.5–15 %</div><p>The most the account can lose if every open position hits its stop at once. When a new trade would push the total above this, it is skipped and the log says so.</p></div>
+<div class="s"><h3>Max positions per sector</h3><div class="meta">Default <b>2</b> · range 1–10</div><p>Stops the bot from loading up on one industry (e.g. three chip stocks that all fall together). Only applies to stocks whose sector the bot knows; names it doesn't know count as "Other" and are not limited.</p></div>
+<div class="s"><h3>Daily loss limit</h3><div class="meta">Default <b>3 %</b> · range 0.5–20 %</div><p>If the account is down this much on the day, the bot stops opening new trades until tomorrow and closes its options. Open stock positions are kept and managed as usual.</p></div>
+<div class="s"><h3>Weekly loss limit</h3><div class="meta">Default <b>6 %</b> · range 1–30 %</div><p>Down this much since Monday's open: no new trades until next week.</p></div>
+<div class="s"><h3>Losing streak limit</h3><div class="meta">Default <b>3</b> · range 1–10</div><p>This many losing trades in a row today and the bot is done for the day. Protects against a tape where nothing works.</p></div>
+</section>
+
+<section id="s3">
+<h2>3 · Capital allocation<small>how much money each of stocks, CALLs and PUTs may use</small></h2>
+<div class="s"><h3>Trade stocks / Trade CALL options / Trade PUT options</h3><div class="meta">Default <b>on / on / off</b> · PUTs <span class="tag exp">experimental</span></div><p>Switch each instrument on or off. Stocks are the researched core. CALLs ride the same dips with options (limited loss, more leverage). PUTs are the mirror image — bought when a stock in a downtrend spikes — and were never part of the research.</p></div>
+<div class="s"><h3>Size it in: % of account / fixed dollars</h3><div class="meta">Per instrument · default <b>% of account</b></div><p>Choose whether the money limits for that instrument are read as a percentage of the current account value or as fixed dollar amounts. The pair you don't pick is dimmed and ignored.</p></div>
+<div class="s"><h3>Per trade (%, or $)</h3><div class="meta">Defaults <b>10 % stocks · 2 % CALLs · 1 % PUTs</b> · or <b>$10,000 / $2,000 / $1,000</b></div><p>The most one trade may spend. The actual size is the smaller of this and the risk-per-trade rule above. If even one share or one contract costs more than this, the trade is skipped and the log says "above this trade's money budget".</p></div>
+<div class="s"><h3>All together (%, or $) — 0 = no limit</h3><div class="meta">Default <b>0</b></div><p>A ceiling on everything that instrument holds plus its waiting buy orders. With $400 on PUTs and $300 already in PUT positions, the next PUT may use $100 at most.</p><p class="when">Handy for keeping the experimental sleeves small while you test them: e.g. PUTs capped at $500 in total.</p></div>
+<div class="s"><h3>Max stock positions</h3><div class="meta">Default <b>6</b> · range 1–20</div><p>How many different stocks it will hold at once. Note the research used 6; fewer concentrates, more dilutes each signal.</p></div>
+<div class="s"><h3>Max option positions (CALLs + PUTs)</h3><div class="meta">Default <b>4</b> · range 0–10</div><p>Shared cap across both option kinds.</p></div>
+</section>
+
+<section id="s4">
+<h2>4 · Strategy<small>the tested values are the defaults — change with care</small></h2>
+<div class="s"><h3>Intraday signals</h3><div class="meta">Default <b>off</b> <span class="tag exp">experimental</span></div><p>Off: a stock has to <i>finish</i> a day as a sharp dip; the bot sees it the next morning. On: the live price stands in for today's close, so a stock that falls hard at 11 AM can qualify at 11 AM. Same thresholds, more trades, more false alarms (a dip at 11 AM can recover by the close). The "already bounced 1 %" rule still uses yesterday's real close.</p></div>
+<div class="s"><h3>RSI-2 buy level</h3><div class="meta">Default <b>10</b> <span class="tag tested">tested</span> · range 2–30</div><p>RSI-2 scores the last two days from 0 (fell hard) to 100 (rose hard). A stock above its 200-day average qualifies as a dip when RSI-2 is below this number. PUTs use the mirror: below the 200-day and RSI-2 above 100 minus this number (90 by default).</p><p class="when">Raise it (15–25) to get more, shallower dips and more trades; lower it (5) for only the sharpest dips. The research found 10 the best balance.</p></div>
+<div class="s"><h3>Max hold</h3><div class="meta">Default <b>10</b> sessions <span class="tag tested">tested</span> · range 1–30</div><p>A position that hasn't bounced above its 5-day average by then is sold anyway.</p></div>
+<div class="s"><h3>Option take-profit</h3><div class="meta">Default <b>+50 %</b> · range 10–300 %</div><p>An option that gains this much is sold (a resting limit order sits at the broker, so it fills at exchange speed).</p></div>
+<div class="s"><h3>Option stop</h3><div class="meta">Default <b>−50 %</b> · range 20–90 %</div><p>An option that loses this much is sold. Options also leave 3 days before expiry and on Fed-decision afternoons regardless.</p></div>
+<div class="s"><h3>Hard floor</h3><div class="meta">Default <b>25 %</b> · range 5–60 %</div><p>A stock down this much from its buy price is sold immediately, any time of day, streamed tick by tick. It is a disaster brake, not the normal exit — the normal exit is the 5-day-average bounce.</p></div>
+<div class="s"><h3>Cancel unfilled entries after</h3><div class="meta">Default <b>45</b> minutes · range 5–240</div><p>A buy order that hasn't filled (the price ran away) is cancelled after this long so money isn't tied up.</p></div>
+<div class="s"><h3>Entry window closes at</h3><div class="meta">Default <b>11:00</b> AM ET <span class="tag tested">tested</span> · range 10:00–15:00</div><p>New positions are opened only between 9:45 AM (10:15 on CPI/jobs mornings) and this time. Positions are managed all day regardless. The research entered in the first hour; a later close gives more chances but drifts from what was tested.</p></div>
+</section>
+
+<section id="s5">
+<h2>5 · Guards<small>what makes the bot stand aside</small></h2>
+<div class="s"><h3>Economic calendar guard</h3><div class="meta">Default <b>on</b></div><p>No new trades around Fed decisions (from 30 min before to 60 min after, options closed before), CPI and jobs mornings (entries from 10:15, half size until 11:00) and Fed-minutes afternoons. The calendar is in <code>events.json</code> through 2027.</p></div>
+<div class="s"><h3>Breaking-news guard</h3><div class="meta">Default <b>on</b></div><p>Scans headlines every minute. A fresh war / policy / crisis headline pauses new trades for 30 minutes; a stock with its own fresh news or earnings is skipped. Matching is whole-word and phrase-based ("Radware", "awards", "software" cannot trigger it; "invasion", "missile strike" can). The Bot trades tab shows exactly which headline it reacted to.</p></div>
+<div class="s"><h3>Phone alerts</h3><div class="meta">Default <b>on</b> · needs the alert topic in section 1</div><p>Sends every buy, sell, daily/weekly stop and error to your phone.</p></div>
+<div class="s"><h3>Include prices and profit in alerts</h3><div class="meta">Default <b>on</b></div><p>Buys show size and limit price; sells show the entry price, the exit price and the profit. Turn off if you want alerts without numbers (anyone who knows your topic name can read them).</p></div>
+</section>
+
+<section id="s6">
+<h2>6 · Stocks it watches<small>the universe</small></h2>
+<div class="s"><h3>Scan the whole market</h3><div class="meta">Default <b>off</b> (uses your list)</div><p>Each session start the bot asks the broker for every tradable US stock on NYSE / NASDAQ / ARCA / AMEX (no OTC), ranks them by 20-day average dollar volume, drops anything under the minimum price, and watches the top N. The Bot trades tab shows the list it picked. Your typed list is ignored while this is on. The scan happens only at session start, so a change here shows up at the next start.</p></div>
+<div class="s"><h3>How many stocks to watch</h3><div class="meta">Default <b>200</b> · range 50–400</div><p>The size of the scanned list. The strategy was tested on large, liquid names, which is why ranking by volume is the filter.</p></div>
+<div class="s"><h3>Minimum share price</h3><div class="meta">Default <b>$5</b> · range $1–500</div><p>Skips penny stocks. A high value (say $50) narrows the scan to larger companies.</p></div>
+<div class="s"><h3>Only my list</h3><div class="meta">Default list: 30 large US names</div><p>US tickers, comma-separated, up to 60. Positions are managed even if a ticker is removed from the list.</p></div>
+</section>
+
+<section id="s7">
+<h2>7 · Mode<small>paper or real money</small></h2>
+<div class="s"><h3>Trade real money</h3><div class="meta">Default <b>off</b> (paper)</div><p>Switches the bot to the live Alpaca keys from section 1. It refuses unless you also type <code>I UNDERSTAND THE RISK</code>. Paper keys never trade real money. Only consider this after months of paper results that match the research, and never run two bots on one account.</p></div>
+</section>
+
+<section id="s8">
+<h2>8 · Controls<small>pause, resume, run</small></h2>
+<div class="s"><h3>Pause — sell everything now</h3><p><b>Not a pause button in the gentle sense:</b> within seconds the bot cancels every order and sells every position, then stays idle until you press Resume. Use it when you want to be flat right now.</p></div>
+<div class="s"><h3>Run the bot now</h3><p>Starts a fresh bot session on GitHub Actions on the latest code. The running session, if any, continues until it ends; the new one waits in the queue unless the old one is cancelled on GitHub. This is also how new bot code and a market-scan change take effect before tomorrow.</p></div>
+<div class="s"><h3>Re-run 33-year research</h3><p>Starts the strategy-research workflow (about 40 minutes). Results appear on the Bot trades tab.</p></div>
+<div class="s"><h3>Reload from GitHub</h3><p>Throws away unsaved edits and re-reads the saved settings.</p></div>
+</section>
+
+<section id="recipes">
+<h2>Common setups<small>what to change for what you want</small></h2>
+<div class="s"><h3>"I want to see it trade more, it's paper anyway"</h3><p>RSI-2 buy level 20–25 · Entry window 15:00 · Intraday signals on · Scan the whole market, 200 stocks · Max stock positions 10. Expect more, shallower trades and a result that no longer matches the research.</p></div>
+<div class="s"><h3>"Test puts and intraday without risking much"</h3><p>Keep the core at its defaults; set PUTs to fixed dollars, $200 per trade, $600 all together; same for CALLs. The experiments stay small while the tested rule runs at full size.</p></div>
+<div class="s"><h3>"Run exactly what was tested"</h3><p>Profile Balanced · PUTs off · Intraday off · RSI-2 level 10 · Entry window 11:00 · Only my list (the 30 defaults) · Max hold 10.</p></div>
+<div class="s"><h3>"Something's wrong, make it stop"</h3><p>Section 8 → Pause. Everything is sold within seconds. Resume when you're ready.</p></div>
+</section>
+</main>
+</div>
+</body>
+</html>

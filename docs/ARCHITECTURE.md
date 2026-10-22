@@ -168,6 +168,7 @@ signal-desk/
 ├── events.json             FOMC / CPI / jobs / PPI / minutes calendar through 2027
 ├── symbols.json            built-in universe (US + India)
 ├── ver.txt                 build stamp; the page polls it to self-update
+├── docs/settings.html      owner-facing guide: what every Bot settings control does, defaults, when to change (linked from the tab)
 ├── tools/stamp.mjs         bumps the build stamp and rewrites the CSP script hashes (run after every index.html edit)
 ├── package.json  .nvmrc  eslint.config.js   npm scripts (test / lint / check / verify), Node 20, lint rules — no dependencies
 ├── favicon.ico  manifest.webmanifest   browser-tab icon; installable-app manifest
@@ -464,10 +465,11 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 ## 9. Change log and maintenance
 
-**Maintenance rule:** every change to the website, the bot or the workflows updates this document, `docs/index.html` and, when the architecture changes, `docs/architecture.pptx`, **in the same commit**. After any edit to `index.html` run `node tools/stamp.mjs` (new build number + CSP hashes), and `npm run verify` before pushing. The "Last updated" line at the top and the table below are part of that commit.
+**Maintenance rule:** every change to the website, the bot or the workflows updates this document, `docs/index.html` and, when the architecture changes, `docs/architecture.pptx`, **in the same commit**. Any change to a bot setting (new, removed, renamed, new default or range, new behaviour) also updates the owner-facing **settings guide** `docs/settings.html` (linked from the Bot settings tab) in the same commit, without being asked. After any edit to `index.html` run `node tools/stamp.mjs` (new build number + CSP hashes), and `npm run verify` before pushing. The "Last updated" line at the top and the table below are part of that commit.
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Settings guide `docs/settings.html` (every control, default, range, when to change, common setups), linked from the Bot settings tab; maintenance rule extended: keep it current with every settings change | §3.2, §9 |
 | 2026-10-22 | Watch card shows trigger prices: for every watched stock the close that would push RSI-2 under the buy level (`rsi2Trigger`, bisection) and, with puts on, over the put level; for every holding the exit level (average of the last 4 closes = the 5-day-average crossing, `rsi2ExitLevel`), hard floor, and for options take-profit, stop and expiry | §5.2, §5.5, §8 |
 | 2026-10-22 | Phone alerts carry prices and profit (`alertDetail`, on by default, switch in Guards): buys show size and limit price, sells show entry, exit and P/L | §5.4 |
 | 2026-10-22 | **Fix: Bot settings Save hung forever.** With the Screener sub-view remembered, every redraw of a non-market tab ran the Screener binding and threw (`MK[tab].stocks`), which aborted the save before it reached GitHub. Binding now limited to the market tabs. Added a page error strip (bottom of the page, with line number), save made independent of redraw errors, and `tools/page-test.mjs` in CI to catch this class of bug | §2.2, §8 |
