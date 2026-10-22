@@ -16,23 +16,29 @@ import { signalAt, signalShortAt, r2d, rsi2Signal, rsi2Exit } from './strategy.m
 import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
+import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
 
 const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
 export const HAVE_KEYS = !!(KEY && SECRET);
-const BASE = process.env.ALPACA_URL || 'https://paper-api.alpaca.markets';
 const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
-const n = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? +process.env[k] : d);
-const STK_ON = process.env.BOT_STOCKS !== '0', OPT_ON = process.env.BOT_OPTIONS !== '0';
-const BUDGET = n('BOT_PER_TRADE', 0), OPT_BUDGET = n('BOT_OPT_BUDGET', 0);   // 0 = auto: 10% of equity per stock position, 2% per option trade
-const MAX_POS = n('BOT_MAX_POSITIONS', 6), MAX_OPT = n('BOT_MAX_OPTIONS', 4), MAX_ENTRIES = n('BOT_MAX_ENTRIES_PER_SYM', 3);
-const TP = n('BOT_TAKE_PROFIT', 1), OPT_TP = n('BOT_OPT_TAKE_PROFIT', 50); // quick-profit exits, in %
-const LOSS_CAP = n('BOT_DAILY_LOSS_CAP', 3), HOLD_LOSS = n('BOT_HOLD_LOSS', 1.5), HOLD_FLOOR = n('BOT_HOLD_FLOOR', 25), MAX_HOLD_DAYS = n('BOT_MAX_HOLD_DAYS', 30);
-const UNIVERSE = (process.env.BOT_SYMBOLS || 'AAPL,MSFT,NVDA,AMZN,META,GOOGL,TSLA,AMD,JPM,BAC,XOM,CVX,KO,PEP,WMT,HD,DIS,INTC,CSCO,QCOM,ORCL,CRM,ADBE,NFLX,UBER,PLTR,SHOP,COIN,SOFI,F').split(',').map(s => s.trim()).filter(Boolean);
 const DRY = process.env.BOT_DRY === '1';
-// professional risk limits (all % of account equity)
-const RISK_PCT = n('BOT_RISK_PCT', 0.5), OPT_RISK_PCT = n('BOT_OPT_RISK_PCT', 0.5), MAX_HEAT = n('BOT_MAX_HEAT', 3);
-const MAX_PER_SECTOR = n('BOT_MAX_PER_SECTOR', 2), MAX_STREAK = n('BOT_MAX_LOSS_STREAK', 3), WEEK_CAP = n('BOT_WEEKLY_LOSS_CAP', 6), STALE_MIN = n('BOT_STALE_ORDER_MIN', 45);
 const NTFY = process.env.NTFY_TOPIC || '';
+const MAX_ENTRIES = 3, HOLD_LOSS = 1.5, MAX_HOLD_DAYS = 30, TP = 1;
+
+// ---- settings: bot/config.json (written by the Settings tab), re-applied live by applyConfig() ----
+export let CFG = normalize(null);
+let BASE, STK_ON, OPT_ON, MAX_POS, MAX_OPT, OPT_TP, LOSS_CAP, HOLD_FLOOR, UNIVERSE, RISK_PCT, OPT_RISK_PCT, MAX_HEAT, MAX_PER_SECTOR, MAX_STREAK, WEEK_CAP, STALE_MIN, ENTRY_END;
+export function applyConfig(raw) {
+  CFG = normalize(raw);
+  const live = CFG.mode === 'live' && process.env.ALPACA_LIVE_URL;          // live needs the live endpoint secret too
+  BASE = live ? process.env.ALPACA_LIVE_URL : (process.env.ALPACA_URL || 'https://paper-api.alpaca.markets');
+  STK_ON = CFG.stocks; OPT_ON = CFG.options; MAX_POS = CFG.maxPositions; MAX_OPT = CFG.maxOptions; OPT_TP = CFG.optTakeProfit;
+  LOSS_CAP = CFG.dayCap; HOLD_FLOOR = CFG.holdFloor; UNIVERSE = CFG.symbols; RISK_PCT = CFG.riskPct; OPT_RISK_PCT = CFG.optRiskPct;
+  MAX_HEAT = CFG.maxHeat; MAX_PER_SECTOR = CFG.perSector; MAX_STREAK = CFG.streak; WEEK_CAP = CFG.weekCap; STALE_MIN = CFG.staleMin; ENTRY_END = entryEndMin(CFG);
+  return CFG;
+}
+export function loadConfigFile() { try { return JSON.parse(fs.readFileSync('bot/config.json', 'utf8')); } catch (e) { return null; } }
+applyConfig(loadConfigFile());
 
 const H = { 'APCA-API-KEY-ID': KEY, 'APCA-API-SECRET-KEY': SECRET, 'content-type': 'application/json' };
 async function call(base, path, opt = {}) {
@@ -126,7 +132,7 @@ const sentAlerts = new Map();
 async function flushAlerts() {
   if (!alerts.length) return;
   const lines = alerts.splice(0).filter(m => { const k = m.replace(/[\d.]+/g, '#'); if (sentAlerts.has(k) && Date.now() - sentAlerts.get(k) < 20 * 60000) return false; sentAlerts.set(k, Date.now()); return true; });
-  if (!NTFY || !lines.length || DRY) return;
+  if (!NTFY || !lines.length || DRY || !CFG.alerts) return;
   try {
     await fetch('https://ntfy.sh/' + encodeURIComponent(NTFY), { method: 'POST', body: lines.join('\n'),
       headers: { Title: 'Signal Desk bot' + (lines.length > 1 ? ' (' + lines.length + ')' : ''), Priority: lines.some(l => /\u26d4|\u26a0/.test(l)) ? 'high' : 'default', Tags: 'chart_with_upwards_trend' } });
@@ -163,7 +169,7 @@ async function run() {
     const st = (((await D('/v2/stocks/trades/latest?symbols=SPY&feed=iex')).trades) || {}).SPY;
     if (spyPrev && st) spyPct = (st.p / spyPrev.c - 1) * 100;
   } catch (e) {}
-  const G = lastGuard = guard({ events: loadEvents(), todayDash: ymdDash(Date.now()), mins: MINS, headlines: newsCache.market, spyPct });
+  const G = lastGuard = guard({ events: CFG.eventGuard ? loadEvents() : [], todayDash: ymdDash(Date.now()), mins: MINS, headlines: CFG.newsGuard ? newsCache.market : [], spyPct });
   G.spyPct = spyPct; G.newsOk = newsCache.ok;
   const RG = regimeOf(spyPrev && spyPrev.closes);
   G.regime = RG.regime; G.longSize = 1;
@@ -196,7 +202,7 @@ async function run() {
     return;
   }
   const dayPct = lastEq > 0 ? (equity - lastEq) / lastEq * 100 : 0;
-  const bud = BUDGET > 0 ? BUDGET : equity * 0.10, obud = OPT_BUDGET > 0 ? OPT_BUDGET : equity * 0.02;
+  const bud = equity * CFG.stockPct / 100, obud = equity * CFG.optPct / 100;
   const capHit = dayPct <= -LOSS_CAP;
 
   // ---- cancel stale entries ----
@@ -225,7 +231,7 @@ async function run() {
       if (HOLD_FLOOR > 0 && plpc <= -HOLD_FLOOR) { await out(`${p.symbol} down ${plpc.toFixed(1)}% \u2014 hit the ${HOLD_FLOOR}% hard floor`); continue; }
       if (MINS < 950 || !px) continue;                                  // exits happen in the last 10 minutes, like a closing order
       const h = held(p.symbol, day8); if (h === 0) continue;             // never sell on the day it was bought
-      const x = rsi2Exit(completed(bars0, p.symbol).map(b => b.c), px, h);
+      const x = rsi2Exit(completed(bars0, p.symbol).map(b => b.c), px, h, CFG.maxHold);
       if (x.exit) await out(`${p.symbol} RSI-2 exit \u2014 ${x.why} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(2)}%)`);
     }
     for (const { p, e } of swingOpt) {
@@ -235,11 +241,11 @@ async function run() {
       const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }); await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
       const daysToExp = (Date.parse(dash8(exp)) - Date.parse(ymdDash(Date.now()))) / 864e5;
       if (plpc >= OPT_TP) await out(`${p.symbol} +${plpc.toFixed(0)}% \u2014 take profit`);
-      else if (plpc <= -50) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
+      else if (plpc <= -CFG.optStop) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
       else if (capHit) await out(`${p.symbol} daily loss cap hit \u2014 closing options`);
       else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options`);
       else if (daysToExp <= 3) await out(`${p.symbol} ${daysToExp} days to expiry \u2014 out before time decay accelerates`);
-      else if (MINS >= 950 && px && held(und, day8) > 0) { const x = rsi2Exit(completed(bars0, und).map(b => b.c), px, held(und, day8)); if (x.exit) await out(`${p.symbol} stock ${x.why} \u2014 selling the CALL`); }
+      else if (MINS >= 950 && px && held(und, day8) > 0) { const x = rsi2Exit(completed(bars0, und).map(b => b.c), px, held(und, day8), CFG.maxHold); if (x.exit) await out(`${p.symbol} stock ${x.why} \u2014 selling the CALL`); }
       else if (!sells.length) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
     }
   }
@@ -284,7 +290,7 @@ async function run() {
     const sells = sellsFor(p.symbol);
     const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }); await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
     if (plpc >= OPT_TP) await out(`${p.symbol} +${plpc.toFixed(0)}% \u2014 take profit`);
-    else if (plpc <= -50) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
+    else if (plpc <= -CFG.optStop) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
     else if (capHit) await out(`${p.symbol} daily loss cap hit \u2014 closing options`);
     else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options before the volatility`);
     else if (exp <= TODAY) await out(`${p.symbol} expires today \u2014 out`);
@@ -294,7 +300,7 @@ async function run() {
 
   // ---- new entries ----
   if (capHit) { act(`Daily loss cap ${LOSS_CAP}% hit (${dayPct.toFixed(2)}%) — no new trades today`); return; }
-  if (MINS < G.minStart || MINS >= 660) { console.log('Outside the RSI-2 entry window (opening hour to 11:00 ET).'); return; }
+  if (MINS < G.minStart || MINS >= ENTRY_END) { console.log('Outside the RSI-2 entry window.'); return; }
   if (G.block) { console.log('Paused by market check.'); return; }
 
   // ---- portfolio risk: heat (money at risk to the stops) and sector concentration ----
@@ -318,7 +324,7 @@ async function run() {
   const sigs = [];
   for (const sym of UNIVERSE) {
     const B = completed(bars, sym); if (B.length < 205) continue;
-    const s = rsi2Signal(B, B.map(b => b.c)); if (s) sigs.push({ sym, ...s, px: last[sym] && last[sym].p });
+    const s = rsi2Signal(B, B.map(b => b.c), B.length - 1, CFG.rsiThreshold); if (s) sigs.push({ sym, ...s, px: last[sym] && last[sym].p });
   }
   sigs.sort((a, b) => a.r2 - b.r2);                                      // deepest dip first, like the backtest
   lastSignals = { longs: [], shorts: [], rsi2: sigs, at: Date.now() };
@@ -331,7 +337,7 @@ async function run() {
       if (slots <= 0) break;
       if (!s.px || stockPos.some(p => p.symbol === s.sym) || liveOrders.some(o => o.symbol === s.sym) || todays.some(o => cid(o).startsWith('sd-r-' + s.sym + '-'))) continue;
       if (s.px > s.prevClose * 1.01) { act(`${s.sym} skipped \u2014 already bounced ${((s.px / s.prevClose - 1) * 100).toFixed(1)}% since yesterday's close`); continue; }
-      const risk = symbolRisk(s.sym, newsCache.syms); if (risk) { act(`${s.sym} skipped \u2014 ${risk}`); continue; }
+      const risk = CFG.newsGuard ? symbolRisk(s.sym, newsCache.syms) : null; if (risk) { act(`${s.sym} skipped \u2014 ${risk}`); continue; }
       if (sectorFull(s.sym)) { act(`${s.sym} skipped \u2014 already ${MAX_PER_SECTOR} positions in ${sectorOf(s.sym)}`); continue; }
       const lim = r2d(s.px * 1.002);
       const qty = stockQty({ equity, riskPct: RISK_PCT * G.budget, entry: lim, stop: lim - s.riskUnit, budget: bud * G.budget });
@@ -350,7 +356,7 @@ async function run() {
     const hasOptOn = und => optPos.some(p => OPT_RE.exec(p.symbol)[1] === und) || liveOrders.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === und);
     for (const s of sigs) {
       if (slots <= 0) break;
-      if (!s.px || hasOptOn(s.sym) || s.px > s.prevClose * 1.01 || symbolRisk(s.sym, newsCache.syms) || sectorFull(s.sym)) continue;
+      if (!s.px || hasOptOn(s.sym) || s.px > s.prevClose * 1.01 || (CFG.newsGuard && symbolRisk(s.sym, newsCache.syms)) || sectorFull(s.sym)) continue;
       if (todays.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym)) continue;
       const cj = await T(`/v2/options/contracts?underlying_symbols=${s.sym}&type=call&status=active&expiration_date_gte=${ymdDash(Date.now() + 14 * 864e5)}&expiration_date_lte=${ymdDash(Date.now() + 35 * 864e5)}&strike_price_gte=${r2d(s.px * 0.95)}&strike_price_lte=${r2d(s.px * 1.05)}&limit=200`);
       const cs = (cj.option_contracts || []).filter(c => c.tradable !== false);
@@ -392,7 +398,7 @@ async function writeJournal() {
   if (prev.sig === sig && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: !process.env.ALPACA_URL || /paper/.test(process.env.ALPACA_URL),
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
-    risk: lastRisk, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
+    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, risk: lastRisk, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   fs.writeFileSync('bot/journal.json', JSON.stringify(j));
   console.log('journal written:', closed.length, 'closed,', open.length, 'open');
 }

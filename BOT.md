@@ -55,6 +55,17 @@ as an upper bound. Past results do not predict future results.
   You get a push for every buy/sell, every circuit-breaker halt and any bot error.
 - **Tests:** `node bot/test.mjs` (29 checks) runs automatically on every change.
 
+## Control panel (Bot settings tab on your site)
+Everything below is set from the **Bot settings** tab, not by editing files:
+risk profile (Conservative / Balanced / Aggressive / Custom), capital per stock and per option
+trade, max positions, strategy parameters, the stock universe, the news and calendar guards,
+paper vs live mode, and Pause / Resume / Run now. Settings save to `bot/config.json`; the bot
+re-reads it every minute. Broker keys are encrypted in your browser with GitHub's public key
+and stored as repository secrets — they never appear on the page or in the repo.
+
+Connect once per device with a fine-grained GitHub token (Contents, Secrets and Actions:
+read & write, scoped to this repo only). The token stays in that browser.
+
 ## Setup (about 10 minutes)
 1. Sign up free at https://alpaca.markets, switch to **Paper**, generate API keys.
 2. Repo → Settings → Secrets and variables → Actions → add `ALPACA_KEY`, `ALPACA_SECRET`

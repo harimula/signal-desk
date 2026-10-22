@@ -78,10 +78,10 @@ export function signalShortAt(bars, closes, i) {
 // ---- RSI-2 mean reversion (the strategy the 33-year research selected) ----
 // Buy: completed close above its 200-day average AND RSI-2 below 10 (a sharp dip in an uptrend).
 // Sell: at the close once price is above its 5-day average, or after 10 sessions.
-export function rsi2Signal(bars, closes, i = closes.length - 1) {
+export function rsi2Signal(bars, closes, i = closes.length - 1, threshold = 10) {
   if (i < 200) return null;
   const s200 = sma(closes, 200, i), r = rsi2(closes, i);
-  if (s200 == null || r == null || !(closes[i] > s200 && r < 10)) return null;
+  if (s200 == null || r == null || !(closes[i] > s200 && r < threshold)) return null;
   let rg = 0; for (let k = i - 9; k <= i; k++) rg += bars[k].h - bars[k].l;
   return { r2: Math.round(r * 10) / 10, prevClose: closes[i], riskUnit: r2d(3 * rg / 10), s200: r2d(s200) };
 }

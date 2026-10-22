@@ -528,7 +528,7 @@ function analyzeAll() {
   }
 }
 analyzeAll();
-const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades'], ['NEWS', 'News']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
+const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades'], ['SET', 'Bot settings'], ['NEWS', 'News']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
 let pfolios = [{id: 'p1', name: 'Portfolio'}];
 const pfOf = k => (typeof k === 'string' && k.startsWith('PF:')) ? k.slice(3) : null;
 const pfName = id => { const p = pfolios.find(x => x.id === id); return p ? p.name : 'Portfolio'; };
@@ -624,12 +624,12 @@ function fresh(m) {
   return {age, open, level};
 }
 function chrome() {
-  const m = MK[(tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || pfOf(tab)) ? 'US' : tab === 'DT' ? dtMk : tab === 'OP' ? opMk : tab], f = fresh(m);
+  const m = MK[(tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab)) ? 'US' : tab === 'DT' ? dtMk : tab === 'OP' ? opMk : tab], f = fresh(m);
   $('#mdots').innerHTML = ['US', 'IN'].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
-  $('#asof').innerHTML = (tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'BOT' ? 'Paper-trading bot — every trade it took' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
-  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
+  $('#asof').innerHTML = (tab === 'SET' ? 'Control panel \u2014 risk, capital, strategy, keys' : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'BOT' ? 'Paper-trading bot — every trade it took' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
+  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
   let h = '';
-  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && !pfOf(tab)) {
+  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && tab !== 'SET' && !pfOf(tab)) {
     if (f.level === 'stale') h += `<div class="banner warn"><b>Stale data. Entry zones are for reference only.</b> This snapshot is ${ageText(f.age)} old and prices have likely moved. Press ↻ Refresh prices.</div>`;
     else if (f.level === 'aging') h += `<div class="banner warn"><b>Snapshot is ageing.</b> Pulled ${ageText(f.age)} ago. Press ↻ Refresh prices.</div>`;
     h += `<div class="banner info">${esc(m.stamp.note)} Prices update when you press ↻ Refresh prices or on the auto-refresh schedule you pick (Yahoo data can lag ~15 minutes). Signals are rule-based readouts, not advice. The page places no orders.</div>`;
@@ -825,7 +825,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792627286';
+const BUILD_V = '1792628334';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2080,7 +2080,165 @@ ${lvBox('Worst drawdown', `<span class="neg">−$${fmt(dd, 2)}</span>`)}
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? '' : ' · paper account (fake money)'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }
-function viewHTML() { return tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
+// ---------- Bot settings tab: control panel that writes bot/config.json + GitHub secrets ----------
+const ST_PRESETS = {
+  conservative: {riskPct: 0.25, optRiskPct: 0.25, maxHeat: 1.5, perSector: 1, maxPositions: 4, maxOptions: 1, dayCap: 2, weekCap: 4, streak: 2, stockPct: 8, optPct: 1},
+  balanced: {riskPct: 0.5, optRiskPct: 0.5, maxHeat: 3, perSector: 2, maxPositions: 6, maxOptions: 4, dayCap: 3, weekCap: 6, streak: 3, stockPct: 10, optPct: 2},
+  aggressive: {riskPct: 1, optRiskPct: 1, maxHeat: 6, perSector: 3, maxPositions: 8, maxOptions: 6, dayCap: 5, weekCap: 10, streak: 4, stockPct: 12, optPct: 3}};
+const ST_DEF = {mode: 'paper', preset: 'balanced', ...ST_PRESETS.balanced, stocks: true, options: true, rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, staleMin: 45, newsGuard: true, eventGuard: true, alerts: true,
+  symbols: ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'META', 'GOOGL', 'TSLA', 'AMD', 'JPM', 'BAC', 'XOM', 'CVX', 'KO', 'PEP', 'WMT', 'HD', 'DIS', 'INTC', 'CSCO', 'QCOM', 'ORCL', 'CRM', 'ADBE', 'NFLX', 'UBER', 'PLTR', 'SHOP', 'COIN', 'SOFI', 'F']};
+const ST_FIELDS = {
+  risk: [['riskPct', 'Risk per stock trade', '% of account lost if the trade hits its stop', 0.05, 3, 0.05], ['optRiskPct', 'Risk per option trade', '% of account lost at the option stop', 0.05, 3, 0.05], ['maxHeat', 'Total risk cap', '% of account at risk across everything open', 0.5, 15, 0.5], ['perSector', 'Max positions per sector', 'e.g. only 2 Tech names at once', 1, 10, 1], ['dayCap', 'Daily loss limit', '% down on the day → stop for the day', 0.5, 20, 0.5], ['weekCap', 'Weekly loss limit', '% down in a week → no new trades', 1, 30, 0.5], ['streak', 'Losing streak limit', 'losses in a row → done for the day', 1, 10, 1]],
+  alloc: [['stockPct', 'Capital per stock position', '% of account', 1, 30, 1], ['maxPositions', 'Max stock positions', 'held at once', 1, 20, 1], ['optPct', 'Capital per option trade', '% of account spent on premium', 0.5, 10, 0.5], ['maxOptions', 'Max option positions', 'held at once', 0, 10, 1]],
+  strat: [['rsiThreshold', 'RSI-2 buy level', 'buy when RSI-2 is below this (10 = tested value)', 2, 30, 1], ['maxHold', 'Max hold', 'sessions before a forced exit', 1, 30, 1], ['optTakeProfit', 'Option take-profit', '% gain that sells the option', 10, 300, 5], ['optStop', 'Option stop', '% loss that sells the option', 20, 90, 5], ['holdFloor', 'Hard floor', '% loss on a stock that forces a sale', 5, 60, 1], ['staleMin', 'Cancel unfilled entries after', 'minutes', 5, 240, 5]]};
+let stCfg = null, stSha = null, stMsg = '', stBusy = false, stSecrets = null, stRepoInfo = null, stLoadedAt = 0;
+const ghTok = () => load('sd-ghtok', ''), ghRepo = () => load('sd-ghrepo', 'hmula-fbin/signal-desk');
+async function ghApi(path, opt = {}) {
+  const r = await fetch('https://api.github.com/repos/' + ghRepo() + path, {...opt, headers: {Authorization: 'Bearer ' + ghTok(), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opt.headers || {})}});
+  if (r.status === 204) return null;
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new Error((j && j.message) || ('HTTP ' + r.status));
+  return j;
+}
+const b64 = s => btoa(unescape(encodeURIComponent(s)));
+async function stLoad(force) {
+  if (stBusy || (!force && Date.now() - stLoadedAt < 60000)) return;
+  stBusy = true; stLoadedAt = Date.now();
+  try {
+    if (ghTok()) {
+      const f = await ghApi('/contents/bot/config.json?ref=main'); stSha = f.sha;
+      stCfg = JSON.parse(decodeURIComponent(escape(atob(f.content.replace(/\n/g, '')))));
+      try { stRepoInfo = await ghApi(''); } catch (e) {}
+      try { stSecrets = (await ghApi('/actions/secrets?per_page=100')).secrets.map(s => s.name); } catch (e) { stSecrets = null; }
+      try { stStop = !!(await ghApi('/contents/bot/STOP?ref=main')); } catch (e) { stStop = false; }
+    } else {
+      const r = await fetch('bot/config.json?t=' + Date.now(), {cache: 'no-store'}); if (r.ok) stCfg = await r.json();
+    }
+  } catch (e) { stMsg = 'Could not load settings: ' + e.message; }
+  if (!stCfg) stCfg = {...ST_DEF};
+  stBusy = false;
+  if (app === 'desk' && tab === 'SET') renderAll();
+}
+let stStop = false;
+function stRead() {
+  const c = {...stCfg};
+  const v = id => { const el = document.getElementById('st-' + id); return el ? el.value : null; };
+  c.preset = v('preset') || 'balanced';
+  for (const g of Object.values(ST_FIELDS)) for (const [k] of g) { const x = parseFloat(v(k)); if (isFinite(x)) c[k] = x; }
+  for (const k of ['stocks', 'options', 'newsGuard', 'eventGuard', 'alerts']) { const el = document.getElementById('st-' + k); if (el) c[k] = el.checked; }
+  c.entryEnd = v('entryEnd') || '11:00';
+  c.symbols = (v('symbols') || '').split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+  c.mode = document.getElementById('st-live') && document.getElementById('st-live').checked ? 'live' : 'paper';
+  c.liveConfirm = c.mode === 'live' ? (v('liveConfirm') || '') : '';
+  return c;
+}
+async function stSave() {
+  if (!ghTok()) { stMsg = 'Connect GitHub first (section 1).'; renderAll(); return; }
+  const c = stRead();
+  if (c.mode === 'live' && c.liveConfirm !== 'I UNDERSTAND THE RISK') { stMsg = 'To switch to LIVE you must type exactly: I UNDERSTAND THE RISK'; renderAll(); return; }
+  c.updatedAt = new Date().toISOString(); c.updatedBy = 'settings page';
+  stBusy = true; stMsg = 'Saving…'; renderAll();
+  try {
+    let sha = stSha; try { const f = await ghApi('/contents/bot/config.json?ref=main'); sha = f.sha; } catch (e) { sha = null; }
+    const r = await ghApi('/contents/bot/config.json', {method: 'PUT', body: JSON.stringify({message: 'Bot settings: ' + c.preset + (c.mode === 'live' ? ' LIVE' : ''), content: b64(JSON.stringify(c, null, 1)), sha: sha || undefined, branch: 'main'})});
+    stSha = r.content.sha; stCfg = c; stMsg = 'Saved ' + new Date().toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + ' — the bot applies it within about a minute (GitHub Pages publishes the file first).';
+  } catch (e) { stMsg = 'Save failed: ' + e.message; }
+  stBusy = false; renderAll();
+}
+async function stSecret(name, value, label) {
+  if (!value) return;
+  if (!window.sodium || !window.sodium.crypto_box_seal) {
+    const ld = src => new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => bad(new Error('could not load the encryption library \u2014 check your connection')); document.head.appendChild(s); });
+    await ld('https://cdn.jsdelivr.net/npm/libsodium@0.7.13/dist/modules/libsodium.js');            // core first
+    await ld('https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/dist/modules/libsodium-wrappers.js');
+  }
+  await window.sodium.ready;
+  const pk = await ghApi('/actions/secrets/public-key');
+  const enc = window.sodium.crypto_box_seal(window.sodium.from_string(value), window.sodium.from_base64(pk.key, window.sodium.base64_variants.ORIGINAL));
+  await ghApi('/actions/secrets/' + name, {method: 'PUT', body: JSON.stringify({encrypted_value: window.sodium.to_base64(enc, window.sodium.base64_variants.ORIGINAL), key_id: pk.key_id})});
+  return label;
+}
+async function stSaveKeys() {
+  if (!ghTok()) { stMsg = 'Connect GitHub first.'; renderAll(); return; }
+  const k = document.getElementById('st-akey').value.trim(), s = document.getElementById('st-asec').value.trim(), n = document.getElementById('st-ntfy').value.trim(), lv = document.getElementById('st-liveurl') ? document.getElementById('st-liveurl').value.trim() : '';
+  if (!k && !s && !n && !lv) { stMsg = 'Nothing to save.'; renderAll(); return; }
+  stBusy = true; stMsg = 'Encrypting and saving to GitHub secrets…'; renderAll();
+  try {
+    const done = [];
+    if (k) done.push(await stSecret('ALPACA_KEY', k, 'Alpaca key'));
+    if (s) done.push(await stSecret('ALPACA_SECRET', s, 'Alpaca secret'));
+    if (n) done.push(await stSecret('NTFY_TOPIC', n, 'alert topic'));
+    if (lv) done.push(await stSecret('ALPACA_LIVE_URL', lv, 'live endpoint'));
+    stMsg = 'Saved as encrypted GitHub secrets: ' + done.join(', ') + '. They never touch this page or the repo in the clear.';
+    stKeysClear = true;
+    try { stSecrets = (await ghApi('/actions/secrets?per_page=100')).secrets.map(x => x.name); } catch (e) {}
+  } catch (e) { stMsg = 'Saving keys failed: ' + e.message + ' \u2014 your keys are still in the boxes, nothing was sent.'; }
+  stBusy = false; renderAll();
+}
+let stKeysClear = false;
+async function stControl(what) {
+  if (!ghTok()) { stMsg = 'Connect GitHub first.'; renderAll(); return; }
+  stBusy = true; stMsg = 'Working…'; renderAll();
+  try {
+    if (what === 'pause') { await ghApi('/contents/bot/STOP', {method: 'PUT', body: JSON.stringify({message: 'Pause bot', content: b64('stop'), branch: 'main'})}); stStop = true; stMsg = 'Paused. Within seconds the bot cancels every order and sells every position, then stays idle until you resume.'; }
+    if (what === 'resume') { const f = await ghApi('/contents/bot/STOP?ref=main'); await ghApi('/contents/bot/STOP', {method: 'DELETE', body: JSON.stringify({message: 'Resume bot', sha: f.sha, branch: 'main'})}); stStop = false; stMsg = 'Resumed. Trading continues on the next cycle.'; }
+    if (what === 'run') { await ghApi('/actions/workflows/trade.yml/dispatches', {method: 'POST', body: JSON.stringify({ref: 'main'})}); stMsg = 'Bot run requested — check the Actions tab on GitHub in a minute.'; }
+    if (what === 'research') { await ghApi('/actions/workflows/research.yml/dispatches', {method: 'POST', body: JSON.stringify({ref: 'main'})}); stMsg = 'Strategy research started (about 15 minutes). Results appear on the Bot trades tab.'; }
+  } catch (e) { stMsg = 'Failed: ' + e.message; }
+  stBusy = false; renderAll();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-st]'); if (!b) return;
+  const a = b.dataset.st;
+  if (a === 'save') stSave();
+  else if (a === 'keys') stSaveKeys();
+  else if (a === 'connect') { save('sd-ghtok', document.getElementById('st-tok').value.trim()); save('sd-ghrepo', (document.getElementById('st-repo').value.trim() || 'hmula-fbin/signal-desk')); stCfg = null; stMsg = ''; stLoad(true); }
+  else if (a === 'disconnect') { save('sd-ghtok', ''); stSecrets = null; stRepoInfo = null; stMsg = 'Disconnected on this device.'; renderAll(); }
+  else if (a === 'preset') { stCfg = {...stRead(), preset: b.dataset.v, ...ST_PRESETS[b.dataset.v]}; renderAll(); }
+  else if (a === 'reload') { stLoad(true); }
+  else stControl(a);
+});
+document.addEventListener('change', e => { const el = e.target; if (el && el.id && el.id.startsWith('st-') && el.id !== 'st-tok' && el.id !== 'st-repo' && !['st-akey', 'st-asec', 'st-ntfy', 'st-liveurl', 'st-liveConfirm'].includes(el.id)) { const c = stRead(); if (el.id !== 'st-preset' && Object.keys(ST_PRESETS.balanced).includes(el.id.slice(3))) c.preset = 'custom'; stCfg = c; renderAll(); } });
+function settingsView() {
+  stLoad();
+  const keep = {}; if (!stKeysClear) ['st-akey', 'st-asec', 'st-ntfy', 'st-liveurl'].forEach(id => { const el = document.getElementById(id); if (el && el.value) keep[id] = el.value; }); stKeysClear = false;
+  setTimeout(() => { for (const id in keep) { const el = document.getElementById(id); if (el && !el.value) el.value = keep[id]; } }, 0);
+  const c = stCfg || {...ST_DEF}, connected = !!ghTok();
+  const inp = 'style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px"';
+  const num = ([k, lab, help, lo, hi, step]) => `<label style="display:block;font-size:12px"><b>${esc(lab)}</b><div class="mut" style="font-size:11px;margin:1px 0 3px;min-height:14px">${esc(help)}</div><input id="st-${k}" type="number" min="${lo}" max="${hi}" step="${step}" value="${c[k] != null ? c[k] : ''}" ${inp}></label>`;
+  const grid = arr => `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:10px">${arr.map(num).join('')}</div>`;
+  const chk = (k, lab, help) => `<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px"><input id="st-${k}" type="checkbox" ${c[k] ? 'checked' : ''} style="width:18px;height:18px"> <b>${lab}</b> <span class="mut" style="font-size:12px">${help}</span></label>`;
+  const sec = (t, body, sub) => `<div class="card" style="padding:14px 18px;margin-bottom:14px"><b style="font-size:15px">${t}</b>${sub ? ` <span class="mut" style="font-size:12px">· ${sub}</span>` : ''}${body}</div>`;
+  const has = n => stSecrets && stSecrets.includes(n);
+  const dot = ok => `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${ok ? 'var(--tb)' : 'var(--line)'};margin-right:5px"></span>`;
+  const presetBtn = k => `<button class="btn ${c.preset === k ? '' : 'ghost'}" type="button" data-st="preset" data-v="${k}" style="flex:1;min-width:150px;text-align:left;padding:10px 12px"><b style="text-transform:capitalize">${k}</b><div style="font-size:11.5px;font-weight:400;margin-top:2px;opacity:.85${c.preset === k ? ';color:#fff' : ''}" class="${c.preset === k ? '' : 'mut'}">${ST_PRESETS[k].riskPct}% per trade · cap ${ST_PRESETS[k].maxHeat}% · day limit −${ST_PRESETS[k].dayCap}%</div></button>`;
+  const connect = sec('1. Connection', connected
+    ? `<div style="margin-top:8px;font-size:13px">${dot(true)}Connected to <b>${esc(ghRepo())}</b>${stRepoInfo ? ` <span class="mut">(${stRepoInfo.private ? 'private' : 'public'} repo)</span>` : ''} <button class="btn ghost" type="button" data-st="disconnect" style="margin-left:8px;font-size:12px">Disconnect</button></div>
+<div style="margin-top:10px;font-size:13px">${dot(has('ALPACA_KEY') && has('ALPACA_SECRET'))}Alpaca keys ${has('ALPACA_KEY') && has('ALPACA_SECRET') ? 'set' : '<b>not set</b> — the bot cannot trade yet'} &nbsp; ${dot(has('NTFY_TOPIC'))}Phone alerts ${has('NTFY_TOPIC') ? 'set' : 'not set'} &nbsp; ${dot(has('ALPACA_LIVE_URL'))}Live endpoint ${has('ALPACA_LIVE_URL') ? 'set' : 'not set'}</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px">
+<label style="font-size:12px"><b>Alpaca API key</b><input id="st-akey" ${inp} autocomplete="off" placeholder="${has('ALPACA_KEY') ? 'set — paste to replace' : 'paste key'}"></label>
+<label style="font-size:12px"><b>Alpaca secret</b><input id="st-asec" type="password" ${inp} autocomplete="off" placeholder="${has('ALPACA_SECRET') ? 'set — paste to replace' : 'paste secret'}"></label>
+<label style="font-size:12px"><b>Phone alert topic</b> <span class="mut">(ntfy app)</span><input id="st-ntfy" ${inp} autocomplete="off" placeholder="e.g. signaldesk-7f3k29q"></label>
+<label style="font-size:12px"><b>Live endpoint</b> <span class="mut">(only for real money)</span><input id="st-liveurl" ${inp} autocomplete="off" placeholder="https://api.alpaca.markets"></label></div>
+<div style="margin-top:10px"><button class="btn" type="button" data-st="keys" ${stBusy ? 'disabled' : ''}>Save keys to GitHub secrets</button> <span class="mut" style="font-size:11.5px">Encrypted in your browser with GitHub’s public key, stored only as repository secrets. Nothing is kept on this page.</span></div>`
+    : `<div class="mut" style="margin-top:6px;font-size:13px;line-height:1.6">This page writes settings straight into your GitHub repo, where the bot reads them. Connect it once per device with a <b>fine-grained personal access token</b>: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained → Generate. Repository access: only <b>${esc(ghRepo())}</b>. Permissions: <b>Contents: Read and write</b>, <b>Secrets: Read and write</b>, <b>Actions: Read and write</b>. The token stays in this browser only.</div>
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:10px"><label style="font-size:12px"><b>GitHub token</b><input id="st-tok" type="password" ${inp} autocomplete="off" placeholder="github_pat_…"></label><label style="font-size:12px"><b>Repository</b><input id="st-repo" ${inp} value="${esc(ghRepo())}"></label></div>
+<div style="margin-top:10px"><button class="btn" type="button" data-st="connect">Connect</button></div>`, 'your GitHub repo, broker keys and alerts');
+  const risk = sec('2. Risk profile', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${['conservative', 'balanced', 'aggressive'].map(presetBtn).join('')}</div>
+<div class="mut" style="font-size:12px;margin-top:8px">${c.preset === 'custom' ? '<b>Custom</b> — you changed a value below. Pick a profile to reset.' : 'Editing any value below switches to Custom.'}</div>${grid(ST_FIELDS.risk)}<input type="hidden" id="st-preset" value="${c.preset}">`, 'how much the bot may lose, per trade and in total');
+  const alloc = sec('3. Capital allocation', `${chk('stocks', 'Trade stocks', 'RSI-2 dip buys, held 1–10 days')}${chk('options', 'Trade options', 'CALLs on the same dips — untested side, keep small')}${grid(ST_FIELDS.alloc)}
+<div class="mut" style="font-size:12px;margin-top:8px">Position size is the <i>smaller</i> of the capital % and the risk % — the risk rule usually decides.</div>`, 'stocks vs options, and how many at once');
+  const strat = sec('4. Strategy', `${grid(ST_FIELDS.strat)}<div style="margin-top:10px;font-size:12px"><b>Entry window closes at</b> <input id="st-entryEnd" type="time" value="${esc(c.entryEnd || '11:00')}" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;color:var(--text)"> <span class="mut">ET (opens 9:45, or 10:15 on CPI/jobs days)</span></div>`, 'the tested values are the defaults — change with care');
+  const guards = sec('5. Guards', `${chk('eventGuard', 'Economic calendar guard', 'Fed days, CPI/jobs mornings, Fed minutes')}${chk('newsGuard', 'Breaking-news guard', 'war, policy, crisis headlines pause trading; stocks with fresh news skipped')}${chk('alerts', 'Phone alerts', 'every trade, halt and error (needs the alert topic above)')}`, 'what makes the bot stand aside');
+  const uni = sec('6. Stocks it watches', `<textarea id="st-symbols" rows="3" ${inp.replace('style="', 'style="font-family:var(--font-mono),monospace;')}>${esc((c.symbols || []).join(', '))}</textarea><div class="mut" style="font-size:12px;margin-top:4px">US tickers, comma-separated, up to 60. Liquid large-caps work best — the rules were tested on them.</div>`, 'the universe');
+  const mode = sec('7. Mode', `<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px"><input id="st-live" type="checkbox" ${c.mode === 'live' ? 'checked' : ''} style="width:18px;height:18px"> <b>Trade real money</b> <span class="mut" style="font-size:12px">(requires the live endpoint secret and live keys)</span></label>
+${c.mode === 'live' || (document.getElementById('st-live') && document.getElementById('st-live').checked) ? `<div style="margin-top:8px;padding:10px 12px;border-radius:8px;background:var(--ts-bg);font-size:12.5px;line-height:1.5"><b class="neg">Real money.</b> Losses are real and yours. Only do this after months of paper results that match the research. Type <b>I UNDERSTAND THE RISK</b> to confirm:<input id="st-liveConfirm" ${inp} style="margin-top:6px" value="${esc(c.liveConfirm || '')}" autocomplete="off"></div>` : '<div class="mut" style="font-size:12px;margin-top:4px">Currently <b>paper</b> — fake money, real prices.</div>'}`, 'paper or real money');
+  const ctl = sec('8. Controls', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${stStop ? '<button class="btn" type="button" data-st="resume">▶ Resume trading</button>' : '<button class="btn" type="button" data-st="pause" style="background:var(--ts)">⏸ Pause — sell everything now</button>'}<button class="btn ghost" type="button" data-st="run">Run the bot now</button><button class="btn ghost" type="button" data-st="research">Re-run 33-year research</button><button class="btn ghost" type="button" data-st="reload">Reload from GitHub</button></div>
+<div class="mut" style="font-size:12px;margin-top:8px">${stStop ? '<b class="neg">Paused</b> — the bot has sold everything and is idle.' : 'Running normally.'} Pause creates <code>bot/STOP</code> in the repo; the bot sees it within seconds.</div>`, 'pause, resume, run');
+  const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span style="font-size:12.5px">${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span></div>`;
+  return `<h2 style="margin-bottom:6px">Bot settings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.</div>${bar}${connect}${risk}${alloc}${strat}${guards}${uni}${mode}${ctl}`;
+}
+function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {
   root.querySelectorAll('.tw').forEach(tw => {
     let wrap = tw.parentElement;
@@ -2142,7 +2300,7 @@ function renderAll(bg) {
   $('#view').dataset.app = 'desk';
   if (typeof goliveCheck === 'function') goliveCheck();
   renderTabs(); chrome();
-  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || tab === 'NEWS' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
+  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
   const view = $('#view');
   const openKeys = new Set(Array.from(view.querySelectorAll('details[data-k][open]')).map(d2 => d2.dataset.k));
   const sameView = view.dataset.rv === app + ':' + tab, scY = window.scrollY, scX = window.scrollX;
