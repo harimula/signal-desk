@@ -12,7 +12,7 @@
 //    all at -50%, all by 3:40pm the next session, never into expiry day.
 // Safety: paper endpoint by default; bot/STOP file flattens and halts; daily loss cap.
 import fs from 'node:fs';
-import { signalAt, signalShortAt, r2d } from './strategy.mjs';
+import { signalAt, signalShortAt, r2d, rsi2Signal, rsi2Exit } from './strategy.mjs';
 import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
@@ -44,7 +44,9 @@ async function call(base, path, opt = {}) {
   return tx ? JSON.parse(tx) : null;
 }
 const T = (p, o) => call(BASE, p, o), D = (p, o) => call(DATA, p, o);
-const send = async (body, why) => { alerts.push((body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why); act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }); };
+// Idempotency: never send the same order twice, even if the broker is slow to list it.
+const placed = new Map();
+const send = async (body, why) => { const dk = body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); alerts.push((body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why); act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }); };
 
 // ---- time in New York ----
 const etParts = d => Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map(p => [p.type, p.value]));
@@ -102,6 +104,23 @@ export async function fastCheck() {
 }
 export const clockInfo = () => lastClock;
 
+// Daily bars for the universe + anything we hold; refreshed every 30 minutes (~230 sessions).
+async function loadBars(extra = []) {
+  const want = [...new Set(UNIVERSE.concat(extra))];
+  if (barsCache.bars && Date.now() - barsCache.at < 30 * 60000 && want.every(s => barsCache.bars[s])) return barsCache.bars;
+  const start = new Date(Date.now() - 340 * 864e5).toISOString(), b2 = {};
+  let token = '';
+  for (let k = 0; k < 20; k++) {
+    const j = await D(`/v2/stocks/bars?symbols=${want.join(',')}&timeframe=1Day&start=${start}&limit=10000&adjustment=split&feed=iex&sort=asc${token ? '&page_token=' + token : ''}`);
+    for (const [s, arr] of Object.entries(j.bars || {})) b2[s] = (b2[s] || []).concat(arr);
+    token = j.next_page_token; if (!token) break;
+  }
+  barsCache = { at: Date.now(), bars: b2 };
+  return b2;
+}
+const completed = (bars, sym) => (bars[sym] || []).filter(b => b.t.slice(0, 10) < ymdDash(Date.now())).map(b => ({ d: b.t.slice(0, 10), o: b.o, h: b.h, l: b.l, c: b.c }));
+const dash8 = s => s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+
 // Phone alerts via ntfy.sh (free): install the ntfy app, subscribe to your secret topic name.
 const sentAlerts = new Map();
 async function flushAlerts() {
@@ -148,8 +167,8 @@ async function run() {
   G.spyPct = spyPct; G.newsOk = newsCache.ok;
   const RG = regimeOf(spyPrev && spyPrev.closes);
   G.regime = RG.regime; G.longSize = 1;
-  if (RG.regime === 'bear') { G.noLongs = true; G.reasons.push('Bear market regime (SPY below its 50- and 200-day averages) \u2014 no new stock buys or CALLs'); }
-  else if (RG.regime === 'neutral') { G.longSize = 0.5; G.reasons.push('Choppy regime (SPY near its 50-day average) \u2014 long trades at half size'); }
+  if (RG.regime === 'bear') G.reasons.push('Bear market regime (SPY below its 50- and 200-day averages) \u2014 fewer stocks qualify, since each must be above its own 200-day');   // reported, not enforced: the filter did not improve RSI-2 in the research
+  // (neutral regime: no size change for RSI-2)
   // circuit breakers: losing streak today, weekly drawdown
   try {
     if (Date.now() - fillsCache.at > 60000) {
@@ -182,7 +201,7 @@ async function run() {
 
   // ---- cancel stale entries ----
   for (const o of openOrders) {
-    if (o.side !== 'buy' || !/^sd-[so]-/.test(cid(o))) continue;
+    if (o.side !== 'buy' || !/^sd-[sorq]-/.test(cid(o))) continue;
     if (Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > STALE_MIN * 60000) {
       act(`${o.symbol} buy at ${o.limit_price} unfilled for ${STALE_MIN} min \u2014 cancelled (setup is stale)`);
       if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
@@ -191,7 +210,41 @@ async function run() {
   }
   const liveOrders = openOrders.filter(o => !o._cancelled);
 
-  // ---- manage stock positions ----
+  // ---- RSI-2 swing positions: sell at the close once above the 5-day average (or after 10 sessions) ----
+  const swingStk = stockPos.map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-r-' + p.symbol + '-')) })).filter(x => x.e);
+  const swingOpt = optPos.map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-q-' + p.symbol + '-')) })).filter(x => x.e);
+  if (swingStk.length || swingOpt.length) {
+    const unds = [...new Set(swingStk.map(x => x.p.symbol).concat(swingOpt.map(x => OPT_RE.exec(x.p.symbol)[1])))];
+    const bars0 = await loadBars(unds);
+    const lastU = (await D(`/v2/stocks/trades/latest?symbols=${unds.join(',')}&feed=iex`)).trades || {};
+    const held = (sym, day8) => { if (day8 === TODAY) return 0; return completed(bars0, sym).filter(b => b.d > dash8(day8)).length + 1; };
+    for (const { p, e } of swingStk) {
+      if (sellsFor(p.symbol).some(o => o.type === 'market')) continue;
+      const day8 = cid(e).split('-')[4], plpc = +p.unrealized_plpc * 100, px = lastU[p.symbol] && lastU[p.symbol].p;
+      const out = why => send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why);
+      if (HOLD_FLOOR > 0 && plpc <= -HOLD_FLOOR) { await out(`${p.symbol} down ${plpc.toFixed(1)}% \u2014 hit the ${HOLD_FLOOR}% hard floor`); continue; }
+      if (MINS < 950 || !px) continue;                                  // exits happen in the last 10 minutes, like a closing order
+      const h = held(p.symbol, day8); if (h === 0) continue;             // never sell on the day it was bought
+      const x = rsi2Exit(completed(bars0, p.symbol).map(b => b.c), px, h);
+      if (x.exit) await out(`${p.symbol} RSI-2 exit \u2014 ${x.why} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(2)}%)`);
+    }
+    for (const { p, e } of swingOpt) {
+      const sells = sellsFor(p.symbol); if (sells.some(o => o.type === 'market')) continue;
+      const parts = cid(e).split('-'), day8 = parts[3], und = OPT_RE.exec(p.symbol)[1], exp = '20' + OPT_RE.exec(p.symbol)[2];
+      const qty = Math.abs(+p.qty), plpc = +p.unrealized_plpc * 100, avg = +p.avg_entry_price, px = lastU[und] && lastU[und].p;
+      const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }); await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
+      const daysToExp = (Date.parse(dash8(exp)) - Date.parse(ymdDash(Date.now()))) / 864e5;
+      if (plpc >= OPT_TP) await out(`${p.symbol} +${plpc.toFixed(0)}% \u2014 take profit`);
+      else if (plpc <= -50) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
+      else if (capHit) await out(`${p.symbol} daily loss cap hit \u2014 closing options`);
+      else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options`);
+      else if (daysToExp <= 3) await out(`${p.symbol} ${daysToExp} days to expiry \u2014 out before time decay accelerates`);
+      else if (MINS >= 950 && px && held(und, day8) > 0) { const x = rsi2Exit(completed(bars0, und).map(b => b.c), px, held(und, day8)); if (x.exit) await out(`${p.symbol} stock ${x.why} \u2014 selling the CALL`); }
+      else if (!sells.length) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
+    }
+  }
+
+  // ---- manage stock positions (legacy intraday trades, if any remain) ----
   for (const p of stockPos) {
     const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-s-' + p.symbol + '-'));
     if (!e) continue;                                   // not ours — never touch manual positions
@@ -241,11 +294,13 @@ async function run() {
 
   // ---- new entries ----
   if (capHit) { act(`Daily loss cap ${LOSS_CAP}% hit (${dayPct.toFixed(2)}%) — no new trades today`); return; }
-  if (MINS < G.minStart || MINS >= 900) { console.log('Outside the entry window.'); return; }
+  if (MINS < G.minStart || MINS >= 660) { console.log('Outside the RSI-2 entry window (opening hour to 11:00 ET).'); return; }
   if (G.block) { console.log('Paused by market check.'); return; }
 
   // ---- portfolio risk: heat (money at risk to the stops) and sector concentration ----
   const stopFor = (sym, ord) => {
+    const r = ord && /^sd-r-/.test(cid(ord)) ? ord : hist.find(o => o.side === 'buy' && cid(o).startsWith('sd-r-' + sym + '-'));
+    if (r) { const unit = +cid(r).split('-')[3] / 100, base = ord ? +ord.limit_price : +((positions.find(x => x.symbol === sym) || {}).avg_entry_price || 0); return base ? base - unit : null; }
     const src = ord && /^sd-s-/.test(cid(ord)) ? ord : hist.find(o => o.side === 'buy' && cid(o).startsWith('sd-s-' + sym + '-'));
     return src ? +cid(src).split('-')[4] / 100 : null;
   };
@@ -257,85 +312,62 @@ async function run() {
   const sectorFull = sym => sectorOf(sym) !== 'Other' && (sectorCount[sectorOf(sym)] || 0) >= MAX_PER_SECTOR;
   lastRisk = { heatPct: heat / equity * 100, capPct: MAX_HEAT, sectors: sectorCount, regime: G.regime };
 
-  if (!barsCache.bars || Date.now() - barsCache.at > 30 * 60000) {         // daily bars: refresh every 30 min
-    const start = new Date(Date.now() - 130 * 864e5).toISOString();
-    const b2 = {};
-    let token = '';
-    for (let k = 0; k < 10; k++) {
-      const j = await D(`/v2/stocks/bars?symbols=${UNIVERSE.join(',')}&timeframe=1Day&start=${start}&limit=10000&adjustment=split&feed=iex&sort=asc${token ? '&page_token=' + token : ''}`);
-      for (const [s, arr] of Object.entries(j.bars || {})) b2[s] = (b2[s] || []).concat(arr);
-      token = j.next_page_token; if (!token) break;
-    }
-    barsCache = { at: Date.now(), bars: b2 };
-  }
-  const bars = barsCache.bars;
+  // ---- RSI-2 entries (selected by the 33-year out-of-sample research) ----
+  const bars = await loadBars();
   const last = (await D(`/v2/stocks/trades/latest?symbols=${UNIVERSE.join(',')}&feed=iex`)).trades || {};
-  const todayDash = ymdDash(Date.now());
-  const longs = [], shorts = [];
+  const sigs = [];
   for (const sym of UNIVERSE) {
-    const bs = bars[sym] || [];
-    const B = bs.filter(b => b.t.slice(0, 10) < todayDash).map(b => ({ o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
-    if (B.length < 25) continue;
-    const C = B.map(b => b.c), i = B.length - 1;
-    const L = signalAt(B, C, i); if (L) longs.push({ sym, ...L, px: last[sym] && last[sym].p });
-    const S = signalShortAt(B, C, i); if (S) shorts.push({ sym, ...S, px: last[sym] && last[sym].p });
+    const B = completed(bars, sym); if (B.length < 205) continue;
+    const s = rsi2Signal(B, B.map(b => b.c)); if (s) sigs.push({ sym, ...s, px: last[sym] && last[sym].p });
   }
-  const order = (a, b) => (b.strong - a.strong) || (a.r2 - b.r2);
-  longs.sort(order); shorts.sort((a, b) => (b.strong - a.strong) || (b.r2 - a.r2));
-  lastSignals = { longs, shorts, at: Date.now() };
-  const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && o.status !== 'canceled' && o.status !== 'expired' && o.status !== 'rejected');
+  sigs.sort((a, b) => a.r2 - b.r2);                                      // deepest dip first, like the backtest
+  lastSignals = { longs: [], shorts: [], rsi2: sigs, at: Date.now() };
+  if (sigs.length) act(`RSI-2 dips today: ${sigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
+  const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
 
-  // stock day trades
   if (STK_ON) {
     let slots = MAX_POS - stockPos.length - liveOrders.filter(o => o.side === 'buy' && !isOpt(o.symbol)).length;
-    for (const s of (G.noLongs ? [] : longs)) {
+    for (const s of sigs) {
       if (slots <= 0) break;
-      if (stockPos.some(p => p.symbol === s.sym) || openOrders.some(o => o.symbol === s.sym)) continue;
-      const risk = symbolRisk(s.sym, newsCache.syms);
-      if (risk) { act(`${s.sym} skipped \u2014 ${risk}`); continue; }
-      if (todays.filter(o => cid(o).startsWith('sd-s-' + s.sym + '-')).length >= MAX_ENTRIES) continue;
+      if (!s.px || stockPos.some(p => p.symbol === s.sym) || liveOrders.some(o => o.symbol === s.sym) || todays.some(o => cid(o).startsWith('sd-r-' + s.sym + '-'))) continue;
+      if (s.px > s.prevClose * 1.01) { act(`${s.sym} skipped \u2014 already bounced ${((s.px / s.prevClose - 1) * 100).toFixed(1)}% since yesterday's close`); continue; }
+      const risk = symbolRisk(s.sym, newsCache.syms); if (risk) { act(`${s.sym} skipped \u2014 ${risk}`); continue; }
       if (sectorFull(s.sym)) { act(`${s.sym} skipped \u2014 already ${MAX_PER_SECTOR} positions in ${sectorOf(s.sym)}`); continue; }
-      const qty = stockQty({ equity, riskPct: RISK_PCT * G.budget * G.longSize, entry: s.entry, stop: s.stop, budget: bud * G.budget * G.longSize });
+      const lim = r2d(s.px * 1.002);
+      const qty = stockQty({ equity, riskPct: RISK_PCT * G.budget, entry: lim, stop: lim - s.riskUnit, budget: bud * G.budget });
       if (qty < 1) continue;
-      const add = qty * (s.entry - s.stop);
+      const add = qty * s.riskUnit;
       if (heat + add > heatCap) { act(`${s.sym} skipped \u2014 total risk would exceed ${MAX_HEAT}% of the account`); continue; }
-      heat += add; sectorCount[sectorOf(s.sym)] = (sectorCount[sectorOf(s.sym)] || 0) + 1;
-      await send({ symbol: s.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(s.entry), time_in_force: 'day',
-        client_order_id: `sd-s-${s.sym}-${Math.round(s.target * 100)}-${Math.round(s.stop * 100)}-${TODAY}-${rid()}` }, `${s.sym} stock day trade (RSI-2 ${s.r2})`);
-      slots--;
+      await send({ symbol: s.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
+        client_order_id: `sd-r-${s.sym}-${Math.round(s.riskUnit * 100)}-${TODAY}-${rid()}` }, `${s.sym} RSI-2 dip buy (RSI-2 ${s.r2}, above 200-day ${s.s200})`);
+      heat += add; sectorCount[sectorOf(s.sym)] = (sectorCount[sectorOf(s.sym)] || 0) + 1; slots--;
     }
   }
 
-  // options: CALL on long setups, PUT on short setups — only once the stock touches the level
+  // CALLs on the same RSI-2 dips (puts are off: the short side was not part of the winning research)
   if (OPT_ON && !G.noOptions) {
     let slots = MAX_OPT - optPos.length - liveOrders.filter(o => o.side === 'buy' && isOpt(o.symbol)).length;
-    const hasOptOn = und => optPos.some(p => OPT_RE.exec(p.symbol)[1] === und) || openOrders.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === und);
-    const tries = (G.noLongs ? [] : longs.map(s => ({ ...s, type: 'call' }))).concat(G.noPuts ? [] : shorts.map(s => ({ ...s, type: 'put' })));
-    for (const s of tries) {
+    const hasOptOn = und => optPos.some(p => OPT_RE.exec(p.symbol)[1] === und) || liveOrders.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === und);
+    for (const s of sigs) {
       if (slots <= 0) break;
-      if (!s.px || hasOptOn(s.sym)) continue;
-      if (symbolRisk(s.sym, newsCache.syms)) continue;
-      if (sectorFull(s.sym)) continue;
-      const touched = s.type === 'call' ? s.px <= s.entry * 1.002 : s.px >= s.entry * 0.998;
-      if (!touched) continue;
-      if (todays.filter(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym).length >= MAX_ENTRIES) continue;
-      const cj = await T(`/v2/options/contracts?underlying_symbols=${s.sym}&type=${s.type}&status=active&expiration_date_gte=${ymdDash(Date.now() + 6 * 864e5)}&expiration_date_lte=${ymdDash(Date.now() + 17 * 864e5)}&strike_price_gte=${r2d(s.entry * 0.95)}&strike_price_lte=${r2d(s.entry * 1.05)}&limit=200`);
+      if (!s.px || hasOptOn(s.sym) || s.px > s.prevClose * 1.01 || symbolRisk(s.sym, newsCache.syms) || sectorFull(s.sym)) continue;
+      if (todays.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym)) continue;
+      const cj = await T(`/v2/options/contracts?underlying_symbols=${s.sym}&type=call&status=active&expiration_date_gte=${ymdDash(Date.now() + 14 * 864e5)}&expiration_date_lte=${ymdDash(Date.now() + 35 * 864e5)}&strike_price_gte=${r2d(s.px * 0.95)}&strike_price_lte=${r2d(s.px * 1.05)}&limit=200`);
       const cs = (cj.option_contracts || []).filter(c => c.tradable !== false);
-      if (!cs.length) { act(`${s.sym} ${s.type.toUpperCase()}: no contract 6–17 days out near ${s.entry}`); continue; }
+      if (!cs.length) { act(`${s.sym} CALL: no contract 14\u201335 days out near ${s.px}`); continue; }
       const ex = [...new Set(cs.map(c => c.expiration_date))].sort()[0];
-      const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - s.entry) - Math.abs(+b.strike_price - s.entry))[0];
+      const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - s.px) - Math.abs(+b.strike_price - s.px))[0];
       const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`)).quotes || {})[c.symbol];
-      if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote — skipped`); continue; }
-      if ((q.ap - q.bp) / q.ap > 0.2) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}) — skipped`); continue; }
+      if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); continue; }
+      if ((q.ap - q.bp) / q.ap > 0.2) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}) \u2014 skipped`); continue; }
       const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.03));
-      const qty = optionQty({ equity, riskPct: OPT_RISK_PCT * G.budget * (s.type === 'call' ? G.longSize : 1), price: lim, budget: obud * G.budget * (s.type === 'call' ? G.longSize : 1) });
+      const qty = optionQty({ equity, riskPct: OPT_RISK_PCT * G.budget, price: lim, budget: obud * G.budget });
+      if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's risk budget \u2014 skipped`); continue; }
       const addO = qty * lim * 100 * 0.5;
-      if (qty >= 1 && heat + addO > heatCap) { act(`${c.symbol} skipped \u2014 total risk would exceed ${MAX_HEAT}% of the account`); continue; }
-      if (qty >= 1) { heat += addO; sectorCount[sectorOf(s.sym)] = (sectorCount[sectorOf(s.sym)] || 0) + 1; }
-      if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's risk budget — skipped`); continue; }
+      if (heat + addO > heatCap) { act(`${c.symbol} skipped \u2014 total risk would exceed ${MAX_HEAT}% of the account`); continue; }
       await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
-        client_order_id: `sd-o-${c.symbol}-${TODAY}-${qty}-${rid()}` }, `${s.sym} ${s.type.toUpperCase()} (stock touched ${s.entry})`);
-      slots--;
+        client_order_id: `sd-q-${c.symbol}-${TODAY}-${qty}-${rid()}` }, `${s.sym} CALL on RSI-2 dip (RSI-2 ${s.r2})`);
+      heat += addO; sectorCount[sectorOf(s.sym)] = (sectorCount[sectorOf(s.sym)] || 0) + 1; slots--;
     }
   }
 }

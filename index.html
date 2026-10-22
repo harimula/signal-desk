@@ -825,7 +825,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792625229';
+const BUILD_V = '1792627286';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1964,7 +1964,7 @@ ${nwItems == null ? '<div class="mut" style="padding:10px 0">Loading…</div>' :
 <div class="mut" style="font-size:11px;margin-top:8px">${srcLine ? srcLine + '. ' : ''}Sources: Yahoo Finance, Federal Reserve, Benzinga (via Alpaca), Finnhub. Tags are keyword-based. Not advice.</div></div>`;
 }
 // ---------- Bot trades tab: reads bot/journal.json written by the paper-trading bot ----------
-let botJ = null, botErr = '', botBusy = false, botAt = 0;
+let botJ = null, botErr = '', botBusy = false, botAt = 0, btJ = null;
 async function botLoad(force) {
   if (botBusy || (!force && Date.now() - botAt < 55000)) return;
   botBusy = true; botAt = Date.now();
@@ -1972,6 +1972,7 @@ async function botLoad(force) {
     const r = await fetch('bot/journal.json?t=' + Date.now(), {cache: 'no-store'});
     if (!r.ok) throw new Error(r.status === 404 ? 'none' : 'HTTP ' + r.status);
     botJ = await r.json(); botErr = '';
+    try { const b2 = await fetch('bot/research.json?t=' + Math.floor(Date.now() / 600000), {cache: 'no-store'}); if (b2.ok) btJ = await b2.json(); } catch (e2) {}
   } catch (e) {
     botErr = e.message === 'none'
       ? 'No bot activity yet. To switch it on: add your Alpaca <b>paper</b> keys as GitHub secrets and enable the <b>paper-trade-bot</b> workflow (steps in BOT.md in your repo). This tab fills in by itself after the bot’s first run during market hours.'
@@ -1983,7 +1984,7 @@ async function botLoad(force) {
 setInterval(() => { if (app === 'desk' && tab === 'BOT' && !document.hidden) botLoad(); }, 60000);
 function botView() {
   botLoad();
-  const head = `<h2 style="margin-bottom:6px">Bot trades</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Every trade the bot took — stock day trades, CALLs and PUTs — with when it bought and when it sold. Paper money on Alpaca. Updates about every 30 minutes and after each trade. Not advice.</div>`;
+  const head = `<h2 style="margin-bottom:6px">Bot trades</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Every trade the bot took — RSI-2 dip buys in stocks (held 1–10 days) and CALLs on the same dips — with when it bought and when it sold. Paper money on Alpaca. Updates about every 30 minutes and after each trade. Not advice.</div>`;
   if (!botJ) return head + `<div class="card empty" style="line-height:1.6">${botErr || 'Loading the bot journal…'}</div>`;
   const J = botJ, $$ = v => (v >= 0 ? '+' : '−') + '$' + fmt(Math.abs(v), 2);
   const cls = v => v >= 0 ? 'pos' : 'neg';
@@ -2010,7 +2011,7 @@ ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins 
   const openTbl = open.length ? `<h3 style="margin:16px 0 8px">Open now <span class="mut" style="font-weight:400;font-size:13px">· ${open.length}</span></h3>
 <div class="tw card"><table style="min-width:640px"><thead><tr><th class="lt">What</th><th class="lt">Type</th><th>Qty</th><th class="lt">Bought</th><th>Bought at</th><th>Now</th><th>P/L $</th><th>P/L %</th><th class="lt">Status</th></tr></thead><tbody>${open.map(o => {
     const held = o.kind === 'Stock' && o.since && dET(o.since) < today;
-    return `<tr><td class="lt">${what(o)}</td><td class="lt">${typ(o)}</td><td>${fmt(o.qty, o.qty % 1 ? 2 : 0)}</td><td class="lt">${tET(o.since)}</td><td>$${fmt(o.avg)}</td><td>$${fmt(o.now)}</td><td class="${cls(o.pl)}"><b>${$$(o.pl)}</b></td><td class="${cls(o.plPct)}">${sgn(o.plPct)}%</td><td class="lt mut" style="font-size:12px">${held ? 'holding — sells at breakeven' : o.kind === 'Stock' ? 'day trade — target set' : 'option — exit ladder'}</td></tr>`;
+    return `<tr><td class="lt">${what(o)}</td><td class="lt">${typ(o)}</td><td>${fmt(o.qty, o.qty % 1 ? 2 : 0)}</td><td class="lt">${tET(o.since)}</td><td>$${fmt(o.avg)}</td><td>$${fmt(o.now)}</td><td class="${cls(o.pl)}"><b>${$$(o.pl)}</b></td><td class="${cls(o.plPct)}">${sgn(o.plPct)}%</td><td class="lt mut" style="font-size:12px">${o.kind === 'Stock' ? 'RSI-2 swing — sells at the close above its 5-day avg (max 10 days)' : 'CALL — sells with the stock, at +50% or −50%'}</td></tr>`;
   }).join('')}</tbody></table></div>` : '';
   const days = {};
   closed.forEach(c => { const d = dET(c.outT); (days[d] = days[d] || []).push(c); });
@@ -2029,7 +2030,53 @@ ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins 
 ${(env.reasons || []).map(r => `<div class="mut" style="font-size:12.5px;margin-top:3px">\u2022 ${esc(r)}</div>`).join('')}
 ${(env.flagged || []).length ? `<div style="margin-top:8px;font-size:12px"><b>Headlines it reacted to or is watching</b>${env.flagged.slice(0, 6).map(f => `<div style="margin-top:2px"><span class="mut">${tET(f.t)}</span> \u00b7 <span class="pill r-Hold" style="font-size:10px">${esc(f.cats.join(', '))}</span> ${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" style="color:var(--text)">${esc(f.headline)}</a>` : esc(f.headline)}</div>`).join('')}</div>` : ''}
 </div>` : '';
-  return head + evCard() + envCard + boxes + openTbl +
+  // ---- professional panels: status, risk, performance, backtest ----
+  const hbMin = J.at ? (Date.now() - Date.parse(J.at)) / 60000 : 1e9;
+  const nyMins = (() => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false}).formatToParts(new Date()).map(x => [x.type, x.value])); return {m: (+p.hour % 24) * 60 + +p.minute, wd: p.weekday}; })();
+  const mktHours = !['Sat', 'Sun'].includes(nyMins.wd) && nyMins.m >= 570 && nyMins.m < 960;
+  const status = !mktHours ? ['var(--muted)', 'Idle — market closed', `last check-in ${tET(J.at)} ET`]
+    : hbMin <= 15 ? ['var(--tb)', 'Running', `checked in ${Math.max(0, Math.round(hbMin))} min ago`]
+    : ['var(--ts)', 'Not reporting', `no check-in for ${Math.round(hbMin)} min — check the paper-trade-bot workflow in GitHub Actions`];
+  const statusLine = `<div style="display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:13px"><span style="width:10px;height:10px;border-radius:50%;background:${status[0]};display:inline-block"></span><b>${status[1]}</b><span class="mut">· ${status[2]}</span></div>`;
+  const R = J.risk, L = J.limits, rg = (env && env.regime) || (R && R.regime);
+  const rgTxt = {bull: ['pos', 'Bull — SPY above its 50- and 200-day averages'], neutral: ['', 'Choppy — SPY near its 50-day average'], bear: ['neg', 'Bear — SPY below its averages (fewer stocks qualify: each must be above its own 200-day)'], unknown: ['', 'Not enough history yet']}[rg || 'unknown'];
+  const heatBar = R ? Math.min(100, R.heatPct / R.capPct * 100) : 0;
+  const riskCard = L ? `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">⚖️ Risk dashboard</b>
+<div style="margin-top:8px;font-size:13px"><b>Market regime:</b> <span class="${rgTxt[0]}">${rgTxt[1]}</span></div>
+${R ? `<div style="margin-top:8px;font-size:13px"><b>Money at risk to the stops:</b> ${fmt(R.heatPct, 2)}% of the account <span class="mut">(cap ${R.capPct}%)</span>
+<div style="height:8px;background:var(--surface2);border-radius:4px;margin-top:4px;overflow:hidden"><div style="height:100%;width:${heatBar}%;background:${heatBar > 85 ? 'var(--ts)' : heatBar > 60 ? 'var(--s)' : 'var(--tb)'}"></div></div></div>
+${Object.keys(R.sectors || {}).length ? `<div class="mut" style="font-size:12px;margin-top:6px">Positions by sector: ${Object.entries(R.sectors).map(([k, v]) => `${esc(k)} ${v}/${L.perSector}`).join(' · ')}</div>` : ''}` : ''}
+<div class="mut" style="font-size:12px;margin-top:8px;line-height:1.6">Rules in force: each stock trade risks at most <b>${L.riskPct}%</b> of the account at its stop (option trades ${L.optRiskPct}%) · total risk cap <b>${L.maxHeat}%</b> · max <b>${L.perSector}</b> positions per sector · stop for the day after <b>${L.streak}</b> losses in a row or <b>−${L.dayCap}%</b> on the day · no new trades after <b>−${L.weekCap}%</b> in a week · unfilled entries cancelled after 45 min.</div></div>` : '';
+  const kinds = ['Stock', 'Call', 'Put'];
+  const st = arr => { const w = arr.filter(c => c.pl > 0), l = arr.filter(c => c.pl <= 0), gw = w.reduce((t, c) => t + c.pl, 0), gl = -l.reduce((t, c) => t + c.pl, 0); return {n: arr.length, win: arr.length ? w.length / arr.length * 100 : 0, exp: arr.length ? (gw - gl) / arr.length : 0, pf: gl > 0 ? gw / gl : null, aw: w.length ? gw / w.length : 0, al: l.length ? -gl / l.length : 0, net: gw - gl}; };
+  let perfCard = '';
+  if (closed.length) {
+    const S = st(closed);
+    let eqv = 0, pk = 0, dd = 0;
+    [...closed].sort((a, b) => a.outT < b.outT ? -1 : 1).forEach(c => { eqv += c.pl; pk = Math.max(pk, eqv); dd = Math.max(dd, pk - eqv); });
+    perfCard = `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">📊 Performance</b> <span class="mut" style="font-size:11.5px">· all closed trades</span>
+<div class="lv" style="margin:8px 0 0">
+${lvBox('Expectancy / trade', `<span class="${cls(S.exp)}">${$$(S.exp)}</span>`)}
+${lvBox('Profit factor', S.pf == null ? '–' : `<span class="${S.pf >= 1 ? 'pos' : 'neg'}">${fmt(S.pf, 2)}</span>`)}
+${lvBox('Win rate', fmt(S.win, 0) + '%')}
+${lvBox('Avg win / avg loss', `<span class="pos">${$$(S.aw)}</span> / <span class="neg">${$$(S.al)}</span>`)}
+${lvBox('Worst drawdown', `<span class="neg">−$${fmt(dd, 2)}</span>`)}
+</div>
+<div class="tw" style="margin-top:10px"><table style="min-width:460px"><thead><tr><th class="lt">Type</th><th>Trades</th><th>Win rate</th><th>Expectancy</th><th>Profit factor</th><th>Net P/L</th></tr></thead><tbody>${kinds.map(k => { const s = st(closed.filter(c => c.kind === k)); return s.n ? `<tr><td class="lt"><b>${k}</b></td><td>${s.n}</td><td>${fmt(s.win, 0)}%</td><td class="${cls(s.exp)}">${$$(s.exp)}</td><td>${s.pf == null ? '–' : fmt(s.pf, 2)}</td><td class="${cls(s.net)}"><b>${$$(s.net)}</b></td></tr>` : ''; }).join('')}</tbody></table></div>
+<div class="mut" style="font-size:11.5px;margin-top:6px">Expectancy above $0 and profit factor above 1.0, held over 50+ trades, is what a real edge looks like. Fewer trades than that is mostly noise.</div></div>`;
+  }
+  const RS = btJ && btJ.results, pick = (k, rg) => RS && RS.find(r => r.key === k && r.regime === rg);
+  const bt = m => m ? `<td class="${m.cagr >= 0 ? 'pos' : 'neg'}">${sgn(m.cagr)}%</td><td>${fmt(m.sharpe, 2)}</td><td class="neg">−${fmt(m.maxDD, 1)}%</td>` : '<td>–</td><td>–</td><td>–</td>';
+  const live = pick('rsi2', false), old = pick('daytrade', false), brk = pick('breakout', true);
+  const btCard = live ? `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">🧪 Why the bot uses RSI-2 — 33-year test</b> <span class="mut" style="font-size:11.5px">· ${esc(live.all.from)} → ${esc(live.all.to)} · 39 stocks · costs 0.05%/side · out-of-sample from ${esc(btJ.split)} · <a href="bot/research_report.md" target="_blank" rel="noopener" style="color:var(--text)">full report</a></span>
+<div class="tw" style="margin-top:8px"><table style="min-width:520px"><thead><tr><th class="lt">Strategy</th><th>Yearly return</th><th>Sharpe</th><th>Max drawdown</th></tr></thead><tbody>
+<tr style="background:var(--tb-bg)"><td class="lt"><b>RSI-2 dip buying — what the bot runs</b> (all years)</td>${bt(live.all)}</tr>
+<tr style="background:var(--tb-bg)"><td class="lt"><b>RSI-2 — out-of-sample</b> (never used to choose it)</td>${bt(live.oos)}</tr>
+<tr><td class="lt">Old intraday rules — out-of-sample (retired)</td>${bt(old && old.oos)}</tr>
+<tr><td class="lt">Trend breakout — out-of-sample</td>${bt(brk && brk.oos)}</tr>
+<tr><td class="lt">SPY buy &amp; hold — out-of-sample</td>${bt(btJ.spy && btJ.spy.oos)}</tr></tbody></table></div>
+<div class="mut" style="font-size:11.5px;margin-top:6px">RSI-2: ${live.t.n.toLocaleString()} trades · ${fmt(live.t.win, 1)}% won · ${sgn(live.t.exp)}% per trade after costs · profit factor ${fmt(live.t.pf, 2)}. Stocks only (no free historical option prices, so the CALL side is untested). Today’s big companies looking back flatters every result — treat it as an upper bound. Past results do not predict future results.</div></div>` : '';
+  return head + statusLine + evCard() + envCard + boxes + riskCard + perfCard + btCard + openTbl +
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? '' : ' · paper account (fake money)'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }

@@ -74,3 +74,23 @@ export function signalShortAt(bars, closes, i) {
   if (!(target < entry && entry < stop)) return null;
   return { entry: r2d(entry), stop: r2d(stop), target: r2d(target), strong: r2 >= 85, r2: Math.round(r2) };
 }
+
+// ---- RSI-2 mean reversion (the strategy the 33-year research selected) ----
+// Buy: completed close above its 200-day average AND RSI-2 below 10 (a sharp dip in an uptrend).
+// Sell: at the close once price is above its 5-day average, or after 10 sessions.
+export function rsi2Signal(bars, closes, i = closes.length - 1) {
+  if (i < 200) return null;
+  const s200 = sma(closes, 200, i), r = rsi2(closes, i);
+  if (s200 == null || r == null || !(closes[i] > s200 && r < 10)) return null;
+  let rg = 0; for (let k = i - 9; k <= i; k++) rg += bars[k].h - bars[k].l;
+  return { r2: Math.round(r * 10) / 10, prevClose: closes[i], riskUnit: r2d(3 * rg / 10), s200: r2d(s200) };
+}
+// Exit check during the last minutes of the session: `price` stands in for today's close.
+export function rsi2Exit(completedCloses, price, sessionsHeld, maxHold = 10) {
+  const last4 = completedCloses.slice(-4);
+  if (last4.length < 4) return { exit: sessionsHeld >= maxHold, why: 'max hold' };
+  const s5 = (last4.reduce((a, b) => a + b, 0) + price) / 5;
+  if (price > s5) return { exit: true, why: `closed above its 5-day average (${r2d(s5)})` };
+  if (sessionsHeld >= maxHold) return { exit: true, why: `held ${sessionsHeld} sessions` };
+  return { exit: false, s5: r2d(s5) };
+}

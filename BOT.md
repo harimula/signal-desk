@@ -1,109 +1,72 @@
-# Signal Desk trading bot — setup (paper money first)
+# Signal Desk trading bot
 
-The bot trades an **Alpaca paper account** — fake money, real market prices — using the
-same rules as the dashboard's Day trading tab. It runs on GitHub Actions and **watches every second** for the whole session: a quick
-check each second (prices, fills, option levels) and a full decision cycle every 20 seconds
-— instantly when the quick check sees a fill or a trigger. No computer of yours needs to
-stay on.
+Paper money first: the bot trades an **Alpaca paper account** (fake money, real prices).
+It runs on GitHub Actions and watches every second during market hours. No computer of
+yours needs to stay on.
 
-It can hold several stocks at once (default 6) and re-enter a stock after a target or
-stop hits (default 2 entries per stock per day) — multiple trades per day by design.
+## Why it trades what it trades
+`bot/research.mjs` tested four strategies on 39 large US stocks from 1993 to 2026, with
+0.05% costs per side, 10% of equity per position and at most 6 positions, judged on the
+last 30% of years (2016–2026), which were never used to choose anything:
 
-## 1. Create a free Alpaca account (you do this part)
-1. Sign up at https://alpaca.markets (choose the free individual account).
-2. In the dashboard, make sure the **Paper** toggle (top-left) is on.
-3. Go to the API keys panel and generate a key pair for the PAPER account.
+| Strategy | Out-of-sample yearly return | Sharpe | Max drawdown |
+|---|---|---|---|
+| **RSI-2 dip buying (what the bot runs)** | **+16.4%** | **1.45** | **−11.9%** |
+| Old intraday pullback rules (retired) | −4.1% | −0.86 | −35.0% |
+| Trend breakout | +7.2% | 0.70 | −13.6% |
+| SPY buy & hold | +13.3% | 0.79 | −34.1% |
 
-## 2. Give the keys to the bot (GitHub secrets — not in code)
-Repo → Settings → Secrets and variables → Actions → New repository secret:
-- `ALPACA_KEY` — the key id
-- `ALPACA_SECRET` — the secret
+Full table: `bot/research_report.md` (re-run: Actions → strategy-research → Run workflow).
+Survivorship bias (today's big companies, looking back) flatters every result — treat them
+as an upper bound. Past results do not predict future results.
 
-Secrets are encrypted and never appear in the code or logs.
+## The strategy
+- **Buy:** a stock whose last close is above its 200-day average with RSI-2 below 10 (a
+  sharp dip inside an uptrend). Bought in the first trading hour (from 9:45, after 10:15 on
+  CPI/jobs days), deepest dip first. Skipped if it already bounced 1%+ since yesterday's close.
+- **Sell:** in the last 10 minutes of the session once the price is above its 5-day average,
+  or after 10 sessions. No stop order — the version with a stop did worse in testing — but a
+  25% hard floor stays on as a disaster brake.
+- **CALLs** on the same dips: strike nearest the price, expiry 14–35 days. Sold with the
+  stock's exit, at +50% (resting order at the broker), at −50%, or 3 days before expiry.
+  Options were *not* backtested (no free historical option prices).
 
-## 3. Turn it on
-Actions tab → "paper-trade-bot" → enable. It then runs itself every 5 minutes while the
-market is open. Watch results at https://app.alpaca.markets (paper).
+## Professional risk controls
+- **Position sizing:** each stock trade is sized so a 3×-average-range move against it costs at
+  most **0.5%** of the account, and never more than 10% of the account per position.
+  Option trades: the −50% stop costs at most 0.5% of the account.
+- **Total risk cap:** money at risk across all open positions and pending orders ≤ **3%**.
+- **Sector cap:** at most **2** positions per sector.
+- **Circuit breakers:** stop for the day after **3** losing trades in a row or **−3%** on the
+  day; no new trades after **−6%** in a week.
+- **Stale orders:** entries unfilled after 45 minutes are cancelled.
+- **Idempotency:** the same order can never be sent twice.
+- **News & events guard:** Fed decision days (no new trades 1:30–3:00pm, no new options, half
+  size), CPI/jobs/PPI mornings (wait until 10:15), Fed minutes (paused 1:45–2:30pm), breaking
+  war/policy/crisis headlines (30-minute pause), company news or earnings (stock skipped).
+- **Kill switch:** add a file named `bot/STOP` → everything is cancelled and sold within seconds.
 
-## What it trades
-**Stock day trades** — buy limit at S3 when a stock closed above its 20-day average with
-RSI-2 ≤ 40. The moment it fills, a sell limit sits at the broker at **+1% or the R1 target,
-whichever comes first** — profit is taken early, any time of day, and the slot frees up for
-the next trade (up to 3 trades per stock per day). At 3:45pm ET anything still open that is
-a winner or a small loser is sold.
-**A stock down more than 1.5% at the close is HELD instead of sold at a loss** — it gets a
-sell limit at breakeven (+0.3%) and waits to recover. Two guards stay on: a hard floor at
-−25% and a 30-day maximum hold.
+## Monitoring
+- **Bot trades tab** on your site: running / not-reporting status, risk dashboard (regime,
+  money at risk vs cap, sectors), performance (expectancy, profit factor, win rate, drawdown,
+  by Stock/Call), the 33-year scorecard, and every trade with entry and exit times.
+- **Phone alerts (optional, free):** install the **ntfy** app, subscribe to a hard-to-guess
+  topic name (e.g. `signaldesk-7f3k29q`), and add that name as the repo secret `NTFY_TOPIC`.
+  You get a push for every buy/sell, every circuit-breaker halt and any bot error.
+- **Tests:** `node bot/test.mjs` (29 checks) runs automatically on every change.
 
-**CALLs** on the same uptrend setups, **PUTs** on the mirror setups (downtrend stock that
-bounced up hard, RSI-2 ≥ 60) — bought only once the stock actually touches the trigger
-level. Strike nearest the trigger, expiry 6–17 days out, skipped if the bid/ask spread is
-wider than 20%. Exits: a sell limit at **+50%** sits at the broker from the moment it fills (instant
-profit-taking); all out at −50%, all by 3:40pm the next session, never into expiry day. Options are never held at a loss "to recover" — they decay.
+## Setup (about 10 minutes)
+1. Sign up free at https://alpaca.markets, switch to **Paper**, generate API keys.
+2. Repo → Settings → Secrets and variables → Actions → add `ALPACA_KEY`, `ALPACA_SECRET`
+   (and optionally `NTFY_TOPIC`). Never paste keys into chat or code.
+3. Actions tab → enable **paper-trade-bot**.
 
-Stands aside the first 15 minutes; no new entries after 3:00pm. If the account is down 3%
-on the day it stops opening trades and closes its options (held stocks stay).
+## Tuning (Settings → Secrets and variables → Actions → Variables)
+`BOT_RISK_PCT` (0.5) · `BOT_MAX_HEAT` (3) · `BOT_MAX_PER_SECTOR` (2) · `BOT_PER_TRADE` (0 = 10% of
+equity) · `BOT_OPT_BUDGET` (0 = 2% of equity) · `BOT_OPT_TAKE_PROFIT` (50) · `BOT_MAX_POSITIONS` (6)
+· `BOT_MAX_OPTIONS` (4) · `BOT_HOLD_FLOOR` (25) · `BOT_STOCKS` / `BOT_OPTIONS` (0 = off) · `BOT_SYMBOLS`.
 
-Alpaca paper accounts normally have options enabled; if options orders are rejected, turn
-options on in the Alpaca dashboard (paper) or set `BOT_OPTIONS=0`.
-
-## Watching it
-Your site's **Bot trades** tab shows every trade — bought when, sold when, at what price —
-day-by-day P/L, total realized P/L, open positions and the account value. It reads
-`bot/journal.json`, which the bot updates after trades and about every 30 minutes.
-
-## Controls (Settings → Secrets and variables → Actions → Variables)
-`BOT_PER_TRADE` ($500 per stock trade), `BOT_OPT_BUDGET` ($300 per option trade),
-`BOT_MAX_POSITIONS` (6 stocks), `BOT_MAX_OPTIONS` (4), `BOT_HOLD_LOSS` (1.5),
-`BOT_HOLD_FLOOR` (25), `BOT_TAKE_PROFIT` (1 = +1% stock quick profit),
-`BOT_OPT_TAKE_PROFIT` (50 = +50% option profit), `BOT_MAX_ENTRIES_PER_SYM` (3),
-`BOT_STOCKS` / `BOT_OPTIONS` (set to 0 to switch either off).
-
-## Kill switch
-Create a file named `bot/STOP` in the repo (GitHub → Add file). Next run (≤5 min) the bot
-cancels all orders, sells everything, and halts until you delete the file.
-
-## The 40-year backtest
-Actions tab → "backtest" → Run workflow. It pulls up to 40 years of daily bars for 40
-long-lived symbols, replays the same rules, and commits `bot/backtest_report.md` with
-overall, per-year and per-symbol results. Honest limits: daily bars (40-year minute data
-does not exist), one trade/symbol/day in the test, no fees, survivorship bias.
-
-## Real money — read this first
-Run paper for at least 1–2 months and compare with the backtest. If you ever switch
-(`ALPACA_URL=https://api.alpaca.markets` + live keys), that decision and those keys are
-yours alone, losses included. This is a rules demo, not financial advice.
-
-## How the every-second watching works
-GitHub can only *start* a job every 5 minutes, so each job starts once and stays alive for
-the session (up to ~5h45m — GitHub's limit is 6h); the next scheduled job waits in the queue
-and takes over the moment the first one ends. Each second it makes 1–2 light requests
-(positions, latest prices); every 20 seconds, or the instant it sees a fill or a price
-touching a trigger, it runs a full cycle. That stays under Alpaca's 200-requests/minute limit.
-Profit-taking sell orders rest at Alpaca, so they fill at broker speed regardless.
-Keep the repo public: public repos get unlimited free Actions minutes (a private repo would
-burn ~8,000 minutes a month this way).
-
-## News & events guard
-The bot does not trade blind into the news. Before every entry it checks:
-
-**Scheduled releases** (`events.json`, from the Fed and BLS calendars):
-- **Fed decision days (FOMC)** — half size all day, no new options, closes options at
-  1:50pm, no new trades 1:30–3:00pm (statement 2:00, press conference 2:30).
-- **CPI / jobs / PPI days** (8:30am releases) — no entries until 10:15, half size until 11:00.
-- **Fed minutes** — paused 1:45–2:30pm.
-
-**Live headlines** (Alpaca's Benzinga news feed, included with your Alpaca keys), scanned every minute:
-- War / geopolitics, White House & policy (tariffs, executive orders, sanctions, shutdowns),
-  or crisis headlines (bank failures, defaults, crashes, halts) in the last 30 minutes —
-  **all new entries pause for 30 minutes**.
-- Fed / macro headlines are tracked and shown, and feed the scheduled-event rules above.
-- **Company news**: a stock with fresh news in the last 2 hours, or earnings talk in the last
-  3 days, is skipped — it can gap through any level.
-
-**Market tone** (SPY vs yesterday's close):
-- SPY down 1% or more — no new stock buys or CALLs (PUTs still allowed).
-- SPY up 1% or more — no new PUTs.
-
-Everything it decided shows in the **Bot trades** tab under "Bot's market check".
-Add each new year's FOMC/CPI dates to `events.json` when the agencies publish them.
+## Real money
+Run paper for at least 2–3 months and compare live results with the research. If you ever
+switch (`ALPACA_URL=https://api.alpaca.markets` + live keys), that decision and those keys are
+yours alone, losses included. This is a rules engine, not financial advice.

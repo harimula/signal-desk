@@ -58,8 +58,8 @@ export function guard({ events, todayDash, mins, headlines = [], spyPct = null, 
   }
   // market tone: a big down day blocks new longs/CALLs, a big up day blocks new PUTs
   if (spyPct != null) {
-    if (spyPct <= -1) { out.noLongs = true; out.reasons.push(`SPY ${spyPct.toFixed(2)}% today — risk-off: no new stock buys or CALLs (PUTs allowed)`); }
-    if (spyPct >= 1) { out.noPuts = true; out.reasons.push(`SPY +${spyPct.toFixed(2)}% today — strong tape: no new PUTs`); }
+    if (spyPct <= -1) out.reasons.push(`SPY ${spyPct.toFixed(2)}% today \u2014 a sell-off day; RSI-2 dip buys are built for days like this`);   // informational: RSI-2's tested edge comes from buying sell-offs
+    if (spyPct >= 1) out.reasons.push(`SPY +${spyPct.toFixed(2)}% today \u2014 strong day; few RSI-2 dips expected`);
   }
   out.flagged = out.flagged.slice(0, 12);
   return out;
