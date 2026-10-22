@@ -318,7 +318,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   <li><b>Entries:</b> 9:45–11:00 ET (after 10:15 on CPI/jobs days); resting limit orders at the broker.</li>
   <li><b>Exits:</b> last 10 minutes once the close is above the 5-day average, or after 10 sessions. A 25 % hard floor is a disaster brake and fires within a second off the stream.</li>
   <li><b>Options:</b> CALL at the nearest strike, 14–35 days to expiry, on the same dips; take-profit +50 % as a resting order, stop −50 %, closed 3 days before expiry. Skipped under the pattern-day-trader guard when equity is under $25 000.</li>
-  <li><b>Guards:</b> FOMC/CPI/jobs windows, live headline scan (war, White House, Fed, crisis), SPY tone; daily −3 % and weekly −6 % loss caps; 3-loss streak pause; stale orders cancelled after 45 min.</li>
+  <li><b>Guards:</b> FOMC/CPI/jobs windows, live headline scan (war, White House, Fed, crisis — whole-word matching; a single company halting skips only that ticker), SPY tone; daily −3 % and weekly −6 % loss caps; 3-loss streak pause; stale orders cancelled after 45 min.</li>
 </ul>
 
 <h3>Real-time engine</h3>
@@ -424,7 +424,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <section id="testing">
 <h2><span class="k">08</span>Testing and quality</h2>
 <ul>
-  <li><code>bot/test.mjs</code>: 29 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
+  <li><code>bot/test.mjs</code>: 33 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
   <li>Integration tests against mock brokers (REST + websocket) with a fake clock: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.</li>
   <li>Page checks in headless Chromium at desktop and phone widths for every tab, including scroll preservation during live ticks.</li>
   <li>Research and backtest workflows produce reproducible reports committed to the repo.</li>

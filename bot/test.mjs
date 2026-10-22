@@ -66,5 +66,32 @@ test('keeps company stories and aliases', () => { assert.equal(relevant({ h: 'Mi
 test('drops industry-report spam', () => { assert.equal(relevant({ h: 'Global Market Report 2026-2030 | IBM, TCS' }, keysFor('TCS.NS', 'Tata Consultancy Services Limited')), false); });
 test('RSS parsing decodes entities and tags', () => { const x = parseRss('<item><title>A &amp; B</title><link>u</link><pubDate>Wed, 21 Oct 2026 18:30:00 GMT</pubDate><description>&lt;p&gt;Hi&lt;/p&gt;</description></item>', 'S'); assert.equal(x[0].h, 'A & B'); assert.equal(x[0].sum, 'Hi'); });
 
+console.log('News classifier');
+test('keywords match whole words only', () => {
+  assert.equal(classify('Stewart Information Servs Q3 Earnings Call Transcript').length, 0);
+  assert.equal(classify('Upgrade Legacy Applications, Software Delivery').length, 0);
+  assert.equal(classify('Warner Bros opens a warehouse').length, 0);
+  assert.ok(classify('Russia launches a missile attack on Kyiv').includes('war'));
+  assert.ok(classify('Escalating airstrikes reported').includes('war'));
+  assert.ok(classify('White House announces new tariffs').includes('policy'));
+});
+test('one stock halting is not a market crisis', () => {
+  const c = classify('POMDOCTOR Shares Halted On Circuit Breaker To The Downside');
+  assert.ok(c.includes('single'));
+  assert.ok(!c.includes('crisis'));
+  assert.ok(classify('Regional bank failure sparks contagion fears').includes('crisis'));
+});
+test('noise headlines do not pause the bot', () => {
+  const g = guard({ events: [], todayDash: '2026-10-22', mins: 585,
+    headlines: [{ headline: 'Stewart Information Servs Q3 2026 Earnings Call Transcript', created_at: new Date().toISOString() },
+                { headline: 'Tech Mahindra Partners On Software Delivery', created_at: new Date().toISOString() }] });
+  assert.equal(g.block, false);
+});
+test('a real war headline still pauses the bot', () => {
+  const g = guard({ events: [], todayDash: '2026-10-22', mins: 585,
+    headlines: [{ headline: 'Missile attack on Kyiv escalates', created_at: new Date().toISOString() }] });
+  assert.equal(g.block, true);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

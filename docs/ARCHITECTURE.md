@@ -322,7 +322,7 @@ flowchart TD
 - **Entries:** 9:45–11:00 ET (after 10:15 on CPI/jobs days); limit orders at the broker.
 - **Exits:** last 10 minutes once the close is above the 5-day average, or after 10 sessions. A 25 % hard floor is a disaster brake (fires within a second off the stream).
 - **Options:** CALL nearest strike, 14–35 days to expiry, same dips; take-profit +50 % as a resting order, stop −50 %, closed 3 days before expiry. Skipped under the pattern-day-trader guard when equity < $25 000.
-- **Guards:** FOMC/CPI/jobs calendar windows, live headline scan (war, White House, Fed, crisis keywords), SPY tone; daily (−3 %) and weekly (−6 %) loss caps; 3-loss streak pause; stale orders cancelled after 45 min.
+- **Guards:** FOMC/CPI/jobs calendar windows, live headline scan (war, White House, Fed, crisis keywords — matched on whole words, so "Stewart" and "Software" are not war headlines; a single company halting is tagged `single` and skips only that ticker), SPY tone; daily (−3 %) and weekly (−6 %) loss caps; 3-loss streak pause; stale orders cancelled after 45 min.
 
 ### 5.3 Real-time engine
 
@@ -437,7 +437,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 ## 8. Testing and quality
 
-- `bot/test.mjs`: 29 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.
+- `bot/test.mjs`: 33 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.
 - Integration tests against **mock brokers** (REST + websocket) with a fake clock, covering: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.
 - Page checks in headless Chromium at desktop and phone widths for every tab, including scroll-position preservation during live ticks.
 - Research/backtest workflows produce reproducible reports committed to the repo.

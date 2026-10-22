@@ -3,18 +3,27 @@
 import fs from 'node:fs';
 
 export const KEYWORDS = {
-  war:    ['war', 'missile', 'invasion', 'invade', 'airstrike', 'military strike', 'troops', 'nuclear', 'attack on', 'terror', 'escalat', 'blockade'],
-  policy: ['white house', 'tariff', 'executive order', 'trade war', 'export control', 'sanction', 'government shutdown', 'debt ceiling', 'impeach'],
+  war:    ['war', 'wars', 'warfare', 'missile', 'missiles', 'invasion', 'invade', 'invaded', 'airstrike', 'air strike', 'military strike', 'troops', 'nuclear', 'attack on', 'terror*', 'escalat*', 'blockade', 'ceasefire'],
+  policy: ['white house', 'tariff*', 'executive order', 'trade war', 'export control*', 'sanction*', 'government shutdown', 'debt ceiling', 'impeach*'],
   fed:    ['fomc', 'federal reserve', 'fed chair', 'powell', 'rate hike', 'rate cut', 'emergency rate', 'fed minutes', 'fed holds', 'fed raises', 'fed cuts'],
   macro:  ['cpi', 'inflation', 'jobs report', 'payrolls', 'unemployment rate', 'gdp', 'recession', 'pce'],
-  crisis: ['bank failure', 'bank run', 'default', 'market crash', 'circuit breaker', 'trading halt', 'bankrupt', 'contagion', 'flash crash'],
+  crisis: ['bank failure', 'bank run', 'market crash', 'flash crash', 'contagion', 'systemic risk', 'credit crisis', 'market-wide halt'],
+  single: ['circuit breaker', 'trading halt', 'halted', 'bankrupt*', 'chapter 11', 'default*', 'delisted'],
 };
 const HIGH = ['war', 'policy', 'crisis'];                      // categories that pause new trades on their own
+// 'single' is deliberately NOT high-impact: one company halting is news for that ticker
+// (symbolRisk skips it), not a reason to stop trading everything else.
+
+// Whole-word matching. Substring matching once made "Stewart" and "Software" look like war
+// headlines, which paused the bot all day. A trailing * keeps a deliberate stem (terror*).
+const RX = {};
+const rxFor = w => RX[w] || (RX[w] = new RegExp(
+  '\\b' + w.replace(/\*$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (w.endsWith('*') ? '' : '\\b'), 'i'));
 
 export function classify(text) {
-  const t = (' ' + (text || '') + ' ').toLowerCase();
+  const t = ' ' + (text || '') + ' ';
   const hits = [];
-  for (const [cat, words] of Object.entries(KEYWORDS)) if (words.some(w => t.includes(w))) hits.push(cat);
+  for (const [cat, words] of Object.entries(KEYWORDS)) if (words.some(w => rxFor(w).test(t))) hits.push(cat);
   return hits;
 }
 
