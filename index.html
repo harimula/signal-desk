@@ -223,6 +223,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
   .card{border-radius:8px}
   .dh{padding:12px 12px 8px}
 }
+@media (hover:none) and (pointer:coarse){.twbtn{display:none!important}.twwrap{padding:0}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
@@ -843,7 +844,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792633568';
+const BUILD_V = '1792633751';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
