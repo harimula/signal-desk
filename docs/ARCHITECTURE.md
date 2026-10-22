@@ -469,6 +469,7 @@ Bot settings, type the confirmation. Lower the risk profile first. Mind the patt
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | Portfolio: **commodities** (gold, silver, WTI/Brent crude, natural gas, copper, platinum via Yahoo continuous futures in `symbols.json`; gold in grams / 10 g and silver per kg priced in ₹ from the troy-ounce quote × USD→INR), a Commodities price strip, and an **Everything together** tile showing the whole portfolio in both USD and INR at an owner-set USD→INR rate (`sd-fx`, synced) or the live `USDINR=X` quote | §2.2, §4.2 |
 | 2026-10-22 | Fix: the watch list was only built after the entry gates (loss cap, entry window, news pause), so a paused or after-3 PM session published no card. Now built every cycle (every 20 s while gated) with an `idle` reason shown on the card | §5.5 |
 | 2026-10-22 | Settings guide `docs/settings.html` (every control, default, range, when to change, common setups), linked from the Bot settings tab; maintenance rule extended: keep it current with every settings change | §3.2, §9 |
 | 2026-10-22 | Watch card shows trigger prices: for every watched stock the close that would push RSI-2 under the buy level (`rsi2Trigger`, bisection) and, with puts on, over the put level; for every holding the exit level (average of the last 4 closes = the 5-day-average crossing, `rsi2ExitLevel`), hard floor, and for options take-profit, stop and expiry | §5.2, §5.5, §8 |

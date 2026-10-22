@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-aTlRd1kqjqMgEnXxhIT3I4DqXvYHI9jdLQYyXFNokwQ=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-+uYvBv0wug17Thsp7rlYP61dp7W3/p15mKamHm6hgCU=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -743,12 +743,14 @@ async function refreshAll(auto) {
   if (rfBusy) return; rfBusy = true;
   const btn = $('#rfBtn'), msg = $('#rfMsg'); btn.disabled = true;
   const syms = Object.keys(DATA.rows), cids = Object.keys(custom);
-  const total = syms.length + cids.length; let done = 0, fail = 0, snapFill = 0, firstErr = '';
+  let total = syms.length + cids.length; let done = 0, fail = 0, snapFill = 0, firstErr = '';
   const newest = {US: 0, IN: 0};
   const tick = () => { msg.textContent = 'Getting live prices… ' + done + ' of ' + total; };
   msg.textContent = 'Finding a live price feed…';
   let LJ = null;
   try { const lr = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (lr.ok) LJ = await lr.json(); } catch (e) {}
+  // commodities and the USD→INR quote come only from live.json (they are not part of the built-in stock universe)
+  if (LJ && LJ.rows) for (const k of Object.keys(LJ.rows)) if (k.includes('=') && !DATA.rows[k]) { DATA.rows[k] = LJ.rows[k]; if (!syms.includes(k)) syms.push(k); total = syms.length + cids.length; }
   await pickRoute();
   const slowRelay = feedRoute && feedRoute.name === 'a free relay';
   const useLJ = (!feedRoute || slowRelay) && !!(LJ && LJ.rows);
@@ -868,7 +870,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792694915';
+const BUILD_V = '1792696545';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1151,6 +1153,27 @@ $('#maT').addEventListener('change', e => { maT = e.target.value; save('sd-mat',
 let db = null, reqs = {}, custom = {}, dbState = 'loading', reqAt = 0;
 let recsDocs = {}, recsReady = false, recsWritable = true, recsSyncing = false;
 const idOf = s => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+// Commodities for the Portfolio tab: Yahoo continuous-futures prices, shown in the unit people actually hold.
+// Gram / kilo rupee versions convert the dollar-per-troy-ounce price with the USD→INR rate (31.1035 g per troy oz).
+const OZ_G = 31.1035;
+const CMD = [
+  {k: 'GOLD', sym: 'GC=F', name: 'Gold', unit: 'troy oz', cur: '$'},
+  {k: 'GOLDG', sym: 'GC=F', name: 'Gold (grams, ₹)', unit: 'gram', cur: '₹', conv: px => px / OZ_G * fxRate()},
+  {k: 'GOLD10G', sym: 'GC=F', name: 'Gold (10 grams, ₹)', unit: '10 g', cur: '₹', conv: px => px / OZ_G * 10 * fxRate()},
+  {k: 'SILVER', sym: 'SI=F', name: 'Silver', unit: 'troy oz', cur: '$'},
+  {k: 'SILVERKG', sym: 'SI=F', name: 'Silver (kg, ₹)', unit: 'kg', cur: '₹', conv: px => px / OZ_G * 1000 * fxRate()},
+  {k: 'OIL', sym: 'CL=F', name: 'Crude oil (WTI)', unit: 'barrel', cur: '$'},
+  {k: 'BRENT', sym: 'BZ=F', name: 'Crude oil (Brent)', unit: 'barrel', cur: '$'},
+  {k: 'NATGAS', sym: 'NG=F', name: 'Natural gas', unit: 'MMBtu', cur: '$'},
+  {k: 'COPPER', sym: 'HG=F', name: 'Copper', unit: 'lb', cur: '$'},
+  {k: 'PLATINUM', sym: 'PL=F', name: 'Platinum', unit: 'troy oz', cur: '$'},
+];
+const cmdOf = k => CMD.find(c => c.k === k);
+// USD→INR: the owner's own rate wins; otherwise the live USDINR=X quote from the price feed; otherwise a sane fallback.
+let fxManual = +load('sd-fx', 0) || 0;
+const fxLive = () => { const r = DATA.rows && DATA.rows['USDINR=X']; const px = r && +r[1]; return px > 0 ? px : 0; };
+const fxRate = () => fxManual > 0 ? fxManual : (fxLive() || 84);
+const cmdPx = sym => { const r = DATA.rows && DATA.rows[sym]; if (r) return { px: +r[1], chg: r[2] > 0 ? (+r[1] / +r[2] - 1) * 100 : 0 }; const c = Object.values(custom).find(x => x.sym === sym && x.rec); return c ? { px: +c.rec[1], chg: c.rec[2] > 0 ? (+c.rec[1] / +c.rec[2] - 1) * 100 : 0 } : null; };
 function analyseCustom() {
   const out = [];
   for (const [id, r] of Object.entries(reqs)) {
@@ -1215,7 +1238,16 @@ async function syncRecs() {
 }
 
 // ---------- portfolio ----------
-async function addHolding(sym, market, qty, cost) {
+async function addHolding(sym, market, qty, cost, cmk) {
+  if (market === 'CM') {
+    const c = cmdOf(cmk); if (!c) return 'Pick a commodity.';
+    qty = parseFloat(qty); cost = parseFloat(cost);
+    if (!(qty > 0)) return 'Enter how much you hold (' + c.unit + ').';
+    const id = idOf(c.sym + '_' + c.k);
+    pf[id] = {sym: c.sym, market: 'CM', cm: c.k, qty, cost: cost > 0 ? cost : 0, at: Date.now(), pfid: pfOf(tab) || pfolios[0].id}; save('sd-pf', pf);
+    if (!DATA.rows[c.sym] && !custom[idOf(c.sym)]) { try { const r = await pullSym(c.sym); custom[idOf(c.sym)] = {sym: c.sym, market: 'US', rec: r.rec, closes: r.closes, bars: r.bars, cur: '$', liveAt: r.liveAt}; save('sd-my', custom); } catch (e) { return 'Saved, but could not download the ' + c.name + ' price yet: ' + (e.message || e); } }
+    return '';
+  }
   sym = sym.trim().toUpperCase().replace(/\s+/g, '');
   if (!/^[A-Z0-9.\-^=&]{1,20}$/.test(sym)) return 'Enter a valid symbol, for example AAPL or TCS.';
   if (market === 'IN' && !/\.(NS|BO)$/.test(sym) && !sym.startsWith('^')) sym += '.NS';
@@ -1260,6 +1292,13 @@ async function deletePortfolio(id) {
 }
 function pfRows(pfid) {
   return Object.entries(pf).filter(([id, h]) => (h.pfid || 'p1') === pfid).map(([id, h]) => {
+    if (h.market === 'CM') {
+      const c = cmdOf(h.cm), q = c && cmdPx(c.sym);
+      if (!c || !q || !(q.px > 0)) return {id, h, s: null, val: 0, cost: h.cost ? h.qty * h.cost : 0, pl: null, day: 0};
+      const px = c.conv ? c.conv(q.px) : q.px, s = {sym: c.sym, market: 'US', cur: c.cur, name: c.name + ' · per ' + c.unit, px, chg: q.chg, rating: 'Hold', cm: c};
+      const val = h.qty * px, cost = h.cost ? h.qty * h.cost : 0;
+      return {id, h, s, val, cost, pl: h.cost ? val - cost : null, day: val - val / (1 + s.chg / 100)};
+    }
     const mk = MK[h.market === 'IN' ? 'IN' : 'US'];
     let s = null;
     if (DATA.rows[h.sym]) { s = mkRec(h.sym, DATA.rows[h.sym], F); s.market = mk.code; s.cur = mk.cur; s.industry = 'Portfolio'; rateOne(s, mk.bench, mk.bench); }
@@ -1273,9 +1312,10 @@ function pfView(pfid) {
   const list = pfRows(pfid);
   const note = `<div class="banner info">Your portfolio is saved in this browser.</div>`;
   const form = `<div class="card addrow">
-<label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Ticker<input id="pfSym" placeholder="AAPL or TCS" maxlength="20" autocapitalize="characters" style="width:120px"></label>
-<label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Market<select id="pfMk"><option value="US">USA</option><option value="IN">India (NSE)</option></select></label>
-<label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Shares<input id="pfQty" type="number" step="any" min="0" inputmode="decimal" style="width:92px"></label>
+<label class="mut" id="pfSymWrap" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Ticker<input id="pfSym" placeholder="AAPL or TCS" maxlength="20" autocapitalize="characters" style="width:120px"></label>
+<label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Market<select id="pfMk"><option value="US">USA</option><option value="IN">India (NSE)</option><option value="CM">Commodity</option></select></label>
+<label class="mut" id="pfCmWrap" style="font-size:12px;display:none;flex-direction:column;gap:3px">Commodity<select id="pfCm">${CMD.map(c => `<option value="${c.k}">${esc(c.name)} — per ${esc(c.unit)}</option>`).join('')}</select></label>
+<label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px"><span id="pfQtyLab">Shares</span><input id="pfQty" type="number" step="any" min="0" inputmode="decimal" style="width:92px"></label>
 <label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Avg buy price<input id="pfCost" type="number" step="any" min="0" inputmode="decimal" style="width:112px"></label>
 <button class="btn" id="pfBtn" type="button">Add holding</button><span id="pfMsg" class="mut" style="font-size:12px"></span></div>`;
   const groups = {};
@@ -1284,18 +1324,29 @@ function pfView(pfid) {
     const val = rs.reduce((t, r) => t + r.val, 0), cost = rs.reduce((t, r) => t + r.cost, 0);
     const hasCost = rs.every(r => r.h.cost > 0), pl = hasCost ? val - cost : null;
     const day = rs.reduce((t, r) => t + r.day, 0);
-    return `<div class="card mt"><div class="mth"><span class="msym">${c === '₹' ? 'India holdings' : 'US holdings'}</span><span class="mut" style="font-size:11px">${rs.length} position${rs.length > 1 ? 's' : ''}</span></div>
+    return `<div class="card mt"><div class="mth"><span class="msym">${c === '₹' ? 'Rupee holdings' : 'Dollar holdings'}</span><span class="mut" style="font-size:11px">${rs.length} position${rs.length > 1 ? 's' : ''}</span></div>
 <div class="mpx">${c}${fmt(val, 0)}</div>
 <div class="mchg ${day >= 0 ? 'pos' : 'neg'}">${sgn(day)} in the last session</div>
 ${pl != null ? `<div class="kv"><span>Cost basis</span><b>${c}${fmt(cost, 0)}</b></div><div class="kv"><span>Open P&amp;L</span><b class="${pl >= 0 ? 'pos' : 'neg'}">${sgn(pl)} · ${cost ? sgn(pl / cost * 100) : '–'}%</b></div>` : `<div class="kv"><span>Open P&amp;L</span><b>add buy prices to see it</b></div>`}</div>`;
   }).join('');
+  // everything together, in both currencies, at the owner's rate (or the live USD→INR quote)
+  const have = list.filter(r => r.s), fx = fxRate();
+  const totUsd = have.reduce((t, r) => t + (r.s.cur === '₹' ? r.val / fx : r.val), 0), dayUsd = have.reduce((t, r) => t + (r.s.cur === '₹' ? r.day / fx : r.day), 0);
+  const costUsd = have.every(r => r.h.cost > 0) ? have.reduce((t, r) => t + (r.s.cur === '₹' ? r.cost / fx : r.cost), 0) : null, plUsd = costUsd != null ? totUsd - costUsd : null;
+  const allTile = have.length ? `<div class="card mt" style="border-left:4px solid var(--accent)"><div class="mth"><span class="msym">Everything together</span><span class="mut" style="font-size:11px">${have.length} position${have.length > 1 ? 's' : ''}</span></div>
+<div class="mpx">$${fmt(totUsd, 0)} <span class="mut" style="font-size:14px;font-weight:600">· ₹${fmt(totUsd * fx, 0)}</span></div>
+<div class="mchg ${dayUsd >= 0 ? 'pos' : 'neg'}">${sgn(dayUsd)} · ₹${fmt(Math.abs(dayUsd * fx), 0)} in the last session</div>
+${plUsd != null ? `<div class="kv"><span>Open P&amp;L</span><b class="${plUsd >= 0 ? 'pos' : 'neg'}">${sgn(plUsd)} · ₹${fmt(Math.abs(plUsd * fx), 0)}${costUsd ? ' · ' + sgn(plUsd / costUsd * 100) + '%' : ''}</b></div>` : ''}
+<div class="kv" style="align-items:center;gap:6px;flex-wrap:wrap"><span>USD→INR rate</span><span style="display:flex;gap:6px;align-items:center"><input id="pfFx" type="number" step="0.01" min="1" inputmode="decimal" value="${fxManual > 0 ? fxManual : ''}" placeholder="${fmt(fxLive() || 84, 2)}" aria-label="USD to INR rate" style="width:84px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--text)"><button class="btn ghost" id="pfFxSave" type="button" style="font-size:12px;padding:5px 10px">Set</button>${fxManual > 0 ? `<button class="btn ghost" id="pfFxLive" type="button" style="font-size:12px;padding:5px 10px" title="Use the live quote">Use live ${fxLive() ? fmt(fxLive(), 2) : ''}</button>` : `<span class="mut" style="font-size:11px">${fxLive() ? 'live quote' : 'no live quote yet — using 84'}</span>`}</span></div></div>` : '';
   const trs = list.map(r => {
     const h = r.h, s = r.s, c = s ? (s.cur || '$') : (h.market === 'IN' ? '₹' : '$');
-    if (!s) return `<tr><td><b>${esc(showSym(h.sym))}</b> <span class="tag">waiting for data</span></td><td>–</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
-    return `<tr data-s="${esc(s.sym)}" data-m="${s.market}"><td><b>${esc(showSym(s.sym))}</b> <span class="mut nm2">${esc((s.name || '').slice(0, 18))}</span></td><td>${pill(s.rating)}</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>${c}${fmt(s.px)}</td><td>${c}${fmt(r.val, 0)}</td><td class="${s.chg >= 0 ? 'pos' : 'neg'}">${sgn(s.chg)}%</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null ? '–' : sgn(r.pl)}</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null || !r.cost ? '–' : sgn(r.pl / r.cost * 100) + '%'}</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
+    if (!s) return `<tr><td><b>${esc(h.cm && cmdOf(h.cm) ? cmdOf(h.cm).name : showSym(h.sym))}</b> <span class="tag">waiting for data</span></td><td>–</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
+    return `<tr data-s="${esc(s.sym)}" data-m="${s.market}"><td><b>${esc(s.cm ? s.cm.name : showSym(s.sym))}</b> <span class="mut nm2">${esc(s.cm ? 'per ' + s.cm.unit : (s.name || '').slice(0, 18))}</span></td><td>${s.cm ? '<span class="mut">–</span>' : pill(s.rating)}</td><td>${fmt(h.qty, 2)}</td><td>${h.cost ? fmt(h.cost) : '–'}</td><td>${c}${fmt(s.px)}</td><td>${c}${fmt(r.val, 0)}</td><td class="${s.chg >= 0 ? 'pos' : 'neg'}">${sgn(s.chg)}%</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null ? '–' : sgn(r.pl)}</td><td class="${r.pl == null ? 'mut' : r.pl >= 0 ? 'pos' : 'neg'}">${r.pl == null || !r.cost ? '–' : sgn(r.pl / r.cost * 100) + '%'}</td><td><button class="btn ghost" data-rmpf="${esc(r.id)}" type="button">×</button></td></tr>`;
   }).join('');
   const tbl = list.length ? `<div class="tw card" style="margin-top:12px"><table id="pftab"><thead><tr><th>Holding</th><th>Rating</th><th>Shares</th><th>Avg cost</th><th>Price</th><th>Value</th><th>Day %</th><th>P&amp;L</th><th>P&amp;L %</th><th></th></tr></thead><tbody>${trs}</tbody></table></div>` : '<div class="card empty">No holdings yet. Add your first one above: ticker, how many shares, and what you paid on average.</div>';
-  return `<h2>${esc(pfName(pfid))}</h2>${note}${form}${tiles ? `<div class="grid regime" style="margin-top:4px">${tiles}</div>` : ''}${tbl}
+  const seen = new Set(), strip = CMD.filter(c => !c.conv && !seen.has(c.sym) && seen.add(c.sym)).map(c => { const q = cmdPx(c.sym); return q ? `<div class="mkst" style="gap:8px"><b>${esc(c.name)}</b> $${fmt(q.px)}<span class="mut" style="font-size:11px">/${esc(c.unit)}</span> <span class="${q.chg >= 0 ? 'pos' : 'neg'}" style="font-size:11.5px">${sgn(q.chg)}%</span></div>` : ''; }).filter(Boolean).join('');
+  const gold = cmdPx('GC=F'), cmCard = strip ? `<div class="card" style="padding:10px 16px;margin-top:8px;display:flex;gap:14px 22px;flex-wrap:wrap;align-items:center;font-size:13px"><b style="font-size:13.5px">Commodities</b>${strip}<span class="mut" style="font-size:11.5px">USD→INR ${fmt(fxRate(), 2)}${gold ? ' · gold ₹' + fmt(gold.px / OZ_G * fxRate(), 0) + '/g' : ''} · futures, updated with ↻ Refresh prices</span></div>` : '';
+  return `<h2>${esc(pfName(pfid))}</h2>${note}${cmCard}${form}${tiles ? `<div class="grid regime" style="margin-top:4px">${allTile}${tiles}</div>` : ''}${tbl}
 <div class="card addrow" style="margin-top:12px">
 <label class="mut" style="font-size:12px;display:flex;flex-direction:column;gap:3px">Portfolio name<input id="pfNm" value="${esc(pfName(pfid))}" maxlength="24" style="width:170px"></label>
 <button class="btn ghost" id="pfRen" type="button">Rename</button>
@@ -2478,6 +2529,7 @@ document.addEventListener('click', e => {
   else if (a === 'copyjson') stCopyJson();
   else stControl(a);
 });
+document.addEventListener('change', e => { if (e.target && (e.target.id === 'pfMk' || e.target.id === 'pfCm')) { const cm = $('#pfMk').value === 'CM'; $('#pfCmWrap').style.display = cm ? 'flex' : 'none'; $('#pfSymWrap').style.display = cm ? 'none' : 'flex'; const c = cm && cmdOf($('#pfCm').value); $('#pfQtyLab').textContent = c ? 'Quantity (' + c.unit + ')' : 'Shares'; } });
 document.addEventListener('change', e => { if (e.target && e.target.name === 'st-universe') { stCfg = stRead(); renderAll(); } });
 document.addEventListener('change', e => { if (e.target && e.target.id === 'jkeyShow') { const i = document.getElementById('jkeyIn'); if (i) i.type = e.target.checked ? 'text' : 'password'; } });
 // A typed number just updates the draft (no re-render, so the cursor and scroll stay put). Only controls that
@@ -2672,7 +2724,10 @@ function renderAll(bg) {
       catch (e2) { if (m2) m2.textContent = 'Could not copy \u2014 use the steps above.'; }
     }));
   } else if (pfOf(tab)) {
-    const go = async () => { $('#pfMsg').textContent = 'Saving…'; const msg = await addHolding($('#pfSym').value, $('#pfMk').value, $('#pfQty').value, $('#pfCost').value); renderAll(); const el2 = $('#pfMsg'); if (el2) el2.textContent = msg || 'Added.'; };
+    if ($('#pfFxSave')) $('#pfFxSave').addEventListener('click', () => { const v = parseFloat($('#pfFx').value); fxManual = v > 1 ? v : 0; save('sd-fx', fxManual); renderAll(); });
+    if ($('#pfFx')) $('#pfFx').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pfFxSave').click(); });
+    if ($('#pfFxLive')) $('#pfFxLive').addEventListener('click', () => { fxManual = 0; save('sd-fx', 0); renderAll(); });
+    const go = async () => { $('#pfMsg').textContent = 'Saving…'; const msg = await addHolding($('#pfSym').value, $('#pfMk').value, $('#pfQty').value, $('#pfCost').value, $('#pfCm') && $('#pfCm').value); renderAll(); const el2 = $('#pfMsg'); if (el2) el2.textContent = msg || 'Added.'; };
     if ($('#pfBtn')) {
       $('#pfBtn').addEventListener('click', go);
       $('#pfCost').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
@@ -2991,6 +3046,8 @@ window.addEventListener('popstate', () => { const d = $('#dlg'); if (d.open) { d
 
 $('#foot').innerHTML = `<b>How this works.</b> The <b>Rules</b> tab spells out every rule on this page: the full scoring table, rating bands, entry/stop/target construction, industry blending and call tracking. Signals are rule-based readouts of public daily data — a screen, not a forecast, and not financial advice. The page places no orders. <a href="docs/" target="_blank" rel="noopener" style="color:var(--tb);font-weight:700">📘 System documentation</a>`;
 renderAll(); refreshInfo();
+// commodities + USD→INR live only in live.json: pull them once at start so the Portfolio tab has them before the first refresh
+(async () => { try { const r = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const j = await r.json(); let n = 0; for (const k of Object.keys(j.rows || {})) if (k.includes('=') && !DATA.rows[k]) { DATA.rows[k] = j.rows[k]; n++; } if (n && pfOf(tab)) renderAll(); } catch (e) {} })();
 setTimeout(() => { try { syncPull(); } catch (e) {} }, 800);
 setInterval(chrome, 60000);
 </script>
