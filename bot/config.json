@@ -57,7 +57,13 @@
   "SOFI",
   "F"
  ],
- "updatedAt": "2026-10-22T16:12:36.000Z",
- "updatedBy": "Claude, at the owner's request",
- "liveConfirm": ""
+ "updatedAt": "2026-10-22T17:54:13.170Z",
+ "updatedBy": "settings page",
+ "liveConfirm": "",
+ "puts": true,
+ "intraday": false,
+ "universe": "list",
+ "stockUnit": "pct",
+ "callUnit": "pct",
+ "putUnit": "pct"
 }
