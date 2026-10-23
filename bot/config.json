@@ -20,7 +20,7 @@
  "entryEnd": "15:30",
  "optTakeProfit": 20,
  "optStop": 10,
- "holdFloor": 5,
+ "holdFloor": 25,
  "staleMin": 45,
  "newsGuard": true,
  "eventGuard": true,
