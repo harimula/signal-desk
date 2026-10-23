@@ -30,6 +30,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version-file: .nvmrc }
       - name: Headless Chromium
-        run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+        run: npm i --no-save playwright@1.49.1 libsodium@0.7.13 libsodium-wrappers@0.7.13 && npx playwright install --with-deps chromium
       - name: Page tests (every tab, CSP, settings save)
         run: node tools/page-test.mjs

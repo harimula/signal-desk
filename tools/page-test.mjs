@@ -5,6 +5,7 @@
 // Needs playwright (CI installs it; locally: npm i --no-save playwright@1.49.1 && npx playwright install chromium).
 import http from 'node:http';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const { chromium } = await import('playwright');
@@ -29,7 +30,9 @@ async function session(label, prep) {
   page.on('console', m => { if (m.type() === 'error' && !/net::|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text().slice(0, 160)); });
   await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI)); });
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'bot/config.json'), 'utf8'));
-  let sha = 'abc', puts = [];
+  let sha = 'abc', puts = [], secretPuts = [];
+  // the encryption library the page loads from jsDelivr, served from the locally installed package (same bytes, same SRI hash)
+  await page.route('https://cdn.jsdelivr.net/npm/**', route => { const m2 = /npm\/(libsodium(?:-wrappers)?)@[^/]+\/(.*)$/.exec(route.request().url()); const f = m2 && path.join(ROOT, 'node_modules', m2[1], m2[2]); return f && fs.existsSync(f) ? route.fulfill({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(f), headers: { 'access-control-allow-origin': '*' } }) : route.abort(); });
   await page.route('https://api.github.com/**', async route => {
     const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname.replace(/^\/repos\/[^/]+\/[^/]+/, '');
     if (process.env.SLOW_MS) await new Promise(r => setTimeout(r, +process.env.SLOW_MS));
@@ -38,6 +41,8 @@ async function session(label, prep) {
     if (p === '/contents/bot/config.json' && m === 'GET') return json(200, { sha, content: Buffer.from(JSON.stringify(cfg)).toString('base64') });
     if (p === '/contents/bot/config.json' && m === 'PUT') { puts.push(JSON.parse(route.request().postData())); sha = 'new' + puts.length; return json(200, { content: { sha } }); }
     if (p === '/actions/secrets') return json(200, { secrets: [{ name: 'ALPACA_KEY' }, { name: 'ALPACA_SECRET' }] });
+    if (p === '/actions/secrets/public-key') return json(200, { key_id: 'kid1', key: Buffer.from(crypto.generateKeyPairSync('x25519').publicKey.export({ type: 'spki', format: 'der' }).subarray(-32)).toString('base64') });
+    if (p.startsWith('/actions/secrets/') && m === 'PUT') { secretPuts.push({ name: p.split('/').pop(), ...JSON.parse(route.request().postData()) }); return route.fulfill({ status: 201, body: '' }); }
     return json(404, { message: 'Not Found' });
   });
   await page.goto(base, { waitUntil: 'networkidle' });
@@ -52,7 +57,7 @@ async function session(label, prep) {
   const csp = await page.evaluate(() => window.__csp);
   check(`${label}: every tab renders without a script error`, errors.length === 0, errors.join(' | '));
   check(`${label}: no Content-Security-Policy violations`, csp.length === 0, csp.join(' | '));
-  return { page, errors, puts };
+  return { page, errors, puts, secretPuts };
 }
 
 // 1. plain visitor
@@ -60,7 +65,7 @@ async function session(label, prep) {
 
 // 2. connected owner who last used the Screener sub-view (the state that once crashed every other tab's redraw)
 {
-  const { page, errors, puts } = await session('owner with Screener remembered', () => { localStorage.clear(); localStorage.setItem('sd-v2', JSON.stringify('screen')); localStorage.setItem('sd-ghtok', JSON.stringify('ghp_fake')); localStorage.setItem('sd-ghrepo', JSON.stringify('x/y')); });
+  const { page, errors, puts, secretPuts } = await session('owner with Screener remembered', () => { localStorage.clear(); localStorage.setItem('sd-v2', JSON.stringify('screen')); localStorage.setItem('sd-ghtok', JSON.stringify('ghp_fake')); localStorage.setItem('sd-ghrepo', JSON.stringify('x/y')); });
   await page.evaluate(() => document.querySelector('#tabs [data-t="SET"]').click());
   await page.waitForTimeout(1200);
   await page.fill('#st-rsiThreshold', '12');
@@ -81,6 +86,10 @@ async function session(label, prep) {
   await page.fill('#st-ntfy', 'https://ntfy.sh/my-topic-123'); await page.evaluate(() => document.querySelector('[data-st="ntfytest"]').click());
   let m1 = ''; for (let i = 0; i < 20 && !/Sent to/.test(m1); i++) { await page.waitForTimeout(200); m1 = await page.textContent('#ntfyMsg'); }
   check('alerts: "Send test alert" asks for the topic when the box is empty, then posts to ntfy.sh/<topic>', /Type your alert topic/.test(m0) && /Sent to topic/.test(m1) && /ntfy\.sh\/my-topic-123$/.test(ntfyUrl || ''), m0 + ' | ' + m1 + ' | ' + ntfyUrl);
+  // Save keys: the alert topic is sealed in the browser (libsodium) and sent as a GitHub secret
+  await page.evaluate(() => document.querySelector('[data-st="keys"]').click());
+  let km = ''; for (let i = 0; i < 60 && !secretPuts.length && !/failed/i.test(km); i++) { await page.waitForTimeout(250); km = await page.evaluate(() => document.body.innerText.match(/Saving keys failed[^\n]*|Saved[^\n]*secret[^\n]*/i)?.[0] || ''); }
+  check('keys: Save keys seals the alert topic in the browser and stores it as the NTFY_TOPIC secret', secretPuts.some(x => x.name === 'NTFY_TOPIC' && x.key_id === 'kid1' && Buffer.from(x.encrypted_value, 'base64').length === 48 + 'my-topic-123'.length), km + ' ' + JSON.stringify(secretPuts.map(x => x.name)) + ' ' + errors.join(' | '));
   check('alerts: no CSP violation sending the test alert', (await page.evaluate(() => window.__csp)).length === 0, JSON.stringify(await page.evaluate(() => window.__csp)));
   await page.close();
 }

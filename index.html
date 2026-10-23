@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-sz009IgZiHcOKWv0/U8xZhu3IqDDNDAqa9ZtUK4/xn4=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://ntfy.sh https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-QROHxSPaZuTymnBOtn1Igg8eylCdKTSBBpRoVihOnyc=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://ntfy.sh https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -912,7 +912,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792767361';
+const BUILD_V = '1792769654';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2602,7 +2602,7 @@ async function stSecret(name, value, label) {
   if (!value) return;
   if (!window.sodium || !window.sodium.crypto_box_seal) {
     const ld = (src, sri) => new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.integrity = sri; s.crossOrigin = 'anonymous'; s.onload = ok; s.onerror = () => bad(new Error('could not load the encryption library (or its integrity check failed) \u2014 nothing was sent')); document.head.appendChild(s); });
-    await ld('https://cdn.jsdelivr.net/npm/libsodium@0.7.16/dist/modules/libsodium.js', 'sha384-+ZloqXWjRfr0QknQ23oAOiJg3COzC0rE4PSyZOpQwItSIxkO3EYh44iI8GQX//m+');   // exact bytes pinned by hash
+    await ld('https://cdn.jsdelivr.net/npm/libsodium@0.7.13/dist/modules/libsodium.js', 'sha384-SnI6QJTelmxon+8sc89dkWPTJjMT2xMjKtKC4lTAJrkY3NxMvQfMfMCA2fi+kNlO');   // exact bytes pinned by hash; must be the SAME version as the wrapper (0.7.16's browser build is broken)
     await ld('https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/dist/modules/libsodium-wrappers.js', 'sha384-RP9UsCc5EexLsuVeCjf7b+lBnH9zCtNecfZX7tZGZGf9jkivozWYfHAzboabg8QR');
   }
   await window.sodium.ready;

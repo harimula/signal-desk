@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 
 const FILE = 'index.html', VER = 'ver.txt';
 const CSP_HOSTS = {
-  script: ['https://cdn.jsdelivr.net', 'https://www.gstatic.com'],                      // libsodium (SRI-pinned), Firebase (optional accounts feature)
+  script: ["'wasm-unsafe-eval'", 'https://cdn.jsdelivr.net', 'https://www.gstatic.com'],   // wasm-unsafe-eval: lets libsodium (key sealing) compile its WebAssembly; JS eval stays blocked                      // libsodium (SRI-pinned), Firebase (optional accounts feature)
   style: ["'unsafe-inline'", 'https://fonts.googleapis.com'],
   font: ['https://fonts.gstatic.com'],
   connect: ['https://api.github.com', 'https://*.github.io', 'https://finnhub.io', 'wss://ws.finnhub.io', 'https://ntfy.sh',  'https://financialmodelingprep.com', 'https://query1.finance.yahoo.com',
