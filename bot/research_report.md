@@ -28,5 +28,7 @@ Benchmarks include dividends (ETF adjusted closes). The bot keeps at most 60% in
 | Large caps — S&P 500 (SPY) | +79.30% | +12.40% | −24.5% | 0.77 | +5.20% | -18.20% | +26.20% | +24.90% | +17.70% | +12.30% |
 | Mid caps — S&P MidCap 400 (IJH) | +39.40% | +6.90% | −24.1% | 0.44 | +1.90% | -13.10% | +16.40% | +13.90% | +7.40% | +10.50% |
 | Small caps — Russell 2000 (IWM) | +29.00% | +5.20% | −31.9% | 0.34 | -1.90% | -20.50% | +16.80% | +11.40% | +12.70% | +12.80% |
+| Tech — Vanguard Information Technology (VGT) | +130.60% | +18.20% | −35.1% | 0.77 | +7.50% | -29.70% | +52.70% | +29.30% | +21.80% | +26.90% |
+| Nasdaq-100 (QQQ) | +94.00% | +14.20% | −35.1% | 0.69 | +6.50% | -32.60% | +54.90% | +25.60% | +20.80% | +15.10% |
 
 Survivorship bias (today’s big companies, looking back) flatters every strategy, so treat these as an upper bound. Not financial advice.
