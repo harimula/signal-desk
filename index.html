@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-A9lKTi84oiEJtN6X3H6agTR6KHVyAUjPheVaTiVoBTw=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-2AMRGh6+90AwT1EPgtqy4S4nXAkoZZezKcVSN1QjEbU=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -24,7 +24,7 @@
 :root{
   /* Signal Desk design tokens — light: cool paper, ink-navy text, cobalt for actions. Dark flips the accent to amber (an instrument panel). */
   --bg:#f3f5f9;--surface:#ffffff;--surface2:#eaeef5;--text:#0e1526;--muted:#5b6678;--line:#d7dde8;
-  --tb:#05705f;--tb-bg:#dcf1ea;--b:#0f6e5e;--b-bg:#e2f3ef;--h:#636a78;--h-bg:#edf0f5;
+  --tb:#05705f;--line-mid:#7c3aed;--tb-bg:#dcf1ea;--b:#0f6e5e;--b-bg:#e2f3ef;--h:#636a78;--h-bg:#edf0f5;
   --s:#b25000;--s-bg:#fdeedd;--ts:#d30e1d;--ts-bg:#fde7e9;--accent:#1b3c8f;--accent-bg:#e3eafa;--accent-ink:#ffffff;
   --warn:#8a5a00;--warn-bg:#fbf0d2;--gold:#8a5a00;
   --shadow:none;--radius:10px;
@@ -32,12 +32,12 @@
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0b1020;--surface:#111a2e;--surface2:#182340;--text:#e7ebf3;--muted:#9aa6bc;--line:#26324f;
-  --tb:#2dd4bf;--tb-bg:#0e3a33;--b:#26a69a;--b-bg:#0e2f2c;--h:#9aa6bc;--h-bg:#1e2a44;
+  --tb:#2dd4bf;--line-mid:#b69cff;--tb-bg:#0e3a33;--b:#26a69a;--b-bg:#0e2f2c;--h:#9aa6bc;--h-bg:#1e2a44;
   --s:#ff9850;--s-bg:#3a2a14;--ts:#f5616d;--ts-bg:#3a1a22;--accent:#f2b544;--accent-bg:#3a2e12;--accent-ink:#1a1400;--gold:#f2b544;
   --warn:#f3cf7a;--warn-bg:#33290f;--shadow:none;}}
 :root[data-theme="dark"]{
   --bg:#0b1020;--surface:#111a2e;--surface2:#182340;--text:#e7ebf3;--muted:#9aa6bc;--line:#26324f;
-  --tb:#2dd4bf;--tb-bg:#0e3a33;--b:#26a69a;--b-bg:#0e2f2c;--h:#9aa6bc;--h-bg:#1e2a44;
+  --tb:#2dd4bf;--line-mid:#b69cff;--tb-bg:#0e3a33;--b:#26a69a;--b-bg:#0e2f2c;--h:#9aa6bc;--h-bg:#1e2a44;
   --s:#ff9850;--s-bg:#3a2a14;--ts:#f5616d;--ts-bg:#3a1a22;--accent:#f2b544;--accent-bg:#3a2e12;--accent-ink:#1a1400;--gold:#f2b544;
   --warn:#f3cf7a;--warn-bg:#33290f;--shadow:none;}
 *{box-sizing:border-box}
@@ -912,7 +912,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792788448';
+const BUILD_V = '1792789198';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2375,10 +2375,37 @@ ${r ? `<div class="mut" style="font-size:11.5px;margin-top:6px;padding-top:6px;b
   const closedT = `<h3 style="margin:18px 0 8px">Closed trades <span class="mut" style="font-weight:400;font-size:13px">· ${allClosed.length}${allClosed.length > 15 ? ' · latest 15 shown' : ''}</span></h3>` + (allClosed.length ? tbl(['Strategy', 'Stock', 'Qty', 'Bought on', 'At', 'Sold on', 'At', 'P/L ₹', 'P/L %', 'Reason'], [...allClosed].sort((a, b) => a.outDate < b.outDate ? 1 : -1).slice(0, 15).map(c => `<tr><td class="lt">${LAB[c.k]}</td><td class="lt"><b>${esc(nsSym(c.sym))}</b></td><td>${c.qty}</td><td class="lt">${dLab(c.inDate)}</td><td>${inr(c.inPx, 2)}</td><td class="lt">${dLab(c.outDate)}</td><td>${inr(c.outPx, 2)}</td><td class="${cls(c.pl)}"><b>${inrS(c.pl)}</b></td><td class="${cls(c.plPct)}">${pc(c.plPct)}</td><td class="lt mut" style="font-size:11.5px">${esc(c.why || '')}</td></tr>`), 860) : '<div class="card empty">No closed trades yet.</div>');
   const acts = (J.acts || []).slice(-25).reverse();
   const log = acts.length ? `<details data-k="inlog" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700;font-size:13.5px">What the India bot did recently</summary><div class="card" style="padding:10px 14px;margin-top:6px;font-size:12.5px;line-height:1.7">${acts.map(a => `<div><span class="mut">${dLab(a.t)}</span> · ${esc(a.m.replace(/\.NS\b/g, ''))}</div>`).join('')}</div></details>` : '';
-  return botSwitch() + head + status + boxes + chart + cards + pend + openT + watch + closedT + log +
+  return botSwitch() + head + status + boxes + chart + h5Card(inRes && inRes.history5, {sym: '₹', base: J.stake || 1000000, loc: 'en-IN'}) + cards + pend + openT + watch + closedT + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Simulation on real NSE prices — no money moves. Real orders need step 3: your mother’s Zerodha Kite Connect app, a fixed-address server (SEBI rule), and her one-tap login each morning. Gains on a real account are her income for Indian tax. Not financial advice.</div>`;
 }
 
+// ---------- 5-year history: the bot's rules from a fresh start vs large / mid / small caps (research history5) ----------
+function h5Card(H, cur) {
+  if (!H || !(H.series || []).length) return '';
+  const S = H.series.filter(x => !x.missing && x.pts && x.pts.length > 1), miss = H.series.filter(x => x.missing);
+  if (!S.length) return '';
+  const COL = {bot: 'var(--accent)', breakout: 'var(--accent)', rsi2: 'var(--accent)', large: 'var(--muted)', mid: 'var(--line-mid)', small: 'var(--tb)'};
+  const DASH = {breakout: '2 3', rsi2: '6 3', large: '5 4'};
+  const t0 = Date.parse(H.from), t1 = Date.parse(H.to), W = 640, Ht = 220, padR = 4, padL = 0;
+  const all = S.flatMap(x => x.pts.map(p => p[1])), lo = Math.min(...all, 1), hi = Math.max(...all), ly = v => Math.log(v);
+  const y = v => (Ht - 10 - (ly(v) - ly(lo)) / ((ly(hi) - ly(lo)) || 1) * (Ht - 22)).toFixed(1), x = d => (padL + (Date.parse(d) - t0) / ((t1 - t0) || 1) * (W - padR - padL)).toFixed(1);
+  const money = v => cur.sym + Math.round(v).toLocaleString(cur.loc);
+  const years = [...new Set(S.flatMap(s => Object.keys(s.years || {})))].sort();
+  const gs = [1, 1.5, 2, 3, 4].filter(g => g >= lo * 0.95 && g <= hi * 1.05);
+  const short = v => cur.sym === '₹' ? (v >= 1e7 ? '₹' + +(v / 1e7).toFixed(1) + ' Cr' : '₹' + +(v / 1e5).toFixed(1) + ' L') : '$' + (v >= 1e6 ? +(v / 1e6).toFixed(1) + 'M' : +(v / 1e3).toFixed(1) + 'k');
+  const grid = gs.map(g => `<line x1="0" x2="${W}" y1="${y(g)}" y2="${y(g)}" stroke="var(--line)" stroke-width="1" vector-effect="non-scaling-stroke"/>`).join('');
+  const gLab = gs.map(g => `<span style="position:absolute;left:0;top:${(y(g) / Ht * 100).toFixed(2)}%;transform:translateY(-115%);font-size:10.5px;color:var(--muted);background:var(--surface);padding:0 3px;border-radius:3px;line-height:1.2">${short(cur.base * g)}</span>`).join('');
+  const lines = [...S].sort((a, b) => (a.kind === 'bot') - (b.kind === 'bot')).map(s => `<polyline points="${s.pts.map(p => x(p[0]) + ',' + y(p[1])).join(' ')}" fill="none" stroke="${COL[s.key] || 'var(--muted)'}" stroke-width="${s.kind === 'bot' ? 2.6 : s.kind === 'part' ? 1.2 : 1.6}" ${DASH[s.key] ? `stroke-dasharray="${DASH[s.key]}"` : ''} opacity="${s.kind === 'part' ? 0.7 : 1}" vector-effect="non-scaling-stroke"><title>${esc(s.label)}: ${money(cur.base * s.pts[s.pts.length - 1][1])}</title></polyline>`).join('');
+  const key = S.map(s => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px"><svg width="22" height="8" aria-hidden="true"><line x1="0" x2="22" y1="4" y2="4" stroke="${COL[s.key] || 'var(--muted)'}" stroke-width="${s.kind === 'bot' ? 3 : 1.6}" ${DASH[s.key] ? `stroke-dasharray="${DASH[s.key]}"` : ''}/></svg>${esc(s.label)}</span>`).join('');
+  const pcs = v => v == null ? '–' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${fmt(v, 1)}%</span>`;
+  const rows = S.map(s => `<tr${s.kind === 'bot' ? ' style="background:var(--surface2)"' : ''}><td class="lt">${s.kind === 'bot' ? '<b>' + esc(s.label) + '</b>' : s.kind === 'part' ? '<span class="mut">↳ ' + esc(s.label) + '</span>' : esc(s.label)}</td><td><b>${money(cur.base * (1 + s.total / 100))}</b></td><td>${pcs(s.cagr)}</td><td class="neg">−${fmt(s.maxDD, 1)}%</td><td>${fmt(s.sharpe, 2)}</td>${years.map(yy => `<td>${pcs((s.years || {})[yy])}</td>`).join('')}</tr>`).join('');
+  const fd = d => new Intl.DateTimeFormat('en-GB', {month: 'short', year: 'numeric', timeZone: 'UTC'}).format(new Date(d + 'T12:00:00Z'));
+  return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">📜 The last 5 years — the bot’s rules vs large, mid and small caps</b> <span class="mut" style="font-size:11.5px">· ${fd(H.from)} → ${fd(H.to)} · ${money(cur.base)} at the start, fresh start, costs included</span>
+<div style="position:relative;margin-top:8px"><svg viewBox="0 0 ${W} ${Ht}" preserveAspectRatio="none" style="width:100%;height:230px;display:block" role="img" aria-label="Growth of ${money(cur.base)} over 5 years for the bot and the index funds">${grid}${lines}</svg>${gLab}</div>
+<div class="mut" style="font-size:11.5px;margin-top:4px;line-height:1.9">${key}</div>
+<div class="tw" style="margin-top:8px"><table style="min-width:${560 + years.length * 60}px"><thead><tr><th class="lt">5 years</th><th>${money(cur.base)} became</th><th>Per year</th><th>Worst fall</th><th>Sharpe</th>${years.map(yy => `<th>${yy}${yy === years[0] ? '*' : yy === years[years.length - 1] ? '*' : ''}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+<div class="mut" style="font-size:11.5px;margin-top:6px;line-height:1.5">A replay of the bot’s exact rules on real prices, not real trades. The bot keeps at most 60% of the money invested (6 positions × 10%), so it gives up some of a strong rally in exchange for smaller falls. Index lines include dividends (${cur.sym === '₹' ? 'index-fund NAVs from AMFI, after the funds’ fees' : 'ETF adjusted prices'}); the bot’s replay counts price moves only. * part-year. Testing on today’s index members flatters the bot. Past results do not predict future results.${miss.length ? ' Missing: ' + miss.map(m => esc(m.label)).join(', ') + '.' : ''}</div></div>`;
+}
 function botView() {
   botLoad();
   if (botMk === 'IN') return inView();
@@ -2537,7 +2564,7 @@ ${Object.entries(rdJ.variants || {}).map(([k, S]) => row('<span class="mut">Best
 ${yrs.length ? `<div class="mut" style="font-size:12px;margin-top:8px"><b>Best found, year by year:</b> ${yrs.map(([y, x]) => `${y} <span class="${x.R >= 0 ? 'pos' : 'neg'}">${x.R >= 0 ? '+' : ''}${x.R}R</span> (${x.n})`).join(' · ')}</div>` : ''}
 <div class="mut" style="font-size:11.5px;margin-top:6px">Entry at the close of the signal bar plus 0.03% slippage; when one bar touches both the stop and the target the stop is assumed first; flat at 3:45 PM; one trade per stock per day, the daily maximum and the two-loss stop applied in order. The broker's intraday history for these stocks starts in ${esc(firstYear)}; nothing older exists in any public feed. Full report: <a href="bot/research_day_report.md" target="_blank" rel="noopener">research_day_report.md</a>. To use the best values: Bot settings → 4b → “Put these values in the form”.</div></div>`;
   })() : '';
-  return head + statusLine + engTxt + boxes + moneyLine + envCard + watchCard + riskCard + perfCard + evCard() + btCard + rdCard + openTbl +
+  return head + statusLine + engTxt + boxes + moneyLine + envCard + watchCard + riskCard + perfCard + evCard() + h5Card(btJ && btJ.history5, {sym: '$', base: stake || 100000, loc: 'en-US'}) + btCard + rdCard + openTbl +
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? ' · <b>real money</b>' : stake ? ` · practice account run as a <b>$${fmt(stake, 0)} stake</b>: every size, loss limit and the day-trade rule use that figure, so this is what real money would have done` : ' · practice account'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }

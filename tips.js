@@ -97,6 +97,8 @@
     'trend breakout': 'Buys a stock that closes at a 50-day high while above its 200-day average; sells on a close below its 20-day low. The best NSE test result.',
     'rsi-2 dip buying': 'The US bot’s strategy: buy an uptrend stock after a sharp 2-day dip, sell on the bounce. Weaker on NSE because of costs.',
     'india telegram summary': 'One Telegram message after each NSE day with the simulated buys, sells and value against the Nifty 50.',
+    '5 years': 'The bot’s exact rules replayed on real prices over the last 5 years from a fresh start, next to index funds you could simply have bought.',
+    'per year': 'Average growth per year over the 5 years (compound annual growth rate).', 'worst fall': 'The biggest drop from a high point to a later low during the 5 years.',
     // ---------- stat boxes ----------
     'today': 'Change in account value since yesterday’s close (open and closed trades together).',
     'realized today': 'Profit or loss locked in by trades closed today.',
@@ -227,7 +229,7 @@
     'target': 'Take-profit for a day trade, as a multiple of the risk (entry minus stop): 2 = aim to make twice what you risk.',
   };
   // dynamic labels
-  const PAT = [[/^\d+-day (sma|ema)$/, 'The moving average you chose above (simple or exponential) over this many days, compared with the latest price.'],
+  const PAT = [[/ became$/, 'What the starting amount would be worth at the end of the 5 years.'], [/^20\d\d\*?$/, 'Return in that calendar year (* = part of the year: the 5 years start and end mid-year).'], [/^\d+-day (sma|ema)$/, 'The moving average you chose above (simple or exponential) over this many days, compared with the latest price.'],
     [/^vs \d+d$/, 'How far the price is above (+) or below (−) that moving average.']];
   const norm = s => String(s || '').replace(/[▲▼↑↓⇅]/g, '').replace(/\s+/g, ' ').trim().replace(/[:]$/, '').replace(/\s+\d+$/, '').toLowerCase();
   const lookup = (txt, isTh = true) => { const k = norm(txt), k2 = k.replace(/\s*\(.*\)$/, '').replace(/\s+·.*$/, ''); if (!isTh && (LBL[k] || LBL[k2])) return LBL[k] || LBL[k2]; for (const x of [k, k2]) if (T[x] && (isTh || !TH_ONLY.has(x))) return T[x]; for (const [re, v] of PAT) if (re.test(k)) return v; return null; };
