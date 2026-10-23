@@ -61,7 +61,7 @@ EMI calculator includes a SIP (systematic investment) plan for the money left ov
 
 ### 2.2 Signal Desk tabs
 
-A **USA / India switch** beside the Signal Desk name chooses the market (remembered per device). The tabs left of the divider — Stocks, Day trading, Option trading, Bot trades, Bot settings — show the chosen market; the tabs right of it are shared.
+A **USA / India switch** (with flags) beside the Signal Desk name chooses the market (remembered per device). The tabs left of the divider — Stocks, Day trading, Option trading, Bot trades, Bot settings — show the chosen market; the tabs right of it are shared.
 
 | Tab | Purpose | Key features |
 |---|---|---|
@@ -523,6 +523,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-23 | **Clean market separation:** the switch shows US and India flags (inline SVG, so Windows shows them too). With India chosen, Bot settings shows only the India bot section (no Alpaca keys, live keys, sync or US risk settings) and its own subtitle; the Day trading subtitle names the chosen market; the India bot text no longer quotes ET times or calls RSI-2 "the US strategy". A page audit of every tab in both markets finds no text from the other market apart from the switch itself. |
 | 2026-10-23 | **One market switch** (owner chose it from a clickable prototype): a USA / India toggle beside the Signal Desk name (`sd-mkt`, per device). Stocks (replaces the USA stocks and India stocks tabs), Day trading, Option trading, Bot trades and Bot settings follow it; the header status, snapshot age and prices line show the chosen market; the in-tab switches (Day trading, Option trading, Bot trades) are gone; a divider separates the shared tabs (News, portfolios, My tickers, Rules). Bot settings shows only the chosen bot: USA = sections 1–8 as before; India = Connection, Sync and **2. India bot (simulation)**. Page checks: 27; full axe clean for both markets. | ARCHITECTURE §2.2; settings.html; docs/index.html |
 | 2026-10-23 | 5-year history (US) also measures VGT (Vanguard Information Technology) and QQQ (Nasdaq-100), owner asked *"Does the US bot beat VGT?"*: VGT +18.2 %/yr (worst fall −35.1 %), QQQ +14.2 %/yr (−35.1 %), USA bot +14.4 %/yr (−11.9 %). | docs/index.html |
 | 2026-10-23 | **5-year history card** (owner: *"see the bot history for 5 years, compare with small, mid and large caps"*). `research.mjs` replays each bot's exact rules over the last 5 years from a fresh start (India: breakout + RSI-2 50/50 as configured; US: RSI-2) and measures large/mid/small caps with dividends — India: AMFI index-fund NAVs via mfapi.in (Bandhan Nifty 50 118482, Motilal Oswal Midcap 150 147622 / Smallcap 250 147623, Direct Growth); US: SPY / IJH / IWM adjusted closes — saved as `history5` (weekly points, total, CAGR, worst fall, Sharpe, calendar years). Bot trades shows it in both views (log-scale chart + table); `--line-mid` colour token. Result: India bot +5.0 %/yr vs mid +13.0 %, small +12.2 %, Nifty 50 +5.6 % (trend breakout alone +8.2 %); USA bot +14.4 %/yr vs S&P 500 +12.4 %, mid +6.9 %, small +5.2 %, with about half the worst fall. | ARCHITECTURE §3.4; docs/index.html |

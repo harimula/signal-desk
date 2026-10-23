@@ -69,7 +69,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <main>
 <h1>What every bot setting does</h1>
 <p class="lede">One entry per control on the <b>Bot settings</b> tab: what it changes, the default, and when you'd move it. Defaults marked <span class="tag tested">tested</span> are the values the 33-year research used; anything marked <span class="tag exp">experimental</span> was never backtested.</p>
-<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · last updated 2026-10-23 (USA / India switch: each bot’s settings on its own page)</p>
+<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · last updated 2026-10-23 (India settings shown on their own)</p>
 
 <section id="how">
 <h2>How settings work<small>where they live and when they take effect</small></h2>
@@ -87,7 +87,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 </section>
 
 <section id="india">
-<h2>India bot (simulation)<small>choose India with the switch at the top · NSE · real prices, no orders</small></h2>
+<h2>India bot (simulation)<small>choose India with the switch at the top — that page shows only these settings · NSE · real prices, no orders</small></h2>
 <div class="s"><p>A separate bot for NSE stocks that runs after each NSE close (about 4:10 PM IST). It fills the buys it planned the evening before at that morning’s official opening price, sells at the close when an exit rule fires, and plans the next morning — exactly how the NSE test was run — in whole shares with 0.15% costs per side. No broker is connected. Choose <b>India</b> with the USA / India switch at the top of the page: Bot settings then shows Connection, Sync and these settings; Bot trades shows the India bot. Saved to <code>bot/config-in.json</code> with <b>Save India settings</b>.</p></div>
 <div class="s"><h3>Trend breakout / RSI-2 dip buying</h3><div class="meta">Default <b>both on</b></div><p>Trend breakout buys a stock that closes at a 50-day high while above its 200-day average and sells on a close below its 20-day low (the best NSE test result: +12.7% a year in 2021–26). RSI-2 is the US strategy (+4.0% a year on NSE in 2021–26: costs eat most of its edge). Each keeps its own money and record.</p></div>
 <div class="s"><h3>Simulated stake (₹)</h3><div class="meta">Default <b>₹10,00,000</b> · applies when the simulation restarts</div><p>The money the simulation treats as hers.</p></div>
