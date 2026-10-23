@@ -22,7 +22,7 @@ export function rankByLiquidity(bars, { size = 200, minPrice = 5, minDays = 10 }
 }
 
 export async function scanUniverse({ T, D, size = 200, minPrice = 5, log = () => {} }) {
-  const assets = await T('/v2/assets?status=active&asset_class=us_equity');
+  const assets = await T('/v2/assets?status=active&asset_class=us_equity', { timeoutMs: 60000 });   // ~12,000 assets: a large answer
   const syms = (assets || []).filter(a => a.tradable && EXCHANGES.has(a.exchange) && SYM_OK.test(a.symbol)).map(a => a.symbol).sort();
   log(`market scan: ${syms.length} tradable US stocks`);
   const start = new Date(Date.now() - 32 * 864e5).toISOString(), bars = {};

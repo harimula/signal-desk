@@ -53,6 +53,7 @@ let scanCache = { day: '', key: '', symbols: null, info: null };
 // until it is in, the bot uses the last successful scan (bot/scan.json, kept in the repo) or, failing that, the list.
 // A failed scan is retried after 10 minutes, not on every beat.
 let scanJob = null, scanFailAt = 0;
+export const scanStatus = { state: 'idle', at: null, n: 0, err: '' };   // shown in the public engine line: is the scan in, running or failing?
 const SCAN_FILE = 'bot/scan.json';
 function savedScan() { try { const j = JSON.parse(fs.readFileSync(SCAN_FILE, 'utf8')); return Array.isArray(j.symbols) && j.symbols.length >= 5 ? j : null; } catch (e) { return null; } }
 async function ensureUniverse() {
@@ -61,13 +62,13 @@ async function ensureUniverse() {
   if (scanCache.symbols && scanCache.day === TODAY && scanCache.key === key) { UNIVERSE = scanCache.symbols; return; }
   if (!scanCache.symbols) { const sv = savedScan(); if (sv) scanCache = { day: sv.day || '', key: sv.key || '', symbols: sv.symbols, info: sv.info || null }; }
   if (!scanJob && Date.now() - scanFailAt > 10 * 60000) {
-    act('market scan started (runs in the background; the bot keeps working meanwhile)');
+    act('market scan started (runs in the background; the bot keeps working meanwhile)'); Object.assign(scanStatus, { state: 'running', at: new Date().toISOString() });
     scanJob = scanUniverse({ T, D, size: CFG.scanSize, minPrice: CFG.scanMinPrice, log: m => act(m) }).then(r => {
       if (r.symbols.length >= 5) {
-        scanCache = { day: TODAY, key, symbols: r.symbols, info: r }; barsCache = { at: 0, bars: null };
+        scanCache = { day: TODAY, key, symbols: r.symbols, info: r }; barsCache = { at: 0, bars: null }; Object.assign(scanStatus, { state: 'done', at: new Date().toISOString(), n: r.symbols.length, err: '' });
         try { fs.writeFileSync(SCAN_FILE, JSON.stringify({ day: TODAY, key, symbols: r.symbols, info: { at: r.at, scanned: r.scanned } })); } catch (e) {}
-      } else { scanFailAt = Date.now(); act('market scan returned too few stocks (' + r.symbols.length + ') \u2014 keeping the previous list'); }
-    }).catch(e => { scanFailAt = Date.now(); act('market scan failed (' + (e.message || e).slice(0, 80) + ') \u2014 using ' + (scanCache.symbols ? 'the last good scan' : 'the listed stocks') + '; retrying in 10 min'); })
+      } else { scanFailAt = Date.now(); Object.assign(scanStatus, { state: 'failed', at: new Date().toISOString(), err: 'too few stocks (' + r.symbols.length + ')' }); act('market scan returned too few stocks (' + r.symbols.length + ') \u2014 keeping the previous list'); }
+    }).catch(e => { scanFailAt = Date.now(); Object.assign(scanStatus, { state: 'failed', at: new Date().toISOString(), err: String(e.message || e).slice(0, 100) }); act('market scan failed (' + (e.message || e).slice(0, 80) + ') \u2014 using ' + (scanCache.symbols ? 'the last good scan' : 'the listed stocks') + '; retrying in 10 min'); })
       .finally(() => { scanJob = null; });
   }
   if (scanJob) await Promise.race([scanJob, sleepMs(3000)]);            // a quick scan (or a test) lands in this cycle; a slow one in a later one
@@ -759,7 +760,7 @@ async function writeJournal() {
   if (prev.sig === sigCmp && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: /paper/.test(BASE),
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
-    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, engine: { cycleMs: engine.cycleMs, cycleMax: engine.cycleMax, cycles: engine.cycles, avgCallMs: engine.calls ? Math.round(engine.callMs / engine.calls) : 0, calls: engine.calls, errorsHour: engine.hourErrors.length, lastError: engine.lastError, symbols: UNIVERSE.length, beatMs: +process.env.BEAT_MS || 2000 },
+    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, engine: { cycleMs: engine.cycleMs, cycleMax: engine.cycleMax, cycles: engine.cycles, avgCallMs: engine.calls ? Math.round(engine.callMs / engine.calls) : 0, calls: engine.calls, errorsHour: engine.hourErrors.length, lastError: engine.lastError, symbols: UNIVERSE.length, beatMs: +process.env.BEAT_MS || 2000, scan: CFG.universe === 'scan' ? { ...scanStatus } : null },
     // panels the bot only computes while the market is open: a process that has not computed them yet keeps the previous ones
     risk: lastRisk || prev.risk || null, watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
     limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
