@@ -262,6 +262,11 @@ const send = async (body, why) => { why = why + alertDetail(body); const dk = bo
 const etParts = d => Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map(p => [p.type, p.value]));
 let TODAY = '', MINS = 0;                                   // yyyymmdd, minutes past midnight ET
 export function setNow() { const ep = etParts(new Date()); TODAY = ep.year + ep.month + ep.day; MINS = (+ep.hour % 24) * 60 + +ep.minute; return MINS; }
+// When was the journal on disk written, in Eastern time? { day: 'yyyymmdd', mins } or null. Readable in both plain and encrypted journals.
+export function journalStamp() {
+  try { const at = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).at; if (!at) return null; const ep = etParts(new Date(at)); return { day: ep.year + ep.month + ep.day, mins: (+ep.hour % 24) * 60 + +ep.minute, at }; }
+  catch (e) { return null; }
+}
 setNow();
 const ymdDash = ms => { const e = etParts(new Date(ms)); return e.year + '-' + e.month + '-' + e.day; };
 const rid = () => Math.random().toString(36).slice(2, 7);
@@ -678,6 +683,43 @@ async function run() {
   }
 }
 
+// ---- journal encryption (public site, private data) ----
+// AES-256-GCM with a key derived from the journal passphrase (PBKDF2-SHA256, 600k rounds; older blobs carry their own `iter`).
+// The page decrypts with the same passphrase; the bot decrypts its own previous entry at start-up so that nothing is lost
+// across restarts (every run is a fresh process — without this, a run that starts after the close, or at 9:20 before the
+// open, would publish a journal with no watch list, no market check and an empty action log).
+const JOURNAL_ITER = 600000;
+export async function encryptJournal(obj, pass, iter = JOURNAL_ITER) {
+  const cr = await import('node:crypto'), subtle = cr.webcrypto.subtle, enc = new TextEncoder();
+  const salt = cr.randomBytes(16), iv = cr.randomBytes(12);
+  const km = await subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await subtle.deriveKey({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const ct = Buffer.from(await subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(obj))));
+  return { enc: 1, kdf: 'PBKDF2-SHA256', iter, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64') };
+}
+export async function decryptJournal(blob, pass) {
+  const cr = await import('node:crypto'), subtle = cr.webcrypto.subtle, enc = new TextEncoder();
+  const km = await subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await subtle.deriveKey({ name: 'PBKDF2', salt: Buffer.from(blob.salt, 'base64'), iterations: blob.iter || 200000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const pt = await subtle.decrypt({ name: 'AES-GCM', iv: Buffer.from(blob.iv, 'base64') }, key, Buffer.from(blob.ct, 'base64'));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+// The previous journal, as this process knows it: read (and decrypted) once from disk, then kept in memory after each write.
+let prevJournal = null;
+async function previousJournal() {
+  if (prevJournal) return prevJournal;
+  let raw = null;
+  try { raw = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); } catch (e) { return (prevJournal = {}); }
+  if (!raw || !raw.enc) return (prevJournal = raw || {});
+  if (!PRIVATE) return (prevJournal = { at: raw.at, sig: raw.sig });                       // encrypted by an earlier setup, no key now: start fresh
+  try { prevJournal = { ...raw, ...(await decryptJournal(raw, process.env.JOURNAL_KEY)) }; }
+  catch (e) { console.log('previous journal could not be decrypted (passphrase changed?) — starting a fresh one'); prevJournal = { at: raw.at, sig: raw.sig }; }
+  return prevJournal;
+}
+export const _resetPrevJournal = () => { prevJournal = null; };                             // tests only
+let actsFlushed = 0, journalActs = null;                                                     // the published action log; `acts` entries past actsFlushed are new
+const sameAct = (a, b) => a.t === b.t && a.m === b.m;
+
 async function writeJournal() {
   const acct = await T('/v2/account');
   const positions = await T('/v2/positions');
@@ -690,29 +732,32 @@ async function writeJournal() {
     token = j[j.length - 1].id;
   }
   const { closed, open } = buildJournal(fills, positions);
-  let prev = {};
-  try { prev = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); } catch (e) {}
-  const allActs = (PRIVATE ? (globalThis.__acts || []) : (prev.acts || [])).concat(acts).slice(-80); globalThis.__acts = allActs;
+  const prev = await previousJournal();
+  if (!journalActs) journalActs = (prev.acts || []).filter(a => a && a.t && a.m);
+  for (const a of acts.slice(actsFlushed)) if (!journalActs.some(b => sameAct(a, b))) journalActs.push(a);   // append only what is new, once
+  actsFlushed = acts.length; journalActs = journalActs.slice(-80);
+  const allActs = journalActs;
   const env = lastGuard ? { at: new Date().toISOString(), block: lastGuard.block, regime: lastGuard.regime, reasons: lastGuard.reasons, today: lastGuard.today, upcoming: lastGuard.upcoming, flagged: lastGuard.flagged, spyPct: lastGuard.spyPct, newsOk: lastGuard.newsOk } : (prev.env || null);
-  const sig = JSON.stringify([closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), acts.length, env && env.reasons, env && env.flagged && env.flagged.length]);
+  const lastAct = allActs[allActs.length - 1];
+  const sig = JSON.stringify([closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), allActs.length, lastAct && lastAct.t, env && env.reasons, env && env.flagged && env.flagged.length]);
   const sigCmp = PRIVATE ? (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16) : sig;
   if (prev.sig === sigCmp && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: /paper/.test(BASE),
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
-    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, engine: { cycleMs: engine.cycleMs, cycleMax: engine.cycleMax, cycles: engine.cycles, avgCallMs: engine.calls ? Math.round(engine.callMs / engine.calls) : 0, calls: engine.calls, errorsHour: engine.hourErrors.length, lastError: engine.lastError, symbols: UNIVERSE.length, beatMs: +process.env.BEAT_MS || 2000 }, risk: lastRisk, watch: lastWatch || prev.watch || null, day: lastDay, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
+    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, engine: { cycleMs: engine.cycleMs, cycleMax: engine.cycleMax, cycles: engine.cycles, avgCallMs: engine.calls ? Math.round(engine.callMs / engine.calls) : 0, calls: engine.calls, errorsHour: engine.hourErrors.length, lastError: engine.lastError, symbols: UNIVERSE.length, beatMs: +process.env.BEAT_MS || 2000 },
+    // panels the bot only computes while the market is open: a process that has not computed them yet keeps the previous ones
+    risk: lastRisk || prev.risk || null, watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
+    limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {
-    // Public site, private data: AES-256-GCM with a key derived from your passphrase (PBKDF2-SHA256, 200k rounds).
-    // Only the timestamp, paper/live flag and stream health stay readable; the page decrypts the rest with the same passphrase.
-    const subtle = (await import('node:crypto')).webcrypto.subtle, enc = new TextEncoder();
-    const salt = (await import('node:crypto')).randomBytes(16), iv = (await import('node:crypto')).randomBytes(12);
-    const km = await subtle.importKey('raw', enc.encode(process.env.JOURNAL_KEY), 'PBKDF2', false, ['deriveKey']);
-    const key = await subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
-    const ct = Buffer.from(await subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(j))));
+    // Only the timestamp, paper/live flag, stream health and engine health stay readable; the page decrypts the rest with the same passphrase.
+    const blob = await encryptJournal(j, process.env.JOURNAL_KEY);
     const sigH = (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16);   // change-detector only, reveals nothing
-    fs.writeFileSync('bot/journal.json', JSON.stringify({ enc: 1, kdf: 'PBKDF2-SHA256', iter: 600000, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64'), at: j.at, sig: sigH, paper: j.paper, stream: j.stream, engine: j.engine }));
+    fs.writeFileSync('bot/journal.json', JSON.stringify({ ...blob, at: j.at, sig: sigH, paper: j.paper, stream: j.stream, engine: j.engine }));
+    prevJournal = { ...j, sig: sigH };
     console.log('journal written (encrypted)');
   } else {
     fs.writeFileSync('bot/journal.json', JSON.stringify(j));
+    prevJournal = j;
     console.log('journal written:', closed.length, 'closed,', open.length, 'open');
   }
 }

@@ -6,7 +6,7 @@
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { execSync } from 'node:child_process';
-import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat } from './bot.mjs';
+import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp } from './bot.mjs';
 import { summary } from './config.mjs';
 
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
@@ -101,6 +101,14 @@ process.on('unhandledRejection', e => console.log('unhandled rejection', redact(
 // ---- main loop ----
 const m0 = setNow();
 if (m0 < 9 * 60 + 20 || m0 >= 16 * 60 + 5) { console.log('Outside 9:20-16:05 ET - next scheduled run will take over.'); process.exit(0); }
+// Started after the close (the run that was queued behind the day's session): if that session reached the close and wrote
+// its journal, there is nothing left to do — rewriting the journal from an empty memory or sending a second day summary
+// would only do harm. If it died early (journal older than 3:55 PM), fall through: one cycle, journal, summary, exit.
+if (m0 >= 16 * 60) {
+  const js = journalStamp(), todayET = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((o, p) => (o[p.type] = p.value, o), {});
+  if (js && js.day === todayET.year + todayET.month + todayET.day && js.mins >= 15 * 60 + 55) { console.log(`Market closed and today's session already finished its journal at ${js.at} - nothing to do.`); process.exit(0); }
+  console.log('Market closed and today\'s journal is incomplete - running one closing cycle.');
+}
 connectStreams();
 await pollConfig();
 while (Date.now() - born < LIFE && !stopping) {

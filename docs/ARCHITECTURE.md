@@ -1,6 +1,6 @@
 # Signal Desk — System Documentation
 
-**Version:** 1.6 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
+**Version:** 1.7 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
 
 Signal Desk is a personal stock-signal website with an attached rules-based trading bot.
 This document is the single place that explains **what it does** (functional), **how it is
@@ -274,7 +274,7 @@ All actions are pinned to exact commit SHAs (`actions/checkout@11bd719… # v4.2
 | `news.json` | `news.mjs` | `{ at, items: [{t, h, u, sum, s}], bySym: { SYM: [...] } }` — tagged headlines, per-ticker filtered |
 | `events.json` | hand-maintained | `[{ date, time, type, title }]` — FOMC, CPI, JOBS, PPI, MINUTES |
 | `bot/config.json` | Bot settings tab | see §5.4 |
-| `bot/journal.json` | bot | plaintext `{ at, equity, day, trades, acts, … }` or encrypted `{ enc:1, kdf, iter, salt, iv, ct, at, sig, paper, stream }` |
+| `bot/journal.json` | bot | plaintext `{ at, equity, day, trades, acts, … }` or encrypted `{ enc:1, kdf, iter, salt, iv, ct, at, sig, paper, stream, engine }` |
 | `bot/research.json` | research workflow | per-strategy metrics (CAGR, Sharpe, max DD, OOS split) |
 | `user/settings.enc.json` | the page (device sync) | `{ enc:1, kdf, iter, salt, iv, ct }` wrapping `{ v, at, dev, data: { key: value } }` |
 
@@ -355,6 +355,8 @@ flowchart LR
 ```
 
 Measured in tests against a mock broker: fill → take-profit order 40 ms; crash tick → floor exit 110 ms.
+
+**Journal continuity across runs.** Every run is a fresh process, and the panels the bot computes only while the market is open (watch list, market check, risk, day-trading block) plus the action log live in memory. At its first write the bot therefore reads the previous `bot/journal.json` back — decrypting it with `JOURNAL_KEY` when it is encrypted — and carries those panels forward until it has computed fresh ones; the action log is appended to (never re-appended) and capped at 80 entries. A run that starts at or after 16:00 ET exits at once if today's journal was already written at 15:55 or later (the day's session reached the close); otherwise it runs one closing cycle, writes the journal and sends the day summary. A previous journal written under a different passphrase is skipped with a log line, not a crash.
 
 ### 5.4 Settings (`bot/config.json`)
 
@@ -481,6 +483,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 | Symptom | Check |
 |---|---|
 | Bot tab says "No bot activity" | Actions → paper-trade-bot → latest run log; keys present? workflow enabled? |
+| "What the bot is watching" card shows the fallback text | The journal on the site carries no watch block. Normal only for a brand-new setup or right after the journal passphrase was changed (the bot cannot read the previous entry); it fills in with the first check-in after 9:30 ET. Any other time: Actions → paper-trade-bot → latest run log for "previous journal could not be decrypted" |
 | "Settings save failed" | Token expired or scoped wrong; regenerate |
 | Prices stale | Actions → refresh-prices runs; press ↻ Refresh prices |
 | Page shows lock screen | Enter the journal passphrase (same as `JOURNAL_KEY`) |
@@ -491,8 +494,8 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 
 ## 8. Testing and quality
 
-- `bot/test-orders.mjs`: serves a just-dipped stock and a just-popped stock from a fake broker and checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked), money limits, market scan, and — with synthetic 5-minute bars — the day-trading engine: ORB long → stock buy with levels in the id, market-down breakdown → PUT, daily maximum, flat at 15:50, stop at market, resting take-profit. Runs in CI.
-- `bot/test.mjs`: 53 unit tests (indicators, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing, broker HTTP wrapper: retry, timeout, never-retry-an-order). Runs in CI on every push.
+- `bot/test-orders.mjs`: serves a just-dipped stock and a just-popped stock from a fake broker and checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked), money limits, market scan, journal continuity (a run that starts with the market closed keeps the previous encrypted entry's panels; rewrites never duplicate the action log; a foreign-passphrase entry is skipped), and — with synthetic 5-minute bars — the day-trading engine: ORB long → stock buy with levels in the id, market-down breakdown → PUT, daily maximum, flat at 15:50, stop at market, resting take-profit. Runs in CI.
+- `bot/test.mjs`: 55 unit tests (indicators, journal encryption round trip, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing, broker HTTP wrapper: retry, timeout, never-retry-an-order). Runs in CI on every push.
 - `npm run verify` = `tools/stamp.mjs --check` (build number matches `ver.txt`, CSP hashes current, inline scripts parse) + ESLint on the bot and tools + both test files. CI (`bot-tests`) runs the same four steps on every push that touches the bot, the page or the tooling.
 - `tools/page-test.mjs` (CI job `page`): headless Chromium walks every tab as a fresh visitor and as a connected owner with the Screener sub-view remembered, asserting no script errors and no CSP violations, then types into Bot settings and saves against a stand-in GitHub API.
 - Accessibility: audited with axe-core in headless Chromium across every tab — landmarks (`header`, `nav`, `main`), proper `tablist`/`tab` roles, labelled inputs, and all text colours at WCAG AA contrast (≥ 4.5 : 1) in both themes.
@@ -508,6 +511,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | **Journal continuity fix** (reported: *"In bot trading I don't see the watching card"*). Root cause from the run records: the day's session ended 16:00:04 ET, the run queued behind it started 16:00:21 ET with the market closed and, unable to read its own encrypted previous journal, rewrote it from an empty memory — no watch list, no market check, no risk panel, no day block, empty action log (same thing every morning 9:20–9:30). Fix: `previousJournal()` decrypts the last entry with `JOURNAL_KEY` and `writeJournal` carries `watch`/`env`/`risk`/`day` forward until fresh ones exist; action log appended once (also fixes a duplication bug: every rewrite re-appended the whole process log); `live.mjs` exits at once when started after the close and today's journal is already from ≥ 15:55 ET (no second day summary); page shows the card in a fallback form when a journal has no watch block. Tests: crypto round trip (unit), closed-market restart keeps panels, three rewrites never duplicate the log, foreign-passphrase journal is skipped (order checks: 42). | ARCHITECTURE §5.3, §7.4, §8; docs/index.html |
 | 2026-10-22 | Engine speed and health: the cycle's four account reads run in parallel (`Promise.all`); `engine` block in the journal (and in the plaintext envelope) with cycle time, slowest cycle, broker latency, calls, errors in the last hour; shown as a line on the Bot trades tab. Decision recorded: one process for stocks and options — two bots on one account would double or fight over positions; independence comes from the per-instrument switches and money sleeves | §5.3, §5.5 |
 | 2026-10-22 | **Design system pass:** IBM Plex Sans + Plex Mono (tickers), token palette — light: cool paper / ink navy / cobalt actions; dark: deep navy with an amber accent — flat cards (`--radius` 10), stat strip with hairline dividers, sticky tabs, settings page with a sticky section index, consistent 36 px controls, focus rings, reduced-motion respected; status strip and footer are landmarks (axe-core: zero findings, every tab, both themes, desktop and phone). **Stake** (`stakeUsd`): the practice account trades as the owner's real stake (sizes, loss limits, PDT, dashboard, end-of-day report) | §2, §4.1, §5.4 |
 | 2026-10-22 | **Real-money readiness:** protective stops/targets at the broker (OTO leg on swing buys, bracket on day-trade buys; exits cancel legs first; breakeven via replace; bot stop check only where no leg exists); `watchdog.yml` dead-man's switch + end-of-day summary alert + optional heartbeat ping; `liveSizePct` ramp (25 % default) applied to every budget in live mode; go-live checklist computed from real data in Bot settings §7 with a Live size field; *Live vs research* expectancy line on the Performance card; PBKDF2 raised to 600k rounds (bot journal, page sync); §7.3 rewritten as the go-live procedure | §5.2, §5.4, §6, §7.3, §8 |

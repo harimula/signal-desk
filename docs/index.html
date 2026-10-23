@@ -68,7 +68,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
-  <div class="stamp">System documentation · v1.6<br>Updated 2026-10-22</div>
+  <div class="stamp">System documentation · v1.7<br>Updated 2026-10-22</div>
   <ol>
     <li><a href="#what"><span class="k">01</span>What it is</a></li>
     <li><a href="#functional"><span class="k">02</span>Functional</a></li>
@@ -337,6 +337,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   CY --> NT[ntfy alert]
   AL -.->|stream down| POLL[REST polling fallback]</pre>
 <figcaption>Measured against a mock broker: fill → take-profit order in 40 ms; crash tick → floor exit in 110 ms.</figcaption></figure>
+<p><b>Journal continuity across runs.</b> Every run is a fresh process, and the panels the bot computes only while the market is open (watch list, market check, risk, day-trading block) plus the action log live in memory. At its first write the bot reads the previous <code>bot/journal.json</code> back — decrypting it with <code>JOURNAL_KEY</code> when it is encrypted — and carries those panels forward until it has computed fresh ones; the action log is appended to once and capped at 80 entries. A run that starts at or after 16:00 ET exits at once if today’s journal was already written at 15:55 or later; otherwise it runs one closing cycle, writes the journal and sends the day summary. A previous journal written under another passphrase is skipped with a log line, not a crash.</p>
 
 <h3>Settings (<code>bot/config.json</code>)</h3>
 <div class="tw"><table>
@@ -426,6 +427,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="tw"><table>
 <tr><th>Symptom</th><th>Check</th></tr>
 <tr><td>Bot tab says "No bot activity"</td><td>Actions → paper-trade-bot → latest run log. Keys present? Workflow enabled?</td></tr>
+<tr><td>“What the bot is watching” shows its fallback text</td><td>The journal carries no watch block. Normal only for a brand-new setup or right after the journal passphrase was changed; it fills in with the first check-in after 9:30 ET. Otherwise: latest paper-trade-bot run log, look for “previous journal could not be decrypted”.</td></tr>
 <tr><td>"Settings save failed"</td><td>Token expired or scoped wrong; regenerate it</td></tr>
 <tr><td>Prices stale</td><td>Actions → refresh-prices runs; press ↻ Refresh prices</td></tr>
 <tr><td>Settings missing on a new device</td><td>Bot settings → connect GitHub, then enter the passphrase under <i>Sync across devices</i></td></tr>
@@ -437,8 +439,8 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <section id="testing">
 <h2><span class="k">08</span>Testing and quality</h2>
 <ul>
-  <li><code>bot/test-orders.mjs</code>: a fake broker serves a just-dipped and a just-popped stock and the test checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked). Runs in CI.</li>
-  <li><code>bot/test.mjs</code>: 53 unit tests (indicators, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
+  <li><code>bot/test-orders.mjs</code>: a fake broker serves a just-dipped and a just-popped stock and the test checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked), money limits, market scan, journal continuity across restarts, and the day-trading engine — 42 checks. Runs in CI.</li>
+  <li><code>bot/test.mjs</code>: 55 unit tests (indicators, journal encryption round trip, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
   <li>Integration tests against mock brokers (REST + websocket) with a fake clock: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.</li>
   <li>Page checks in headless Chromium at desktop and phone widths for every tab, including scroll preservation during live ticks.</li>
   <li>Research and backtest workflows produce reproducible reports committed to the repo.</li>
@@ -450,6 +452,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Journal continuity fix: a run starting after the close (or at 9:20 before the open) no longer blanks the watch list, market check, risk panel, day block and action log — the bot decrypts its own previous journal and carries them forward; action log no longer duplicates on rewrite; the after-close run exits at once when the day’s session already finished (no second day summary); the watch card is always present on the Bot trades tab</td><td>05, 07, 08</td></tr>
 <tr><td>2026-10-22</td><td>Engine speed and health: parallel account reads; cycle time, broker latency and error count shown on the Bot trades tab. One process for stocks and options by design</td><td>05</td></tr>
 <tr><td>2026-10-22</td><td>Design system pass (IBM Plex, ink-navy/cobalt light theme, navy/amber dark theme, flat cards, stat strip, sticky tabs, settings section index; axe-core clean everywhere). Stake setting: the practice account trades as the real stake</td><td>02, 04, 05</td></tr>
 <tr><td>2026-10-22</td><td>Real-money readiness: broker-side stops and targets on every stock entry, watchdog dead-man's switch, end-of-day summary, live size ramp (25%), go-live checklist in Bot settings §7, live-vs-research line, PBKDF2 600k</td><td>05, 06, 07, 08</td></tr>

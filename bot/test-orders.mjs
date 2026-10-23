@@ -58,7 +58,7 @@ if (process.argv[2] === 'child') {
     req.on('data', c => body += c);
     req.on('end', () => {
       const send = o => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)); };
-      if (p === '/v2/clock') return send({ is_open: true, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
+      if (p === '/v2/clock') return send({ is_open: !FAKE.closed, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
       if (p === '/v2/account') return send({ equity: '100000', last_equity: '100000', cash: '100000', buying_power: '400000', pattern_day_trader: false, daytrade_count: 0, status: 'ACTIVE', multiplier: '4' });
       if (p === '/v2/positions') return send(FAKE.positions || []);
       if (p === '/v2/assets') return send(Object.keys(BARS).map(s => ({ symbol: s, tradable: true, exchange: 'NASDAQ' })).concat([{ symbol: 'OTCX', tradable: true, exchange: 'OTC' }, { symbol: 'WARR.WS', tradable: true, exchange: 'NYSE' }]));
@@ -84,14 +84,17 @@ if (process.argv[2] === 'child') {
   const url = 'http://127.0.0.1:' + server.address().port;
   process.env.ALPACA_URL = url; process.env.ALPACA_DATA_URL = url;
   process.env.ALPACA_KEY = 'test'; process.env.ALPACA_SECRET = 'test';
+  if (FAKE.journalKey) process.env.JOURNAL_KEY = FAKE.journalKey;                        // privacy mode: encrypted journal (must be set before the import)
   fs.mkdirSync('bot', { recursive: true });
   const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
+  if (FAKE.prevJournal) fs.writeFileSync('bot/journal.json', JSON.stringify(FAKE.journalKey ? await bot.encryptJournal(FAKE.prevJournal, FAKE.prevKey || FAKE.journalKey, 1000) : FAKE.prevJournal));   // what the previous run left behind
   bot.applyConfig({ symbols: ['DIP', 'POP', 'FALL'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
-  await bot.botCycle();
+  await bot.botCycle({ journal: !!FAKE.closed });
+  if (FAKE.cycles > 1) for (let k = 1; k < FAKE.cycles; k++) await bot.botCycle({ journal: true });   // a longer session: the journal is rewritten several times
   server.close();
-  let watch = null, day = null; try { const jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); watch = jj.watch; day = jj.day; } catch (e) {}
-  let acts = null; try { acts = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).acts.map(a => a.m); } catch (e) {}
-  console.log('RESULT ' + JSON.stringify({ acts, watch, day, deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
+  const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
+  console.log('RESULT ' + JSON.stringify({ acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
@@ -188,5 +191,21 @@ check('stake: with a $5,000 stake the buy is sized on $5,000, not on the $100,00
 
 const F = run({ stocks: true, options: true, puts: true, stockUnit: 'usd', stockUsd: 5000, stockCapUsd: 50, callCapPct: 0.1, putUnit: 'usd', putUsd: 5000, putCapUsd: 100 });
 check('ceilings: nothing bought when each sleeve ceiling is below one unit', () => assert.equal(F.orders.length, 0, JSON.stringify(F.orders.map(o => o.symbol))));
+
+// ---- the journal survives restarts: a run that starts with the market closed must not blank out what the day's run published ----
+const prevJ = { at: '2026-10-23T20:03:00Z', sig: 'x', acts: [{ t: '2026-10-23T19:58:00.000Z', m: 'Earlier today: DIP RSI-2 dip buy' }], env: { at: '2026-10-23T19:58:00Z', block: false, reasons: ['Bear market regime'], flagged: [] },
+  risk: { heatPct: 1.2, capPct: 6 }, watch: { at: '2026-10-23T19:58:00Z', rows: [{ s: 'DIP', r2: 3.1, up: true }], buy: ['DIP'], call: ['DIP'], put: [], on: { stocks: true, calls: true, puts: false }, total: 3 }, day: { on: false, setups: [] } };
+const J1 = run({ stocks: true, options: true }, { time: '2026-10-23T20:01:00Z', closed: true, journalKey: 'test-pass', prevJournal: prevJ });   // 4:01 PM ET, market closed, encrypted journal on disk
+check('journal: a run that starts after the close keeps the watch list, market check, risk panel and day block from the day\'s run (decrypting its own previous entry)', () => {
+  assert.ok(J1.enc, 'journal was not encrypted'); assert.ok(J1.watch, 'watch list lost: ' + JSON.stringify(J1));
+  assert.deepEqual(J1.watch.buy, ['DIP']); assert.equal(J1.watch.at, '2026-10-23T19:58:00Z');
+  assert.deepEqual(J1.env.reasons, ['Bear market regime']); assert.ok(J1.day && J1.day.on === false);
+});
+check('journal: the action log carries over across a restart instead of starting empty', () => assert.ok((J1.acts || []).includes('Earlier today: DIP RSI-2 dip buy'), JSON.stringify(J1.acts)));
+const J2 = run({ stocks: true, options: true }, { journalKey: 'test-pass', prevJournal: prevJ, cycles: 3 });   // market open: three cycles, three journal writes
+check('journal: an open-market cycle replaces the carried-over watch list with a fresh one', () => { assert.ok(J2.watch && J2.watch.at !== '2026-10-23T19:58:00Z', JSON.stringify(J2.watch && J2.watch.at)); assert.ok(J2.watch.rows.length >= 3); });
+check('journal: rewriting the journal several times never duplicates the action log', () => { const a = J2.acts || []; assert.ok(a.length > 1, JSON.stringify(a)); assert.equal(new Set(a).size, a.length, 'duplicates: ' + JSON.stringify(a)); assert.equal(a[0], 'Earlier today: DIP RSI-2 dip buy'); });
+const J3 = run({ stocks: true, options: true }, { time: '2026-10-23T20:01:00Z', closed: true, journalKey: 'test-pass', prevKey: 'old-pass', prevJournal: prevJ });
+check('journal: a previous entry written under another passphrase is skipped, not a crash (fresh journal, still encrypted)', () => { assert.ok(J3.enc); assert.equal(J3.watch, null); assert.ok(Array.isArray(J3.acts)); });
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

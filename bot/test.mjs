@@ -168,6 +168,15 @@ test('money settings: defaults are % of account with no ceiling; units and caps 
   await atest('HTTP: a 4xx is reported at once, not retried', async () => { await assert.rejects(httpCall(base, '/bad'), /HTTP 422/); assert.equal(hits['/bad'], 1); });
   await atest('HTTP: an order (POST) is never retried', async () => { await assert.rejects(httpCall(base, '/order', { method: 'POST', body: '{}' }), /HTTP 500/); assert.equal(hits['/order'], 1); });
   srv.close();
+  // ---- journal encryption: what the bot writes, the bot (at its next start) and the page can read back ----
+  const { encryptJournal, decryptJournal } = await import('./bot.mjs');
+  await atest('journal crypto: encrypt → decrypt round trip; the blob records its own round count; a wrong passphrase is rejected', async () => {
+    const body = { at: '2026-10-22T20:03:31Z', watch: { rows: [{ s: 'AAPL', r2: 4.2 }], buy: ['AAPL'] }, acts: [{ t: 't1', m: 'hello' }] };
+    const blob = await encryptJournal(body, 'correct horse', 1000);
+    assert.equal(blob.enc, 1); assert.equal(blob.iter, 1000); assert.ok(!JSON.stringify(blob).includes('AAPL'), 'plaintext leaked into the blob');
+    assert.deepEqual(await decryptJournal(blob, 'correct horse'), body);
+    await assert.rejects(decryptJournal(blob, 'wrong'));
+  });
 }
 test('market scan ranking: by average dollar volume, minimum price, top N', () => {
   const bar = (c, v) => Array.from({ length: 20 }, () => ({ c, v }));

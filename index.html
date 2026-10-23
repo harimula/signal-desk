@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-s06J5AXB2Hv4Y3X3E8fbX7uusz5zP97c3U+Aa5A1BCc=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-CCkXRSSZCkyopgRs1VhUOvAkSRZEWcAWe9BqvuYVx7k=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -911,7 +911,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792714646';
+const BUILD_V = '1792716111';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2402,7 +2402,13 @@ ${(() => { const Dy = J.day; if (!Dy) return ''; const $p = v => v == null ? '�
   const open = (Dy.open || []).length ? `<div class="tw" style="margin-top:6px"><table style="min-width:600px"><thead><tr><th class="lt">Open day trade</th><th>Qty</th><th>Bought</th><th>Now</th><th>P/L</th><th>Stop</th><th>Target</th><th class="lt">Opened</th></tr></thead><tbody>${Dy.open.map(h => `<tr><td class="lt"><b>${esc(h.s)}</b> <span class="mut">${esc(h.kind.toUpperCase())} ${h.side}</span></td><td>${h.qty}</td><td>${$p(h.avg)}</td><td>${$p(h.cur)}</td><td class="${cls(h.pl)}">${$$(h.pl)} (${h.plpc >= 0 ? '+' : ''}${h.plpc}%)</td><td>${$p(h.stop)}${h.kind !== 'stock' ? ' <span class="mut">(stock)</span>' : ''}</td><td>${$p(h.target)}${h.kind !== 'stock' ? ' <span class="mut">(stock)</span>' : ''}</td><td class="lt">${h.opened != null ? String(Math.floor(h.opened / 60)).padStart(2, '0') + ':' + String(h.opened % 60).padStart(2, '0') + ' ET' : '–'}</td></tr>`).join('')}</tbody></table></div>` : '';
   return head + setups + open; })()}
 <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px"><b>Every stock it watches, with the price that would trigger it</b></summary><div class="tw" style="margin-top:8px"><table style="min-width:${W.on.puts ? 760 : 620}px"><thead><tr><th class="lt">Stock</th><th>Price</th><th>RSI-2</th><th>200-day</th><th class="lt">Buys / CALLs if it…</th>${W.on.puts ? '<th class="lt">PUT if it…</th>' : ''}<th class="lt">Status</th></tr></thead><tbody>${rowsHtml}</tbody></table></div><div class="mut" style="font-size:11.5px;margin-top:6px">“Closes below $X” is today's closing price that would push RSI-2 under ${W.thr}; the bot then buys the next morning (or right away with Intraday signals on). The level moves every day.</div></details></div>`;
-  })() : '';
+  })() : (() => {
+    // the card is a fixture of this tab: when the journal entry carries no watch list yet, say so instead of leaving a gap
+    const S = J.settings || {}, on = v => v ? '<span class="pos">on</span>' : '<span class="mut">off</span>';
+    return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">👀 What the bot is watching</b> <span class="mut" style="font-size:11.5px">· ${S.universe === 'scan' ? `market scan: the ${S.scanSize || 200} most-traded US stocks` : 'your stock list'}</span>
+<div class="mut" style="margin-top:6px;font-size:12.5px;line-height:1.55">The bot works out its watch list — each stock’s RSI-2, its trend and the price that would trigger a buy — while the market is open, and this journal entry (written ${tET(J.at)} ET) does not carry one yet. It fills in with the bot’s first check-in after 9:30 AM ET on a trading day.</div>
+<div style="margin-top:7px;font-size:13px"><b>🟢 Trade (buy shares):</b> ${on(S.stocks)} · <b>📈 CALL:</b> ${on(S.options)} · <b>📉 PUT:</b> ${on(S.puts)} <span class="mut" style="font-size:11.5px">· switches in Bot settings</span></div></div>`;
+  })();
   const kinds = ['Stock', 'Call', 'Put'];
   const st = arr => { const w = arr.filter(c => c.pl > 0), l = arr.filter(c => c.pl <= 0), gw = w.reduce((t, c) => t + c.pl, 0), gl = -l.reduce((t, c) => t + c.pl, 0); return {n: arr.length, win: arr.length ? w.length / arr.length * 100 : 0, exp: arr.length ? (gw - gl) / arr.length : 0, pf: gl > 0 ? gw / gl : null, aw: w.length ? gw / w.length : 0, al: l.length ? -gl / l.length : 0, net: gw - gl}; };
   let perfCard = '';
