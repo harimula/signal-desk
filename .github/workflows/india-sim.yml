@@ -1,0 +1,36 @@
+name: india-bot-simulation
+# The India bot in SIMULATION: no broker, no real orders. Once per trading day after the NSE close it fills yesterday's
+# planned entries at today's official open, exits at today's close, plans tomorrow — exactly as the NSE research did.
+# 10:40 UTC = 4:10 PM IST; the 12:10 UTC run is a backup in case GitHub skips the first (a second run on the same day
+# changes nothing).
+on:
+  schedule:
+    - cron: '40 10 * * 1-5'
+    - cron: '10 12 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: india-sim
+  cancel-in-progress: false
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: 20 }
+      - run: node bot/india.mjs
+        env:
+          JOURNAL_KEY: ${{ secrets.JOURNAL_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
+      - run: |
+          git config user.name "signal-desk-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add bot/india-journal.json
+          git diff --cached --quiet && exit 0
+          git commit -m "India simulation journal"
+          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs origin main || git rebase --abort; sleep 3; done
+          git push

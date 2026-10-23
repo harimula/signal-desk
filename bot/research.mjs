@@ -4,11 +4,12 @@
 import fs from 'node:fs';
 import { signalAt, rsi2, sma } from './strategy.mjs';
 import { regimeOf } from './risk.mjs';
+import { NIFTY100 as NIFTY100_LIST } from './india.mjs';
 
 // Market: US (default) or IN (NSE). India: Nifty 100 names (today's list — survivorship bias, as for the US), the Nifty 50 index as
 // benchmark and regime filter, and 0.15% per side for costs (STT 0.1%, stamp duty, exchange/SEBI fees, GST, DP charge, slippage).
 const MKT = (process.env.BT_MARKET || 'US').toUpperCase();
-const NIFTY100 = 'RELIANCE,TCS,HDFCBANK,ICICIBANK,INFY,BHARTIARTL,ITC,SBIN,LT,HINDUNILVR,KOTAKBANK,AXISBANK,BAJFINANCE,MARUTI,ASIANPAINT,HCLTECH,SUNPHARMA,TITAN,ULTRACEMCO,WIPRO,NTPC,POWERGRID,ONGC,NESTLEIND,M&M,TATASTEEL,JSWSTEEL,ADANIENT,ADANIPORTS,COALINDIA,BAJAJFINSV,HDFCLIFE,SBILIFE,TECHM,GRASIM,HINDALCO,DRREDDY,CIPLA,DIVISLAB,EICHERMOT,HEROMOTOCO,BAJAJ-AUTO,BRITANNIA,APOLLOHOSP,INDUSINDBK,TATACONSUM,BPCL,SHRIRAMFIN,TRENT,BEL,HAL,LTIM,DMART,PIDILITIND,SIEMENS,GODREJCP,DABUR,HAVELLS,AMBUJACEM,SHREECEM,BANKBARODA,PNB,CANBK,IOC,GAIL,VEDL,DLF,ICICIPRULI,ICICIGI,SBICARD,MARICO,COLPAL,BERGEPAINT,TORNTPHARM,LUPIN,AUROPHARMA,ZYDUSLIFE,MOTHERSON,TVSMOTOR,BOSCHLTD,ABB,CHOLAFIN,MUTHOOTFIN,INDIGO,NAUKRI,JINDALSTEL,TATAPOWER,ADANIGREEN,ADANIPOWER,IRCTC,HDFCAMC,PFC,RECLTD,UNITDSPR,BAJAJHLDNG,ETERNAL,JIOFIN,POLYCAB,CGPOWER,VBL'.split(',').map(s => s + '.NS').join(',');
+const NIFTY100 = NIFTY100_LIST.map(s => s + '.NS').join(',');                        // one list for the research and the India bot
 const BENCH = MKT === 'IN' ? '^NSEI' : 'SPY', BENCH_NAME = MKT === 'IN' ? 'Nifty 50' : 'SPY';
 const OUT = MKT === 'IN' ? { json: 'bot/research-in.json', md: 'bot/research_in_report.md' } : { json: 'bot/research.json', md: 'bot/research_report.md' };
 const YEARS = +(process.env.BT_YEARS || 40), COST = +(process.env.BT_COST || (MKT === 'IN' ? 0.0015 : 0.0005)), POS = 0.10, MAXPOS = 6;

@@ -22,6 +22,8 @@ jobs:
         run: node bot/test.mjs
       - name: Order tests against a fake broker
         run: node bot/test-orders.mjs
+      - name: India simulation tests
+        run: node bot/test-india.mjs
   page:
     runs-on: ubuntu-latest
     timeout-minutes: 12

@@ -758,22 +758,9 @@ async function run() {
 // The page decrypts with the same passphrase; the bot decrypts its own previous entry at start-up so that nothing is lost
 // across restarts (every run is a fresh process — without this, a run that starts after the close, or at 9:20 before the
 // open, would publish a journal with no watch list, no market check and an empty action log).
-const JOURNAL_ITER = 600000;
-export async function encryptJournal(obj, pass, iter = JOURNAL_ITER) {
-  const cr = await import('node:crypto'), subtle = cr.webcrypto.subtle, enc = new TextEncoder();
-  const salt = cr.randomBytes(16), iv = cr.randomBytes(12);
-  const km = await subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
-  const key = await subtle.deriveKey({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
-  const ct = Buffer.from(await subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(obj))));
-  return { enc: 1, kdf: 'PBKDF2-SHA256', iter, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64') };
-}
-export async function decryptJournal(blob, pass) {
-  const cr = await import('node:crypto'), subtle = cr.webcrypto.subtle, enc = new TextEncoder();
-  const km = await subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
-  const key = await subtle.deriveKey({ name: 'PBKDF2', salt: Buffer.from(blob.salt, 'base64'), iterations: blob.iter || 200000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
-  const pt = await subtle.decrypt({ name: 'AES-GCM', iv: Buffer.from(blob.iv, 'base64') }, key, Buffer.from(blob.ct, 'base64'));
-  return JSON.parse(new TextDecoder().decode(pt));
-}
+export { encryptJournal, decryptJournal } from './jcrypt.mjs';
+import { encryptJournal, decryptJournal } from './jcrypt.mjs';
+
 // The previous journal, as this process knows it: read (and decrypted) once from disk, then kept in memory after each write.
 let prevJournal = null;
 async function previousJournal() {

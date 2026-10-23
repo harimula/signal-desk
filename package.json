@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node bot/test.mjs && node bot/test-orders.mjs",
+    "test": "node bot/test.mjs && node bot/test-orders.mjs && node bot/test-india.mjs",
     "lint": "npx --yes eslint@9.39.1 bot/*.mjs news.mjs fetch.mjs tools/*.mjs tips.js",
     "check": "node tools/stamp.mjs --check",
     "stamp": "node tools/stamp.mjs",
