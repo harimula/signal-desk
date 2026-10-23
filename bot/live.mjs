@@ -6,7 +6,7 @@
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { execSync, spawn } from 'node:child_process';
-import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp } from './bot.mjs';
+import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello } from './bot.mjs';
 import { summary } from './config.mjs';
 
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
@@ -124,6 +124,9 @@ if (m1 >= 16 * 60) {
   if (js && js.day === todayET.year + todayET.month + todayET.day && js.mins >= 15 * 60 + 55) { console.log(`Market closed and today's session already finished its journal at ${js.at} - nothing to do.`); process.exit(0); }
   console.log('Market closed and today\'s journal is incomplete - running one closing cycle.');
 }
+// first run of the day (no journal from today yet, market hours): send the good-morning alert once the first cycle is done
+const firstToday = (() => { const js = journalStamp(); const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).replace(/-/g, ''); return !js || js.day !== d; })();
+let helloSent = !firstToday || m1 >= 16 * 60;
 connectStreams();
 await pollConfig();
 while (Date.now() - born < LIFE && !stopping) {
@@ -139,6 +142,7 @@ while (Date.now() - born < LIFE && !stopping) {
     try {
       const r = await botCycle({ journal: Date.now() - lastJournal >= JOURNAL_EVERY, floors: setFloor, held: heldUnds });
       if (Date.now() - lastJournal >= JOURNAL_EVERY) lastJournal = Date.now();
+      if (!helloSent && r.open) { helloSent = true; await morningHello(); }
       const ck = clockInfo();
       if (!r.open && ck && !ck.is_open) { console.log('Market is closed - stopping.'); break; }
       resubscribe();

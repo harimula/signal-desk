@@ -74,6 +74,14 @@ async function session(label, prep) {
   check('settings: Save reaches GitHub with the typed value', puts.length === 1 && JSON.parse(Buffer.from(puts[0].content, 'base64')).rsiThreshold === 12, msg.slice(0, 120));
   check('settings: Save bar reports success', /Saved /.test(msg), msg.slice(0, 120));
   check('settings: no script error during save', errors.length === 0, errors.join(' | '));
+  // phone alerts: the test button sends to the typed topic from the browser (stand-in for ntfy.sh)
+  let ntfyUrl = null; await page.route('https://ntfy.sh/**', r => { ntfyUrl = r.request().url(); return r.fulfill({ status: 200, body: '{}' }); });
+  await page.evaluate(() => document.querySelector('[data-st="ntfytest"]').click());
+  const m0 = await page.textContent('#ntfyMsg');
+  await page.fill('#st-ntfy', 'my-topic-123'); await page.evaluate(() => document.querySelector('[data-st="ntfytest"]').click());
+  let m1 = ''; for (let i = 0; i < 20 && !/Sent to/.test(m1); i++) { await page.waitForTimeout(200); m1 = await page.textContent('#ntfyMsg'); }
+  check('alerts: "Send test alert" asks for the topic when the box is empty, then posts to ntfy.sh/<topic>', /Type your alert topic/.test(m0) && /Sent to topic/.test(m1) && /ntfy\.sh\/my-topic-123$/.test(ntfyUrl || ''), m0 + ' | ' + m1 + ' | ' + ntfyUrl);
+  check('alerts: no CSP violation sending the test alert', (await page.evaluate(() => window.__csp)).length === 0, JSON.stringify(await page.evaluate(() => window.__csp)));
   await page.close();
 }
 // 3. sign in anywhere: device A syncs (token + holdings inside the encrypted blob), device B signs in with the passphrase only

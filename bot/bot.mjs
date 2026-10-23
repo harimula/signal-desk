@@ -214,6 +214,14 @@ export async function eodReport() {
     await flushAlerts();
   } catch (e) { console.log('eod report failed', e.message); }
 }
+// Good-morning alert: the first run of the day says it is up, so a silent phone means "nothing happened", not "is it broken?".
+export async function morningHello() {
+  try {
+    const positions = await T('/v2/positions');
+    alerts.push(`\u2705 Bot is up for the day \u2014 watching ${UNIVERSE.length} stocks${CFG.universe === 'scan' ? ' (market scan follows in the background)' : ''}, holding ${positions.length} position${positions.length === 1 ? '' : 's'}. You get an alert for every buy and sell, and a summary after 4 PM.`);
+    await flushAlerts();
+  } catch (e) { console.log('morning alert failed', e.message); }
+}
 // Optional external heartbeat (e.g. a healthchecks.io ping URL in HEARTBEAT_URL): a service that alerts when pings stop.
 export async function heartbeat() {
   const u = process.env.HEARTBEAT_URL; if (!u) return;

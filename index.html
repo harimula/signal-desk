@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-M2/RpsJ3txhFnpYvzbrIGjyTRQ22xcHezc4pZoVnkK4=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-7U0cK9GGzi0wyQ3dExZbETPWtN9OLXkGFyQHjxh+gdc=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://ntfy.sh https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -911,7 +911,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792766024';
+const BUILD_V = '1792766436';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2650,6 +2650,15 @@ document.addEventListener('click', e => {
   else if (a === 'preset') { stCfg = {...stRead(), preset: b.dataset.v, ...ST_PRESETS[b.dataset.v]}; stDirty = true; renderAll(); }
   else if (a === 'reload') { stDirty = false; stLoad(true); }
   else if (a === 'test') stTest();
+  else if (a === 'ntfytest') {
+    // the saved topic is a GitHub secret the page cannot read back, so the test uses the topic typed in the box
+    const t = ($('#st-ntfy') || {}).value ? $('#st-ntfy').value.trim() : '', out = $('#ntfyMsg');
+    if (!t) { out.textContent = 'Type your alert topic in the box first (the saved one is a secret this page cannot read), then press Send test alert.'; return; }
+    out.textContent = 'Sending…';
+    fetch('https://ntfy.sh/' + encodeURIComponent(t), {method: 'POST', body: 'Test from Signal Desk — if you see this, phone alerts work. Save the same topic with “Save keys to GitHub secrets” so the bot uses it.', headers: {Title: 'Signal Desk test alert', Tags: 'white_check_mark'}})
+      .then(r => { out.textContent = r.ok ? `Sent to topic “${t}”. It should appear in the ntfy app within seconds. Nothing? In the app, check you subscribed to exactly “${t}” (same spelling, server ntfy.sh) and that notifications for ntfy are allowed in your phone settings.` : 'ntfy refused it (HTTP ' + r.status + ').'; })
+      .catch(e => { out.textContent = 'Could not reach ntfy.sh: ' + (e.message || e); });
+  }
   else if (a === 'copyjson') stCopyJson();
   else if (a === 'applyday' && rdJ && rdJ.best) { const P = rdJ.best.P; stCfg = {...stRead(), dayOrMin: P.orMin, dayRvol: P.rvol, dayTarget: P.target, dayTimeStop: P.timeStop, dayEnd: mins2hhmm(P.end), dayStart: mins2hhmm(P.start)}; stDirty = true; stMsg = 'Researched values are in the form — press Save settings to the bot to use them.'; renderAll(); }
   else stControl(a);
@@ -2708,7 +2717,7 @@ function settingsView() {
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px">
 <label style="font-size:12px"><b>Alpaca API key</b><input id="st-akey" ${inp} autocomplete="off" placeholder="${has('ALPACA_KEY') ? 'set — paste to replace' : 'paste key'}"></label>
 <label style="font-size:12px"><b>Alpaca secret</b><input id="st-asec" type="password" ${inp} autocomplete="off" placeholder="${has('ALPACA_SECRET') ? 'set — paste to replace' : 'paste secret'}"></label>
-<label style="font-size:12px"><b>Phone alert topic</b> <span class="mut">(ntfy app)</span><input id="st-ntfy" ${inp} autocomplete="off" placeholder="e.g. signaldesk-7f3k29q"></label>
+<label style="font-size:12px"><b>Phone alert topic</b> <span class="mut">(ntfy app)</span><input id="st-ntfy" ${inp} autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${has('NTFY_TOPIC') ? 'set \u2014 type it to test or replace' : 'e.g. signaldesk-7f3k29q'}"><button class="btn ghost" type="button" data-st="ntfytest" style="margin-top:6px;font-size:12px">Send test alert</button><span id="ntfyMsg" class="mut" style="display:block;font-size:11.5px;margin-top:4px"></span></label>
 <label style="font-size:12px"><b>Journal passphrase</b> <span class="mut">(encrypts your trades on the public site)</span><input id="st-jkey" type="password" ${inp} autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="${has('JOURNAL_KEY') ? 'set \u2014 enter to replace' : 'choose a strong passphrase'}"></label>
 <label style="font-size:12px"><b>Live API key</b> <span class="mut">(real money only)</span><input id="st-lkey" ${inp} autocomplete="off" placeholder="${has('ALPACA_LIVE_KEY') ? 'set \u2014 paste to replace' : 'leave empty for paper'}"></label>
 <label style="font-size:12px"><b>Live secret</b> <span class="mut">(real money only)</span><input id="st-lsec" type="password" ${inp} autocomplete="off" placeholder="${has('ALPACA_LIVE_SECRET') ? 'set \u2014 paste to replace' : 'leave empty for paper'}"></label></div>
