@@ -79,13 +79,6 @@ async function session(label, prep) {
   check('settings: Save reaches GitHub with the typed value', puts.length === 1 && JSON.parse(Buffer.from(puts[0].content, 'base64')).rsiThreshold === 12, msg.slice(0, 120));
   check('settings: Save bar reports success', /Saved /.test(msg), msg.slice(0, 120));
   check('settings: no script error during save', errors.length === 0, errors.join(' | '));
-  // phone alerts: the test button sends to the typed topic from the browser (stand-in for ntfy.sh)
-  let ntfyUrl = null; await page.route('https://ntfy.sh/**', r => { ntfyUrl = r.request().url(); return r.fulfill({ status: 200, body: '{}' }); });
-  await page.evaluate(() => document.querySelector('[data-st="ntfytest"]').click());
-  const m0 = await page.textContent('#ntfyMsg');
-  await page.fill('#st-ntfy', 'https://ntfy.sh/my-topic-123'); await page.evaluate(() => document.querySelector('[data-st="ntfytest"]').click());
-  let m1 = ''; for (let i = 0; i < 20 && !/Sent to/.test(m1); i++) { await page.waitForTimeout(200); m1 = await page.textContent('#ntfyMsg'); }
-  check('alerts: "Send test alert" asks for the topic when the box is empty, then posts to ntfy.sh/<topic>', /Type your alert topic/.test(m0) && /Sent to topic/.test(m1) && /ntfy\.sh\/my-topic-123$/.test(ntfyUrl || ''), m0 + ' | ' + m1 + ' | ' + ntfyUrl);
   // Telegram connect: token check → finds the chat from the owner's /start → test message → both values sealed as secrets
   const tgSent = []; let tgUpd = [];
   await page.route('https://api.telegram.org/**', r => { const m3 = r.request().url().split('/').pop(); const ok = res => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, result: res }) });
@@ -98,11 +91,12 @@ async function session(label, prep) {
   for (let i = 0; i < 60 && !(secretPuts.some(x => x.name === 'TELEGRAM_CHAT')); i++) await page.waitForTimeout(250);
   check('telegram: Connect sends a test message to the chat and stores TELEGRAM_TOKEN + TELEGRAM_CHAT as sealed secrets', tgSent.some(x => x.chat_id === 4242 && /Connected to Signal Desk/.test(x.text)) && ['TELEGRAM_TOKEN', 'TELEGRAM_CHAT'].every(n => secretPuts.some(x => x.name === n && x.encrypted_value)), JSON.stringify(secretPuts.map(x => x.name)) + ' ' + (await page.textContent('#tgMsg').catch(() => '')) + ' ' + errors.join(' | '));
   secretPuts.length = 0;
-  // Save keys: the alert topic is sealed in the browser (libsodium) and sent as a GitHub secret
+  // Save keys: a key is sealed in the browser (libsodium) and sent as a GitHub secret
+  await page.fill('#st-akey', 'PKTESTKEY1234567890');
   await page.evaluate(() => document.querySelector('[data-st="keys"]').click());
   let km = ''; for (let i = 0; i < 60 && !secretPuts.length && !/failed/i.test(km); i++) { await page.waitForTimeout(250); km = await page.evaluate(() => document.body.innerText.match(/Saving keys failed[^\n]*|Saved[^\n]*secret[^\n]*/i)?.[0] || ''); }
-  check('keys: Save keys seals the alert topic in the browser and stores it as the NTFY_TOPIC secret', secretPuts.some(x => x.name === 'NTFY_TOPIC' && x.key_id === 'kid1' && Buffer.from(x.encrypted_value, 'base64').length === 48 + 'my-topic-123'.length), km + ' ' + JSON.stringify(secretPuts.map(x => x.name)) + ' ' + errors.join(' | '));
-  check('alerts: no CSP violation sending the test alert', (await page.evaluate(() => window.__csp)).length === 0, JSON.stringify(await page.evaluate(() => window.__csp)));
+  check('keys: Save keys seals the Alpaca key in the browser and stores it as the ALPACA_KEY secret', secretPuts.some(x => x.name === 'ALPACA_KEY' && x.key_id === 'kid1' && Buffer.from(x.encrypted_value, 'base64').length === 48 + 'PKTESTKEY1234567890'.length), km + ' ' + JSON.stringify(secretPuts.map(x => x.name)) + ' ' + errors.join(' | '));
+  check('settings: no CSP violation connecting Telegram or saving keys', (await page.evaluate(() => window.__csp)).length === 0, JSON.stringify(await page.evaluate(() => window.__csp)));
   await page.close();
 }
 // 3. sign in anywhere: device A syncs (token + holdings inside the encrypted blob), device B signs in with the passphrase only

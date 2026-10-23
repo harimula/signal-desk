@@ -15,7 +15,6 @@ jobs:
         with: { node-version-file: .nvmrc }
       - run: node bot/watchdog.mjs
         env:
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
           ALPACA_KEY: ${{ secrets.ALPACA_KEY }}

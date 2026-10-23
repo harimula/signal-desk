@@ -107,13 +107,13 @@ Everything the owner sets up — Finnhub/FMP keys, proxy URL, watchlist, portfol
 flowchart TB
   subgraph Owner["Owner's devices"]
     BR[Browser<br/>page + localStorage]
-    PH[Phone<br/>ntfy alerts]
+    PH[Phone<br/>Telegram]
   end
 
   subgraph GH["GitHub (free)"]
     REPO[(Repository<br/>code + data JSON)]
     PAGES[GitHub Pages<br/>static site]
-    SEC[(Encrypted secrets<br/>ALPACA_*, JOURNAL_KEY, NTFY_TOPIC)]
+    SEC[(Encrypted secrets<br/>ALPACA_*, JOURNAL_KEY, TELEGRAM_*)]
     subgraph ACT["GitHub Actions"]
       RF[refresh-prices<br/>every 10–15 min]
       TR[paper-trade-bot<br/>market hours]
@@ -128,7 +128,7 @@ flowchart TB
     FH[Finnhub<br/>streaming quotes, news]
     AL[Alpaca<br/>broker: paper or live]
     RSS[Fed / Yahoo RSS<br/>Benzinga news]
-    NT[ntfy.sh<br/>push alerts]
+    NT[Telegram Bot API<br/>alerts + commands]
   end
 
   BR -->|reads| PAGES
@@ -352,7 +352,7 @@ flowchart LR
   Q -->|≥ 250 ms apart| CY[botCycle]
   CY --> AL[Alpaca REST]
   CY --> J[journal.json<br/>commit every 10 min]
-  CY --> NT[ntfy alert]
+  CY --> NT[Telegram alert]
   AL -.->|stream down| POLL[REST polling fallback]
 ```
 
@@ -412,7 +412,7 @@ flowchart TB
     S1[ALPACA_KEY / SECRET — paper]
     S2[ALPACA_LIVE_KEY / SECRET — live]
     S3[JOURNAL_KEY]
-    S4[NTFY_TOPIC]
+    S4[TELEGRAM_TOKEN / TELEGRAM_CHAT]
   end
   Browser -->|libsodium sealed box, SRI-pinned| Secrets
   Secrets -.->|env vars, in memory only| Bot[Bot run]
@@ -429,7 +429,7 @@ flowchart TB
 - **Protective orders live at the broker:** every swing stock buy is an OTO order with a good-till-cancelled stop leg at the hard floor; every day-trade stock buy is a bracket (stop + target). Rule-based exits cancel the legs first, then sell at market; the day-trade breakeven rule moves the stop leg with a replace call; the bot's own stop check runs only where no leg exists. A dead-man's switch (`watchdog.yml`, every 15 min in market hours) alerts the phone when the journal has not been updated for 25 minutes; the bot sends an end-of-day summary; an optional `HEARTBEAT_URL` is pinged every minute.
 - **Broker calls:** every request has a 15 s deadline; reads are retried with backoff on 429 / 5xx / network faults; order placement is never retried (the `client_order_id` and the in-process duplicate guard cover the slow-broker case). A cancelled run (SIGTERM) finishes its cycle, writes the journal and pushes it.
 - **Broker API keys can trade but cannot withdraw funds** (verify in your own Alpaca settings).
-- **Owner checklist** (`SECURITY.md`): 2FA everywhere (no SMS), sole collaborator on the repo, token scoped to one repo with ≤ 90-day expiry, random ntfy topic, never paste keys into chat or issues.
+- **Owner checklist** (`SECURITY.md`): 2FA everywhere (no SMS), sole collaborator on the repo, token scoped to one repo with ≤ 90-day expiry, Telegram connected through the page only, never paste keys into chat or issues.
 
 ---
 
@@ -450,7 +450,7 @@ The bot starts on the next market morning. Nothing on the owner's devices needs 
 | See trades, P/L, risk | Bot trades tab |
 | Change risk, universe, guards | Bot settings tab → Save (in force within 60 s) |
 | Pause / resume / run now | Bot settings tab buttons (writes/removes `bot/STOP`, dispatches workflow) |
-| Alerts on the phone | ntfy app subscribed to the `NTFY_TOPIC` |
+| Alerts on the phone | Telegram: Bot settings → 1 → Connect Telegram; commands /status /money /positions /watch /pause /resume |
 | Re-run research or backtest | Actions tab → workflow → Run workflow |
 
 ### 7.3 Going live — the procedure
@@ -514,6 +514,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-23 | **ntfy removed** at the owner's request (*"No longer needed: ntfy alerts"*) — Telegram is the only alert channel. Removed from the page (topic box, test button, status dot), bot.mjs (`flushAlerts`), watchdog.mjs, both workflows' env (the bot no longer receives `NTFY_TOPIC`, so nothing goes to the public topic even though the secret still exists), the CSP and the tests; readiness item and the Guards checkbox now refer to Telegram. The leftover `NTFY_TOPIC` secret can be deleted in GitHub → Settings → Secrets. | ARCHITECTURE §3.1, §5.3, §6, §7, glossary; settings.html; docs/index.html; SECURITY.md; BOT.md; architecture.pptx |
 | 2026-10-23 | Swing entry window bug (reported via Telegram: *"entry window closed"* at 1 PM with entries set until 3:30): `normalize()` accepted `entryEnd` only up to 15:00, so 15:30 silently became the 11:00 default. Range now 10:00–15:45; the page's time box has min/max and Save refuses an out-of-range time; idle text names the swing window and where to change it. Unit test (58). | settings.html; docs/index.html |
 | 2026-10-23 | **Telegram alerts and commands.** New `bot/telegram.mjs`; `flushAlerts` sends to ntfy and/or Telegram; `tgCommand()` in bot.mjs answers /status /money /positions /watch /help and sets an in-memory `/pause` (adds a `G.block` reason: entries stop, exits and stops unchanged, resets at the next session) / `/resume`; runner polls every 3 s; watchdog also posts to Telegram. Secrets `TELEGRAM_TOKEN` + `TELEGRAM_CHAT` (trade.yml, watchdog.yml). Bot settings §1: *Connect Telegram* (getMe → getUpdates finds the owner's private chat → test message → both sealed as secrets); `https://api.telegram.org` in connect-src; readiness item accepts Telegram or ntfy. Safety: only the configured chat is answered, messages > 30 min old are skipped, the token never appears in errors or logs, no command can buy or sell. Tests: parser (unit, 57), 5 order checks (alert delivery, commands, other chats ignored, /pause blocks a buy, /pause never sells; 48), 2 page checks (18). | ARCHITECTURE §4.3, §6; settings.html; docs/index.html; architecture.pptx |
 | 2026-10-23 | **Save keys fixed** (reported: *"Cannot read properties of undefined (reading 'ready')"*). Two causes: (1) the page paired libsodium core 0.7.16 with wrappers 0.7.13 — the 0.7.16 browser module ships a truncated WebAssembly section and never initialises → core and wrapper now both 0.7.13 (SRI re-pinned from the npm tarball); (2) the 2026-10-22 CSP blocked WebAssembly compilation → `'wasm-unsafe-eval'` added to script-src (WebAssembly only; JS `eval` stays blocked). New page check presses Save keys with the real library files and the real CSP and asserts a sealed `NTFY_TOPIC` PUT (page checks: 16; CI installs the two libsodium packages for it). | ARCHITECTURE §6, §8; docs/index.html |
@@ -593,4 +594,4 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 | **DTE** | Days to expiry of an option |
 | **Paper trading** | Simulated account with fake money and real prices |
 | **Sealed box** | Public-key encryption (libsodium) used to store secrets in GitHub without the browser ever being able to read them back |
-| **ntfy** | Free push-notification service used for bot alerts |
+| **Telegram bot** | Your private bot (made with @BotFather) that delivers alerts and answers commands |

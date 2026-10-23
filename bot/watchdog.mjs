@@ -1,8 +1,8 @@
 // Dead-man's switch, run by GitHub Actions every 15 minutes during US market hours (watchdog.yml).
 // Reads the public journal (its timestamp is readable even when the journal is encrypted) and alerts the phone
-// when the bot has not checked in for too long while the market is open. Needs only NTFY_TOPIC.
+// when the bot has not checked in for too long while the market is open. Needs TELEGRAM_TOKEN + TELEGRAM_CHAT.
 const SITE = process.env.SITE_URL || (process.env.GITHUB_REPOSITORY ? `https://${process.env.GITHUB_REPOSITORY.split('/')[0].toLowerCase()}.github.io/${process.env.GITHUB_REPOSITORY.split('/')[1]}/` : '');
-const NTFY = String(process.env.NTFY_TOPIC || '').trim().replace(/^https?:\/\/(www\.)?ntfy\.sh\//i, '').replace(/[/?#].*$/, '').trim(), MAX_MIN = +(process.env.WATCHDOG_MAX_MIN || 25);
+const MAX_MIN = +(process.env.WATCHDOG_MAX_MIN || 25);
 const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
 const et = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()).map(p => [p.type, p.value]));
 const mins = (+et.hour % 24) * 60 + +et.minute;
@@ -19,6 +19,5 @@ if (ageMin <= MAX_MIN) process.exit(0);
 if (isFinite(ageMin) && (ageMin - MAX_MIN) % 60 >= 15) { console.log('already alerted this hour'); process.exit(0); }   // one alert per hour while it stays down
 const msg = isFinite(ageMin) ? `⚠️ Bot has not checked in for ${Math.round(ageMin)} minutes during market hours. Open the Actions tab on GitHub: paper-trade-bot may have stopped. Protective stops are at the broker.` : '⚠️ Bot journal unreadable — check the site and the Actions tab.';
 console.log(msg);
-if (NTFY) await fetch('https://ntfy.sh/' + encodeURIComponent(NTFY), { method: 'POST', body: msg, headers: { Title: 'Signal Desk watchdog', Priority: 'high', Tags: 'rotating_light' } }).catch(() => {});
   if (process.env.TELEGRAM_TOKEN && process.env.TELEGRAM_CHAT) await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN.trim()}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT.trim(), text: '\ud83d\udea8 Signal Desk watchdog\n' + msg }) }).catch(() => {});
 process.exit(0);

@@ -90,7 +90,7 @@ if (process.argv[2] === 'child') {
   process.env.ALPACA_URL = url; process.env.ALPACA_DATA_URL = url;
   process.env.ALPACA_KEY = 'test'; process.env.ALPACA_SECRET = 'test';
   if (FAKE.journalKey) process.env.JOURNAL_KEY = FAKE.journalKey;
-  if (FAKE.tg) { process.env.TELEGRAM_API = url; process.env.TELEGRAM_TOKEN = 'test-token'; process.env.TELEGRAM_CHAT = '42'; process.env.NTFY_TOPIC = ''; }                        // privacy mode: encrypted journal (must be set before the import)
+  if (FAKE.tg) { process.env.TELEGRAM_API = url; process.env.TELEGRAM_TOKEN = 'test-token'; process.env.TELEGRAM_CHAT = '42'; }                        // privacy mode: encrypted journal (must be set before the import)
   fs.mkdirSync('bot', { recursive: true });
   const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
   if (FAKE.prevJournal) fs.writeFileSync('bot/journal.json', JSON.stringify(FAKE.journalKey ? await bot.encryptJournal(FAKE.prevJournal, FAKE.prevKey || FAKE.journalKey, 1000) : FAKE.prevJournal));   // what the previous run left behind

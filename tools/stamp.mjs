@@ -11,7 +11,7 @@ const CSP_HOSTS = {
   script: ["'wasm-unsafe-eval'", 'https://cdn.jsdelivr.net', 'https://www.gstatic.com'],   // wasm-unsafe-eval: lets libsodium (key sealing) compile its WebAssembly; JS eval stays blocked                      // libsodium (SRI-pinned), Firebase (optional accounts feature)
   style: ["'unsafe-inline'", 'https://fonts.googleapis.com'],
   font: ['https://fonts.gstatic.com'],
-  connect: ['https://api.github.com', 'https://*.github.io', 'https://finnhub.io', 'wss://ws.finnhub.io', 'https://ntfy.sh', 'https://api.telegram.org',  'https://financialmodelingprep.com', 'https://query1.finance.yahoo.com',
+  connect: ['https://api.github.com', 'https://*.github.io', 'https://finnhub.io', 'wss://ws.finnhub.io', 'https://api.telegram.org',  'https://financialmodelingprep.com', 'https://query1.finance.yahoo.com',
     'https://*.workers.dev', 'https://api.allorigins.win', 'https://corsproxy.io',                            // price relays (no keys travel through them)
     'https://*.googleapis.com', 'https://*.firebaseio.com', 'wss://*.firebaseio.com'],                          // Firebase, only if accounts are switched on
 };

@@ -151,12 +151,12 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <figure><pre class="mermaid">flowchart TB
   subgraph Owner["Owner's devices"]
     BR[Browser&lt;br/&gt;page + localStorage]
-    PH[Phone&lt;br/&gt;ntfy alerts]
+    PH[Phone&lt;br/&gt;Telegram]
   end
   subgraph GH["GitHub (free)"]
     REPO[(Repository&lt;br/&gt;code + data JSON)]
     PAGES[GitHub Pages&lt;br/&gt;static site]
-    SEC[(Encrypted secrets&lt;br/&gt;ALPACA_*, JOURNAL_KEY, NTFY_TOPIC)]
+    SEC[(Encrypted secrets&lt;br/&gt;ALPACA_*, JOURNAL_KEY, TELEGRAM_*)]
     subgraph ACT["GitHub Actions"]
       RF[refresh-prices&lt;br/&gt;every 10–15 min]
       TR[paper-trade-bot&lt;br/&gt;market hours]
@@ -169,7 +169,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
     FH[Finnhub]
     AL[Alpaca broker&lt;br/&gt;paper or live]
     RSS[Fed / Yahoo RSS, Benzinga]
-    NT[ntfy.sh]
+    NT[Telegram Bot API]
   end
   BR -->|reads| PAGES
   BR -->|optional| YF
@@ -334,7 +334,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   Q -->|≥ 250 ms apart| CY[botCycle]
   CY --> AL[Alpaca REST]
   CY --> J[journal.json&lt;br/&gt;commit every 10 min]
-  CY --> NT[ntfy alert]
+  CY --> NT[Telegram alert]
   AL -.->|stream down| POLL[REST polling fallback]</pre>
 <figcaption>Measured against a mock broker: fill → take-profit order in 40 ms; crash tick → floor exit in 110 ms.</figcaption></figure>
 <p><b>Journal continuity across runs.</b> Every run is a fresh process, and the panels the bot computes only while the market is open (watch list, market check, risk, day-trading block) plus the action log live in memory. At its first write the bot reads the previous <code>bot/journal.json</code> back — decrypting it with <code>JOURNAL_KEY</code> when it is encrypted — and carries those panels forward until it has computed fresh ones; the action log is appended to once and capped at 80 entries. A run that starts at or after 16:00 ET exits at once if today’s journal was already written at 15:55 or later; otherwise it runs one closing cycle, writes the journal and sends the day summary. A previous journal written under another passphrase is skipped with a log line, not a crash.</p>
@@ -383,7 +383,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
     S1[ALPACA_KEY / SECRET — paper]
     S2[ALPACA_LIVE_KEY / SECRET — live]
     S3[JOURNAL_KEY]
-    S4[NTFY_TOPIC]
+    S4[TELEGRAM_TOKEN / TELEGRAM_CHAT]
   end
   Browser -->|libsodium sealed box, SRI-pinned| Secrets
   Secrets -.->|env vars, in memory only| Bot[Bot run]
@@ -397,7 +397,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <li><b>Supply chain:</b> the only third-party script is pinned by hash; Actions are pinned to commit SHAs; the bot has no npm dependencies.</li>
 <li><b>Broker calls:</b> 15 s deadline on every request; reads retried with backoff; order placement never retried; a cancelled run finishes its cycle and saves the journal.</li>
   <li><b>Broker API keys can trade but cannot withdraw funds</b> (verify in your own Alpaca settings).</li>
-  <li><b>Owner checklist</b> (<code>SECURITY.md</code>): 2FA everywhere, no SMS; sole collaborator on the repo; token scoped to one repo with ≤ 90-day expiry; random ntfy topic; never paste keys into chat or issues.</li>
+  <li><b>Owner checklist</b> (<code>SECURITY.md</code>): 2FA everywhere, no SMS; sole collaborator on the repo; token scoped to one repo with ≤ 90-day expiry; Telegram connected through the page only; never paste keys into chat or issues.</li>
 </ul>
 </section>
 
@@ -418,7 +418,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <tr><td>See trades, P/L, risk</td><td>Bot trades tab</td></tr>
 <tr><td>Change risk, universe, guards</td><td>Bot settings → Save (in force within 60 s)</td></tr>
 <tr><td>Pause / resume / run now</td><td>Bot settings buttons (writes or removes <code>bot/STOP</code>, dispatches the workflow)</td></tr>
-<tr><td>Alerts on the phone</td><td>ntfy app subscribed to the <code>NTFY_TOPIC</code></td></tr>
+<tr><td>Alerts on the phone</td><td>Telegram: Bot settings → 1 → Connect Telegram; commands /status /money /positions /watch /pause /resume</td></tr>
 <tr><td>Re-run research or backtest</td><td>Actions tab → workflow → Run workflow</td></tr>
 </table></div>
 <h3>Going live</h3>
@@ -452,6 +452,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-23</td><td>ntfy removed — Telegram is the only alert channel (page, bot, watchdog, workflows)</td><td>03, 05, 06, 07</td></tr>
 <tr><td>2026-10-23</td><td>Swing entry window can close as late as 3:45 PM (a 3:30 setting was silently replaced by 11:00); Save checks the range</td><td>05</td></tr>
 <tr><td>2026-10-23</td><td>Telegram alerts and commands (/status, /money, /positions, /watch, /pause, /resume); Connect Telegram button in Bot settings; only the owner’s chat is answered and no command can trade</td><td>04, 05, 06</td></tr>
 <tr><td>2026-10-23</td><td>“Save keys to GitHub secrets” fixed: matching encryption-library versions, and the security policy now lets the library run; covered by a page test</td><td>06, 08</td></tr>
@@ -531,7 +532,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <tr><td>DTE</td><td>Days to expiry of an option</td></tr>
 <tr><td>Paper trading</td><td>Simulated account with fake money and real prices</td></tr>
 <tr><td>Sealed box</td><td>Public-key encryption (libsodium) that stores secrets in GitHub without the browser ever reading them back</td></tr>
-<tr><td>ntfy</td><td>Free push-notification service used for bot alerts</td></tr>
+<tr><td>Telegram bot</td><td>Your private bot (made with @BotFather) that delivers alerts and answers commands</td></tr>
 </table></div>
 <p class="rule">Signal Desk · system documentation v1.0 · maintained in <code>docs/</code> of the repository. Not financial advice.</p>
 </section>

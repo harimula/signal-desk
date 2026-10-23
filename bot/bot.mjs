@@ -29,10 +29,6 @@ const PRIVATE = !!process.env.JOURNAL_KEY;                  // privacy mode: enc
 export const redact = s => PRIVATE ? String(s).replace(/\$?\d[\d,]*(\.\d+)?/g, '\u2022') : String(s);
 const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
 const DRY = process.env.BOT_DRY === '1';
-// The topic may have been saved as a bare name ("my-topic") or as the full link from the ntfy app ("https://ntfy.sh/my-topic"):
-// accept both, so a pasted link does not silently send every alert to a garbled topic.
-export const ntfyTopic = raw => String(raw || '').trim().replace(/^https?:\/\/(www\.)?ntfy\.sh\//i, '').replace(/[/?#].*$/, '').trim();
-const NTFY = ntfyTopic(process.env.NTFY_TOPIC);
 const HOLD_LOSS = 1.5, MAX_HOLD_DAYS = 30, TP = 1;
 
 // ---- settings: bot/config.json (written by the Settings tab), re-applied live by applyConfig() ----
@@ -378,16 +374,12 @@ async function loadBars(extra = []) {
 const completed = (bars, sym) => (bars[sym] || []).filter(b => b.t.slice(0, 10) < ymdDash(Date.now())).map(b => ({ d: b.t.slice(0, 10), o: b.o, h: b.h, l: b.l, c: b.c }));
 const dash8 = s => s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
 
-// Phone alerts via ntfy.sh (free): install the ntfy app, subscribe to your secret topic name.
+// Phone alerts go to the owner's Telegram chat (bot/telegram.mjs). ntfy was removed on 2026-10-23 (public channels).
 const sentAlerts = new Map();
 async function flushAlerts() {
   if (!alerts.length) return;
   const lines = alerts.splice(0).filter(m => { const k = m.replace(/[\d.]+/g, '#'); if (sentAlerts.has(k) && Date.now() - sentAlerts.get(k) < 20 * 60000) return false; sentAlerts.set(k, Date.now()); return true; });
   if (!lines.length || DRY || !CFG.alerts) return;
-  if (NTFY) try {
-    await fetch('https://ntfy.sh/' + encodeURIComponent(NTFY), { method: 'POST', body: lines.join('\n'),
-      headers: { Title: 'Signal Desk bot' + (lines.length > 1 ? ' (' + lines.length + ')' : ''), Priority: lines.some(l => /\u26d4|\u26a0/.test(l)) ? 'high' : 'default', Tags: 'chart_with_upwards_trend' } });
-  } catch (e) { console.log('alert failed', e.message); }
   if (tgOn()) try { await tgSend(lines.join('\n\n')); } catch (e) { console.log('telegram alert failed', e.message); }
 }
 

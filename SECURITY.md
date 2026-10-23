@@ -37,8 +37,8 @@
 4. **Fine-grained token** (used by the Bot settings tab): scope to this one repo, permissions
    Contents + Secrets + Actions read/write only, expiry ≤ 90 days, and only on devices you own.
    Revoke it at github.com/settings/tokens if a laptop is lost.
-5. **Alerts:** pick a random `NTFY_TOPIC` (e.g. `sd-7f3k29qx`) — anyone who guesses the topic
-   can read the alerts.
+5. **Alerts:** Telegram only, connected from Bot settings → 1 (the token and chat id are sealed
+   as secrets; the bot answers only your chat and has no buy/sell command). Never share the bot token.
 6. **Never paste a key into chat, an issue, a commit, or the page.** If one was ever exposed,
    regenerate it in Alpaca; the old one dies instantly.
 7. Keep the repo on your personal account, not a shared org, so no one else inherits access.

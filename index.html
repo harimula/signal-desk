@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-4+36Svql+j3e37r5EmdVlumxcN77lVEBVjlxIey6ljI=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://ntfy.sh https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-mCuCqfkDr74AvbLj6Py2jISQ977IrAukvCa+9DtSUDY=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -615,7 +615,6 @@ const tabsList = () => TABS0.concat(pfolios.map(p => ['PF:' + p.id, p.name]), TA
 
 // ---------- state ----------
 let tab = 'US', maN = 50, maT = 'SMA', sortKey = 'score', sortDir = -1, onlyWl = false, q = '', fr = '', fi = '';
-const ntfyName = v => String(v || '').trim().replace(/^https?:\/\/(www\.)?ntfy\.sh\//i, '').replace(/[/?#].*$/, '').trim();   // a pasted ntfy link → its topic name
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} try { syncTouch(k); } catch (e) {} };
 try {
@@ -912,7 +911,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792776409';
+const BUILD_V = '1792777925';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2639,8 +2638,8 @@ const has = n => stSecrets && stSecrets.includes(n);
 async function stSaveKeys() {
   if (!ghTok()) { stMsg = 'Connect GitHub first.'; renderAll(); return; }
   const gv = id => (document.getElementById(id) || {value: ''}).value.trim();
-  const k = gv('st-akey'), s = gv('st-asec'), n = ntfyName(gv('st-ntfy')), jk = gv('st-jkey'), lk = gv('st-lkey'), ls = gv('st-lsec');
-  if (!k && !s && !n && !jk && !lk && !ls) { stMsg = 'Nothing to save.'; renderAll(); return; }
+  const k = gv('st-akey'), s = gv('st-asec'), jk = gv('st-jkey'), lk = gv('st-lkey'), ls = gv('st-lsec');
+  if (!k && !s && !jk && !lk && !ls) { stMsg = 'Nothing to save.'; renderAll(); return; }
   if ((lk && !ls && !has('ALPACA_LIVE_SECRET')) || (ls && !lk && !has('ALPACA_LIVE_KEY'))) { stMsg = 'Live keys come as a pair \u2014 enter both.'; renderAll(); return; }
   if (jk && jk.length < 12) { stMsg = 'Journal passphrase: use at least 12 characters.'; renderAll(); return; }
   stBusy = true; stMsg = 'Encrypting and saving to GitHub secrets…'; renderAll(); stWait(true);
@@ -2648,7 +2647,6 @@ async function stSaveKeys() {
     const done = [];
     if (k) done.push(await stSecret('ALPACA_KEY', k, 'Alpaca key'));
     if (s) done.push(await stSecret('ALPACA_SECRET', s, 'Alpaca secret'));
-    if (n) done.push(await stSecret('NTFY_TOPIC', n, 'alert topic'));
     if (jk) { done.push(await stSecret('JOURNAL_KEY', jk, 'journal passphrase')); save('sd-jkey', jk); }
     if (lk) done.push(await stSecret('ALPACA_LIVE_KEY', lk, 'live key'));
     if (ls) done.push(await stSecret('ALPACA_LIVE_SECRET', ls, 'live secret'));
@@ -2681,16 +2679,6 @@ document.addEventListener('click', e => {
   else if (a === 'reload') { stDirty = false; stLoad(true); }
   else if (a === 'test') stTest();
   else if (a === 'tgconnect') tgConnect();
-  else if (a === 'ntfytest') {
-    if ($('#st-ntfy')) $('#st-ntfy').value = ntfyName($('#st-ntfy').value);
-    // the saved topic is a GitHub secret the page cannot read back, so the test uses the topic typed in the box
-    const t = ($('#st-ntfy') || {}).value ? $('#st-ntfy').value.trim() : '', out = $('#ntfyMsg');
-    if (!t) { out.textContent = 'Type your alert topic in the box first (the saved one is a secret this page cannot read), then press Send test alert.'; return; }
-    out.textContent = 'Sending…';
-    fetch('https://ntfy.sh/' + encodeURIComponent(t), {method: 'POST', body: 'Test from Signal Desk — if you see this, phone alerts work. Save the same topic with “Save keys to GitHub secrets” so the bot uses it.', headers: {Title: 'Signal Desk test alert', Tags: 'white_check_mark'}})
-      .then(r => { out.textContent = r.ok ? `Sent to topic “${t}”. It should appear in the ntfy app within seconds. Nothing? In the app, check you subscribed to exactly “${t}” (same spelling, server ntfy.sh) and that notifications for ntfy are allowed in your phone settings.` : 'ntfy refused it (HTTP ' + r.status + ').'; })
-      .catch(e => { out.textContent = 'Could not reach ntfy.sh: ' + (e.message || e); });
-  }
   else if (a === 'copyjson') stCopyJson();
   else if (a === 'applyday' && rdJ && rdJ.best) { const P = rdJ.best.P; stCfg = {...stRead(), dayOrMin: P.orMin, dayRvol: P.rvol, dayTarget: P.target, dayTimeStop: P.timeStop, dayEnd: mins2hhmm(P.end), dayStart: mins2hhmm(P.start)}; stDirty = true; stMsg = 'Researched values are in the form — press Save settings to the bot to use them.'; renderAll(); }
   else stControl(a);
@@ -2700,7 +2688,7 @@ document.addEventListener('change', e => { if (e.target && e.target.name === 'st
 document.addEventListener('change', e => { if (e.target && e.target.id === 'jkeyShow') { const i = document.getElementById('jkeyIn'); if (i) i.type = e.target.checked ? 'text' : 'password'; } });
 // A typed number just updates the draft (no re-render, so the cursor and scroll stay put). Only controls that
 // show or hide other parts of the form — checkboxes, radios, dropdowns, a profile flipping to Custom — redraw it.
-document.addEventListener('change', e => { const el = e.target; if (el && el.id && el.id.startsWith('st-') && el.id !== 'st-tok' && el.id !== 'st-repo' && !['st-akey', 'st-asec', 'st-ntfy', 'st-jkey', 'st-lkey', 'st-lsec', 'st-liveConfirm'].includes(el.id)) {
+document.addEventListener('change', e => { const el = e.target; if (el && el.id && el.id.startsWith('st-') && el.id !== 'st-tok' && el.id !== 'st-repo' && !['st-akey', 'st-asec', 'st-jkey', 'st-lkey', 'st-lsec', 'st-liveConfirm'].includes(el.id)) {
   const c = stRead(), was = stCfg && stCfg.preset;
   if (el.id !== 'st-preset' && Object.keys(ST_PRESETS.balanced).includes(el.id.slice(3))) c.preset = 'custom';
   stCfg = c; stDirty = true;
@@ -2723,7 +2711,7 @@ function readiness(c) {
     ['Live expectancy positive and at least half of the research figure', expLive != null && swing.length >= 30 && expLive > 0 && (expRes == null || expLive >= expRes / 2), expLive == null ? 'needs 30+ swing trades' : `live ${expLive >= 0 ? '+' : ''}${expLive.toFixed(2)}% per trade on ${swing.length}${expRes != null ? ` · research +${expRes.toFixed(2)}%` : ''}`],
     ['Worst drawdown so far under 10% of your stake', closed.length >= 20 && ddPct < 10, closed.length ? `${ddPct.toFixed(1)}% worst run${c.stakeUsd > 0 ? ' of $' + fmt(c.stakeUsd, 0) : ''}` : '–'],
     ['Protective stops placed at the broker with every stock entry', true, 'built in (OTO / bracket legs)'],
-    ['Phone alerts and the watchdog switched on', !!(has('NTFY_TOPIC') || has('TELEGRAM_CHAT')) && !!c.alerts, (has('NTFY_TOPIC') || has('TELEGRAM_CHAT')) ? (c.alerts ? 'alert topic set, alerts on' : 'alerts are switched off in Guards') : 'no alert topic in section 1'],
+    ['Phone alerts and the watchdog switched on', !!has('TELEGRAM_CHAT') && !!c.alerts, has('TELEGRAM_CHAT') ? (c.alerts ? 'Telegram connected, alerts on' : 'alerts are switched off in Guards') : 'Telegram not connected (section 1)'],
     ['Live keys saved', !!(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET')), has('ALPACA_LIVE_KEY') ? 'set' : 'not set'],
     ['Start at a quarter of the size or less', (c.liveSizePct || 25) <= 25, `${c.liveSizePct || 25}% of paper size`],
     ['Experimental sleeves small or off (PUTs, intraday, day trading)', !c.puts && !c.intraday && !c.dayTrade || ((c.putUnit === 'usd' && c.putCapUsd > 0) && !c.intraday && (!c.dayTrade || c.dayRiskPct <= 0.25)), [c.puts ? 'PUTs on' : null, c.intraday ? 'intraday on' : null, c.dayTrade ? 'day trading on' : null].filter(Boolean).join(', ') || 'all off'],
@@ -2733,7 +2721,7 @@ function readiness(c) {
 function settingsView() {
   if (!stCfg) stLoad();
   if (!botJ && !botBusy) botLoad();                     // journal + research feed the go-live checklist                                  // first visit only; Reload from GitHub re-reads on demand, and a save never gets clobbered by a background refresh
-  const keep = {}; if (!stKeysClear) ['st-akey', 'st-asec', 'st-ntfy', 'st-jkey', 'st-lkey', 'st-lsec'].forEach(id => { const el = document.getElementById(id); if (el && el.value) keep[id] = el.value; }); stKeysClear = false;
+  const keep = {}; if (!stKeysClear) ['st-akey', 'st-asec', 'st-jkey', 'st-lkey', 'st-lsec'].forEach(id => { const el = document.getElementById(id); if (el && el.value) keep[id] = el.value; }); stKeysClear = false;
   setTimeout(() => { for (const id in keep) { const el = document.getElementById(id); if (el && !el.value) el.value = keep[id]; } }, 0);
   const c = stCfg || {...ST_DEF}, connected = !!ghTok();
   const inp = 'style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px"';
@@ -2745,11 +2733,10 @@ function settingsView() {
   const presetBtn = k => `<button class="btn ${c.preset === k ? '' : 'ghost'}" type="button" data-st="preset" data-v="${k}" style="flex:1;min-width:150px;text-align:left;padding:10px 12px"><b style="text-transform:capitalize">${k}</b><div style="font-size:11.5px;font-weight:400;margin-top:2px;opacity:.85${c.preset === k ? ';color:var(--accent-ink)' : ''}" class="${c.preset === k ? '' : 'mut'}">${ST_PRESETS[k].riskPct}% per trade · cap ${ST_PRESETS[k].maxHeat}% · day limit −${ST_PRESETS[k].dayCap}%</div></button>`;
   const connect = sec('1. Connection', connected
     ? `<div style="margin-top:8px;font-size:13px">${dot(true)}Connected to <b>${esc(ghRepo())}</b>${stRepoInfo ? ` <span class="mut">(${stRepoInfo.private ? 'private' : 'public'} repo)</span>` : ''} <button class="btn ghost" type="button" data-st="test" style="margin-left:8px;font-size:12px" ${stBusy ? 'disabled' : ''}>Test connection</button> <button class="btn ghost" type="button" data-st="disconnect" style="font-size:12px">Disconnect</button></div>
-<div style="margin-top:10px;font-size:13px">${dot(has('ALPACA_KEY') && has('ALPACA_SECRET'))}Alpaca keys ${has('ALPACA_KEY') && has('ALPACA_SECRET') ? 'set' : '<b>not set</b> — the bot cannot trade yet'} &nbsp; ${dot(has('TELEGRAM_CHAT'))}Telegram ${has('TELEGRAM_CHAT') ? 'connected' : 'not connected'} &nbsp; ${dot(has('NTFY_TOPIC'))}ntfy alerts ${has('NTFY_TOPIC') ? 'set' : 'not set'} &nbsp; ${dot(has('JOURNAL_KEY'))}Journal ${has('JOURNAL_KEY') ? 'encrypted' : '<b>public</b>'} &nbsp; ${dot(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET'))}Live keys ${has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET') ? 'set' : 'not set'}</div>
+<div style="margin-top:10px;font-size:13px">${dot(has('ALPACA_KEY') && has('ALPACA_SECRET'))}Alpaca keys ${has('ALPACA_KEY') && has('ALPACA_SECRET') ? 'set' : '<b>not set</b> — the bot cannot trade yet'} &nbsp; ${dot(has('TELEGRAM_CHAT'))}Telegram ${has('TELEGRAM_CHAT') ? 'connected' : 'not connected'} &nbsp; ${dot(has('JOURNAL_KEY'))}Journal ${has('JOURNAL_KEY') ? 'encrypted' : '<b>public</b>'} &nbsp; ${dot(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET'))}Live keys ${has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET') ? 'set' : 'not set'}</div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px">
 <label style="font-size:12px"><b>Alpaca API key</b><input id="st-akey" ${inp} autocomplete="off" placeholder="${has('ALPACA_KEY') ? 'set — paste to replace' : 'paste key'}"></label>
 <label style="font-size:12px"><b>Alpaca secret</b><input id="st-asec" type="password" ${inp} autocomplete="off" placeholder="${has('ALPACA_SECRET') ? 'set — paste to replace' : 'paste secret'}"></label>
-<label style="font-size:12px"><b>Phone alert topic</b> <span class="mut">(ntfy app)</span><input id="st-ntfy" ${inp} autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${has('NTFY_TOPIC') ? 'set \u2014 type it to test or replace' : 'e.g. signaldesk-7f3k29q'}"><button class="btn ghost" type="button" data-st="ntfytest" style="margin-top:6px;font-size:12px">Send test alert</button><span id="ntfyMsg" class="mut" style="display:block;font-size:11.5px;margin-top:4px"></span></label>
 <label style="font-size:12px"><b>Journal passphrase</b> <span class="mut">(encrypts your trades on the public site)</span><input id="st-jkey" type="password" ${inp} autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="${has('JOURNAL_KEY') ? 'set \u2014 enter to replace' : 'choose a strong passphrase'}"></label>
 <label style="font-size:12px"><b>Live API key</b> <span class="mut">(real money only)</span><input id="st-lkey" ${inp} autocomplete="off" placeholder="${has('ALPACA_LIVE_KEY') ? 'set \u2014 paste to replace' : 'leave empty for paper'}"></label>
 <label style="font-size:12px"><b>Live secret</b> <span class="mut">(real money only)</span><input id="st-lsec" type="password" ${inp} autocomplete="off" placeholder="${has('ALPACA_LIVE_SECRET') ? 'set \u2014 paste to replace' : 'leave empty for paper'}"></label></div>
@@ -2779,7 +2766,7 @@ ${c.dayTrade ? `<div style="margin:6px 0 0 26px">${chk('dayStock', 'Long setups 
 <div style="margin-top:10px;font-size:12px;display:flex;gap:14px;flex-wrap:wrap;align-items:center"><span><b>Entries from</b> ${tIn('dayStart', c.dayStart || '09:45')}</span><span><b>until</b> ${tIn('dayEnd', c.dayEnd || '15:30')}</span><span class="mut">ET · everything is sold by 3:50 PM (options 3:45) · never held overnight</span></div>
 ${rdJ && rdJ.best ? `<div style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:var(--surface2)">🧪 <b>Tested on ${rdJ.bars ? Math.round(rdJ.bars / 1e6) + ' million' : ''} five-minute bars (${esc(rdJ.start)} → ${esc(rdJ.end)})</b>: best found = opening range ${rdJ.best.P.orMin} min · rel. volume ≥ ${rdJ.best.P.rvol}× · target ${rdJ.best.P.target}R · time stop ${rdJ.best.P.timeStop} min · entries until ${esc(mins2hhmm(rdJ.best.P.end))} → ${rdJ.best.S.avgR > 0 ? '+' : ''}${rdJ.best.S.avgR}R per trade, ${rdJ.best.S.winRate}% wins, profit factor ${rdJ.best.S.profitFactor ?? '–'}. <button class="btn ghost" type="button" data-st="applyday" style="font-size:12px;padding:4px 9px">Put these values in the form</button> <span class="mut">then Save. Details on the Bot trades tab.</span></div>` : ''}
 <div class="mut" style="font-size:12px;margin-top:8px">Market filter: longs only while SPY is above its VWAP, shorts only below it. Stop under the range or the pullback low, target ${c.dayTarget || 2}R, stop to breakeven at +1R, time stop ${c.dayTimeStop || 60} min. Each day trade also obeys the daily loss limit, the news guard and the pattern-day-trader rule.</div>` : '<div class="mut" style="font-size:12px;margin-top:4px">Off. The bot only swing-trades (RSI-2). Day trading was not part of the 33-year research — paper-test it first.</div>'}`, 'in and out the same day — experimental');
-  const guards = sec('5. Guards', `${chk('eventGuard', 'Economic calendar guard', 'Fed days, CPI/jobs mornings, Fed minutes')}${chk('newsGuard', 'Breaking-news guard', 'war, policy, crisis headlines pause trading; stocks with fresh news skipped')}${chk('alerts', 'Phone alerts', 'every trade, halt and error (needs the alert topic above)')}${chk('alertDetail', 'Include prices and profit in alerts', 'buy price and size; on a sell, the entry price, exit price and profit. Anyone who knows your topic name can read alerts')}`, 'what makes the bot stand aside');
+  const guards = sec('5. Guards', `${chk('eventGuard', 'Economic calendar guard', 'Fed days, CPI/jobs mornings, Fed minutes')}${chk('newsGuard', 'Breaking-news guard', 'war, policy, crisis headlines pause trading; stocks with fresh news skipped')}${chk('alerts', 'Telegram alerts', 'every trade, halt and error (needs Telegram connected in section 1)')}${chk('alertDetail', 'Include prices and profit in alerts', 'buy price and size; on a sell, the entry price, exit price and profit. Anyone who knows your topic name can read alerts')}`, 'what makes the bot stand aside');
   const scanOn = c.universe === 'scan';
   const radio = (v, lab, help) => `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:8px"><input type="radio" name="st-universe" value="${v}" ${(c.universe || 'list') === v ? 'checked' : ''} style="width:18px;height:18px;flex:none"> <span><b>${lab}</b> <span class="mut" style="font-size:12px">${help}</span></span></label>`;
   const uni = sec('6. Stocks it watches', `${radio('scan', 'Scan the whole market', 'every morning the bot ranks every tradable US stock by trading volume and watches the most-traded ones — the list below is ignored')}${scanOn ? grid(ST_FIELDS.scan) : ''}${radio('list', 'Only my list', 'the tickers below, nothing else')}<textarea id="st-symbols" rows="3" ${inp.replace('style="', 'style="font-family:var(--font-mono),monospace;margin-top:8px;' + (scanOn ? 'opacity:.5;' : ''))}>${esc((c.symbols || []).join(', '))}</textarea><div class="mut" style="font-size:12px;margin-top:4px">${scanOn ? 'Market scan is on: the Bot trades tab shows the stocks it picked today. Sector limits only apply to stocks the bot knows the sector of.' : 'US tickers, comma-separated, up to 60. Liquid large-caps work best — the rules were tested on them.'}</div>`, 'the universe');

@@ -50,9 +50,8 @@ as an upper bound. Past results do not predict future results.
 - **Bot trades tab** on your site: running / not-reporting status, risk dashboard (regime,
   money at risk vs cap, sectors), performance (expectancy, profit factor, win rate, drawdown,
   by Stock/Call), the 33-year scorecard, and every trade with entry and exit times.
-- **Phone alerts (optional, free):** install the **ntfy** app, subscribe to a hard-to-guess
-  topic name (e.g. `signaldesk-7f3k29q`), and add that name as the repo secret `NTFY_TOPIC`.
-  You get a push for every buy/sell, every circuit-breaker halt and any bot error.
+- **Phone alerts (free):** Telegram — create your bot with @BotFather, then Bot settings → 1 →
+  Connect Telegram. You get every buy/sell, halt and error, and commands like /status and /money.
 - **Tests:** `node bot/test.mjs` (29 checks) runs automatically on every change.
 
 ## Control panel (Bot settings tab on your site)
@@ -69,7 +68,7 @@ read & write, scoped to this repo only). The token stays in that browser.
 ## Setup (about 10 minutes)
 1. Sign up free at https://alpaca.markets, switch to **Paper**, generate API keys.
 2. Repo → Settings → Secrets and variables → Actions → add `ALPACA_KEY`, `ALPACA_SECRET`
-   (and optionally `NTFY_TOPIC`). Never paste keys into chat or code.
+   (Telegram is connected from the site's Bot settings). Never paste keys into chat or code.
 3. Actions tab → enable **paper-trade-bot**.
 
 ## Tuning (Settings → Secrets and variables → Actions → Variables)
