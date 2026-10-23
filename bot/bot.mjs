@@ -212,16 +212,19 @@ applyConfig(loadConfigFile());
 // faults. Order placement (POST) is never retried here: a repeat could double a position, and the idempotency
 // guard in send() plus the client_order_id already protect against the slow-broker case.
 const HTTP_TIMEOUT_MS = +process.env.HTTP_TIMEOUT_MS || 15000, HTTP_RETRIES = 3;
+export const engine = { cycleMs: 0, cycleMax: 0, cycles: 0, calls: 0, callMs: 0, errors: 0, lastError: '', at: 0, hourErrors: [] };   // engine health, shown on the Bot trades tab
 const sleepMs = ms => new Promise(z => setTimeout(z, ms));
 async function call(base, path, opt = {}) {
   const method = (opt.method || 'GET').toUpperCase(), retriable = method !== 'POST';
   let lastErr = null;
   for (let attempt = 0; attempt <= (retriable ? HTTP_RETRIES : 0); attempt++) {
     if (attempt) await sleepMs(Math.min(8000, 1000 * 2 ** (attempt - 1)) + Math.random() * 300);
-    const ac = new AbortController(), timer = setTimeout(() => ac.abort(), HTTP_TIMEOUT_MS);
+    const ac = new AbortController(), timer = setTimeout(() => ac.abort(), HTTP_TIMEOUT_MS), tCall = Date.now();
     let again = false;
+    engine.calls++;
     try {
       const r = await fetch(base + path, { headers: H, ...opt, signal: ac.signal });
+      engine.callMs += Date.now() - tCall;
       if (r.status === 204) return null;
       const tx = await r.text();
       if (r.ok) return tx ? JSON.parse(tx) : null;
@@ -279,8 +282,10 @@ const alerts = [];
 let hooks = {};
 export async function botCycle({ journal = false, floors = null, held = null } = {}) {
   setNow(); hooks = { floors, held };
-  const before = acts.length;
-  try { await run(); } catch (e) { act('Error: ' + (e.message || e)); const k = 'err:' + (e.message || '').slice(0, 40); if (!seen.has(k) || Date.now() - seen.get(k) > 30 * 60000) { seen.set(k, Date.now()); alerts.push('\u26a0\ufe0f Bot error: ' + (e.message || e)); } }
+  const before = acts.length, t0 = Date.now();
+  try { await run(); } catch (e) { engine.errors++; engine.lastError = String(e.message || e).slice(0, 120); engine.hourErrors.push(Date.now()); act('Error: ' + (e.message || e)); const k = 'err:' + (e.message || '').slice(0, 40); if (!seen.has(k) || Date.now() - seen.get(k) > 30 * 60000) { seen.set(k, Date.now()); alerts.push('\u26a0\ufe0f Bot error: ' + (e.message || e)); } }
+  engine.cycleMs = Date.now() - t0; engine.cycleMax = Math.max(engine.cycleMax, engine.cycleMs); engine.cycles++; engine.at = Date.now();
+  engine.hourErrors = engine.hourErrors.filter(t => Date.now() - t < 3600e3);
   await flushAlerts();
   pendingActs += acts.length - before;
   if (journal || pendingActs) { await writeJournal().catch(e => console.log('journal error', e.message)); pendingActs = 0; }
@@ -357,16 +362,17 @@ async function run() {
   if (!lastClock || Date.now() - (lastClock._at || 0) > 30000) { lastClock = await T('/v2/clock'); lastClock._at = Date.now(); }
   const clock = lastClock;
   if (!clock.is_open) { console.log('Market closed.'); return; }
-  const acct = await T('/v2/account');
+  // the four account questions are independent: ask them at once instead of one after another (cycle time roughly halves)
+  const [acct, positions, openOrders, hist] = await Promise.all([
+    T('/v2/account'), T('/v2/positions'), T('/v2/orders?status=open&limit=500'),
+    T('/v2/orders?status=all&limit=500&direction=desc&after=' + new Date(Date.now() - 45 * 864e5).toISOString()),
+  ]);
   // The stake: with stakeUsd set, the bot behaves as if the account held only that much — every size, loss limit and the
   // pattern-day-trader rule are computed on it — so a $100k practice account trades exactly like the money you mean to use.
   const acctEq = +acct.equity, acctLast = +acct.last_equity || acctEq;
   const stake = CFG.stakeUsd > 0 ? Math.min(CFG.stakeUsd, acctEq) : acctEq;
   const equity = stake, lastEq = CFG.stakeUsd > 0 ? stake - (acctEq - acctLast) : acctLast;    // today's change is the account's real change, applied to the stake
-  const positions = await T('/v2/positions');
   posBySym = Object.fromEntries(positions.map(p => [p.symbol, p]));
-  const openOrders = await T('/v2/orders?status=open&limit=500');
-  const hist = await T('/v2/orders?status=all&limit=500&direction=desc&after=' + new Date(Date.now() - 45 * 864e5).toISOString());
   const stockPos = positions.filter(p => !isOpt(p.symbol)), optPos = positions.filter(p => isOpt(p.symbol));
   if (hooks.held) { hooks.held.clear(); positions.forEach(p => hooks.held.add(isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol)); }
   if (hooks.floors) { const seenF = new Set(); for (const p of stockPos) { seenF.add(p.symbol); hooks.floors(p.symbol, HOLD_FLOOR > 0 ? +p.avg_entry_price * (1 - HOLD_FLOOR / 100) : null); } }
@@ -693,7 +699,7 @@ async function writeJournal() {
   if (prev.sig === sigCmp && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: /paper/.test(BASE),
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
-    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, risk: lastRisk, watch: lastWatch || prev.watch || null, day: lastDay, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
+    settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, engine: { cycleMs: engine.cycleMs, cycleMax: engine.cycleMax, cycles: engine.cycles, avgCallMs: engine.calls ? Math.round(engine.callMs / engine.calls) : 0, calls: engine.calls, errorsHour: engine.hourErrors.length, lastError: engine.lastError, symbols: UNIVERSE.length, beatMs: +process.env.BEAT_MS || 2000 }, risk: lastRisk, watch: lastWatch || prev.watch || null, day: lastDay, limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {
     // Public site, private data: AES-256-GCM with a key derived from your passphrase (PBKDF2-SHA256, 200k rounds).
     // Only the timestamp, paper/live flag and stream health stay readable; the page decrypts the rest with the same passphrase.
@@ -703,7 +709,7 @@ async function writeJournal() {
     const key = await subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
     const ct = Buffer.from(await subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(j))));
     const sigH = (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16);   // change-detector only, reveals nothing
-    fs.writeFileSync('bot/journal.json', JSON.stringify({ enc: 1, kdf: 'PBKDF2-SHA256', iter: 600000, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64'), at: j.at, sig: sigH, paper: j.paper, stream: j.stream }));
+    fs.writeFileSync('bot/journal.json', JSON.stringify({ enc: 1, kdf: 'PBKDF2-SHA256', iter: 600000, salt: salt.toString('base64'), iv: iv.toString('base64'), ct: ct.toString('base64'), at: j.at, sig: sigH, paper: j.paper, stream: j.stream, engine: j.engine }));
     console.log('journal written (encrypted)');
   } else {
     fs.writeFileSync('bot/journal.json', JSON.stringify(j));

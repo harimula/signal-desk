@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-gUlcheNBLNYyW08CQ5iVJHZZSlf1MWONtoqqCJtdsSY=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-s06J5AXB2Hv4Y3X3E8fbX7uusz5zP97c3U+Aa5A1BCc=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -911,7 +911,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792714259';
+const BUILD_V = '1792714646';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2358,6 +2358,7 @@ ${(env.flagged || []).length ? `<div style="margin-top:8px;font-size:12px"><b>He
   const status = !mktHours ? ['var(--muted)', 'Idle — market closed', `last check-in ${tET(J.at)} ET`]
     : hbMin <= 15 ? ['var(--tb)', 'Running', `checked in ${Math.max(0, Math.round(hbMin))} min ago`]
     : ['var(--ts)', 'Not reporting', `no check-in for ${Math.round(hbMin)} min — check the paper-trade-bot workflow in GitHub Actions`];
+  const EN = J.engine, engTxt = EN && EN.cycles ? `<div class="mut" style="font-size:12px;margin:-6px 0 12px;display:flex;gap:6px 16px;flex-wrap:wrap"><span>⚙️ engine: a full check every <b>${(EN.beatMs / 1000).toFixed(0)} s</b></span><span>last check took <b>${(EN.cycleMs / 1000).toFixed(2)} s</b> (slowest ${(EN.cycleMax / 1000).toFixed(2)} s)</span><span>broker answers in <b>${EN.avgCallMs} ms</b></span><span>${EN.symbols} stocks watched</span><span class="${EN.errorsHour ? 'neg' : ''}">${EN.errorsHour} error${EN.errorsHour === 1 ? '' : 's'} in the last hour${EN.lastError ? ' — last: ' + esc(EN.lastError) : ''}</span></div>` : '';
   const strm = J.stream, strmTxt = strm ? (strm.mode === 'streaming' ? `<span class="pos">\u25cf real-time stream</span> <span class="mut">\u00b7 ${(strm.ticks || 0).toLocaleString()} price ticks, ${strm.fills || 0} fill events</span>` : '<span class="mut">\u00b7 polling mode (stream not connected)</span>') : '';
   const statusLine = `<div style="display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:13px;flex-wrap:wrap"><span style="width:10px;height:10px;border-radius:50%;background:${status[0]};display:inline-block"></span><b>${status[1]}</b><span class="mut">\u00b7 ${status[2]}</span>${mktHours && strmTxt ? '<span>' + strmTxt + '</span>' : ''}</div>`;
   const R = J.risk, L = J.limits, rg = (env && env.regime) || (R && R.regime);
@@ -2446,7 +2447,7 @@ ${Object.entries(rdJ.variants || {}).map(([k, S]) => row('<span class="mut">Best
 ${yrs.length ? `<div class="mut" style="font-size:12px;margin-top:8px"><b>Best found, year by year:</b> ${yrs.map(([y, x]) => `${y} <span class="${x.R >= 0 ? 'pos' : 'neg'}">${x.R >= 0 ? '+' : ''}${x.R}R</span> (${x.n})`).join(' · ')}</div>` : ''}
 <div class="mut" style="font-size:11.5px;margin-top:6px">Entry at the close of the signal bar plus 0.03% slippage; when one bar touches both the stop and the target the stop is assumed first; flat at 3:45 PM; one trade per stock per day, the daily maximum and the two-loss stop applied in order. The broker's intraday history for these stocks starts in ${esc(firstYear)}; nothing older exists in any public feed. Full report: <a href="bot/research_day_report.md" target="_blank" rel="noopener">research_day_report.md</a>. To use the best values: Bot settings → 4b → “Put these values in the form”.</div></div>`;
   })() : '';
-  return head + statusLine + boxes + envCard + watchCard + riskCard + perfCard + evCard() + btCard + rdCard + openTbl +
+  return head + statusLine + engTxt + boxes + envCard + watchCard + riskCard + perfCard + evCard() + btCard + rdCard + openTbl +
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? ' · <b>real money</b>' : stake ? ` · practice account run as a <b>$${fmt(stake, 0)} stake</b>: every size, loss limit and the day-trade rule use that figure, so this is what real money would have done` : ' · practice account'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }
