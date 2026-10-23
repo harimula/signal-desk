@@ -9,7 +9,7 @@
   },
   "scripts": {
     "test": "node bot/test.mjs && node bot/test-orders.mjs",
-    "lint": "npx --yes eslint@9.39.1 bot/*.mjs news.mjs fetch.mjs tools/*.mjs",
+    "lint": "npx --yes eslint@9.39.1 bot/*.mjs news.mjs fetch.mjs tools/*.mjs tips.js",
     "check": "node tools/stamp.mjs --check",
     "stamp": "node tools/stamp.mjs",
     "verify": "npm run check && npm run lint && npm test",

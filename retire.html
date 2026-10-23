@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html lang="en"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><script src="tips.js" defer></script></head><body>
 <title>Retirement Corpus Calculator</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -197,7 +197,7 @@ details.card summary { font-size: 14px; letter-spacing: 0; text-transform: none;
 .card .scroll + p { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
 </style>
 
-<div class="wrap">
+<main class="wrap">
   <header>
     <div>
       <h1>Retirement Corpus Calculator</h1>
@@ -224,7 +224,7 @@ details.card summary { font-size: 14px; letter-spacing: 0; text-transform: none;
   </details>
 
   <p class="fine">A planning model, not financial advice. The prices for help, groceries, healthcare, travel, cars and school in the dropdowns are my rough estimates, not quotes. Area rents are the middle of the April 2026 market ranges from <a href="https://www.onecityproperty.com/news/rental-property-in-bangalore" target="_blank" rel="noopener">OneCity Property</a>, with Sadashivanagar from <a href="https://wb.rentok.com/market-trends/best-areas-to-live-in-bangalore-ultimate-rental-guide/" target="_blank" rel="noopener">RentOk</a> (2025), and Devanahalli from <a href="https://www.nobroker.in/3bhk-flats-for-rent-in-devanahalli_bangalore" target="_blank" rel="noopener">NoBroker</a> listings (October 2026). The community type sets where in that range the rent falls: standard apartment a quarter of the way up, gated community halfway, premium gated 85% up, and a villa 30% above that. A 4BHK is 1.5 times and a 5BHK 2 times the 3BHK. Those steps and the Sadashivanagar 3BHK range are my estimates, so check listings before you decide. Returns are after tax and fees. Before age 59½ a traditional 401(k) carries a 10% penalty, so this plan does not touch it until 60. As a US citizen you owe US tax on worldwide income, and Indian mutual funds fall under PFIC rules. Check the details with a cross-border CPA.</p>
-</div>
+</main>
 
 <script id="model">
 // Each allowance is a dropdown of options. Option values are ₹ lakh per year; choose None for anything you do not need.
@@ -571,9 +571,9 @@ function render() {
     '<div class="alt">' + usd(T(need.total) / p.fx) + '</div>' +
     '<div class="bar ' + (ok ? 'over' : '') + '"><span style="width:' + pct.toFixed(1) + '%"></span></div>' +
     '<div class="two">' +
-      '<div class="row"><dt>You have today</dt><dd>' + inr(todayAll) + '</dd><dd class="note">' + usd(todayAll / p.fx) + ' across your 401(k) (after tax), Roth, US and Indian accounts.</dd></div>' +
-      '<div class="row"><dt>You will have at age ' + p.retAge + '</dt><dd>' + inr(T(have)) + '</dd><dd class="note">US and Indian portfolios only, with the yearly savings you entered.</dd></div>' +
-      '<div class="row"><dt>' + (gap <= 0 ? 'Spare' : ok ? 'Short, but within 0.2%' : 'Gap') + '</dt><dd class="' + (ok ? 'pos' : 'neg') + '">' + inr(T(Math.abs(gap))) + '</dd></div>' +
+      '<dl class="row" style="margin:0"><dt>You have today</dt><dd>' + inr(todayAll) + '</dd><dd class="note">' + usd(todayAll / p.fx) + ' across your 401(k) (after tax), Roth, US and Indian accounts.</dd></dl>' +
+      '<dl class="row" style="margin:0"><dt>You will have at age ' + p.retAge + '</dt><dd>' + inr(T(have)) + '</dd><dd class="note">US and Indian portfolios only, with the yearly savings you entered.</dd></dl>' +
+      '<dl class="row" style="margin:0"><dt>' + (gap <= 0 ? 'Spare' : ok ? 'Short, but within 0.2%' : 'Gap') + '</dt><dd class="' + (ok ? 'pos' : 'neg') + '">' + inr(T(Math.abs(gap))) + '</dd></dl>' +
     '</div>' +
     '<p class="advice">' + advice + '</p>' +
     '<p class="explain">Your 401(k) and Roth are locked until age ' + p.accAge + ' and are not counted in what you will have. They are credited in the table below.</p>';

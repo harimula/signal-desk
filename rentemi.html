@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html lang="en"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}</style><script src="tips.js" defer></script></head><body>
 <title>Rent vs EMI</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -83,7 +83,7 @@ h2{font:600 15px/1.3 var(--font-display); letter-spacing:0.005em; display:flex; 
 .tie{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 12px; padding:10px 0; border-bottom:1px solid var(--line)}
 .tie dt{font-size:14px}
 .tie dd{font:500 14px var(--font-mono); text-align:right; font-variant-numeric:tabular-nums}
-.tie .why{grid-column:1 / -1; font-size:12.5px; color:var(--muted)}
+.tie .why{grid-column:1 / -1; font:400 12.5px var(--font-body,inherit); text-align:left; color:var(--muted); margin:0}
 .fine{font-size:12.5px; color:var(--muted); margin-top:12px}
 
 /* chart */
@@ -460,7 +460,7 @@ function tieRow(label, t, entered, unitNote){
   if (t.kind === 'tie') { val = pc(t.v) + ' a year'; why = 'Now ' + pc(entered) + '. Buying wins above this.'; }
   else if (t.kind === 'buyAlways') { val = 'Any'; why = 'Buying wins even at ' + pc(t.lo) + ' a year.'; }
   else { val = 'None'; why = 'Renting wins even at ' + pc(t.hi) + ' a year.'; }
-  return '<div class="tie"><dt>' + label + '</dt><dd>' + val + '</dd><span class="why">' + why + '</span></div>';
+  return '<div class="tie"><dt>' + label + '</dt><dd>' + val + '</dd><dd class="why">' + why + '</dd></div>';
 }
 
 function renderVerdict(p, r){
@@ -494,7 +494,7 @@ function renderLedger(p, r){
   const row = (label, b, n, cls) => '<tr' + (cls ? ' class="' + cls + '"' : '') + '><th scope="row">' + label + '</th>' + cell(b) + cell(n) + '</tr>';
   const cashBuy = r.down + r.totEmi + r.totOwn;
   const cashRent = p.upfront + r.lump + r.totRent + r.totGap;
-  let h = '<thead><tr><th></th><th class="c-buy">Buy</th><th class="c-rent">Rent</th></tr></thead><tbody>';
+  let h = '<thead><tr><th><span class="sr">Item</span></th><th class="c-buy">Buy</th><th class="c-rent">Rent</th></tr></thead><tbody>';
   h += row('Down payment', r.down, null);
   h += row('Upfront rent costs', null, p.upfront);
   h += row('Invested on day one', null, r.lump);

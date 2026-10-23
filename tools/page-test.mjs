@@ -30,6 +30,7 @@ async function session(label, prep) {
   page.on('console', m => { if (m.type() === 'error' && !/net::|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text().slice(0, 160)); });
   await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI)); });
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'bot/config.json'), 'utf8'));
+  for (const k of ['dayOrMin', 'dayMaxTrades', 'dayTarget', 'dayOptDteMax']) delete cfg[k];          // like the real file: older saves lack these
   let sha = 'abc', puts = [], secretPuts = [];
   // the encryption library the page loads from jsDelivr, served from the locally installed package (same bytes, same SRI hash)
   await page.route('https://cdn.jsdelivr.net/npm/**', route => { const m2 = /npm\/(libsodium(?:-wrappers)?)@[^/]+\/(.*)$/.exec(route.request().url()); const f = m2 && path.join(ROOT, 'node_modules', m2[1], m2[2]); return f && fs.existsSync(f) ? route.fulfill({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(f), headers: { 'access-control-allow-origin': '*' } }) : route.abort(); });
@@ -72,7 +73,14 @@ async function session(label, prep) {
   await page.evaluate(() => document.querySelector('#st-rsiThreshold').dispatchEvent(new Event('change', { bubbles: true })));
   await page.focus('#st-maxHold'); await page.keyboard.type('1');
   await page.evaluate(() => document.querySelector('#st-maxHold').dispatchEvent(new Event('change', { bubbles: true })));
+  check('settings: a setting missing from config.json shows its default instead of an empty box', await page.evaluate(() => ['dayOrMin', 'dayMaxTrades', 'dayTarget', 'dayOptDteMax'].every(k => { const el = document.getElementById('st-' + k); return el && el.value !== ''; })), await page.evaluate(() => ['dayOrMin', 'dayMaxTrades', 'dayTarget'].map(k => k + '=' + (document.getElementById('st-' + k) || {}).value).join(' ')));
   check('settings: typing does not move the cursor', (await page.evaluate(() => document.activeElement.id)) === 'st-maxHold');
+  // hover help (tips.js): explained labels on the settings page, a card on hover, the help survives redraws
+  const nTips = await page.$$eval('[data-tip]', e => e.length);
+  const tipLab = await page.$('label[data-tip]:has-text("Opening range") b'); if (tipLab) { await tipLab.scrollIntoViewIfNeeded(); await page.waitForTimeout(400); await tipLab.hover(); await page.waitForTimeout(450); }
+  const tipOn = await page.$eval('#sd-tip', e => e.classList.contains('on') && /breakout/.test(e.textContent)).catch(() => false);
+  await page.mouse.move(2, 2); await page.evaluate(() => window.renderAll()); await page.waitForTimeout(200);
+  check('hover help: settings labels are explained, the card shows on hover, and a redraw keeps it', nTips >= 40 && tipOn && (await page.$$eval('[data-tip]', e => e.length)) >= nTips, `${nTips} labels, card ${tipOn}`);
   await page.evaluate(() => document.querySelector('[data-st="save"]').click());
   let msg = '';
   for (let i = 0; i < 80; i++) { await page.waitForTimeout(250); msg = await page.evaluate(() => (document.querySelector('[data-st="save"]').parentElement.textContent || '').replace(/\s+/g, ' ')); if (/Saved|failed/.test(msg)) break; }

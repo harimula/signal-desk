@@ -1,7 +1,7 @@
 name: bot-tests
 on:
   push:
-    paths: ['bot/**', 'news.mjs', 'fetch.mjs', 'tools/**', 'index.html', 'ver.txt', 'eslint.config.js', 'package.json', '.github/workflows/test.yml']
+    paths: ['bot/**', 'news.mjs', 'fetch.mjs', 'tools/**', 'index.html', 'tips.js', 'retire.html', 'rentemi.html', 'ver.txt', 'eslint.config.js', 'package.json', '.github/workflows/test.yml']
   pull_request:
   workflow_dispatch:
 permissions:
