@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-ZRUpEb/A4HoMJpj+MY6cTfoHEmrAeppbptxy1qJe7Zo=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-A9lKTi84oiEJtN6X3H6agTR6KHVyAUjPheVaTiVoBTw=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -912,7 +912,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792787992';
+const BUILD_V = '1792788448';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2629,6 +2629,8 @@ async function stLoad(force) {
       const r = await fetch('bot/config.json?t=' + Date.now(), {cache: 'no-store'}); if (r.ok) stCfg = await r.json();
     }
   } catch (e) { stMsg = 'Could not load settings from GitHub: ' + ghWhy(e); }
+  try { if (ghTok()) { const fi = await ghApi('/contents/bot/config-in.json?ref=main'); inSha = fi.sha; inCfg = JSON.parse(decodeURIComponent(escape(atob(fi.content.replace(/\n/g, ''))))); } else { const ri = await fetch('bot/config-in.json?t=' + Date.now(), {cache: 'no-store'}); if (ri.ok) inCfg = await ri.json(); } } catch (e) { inCfg = inCfg || null; }
+  inCfg = {...IN_DEF, ...(inCfg || {})};
   stCfg = {...ST_DEF, ...(stCfg || {})};   // a setting missing from the file shows (and saves) its default instead of an empty box
   stBusy = false;
   if (app === 'desk' && tab === 'SET') renderAll();
@@ -2650,6 +2652,29 @@ function stRead() {
   c.mode = document.getElementById('st-live') && document.getElementById('st-live').checked ? 'live' : 'paper';
   c.liveConfirm = c.mode === 'live' ? (v('liveConfirm') || '') : '';
   return c;
+}
+// ---- India bot (simulation) settings: bot/config-in.json (read by bot/india.mjs each run) ----
+const IN_DEF = {stakeInr: 1000000, breakout: true, rsi2: true, breakoutShare: 50, posPct: 10, maxPos: 6, costPct: 0.15, rsiThreshold: 10, maxHold: 10, alerts: true, resetAt: null};
+let inCfg = null, inSha = null, inMsg = '', inSaving = false, inResetArm = false;
+async function inSave(reset) {
+  if (!ghTok()) { inMsg = 'Connect GitHub first (section 1).'; renderAll(); return; }
+  const v = id => (document.getElementById('in-' + id) || {}), num = (id, d) => { const x = parseFloat(String(v(id).value || '').replace(/[,\s₹]/g, '')); return Number.isFinite(x) ? x : d; };
+  const c = {...IN_DEF, ...(inCfg || {}), stakeInr: num('stakeInr', 1000000), breakout: !!v('breakout').checked, rsi2: !!v('rsi2').checked, breakoutShare: num('breakoutShare', 50), posPct: num('posPct', 10), maxPos: Math.round(num('maxPos', 6)), rsiThreshold: num('rsiThreshold', 10), maxHold: Math.round(num('maxHold', 10)), alerts: !!v('alerts').checked};
+  if (!c.breakout && !c.rsi2) { inMsg = 'Keep at least one strategy on.'; renderAll(); return; }
+  if (!(c.stakeInr >= 10000)) { inMsg = 'Stake: at least ₹10,000.'; renderAll(); return; }
+  if (reset) c.resetAt = new Date().toISOString();
+  c.updatedAt = new Date().toISOString();
+  inSaving = true; inMsg = 'Saving…'; renderAll();
+  try {
+    let r, sha = inSha;
+    for (let attempt = 1; ; attempt++) {
+      try { r = await ghApi('/contents/bot/config-in.json', {method: 'PUT', body: JSON.stringify({message: 'India bot settings' + (reset ? ' (simulation reset)' : ''), content: b64(JSON.stringify(c, null, 1)), sha: sha || undefined, branch: 'main'})}); break; }
+      catch (e) { if (attempt >= 3 || !/409|does not match|sha|conflict/i.test(e.message || '')) throw e; sha = (await ghApi('/contents/bot/config-in.json?ref=main')).sha; }
+    }
+    inSha = r.content.sha; inCfg = c; inResetArm = false;
+    inMsg = reset ? 'Saved — the simulation restarts with ' + inr(c.stakeInr) + ' at the next run (after today’s NSE close).' : 'Saved — sizes and rules apply from the next run (after the NSE close). Stake and split apply when the simulation restarts.';
+  } catch (e) { inMsg = 'Save failed: ' + ghWhy(e); }
+  inSaving = false; renderAll();
 }
 async function stSave() {
   if (!ghTok()) { stMsg = 'Connect GitHub first (section 1).'; renderAll(); return; }
@@ -2757,6 +2782,8 @@ document.addEventListener('click', e => {
   else if (a === 'reload') { stDirty = false; stLoad(true); }
   else if (a === 'test') stTest();
   else if (a === 'tgconnect') tgConnect();
+  else if (a === 'insave') inSave(false);
+  else if (a === 'inreset') { if (inResetArm) inSave(true); else { inResetArm = true; inMsg = 'Press “Restart the simulation” again to confirm: the India record starts over from today with the stake above.'; renderAll(); } }
   else if (a === 'copyjson') stCopyJson();
   else if (a === 'applyday' && rdJ && rdJ.best) { const P = rdJ.best.P; stCfg = {...stRead(), dayOrMin: P.orMin, dayRvol: P.rvol, dayTarget: P.target, dayTimeStop: P.timeStop, dayEnd: mins2hhmm(P.end), dayStart: mins2hhmm(P.start)}; stDirty = true; stMsg = 'Researched values are in the form — press Save settings to the bot to use them.'; renderAll(); }
   else stControl(a);
@@ -2856,8 +2883,22 @@ ${(() => { const R = readiness(c); return `<div style="margin-top:10px;font-size
 <div class="mut" style="font-size:11.5px;margin-top:6px">The checklist does not block anything — the decision is yours — but switching to real money with red items is how most accounts get hurt. The full procedure is in <a href="docs/#operations" target="_blank" rel="noopener">Operations → Going live</a>.</div></div>`; })()}`, 'paper or real money');
   const ctl = sec('8. Controls', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${stStop ? '<button class="btn" type="button" data-st="resume">▶ Resume trading</button>' : '<button class="btn" type="button" data-st="pause" style="background:var(--ts)">⏸ Pause — sell everything now</button>'}<button class="btn ghost" type="button" data-st="run">Run the bot now</button><button class="btn ghost" type="button" data-st="research">Re-run 33-year research</button><button class="btn ghost" type="button" data-st="reload">Reload from GitHub</button></div>
 <div class="mut" style="font-size:12px;margin-top:8px">${stStop ? '<b class="neg">Paused</b> — the bot has sold everything and is idle.' : 'Running normally.'} Pause creates <code>bot/STOP</code> in the repo; the bot sees it within seconds.</div>`, 'pause, resume, run');
+  const ic = inCfg || IN_DEF, inNum = (id, lab, help, val, step, min, max) => `<label style="font-size:12px"><b>${lab}</b><div class="mut" style="font-size:11.5px;margin:2px 0 4px">${help}</div><input id="in-${id}" type="number" step="${step}" min="${min}" max="${max}" value="${esc(String(val))}" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"></label>`;
+  const inChk = (id, lab, help) => `<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px"><input id="in-${id}" type="checkbox" ${ic[id] ? 'checked' : ''} style="width:18px;height:18px"> <b>${lab}</b> <span class="mut" style="font-size:12px">${help}</span></label>`;
+  const india = sec('9. India bot (simulation)', `<div class="mut" style="font-size:12.5px;margin-top:6px;line-height:1.5">A separate bot for NSE stocks, running in <b>simulation</b>: real prices, no broker, no orders. It runs after each NSE close; see Bot trades → 🇮🇳 India bot. These settings are saved to <code>bot/config-in.json</code> with their own button.</div>
+${inChk('breakout', 'Trend breakout', 'buys a close at a 50-day high above the 200-day; sells on a close below the 20-day low')}${inChk('rsi2', 'RSI-2 dip buying', 'the US strategy, on NSE stocks')}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:10px">
+${inNum('stakeInr', 'Simulated stake (₹)', 'applies when the simulation restarts', ic.stakeInr, 10000, 10000, 1000000000)}
+${inNum('breakoutShare', 'Share for trend breakout (%)', 'the rest goes to RSI-2; applies on restart', ic.breakoutShare, 5, 0, 100)}
+${inNum('posPct', 'Money per position (%)', 'of that strategy’s money; 10 = as tested', ic.posPct, 1, 1, 50)}
+${inNum('maxPos', 'Max positions per strategy', '6 = as tested', ic.maxPos, 1, 1, 20)}
+${inNum('rsiThreshold', 'RSI-2 buy level (India)', 'buy below this; 10 = as tested', ic.rsiThreshold, 1, 1, 30)}
+${inNum('maxHold', 'RSI-2 max hold (India)', 'sessions before it sells anyway', ic.maxHold, 1, 1, 30)}</div>
+${inChk('alerts', 'India Telegram summary', 'one message after each NSE day: buys, sells, value vs the Nifty 50')}
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px"><button class="btn" type="button" data-st="insave" ${inSaving || !connected ? 'disabled' : ''}>Save India settings</button><button class="btn ghost" type="button" data-st="inreset" ${inSaving || !connected ? 'disabled' : ''}>${inResetArm ? 'Press again to restart' : 'Restart the simulation'}</button><span class="mut" style="font-size:12px" id="inMsg">${esc(inMsg)}</span></div>
+<div class="mut" style="font-size:11.5px;margin-top:8px">Real orders on your mother’s Zerodha account are a later step: her Kite Connect app, a fixed-address server (SEBI rule since April 2026) and her login each morning.</div>`, 'NSE · simulation');
   const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:50px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span id="stDirty" class="pill r-Sell" style="font-size:11px;${stDirty ? '' : 'display:none'}">unsaved changes</span><span style="font-size:12.5px">${stBusy ? `<span id="stWait" class="mut" style="font-variant-numeric:tabular-nums;margin-right:6px">${Math.round((Date.now() - stT0) / 1000)} s</span>` : ''}${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span>${stBusy ? `<div id="stSteps" class="mut" style="flex-basis:100%;font-size:11.5px;font-family:var(--font-mono),monospace;white-space:pre-wrap">${stStepsHtml()}</div>` : ''}${stFailed && !stBusy ? `<div style="flex-basis:100%;font-size:12.5px;border-top:1px solid var(--line);padding-top:8px"><b>Can't reach GitHub from here?</b> Save another way: <button class="btn ghost" type="button" data-st="copyjson" style="font-size:12px">Copy settings</button> then <a href="https://github.com/${esc(ghRepo())}/edit/main/bot/config.json" target="_blank" rel="noopener">open bot/config.json on GitHub</a>, select all, paste, Commit changes.${stJsonBox ? `<textarea readonly rows="6" style="width:100%;margin-top:6px;font-family:var(--font-mono),monospace;font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text)">${esc(stJsonBox)}</textarea>` : ''}</div>` : ''}</div>`;
-  const body = `${bar}${connect}${syncC}${risk}${alloc}${strat}${dayS}${guards}${uni}${mode}${ctl}`;
+  const body = `${bar}${connect}${syncC}${risk}${alloc}${strat}${dayS}${guards}${uni}${mode}${ctl}${india}`;
   const side = `<nav class="stnav" aria-label="Settings sections"><div class="mut" style="font-size:11.5px;margin-bottom:6px">On this page</div>${secIds.map(([id, t]) => `<a href="#${id}">${esc(t)}</a>`).join('')}<a href="docs/settings.html" target="_blank" rel="noopener" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">What each setting does ↗</a></nav>`;
   return `<h2 style="margin-bottom:6px">Bot settings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page. <a href="docs/settings.html" target="_blank" rel="noopener"><b>What does each setting do? → the settings guide</b></a></div><div class="stwrap">${side}<div style="min-width:0">${body}</div></div>`;
 }

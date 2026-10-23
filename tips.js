@@ -90,6 +90,13 @@
     '50-day high': 'The highest close of the previous 50 trading days. A close above it, in an uptrend, is the breakout buy signal.', 'gap': 'How far the price still is below its 50-day high.',
     'buys if it…': 'The closing price that would push RSI-2 under the buy level, making it a buy for the next open.', 'at': 'The price of that buy or sell.', 'sold on': 'The trading day the simulated sale filled at the close.',
     'reason': 'Which exit rule fired.', 'strategy': 'Which of the two strategies made this trade: trend breakout or RSI-2 dip buying.',
+    'simulated stake': 'How many rupees the India simulation treats as her money. Applies when the simulation restarts.',
+    'share for trend breakout': 'How the stake is split: this % to trend breakout, the rest to RSI-2. Applies on restart.',
+    'money per position': 'Each buy uses this % of that strategy’s money (10% was tested).', 'max positions per strategy': 'Most stocks one strategy holds at once (6 was tested).',
+    'rsi-2 buy level': 'Buy when RSI-2 drops below this. Lower = fewer, deeper dips. 10 is the tested value.', 'rsi-2 max hold': 'Sell after this many sessions if the exit rule has not fired.',
+    'trend breakout': 'Buys a stock that closes at a 50-day high while above its 200-day average; sells on a close below its 20-day low. The best NSE test result.',
+    'rsi-2 dip buying': 'The US bot’s strategy: buy an uptrend stock after a sharp 2-day dip, sell on the bounce. Weaker on NSE because of costs.',
+    'india telegram summary': 'One Telegram message after each NSE day with the simulated buys, sells and value against the Nifty 50.',
     // ---------- stat boxes ----------
     'today': 'Change in account value since yesterday’s close (open and closed trades together).',
     'realized today': 'Profit or loss locked in by trades closed today.',

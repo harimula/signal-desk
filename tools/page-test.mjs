@@ -31,7 +31,7 @@ async function session(label, prep) {
   await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI)); });
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'bot/config.json'), 'utf8'));
   for (const k of ['dayOrMin', 'dayMaxTrades', 'dayTarget', 'dayOptDteMax']) delete cfg[k];          // like the real file: older saves lack these
-  let sha = 'abc', puts = [], secretPuts = [];
+  let sha = 'abc', puts = [], secretPuts = [], inPuts = [];
   // the encryption library the page loads from jsDelivr, served from the locally installed package (same bytes, same SRI hash)
   await page.route('https://cdn.jsdelivr.net/npm/**', route => { const m2 = /npm\/(libsodium(?:-wrappers)?)@[^/]+\/(.*)$/.exec(route.request().url()); const f = m2 && path.join(ROOT, 'node_modules', m2[1], m2[2]); return f && fs.existsSync(f) ? route.fulfill({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(f), headers: { 'access-control-allow-origin': '*' } }) : route.abort(); });
   await page.route('https://api.github.com/**', async route => {
@@ -42,6 +42,8 @@ async function session(label, prep) {
     if (p === '/contents/bot/config.json' && m === 'GET') return json(200, { sha, content: Buffer.from(JSON.stringify(cfg)).toString('base64') });
     if (p === '/contents/bot/config.json' && m === 'PUT') { puts.push(JSON.parse(route.request().postData())); sha = 'new' + puts.length; return json(200, { content: { sha } }); }
     if (p === '/actions/secrets') return json(200, { secrets: [{ name: 'ALPACA_KEY' }, { name: 'ALPACA_SECRET' }] });
+    if (p === '/contents/bot/config-in.json' && m === 'GET') return json(200, { sha: 'in1', content: Buffer.from(JSON.stringify({ stakeInr: 1000000, breakout: true, rsi2: true })).toString('base64') });
+    if (p === '/contents/bot/config-in.json' && m === 'PUT') { inPuts.push(JSON.parse(route.request().postData())); return json(200, { content: { sha: 'in2' } }); }
     if (p === '/actions/secrets/public-key') return json(200, { key_id: 'kid1', key: Buffer.from(crypto.generateKeyPairSync('x25519').publicKey.export({ type: 'spki', format: 'der' }).subarray(-32)).toString('base64') });
     if (p.startsWith('/actions/secrets/') && m === 'PUT') { secretPuts.push({ name: p.split('/').pop(), ...JSON.parse(route.request().postData()) }); return route.fulfill({ status: 201, body: '' }); }
     return json(404, { message: 'Not Found' });
@@ -58,7 +60,7 @@ async function session(label, prep) {
   const csp = await page.evaluate(() => window.__csp);
   check(`${label}: every tab renders without a script error`, errors.length === 0, errors.join(' | '));
   check(`${label}: no Content-Security-Policy violations`, csp.length === 0, csp.join(' | '));
-  return { page, errors, puts, secretPuts };
+  return { page, errors, puts, secretPuts, inPuts };
 }
 
 // 1. plain visitor
@@ -66,7 +68,7 @@ async function session(label, prep) {
 
 // 2. connected owner who last used the Screener sub-view (the state that once crashed every other tab's redraw)
 {
-  const { page, errors, puts, secretPuts } = await session('owner with Screener remembered', () => { localStorage.clear(); localStorage.setItem('sd-v2', JSON.stringify('screen')); localStorage.setItem('sd-ghtok', JSON.stringify('ghp_fake')); localStorage.setItem('sd-ghrepo', JSON.stringify('x/y')); });
+  const { page, errors, puts, secretPuts, inPuts } = await session('owner with Screener remembered', () => { localStorage.clear(); localStorage.setItem('sd-v2', JSON.stringify('screen')); localStorage.setItem('sd-ghtok', JSON.stringify('ghp_fake')); localStorage.setItem('sd-ghrepo', JSON.stringify('x/y')); });
   await page.evaluate(() => document.querySelector('#tabs [data-t="SET"]').click());
   await page.waitForTimeout(1200);
   await page.fill('#st-rsiThreshold', '12');
@@ -104,6 +106,16 @@ async function session(label, prep) {
   await page.evaluate(() => document.querySelector('[data-st="keys"]').click());
   let km = ''; for (let i = 0; i < 60 && !secretPuts.length && !/failed/i.test(km); i++) { await page.waitForTimeout(250); km = await page.evaluate(() => document.body.innerText.match(/Saving keys failed[^\n]*|Saved[^\n]*secret[^\n]*/i)?.[0] || ''); }
   check('keys: Save keys seals the Alpaca key in the browser and stores it as the ALPACA_KEY secret', secretPuts.some(x => x.name === 'ALPACA_KEY' && x.key_id === 'kid1' && Buffer.from(x.encrypted_value, 'base64').length === 48 + 'PKTESTKEY1234567890'.length), km + ' ' + JSON.stringify(secretPuts.map(x => x.name)) + ' ' + errors.join(' | '));
+  // India bot settings: own section, own file
+  await page.fill('#in-stakeInr', '500000'); await page.evaluate(() => document.querySelector('[data-st="insave"]').click());
+  for (let i = 0; i < 40 && !inPuts.length; i++) await page.waitForTimeout(150);
+  const inSaved = inPuts[0] && JSON.parse(Buffer.from(inPuts[0].content, 'base64').toString());
+  check('India settings: Save writes bot/config-in.json with the typed stake and leaves config.json alone', !!inSaved && inSaved.stakeInr === 500000 && inSaved.breakout === true && !inSaved.resetAt, JSON.stringify(inSaved));
+  await page.evaluate(() => document.querySelector('[data-st="inreset"]').click()); await page.waitForTimeout(200);
+  const armed = inPuts.length === 1; await page.evaluate(() => document.querySelector('[data-st="inreset"]').click());
+  for (let i = 0; i < 40 && inPuts.length < 2; i++) await page.waitForTimeout(150);
+  const rs = inPuts[1] && JSON.parse(Buffer.from(inPuts[1].content, 'base64').toString());
+  check('India settings: Restart needs a second press, then saves a reset time', armed && !!rs && !!rs.resetAt, JSON.stringify(rs));
   check('settings: no CSP violation connecting Telegram or saving keys', (await page.evaluate(() => window.__csp)).length === 0, JSON.stringify(await page.evaluate(() => window.__csp)));
   await page.close();
 }

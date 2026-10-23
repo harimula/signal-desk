@@ -69,7 +69,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <main>
 <h1>What every bot setting does</h1>
 <p class="lede">One entry per control on the <b>Bot settings</b> tab: what it changes, the default, and when you'd move it. Defaults marked <span class="tag tested">tested</span> are the values the 33-year research used; anything marked <span class="tag exp">experimental</span> was never backtested.</p>
-<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · last updated 2026-10-23 (hover help on every field; defaults always shown; sync simplified)</p>
+<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · last updated 2026-10-23 (India bot simulation settings)</p>
 
 <section id="how">
 <h2>How settings work<small>where they live and when they take effect</small></h2>
@@ -86,6 +86,18 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <div class="s"><h3>Live API key / secret</h3><div class="meta">Encrypted secrets · real money only</div><p>Leave empty for paper trading. Only used when section 7 is switched to real money; a paper key is rejected by the live endpoint, so the two can't be mixed up.</p></div>
 </section>
 
+<section id="india">
+<h2>9. India bot (simulation)<small>NSE · real prices, no orders</small></h2>
+<div class="s"><p>A separate bot for NSE stocks that runs after each NSE close (about 4:10 PM IST). It fills the buys it planned the evening before at that morning’s official opening price, sells at the close when an exit rule fires, and plans the next morning — exactly how the NSE test was run — in whole shares with 0.15% costs per side. No broker is connected. Results: Bot trades → 🇮🇳 India bot. Saved to <code>bot/config-in.json</code> with <b>Save India settings</b>.</p></div>
+<div class="s"><h3>Trend breakout / RSI-2 dip buying</h3><div class="meta">Default <b>both on</b></div><p>Trend breakout buys a stock that closes at a 50-day high while above its 200-day average and sells on a close below its 20-day low (the best NSE test result: +12.7% a year in 2021–26). RSI-2 is the US strategy (+4.0% a year on NSE in 2021–26: costs eat most of its edge). Each keeps its own money and record.</p></div>
+<div class="s"><h3>Simulated stake (₹)</h3><div class="meta">Default <b>₹10,00,000</b> · applies when the simulation restarts</div><p>The money the simulation treats as hers.</p></div>
+<div class="s"><h3>Share for trend breakout (%)</h3><div class="meta">Default <b>50</b> · range 0–100 · applies on restart</div><p>The rest goes to RSI-2.</p></div>
+<div class="s"><h3>Money per position (%)</h3><div class="meta">Default <b>10</b> <span class="tag tested">tested</span> · range 1–50</div><p>Each buy uses this share of its strategy’s money.</p></div>
+<div class="s"><h3>Max positions per strategy</h3><div class="meta">Default <b>6</b> <span class="tag tested">tested</span> · range 1–20</div></div>
+<div class="s"><h3>RSI-2 buy level / max hold (India)</h3><div class="meta">Defaults <b>10</b> and <b>10 sessions</b> <span class="tag tested">tested</span></div><p>Separate from the US settings.</p></div>
+<div class="s"><h3>India Telegram summary</h3><div class="meta">Default <b>on</b></div><p>One message after each NSE day: buys, sells, value against the Nifty 50.</p></div>
+<div class="s"><h3>Restart the simulation</h3><div class="meta">Press twice</div><p>Starts the India record over from the next run with the stake and split above. Sizes and rule settings apply from the next run without a restart.</p></div>
+</section>
 <section id="sync">
 <h2>Sync across devices<small>settings follow you</small></h2>
 <div class="s"><p>With a token and the journal passphrase entered, your Finnhub/FMP keys, watchlist, portfolios and calculator inputs are encrypted with the passphrase and stored in the repo, so a second device with the same passphrase gets them automatically. <b>👤 Sign in</b> (top of the page) is the normal way to use another device: enter the passphrase and that device gets your token, keys, holdings and settings, then stays in sync. <b>Sign out and wipe this device</b> clears a borrowed computer.The code carries your secrets — show it only to your own phone. The QR link and the “show passphrase” button were removed on 2026-10-23: Sign in does the same without putting secrets on screen.</p></div>
