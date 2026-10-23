@@ -11,7 +11,7 @@ const CSP_HOSTS = {
   script: ['https://cdn.jsdelivr.net', 'https://www.gstatic.com'],                      // libsodium (SRI-pinned), Firebase (optional accounts feature)
   style: ["'unsafe-inline'", 'https://fonts.googleapis.com'],
   font: ['https://fonts.gstatic.com'],
-  connect: ['https://api.github.com', 'https://*.github.io', 'https://finnhub.io', 'https://financialmodelingprep.com', 'https://query1.finance.yahoo.com',
+  connect: ['https://api.github.com', 'https://*.github.io', 'https://finnhub.io', 'wss://ws.finnhub.io',  'https://financialmodelingprep.com', 'https://query1.finance.yahoo.com',
     'https://*.workers.dev', 'https://api.allorigins.win', 'https://corsproxy.io',                            // price relays (no keys travel through them)
     'https://*.googleapis.com', 'https://*.firebaseio.com', 'wss://*.firebaseio.com'],                          // Firebase, only if accounts are switched on
 };
@@ -37,6 +37,11 @@ if (process.argv.includes('--check')) {
   else if (html.match(metaRe)[0] !== meta) problems.push('CSP script hashes are stale (index.html changed after the last stamp)');
   if (!verNow) problems.push('no BUILD_V in index.html');
   else if (fs.readFileSync(VER, 'utf8').trim() !== verNow) problems.push(`ver.txt (${fs.readFileSync(VER, 'utf8').trim()}) does not match BUILD_V (${verNow})`);
+  // every host the page's code opens a connection to (fetch / tryJson / WebSocket / EventSource) must be allowed by
+  // connect-src — otherwise the browser blocks it silently (this is how the Finnhub live stream broke on 2026-10-22)
+  const allowed = CSP_HOSTS.connect.map(h => new RegExp('^' + h.replace(/[.]/g, '\\.').replace('*', '[a-z0-9-]+') + '$'));
+  const used = new Set([...html.matchAll(/(?:fetch|tryJson|WebSocket|EventSource)\(\s*['"`]((?:https|wss):\/\/[^/'"`?$]+)/g)].map(m => m[1]));
+  for (const h of used) if (!allowed.some(re => re.test(h))) problems.push(`the page connects to ${h} but connect-src does not allow it — add it to CSP_HOSTS.connect`);
   for (const [n, c] of inline.entries()) { try { new Function(c); } catch (e) { problems.push(`inline script #${n + 1} does not parse: ${e.message}`); } }
   if (problems.length) { console.error('stamp check FAILED:\n  - ' + problems.join('\n  - ') + '\nRun: node tools/stamp.mjs'); process.exit(1); }
   console.log(`stamp check OK: build ${verNow}, ${inline.length} inline scripts hashed`);
