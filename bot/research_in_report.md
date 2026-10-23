@@ -15,4 +15,6 @@ Costs 0.15%/side · 10% of equity per position · max 6 positions · out-of-samp
 | Trend breakout: close at a 50-day high above the 200-day, exit on a 20-day low | on | +11.70% | 0.91 | −37.1% | **+11.15%** | **0.86** | −24.4% | 456 | 41.0% | +5.91% | 2.19 |
 | Nifty 50 buy & hold | – | +8.85% | 0.53 | −59.9% | **+7.32%** | **0.59** | −17.2% | – | – | – | – |
 
+| Nifty Midcap 50 buy & hold (from 2007-09-24) | – | +15.80% | 0.46 | −75.1% | **+16.87%** | **0.96** | −22.6% | – | – | – | – |
+
 Survivorship bias (today’s big companies, looking back) flatters every strategy, so treat these as an upper bound. Not financial advice.
