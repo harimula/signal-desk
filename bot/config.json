@@ -57,7 +57,7 @@
   "SOFI",
   "F"
  ],
- "updatedAt": "2026-10-22T18:59:45.635Z",
+ "updatedAt": "2026-10-23T00:50:10.032Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "puts": true,
@@ -70,5 +70,13 @@
  "scanMinPrice": 5,
  "putPct": 2,
  "alertDetail": true,
- "stockUsd": 22
+ "stockUsd": 22,
+ "dayTrade": true,
+ "dayStart": "09:45",
+ "dayEnd": "15:30",
+ "liveSizePct": 25,
+ "stakeUsd": 0,
+ "dayStock": true,
+ "dayCalls": true,
+ "dayPuts": true
 }
