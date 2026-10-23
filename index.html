@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-37EB7fh7/t1V7qEz0N33DCJtIuMHz9u32iKrT2kyHdU=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-dM9Z20Jp10tQpJvVZn+2Z6hIKqONVSbe8vvsn0gBTTI=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -50,6 +50,12 @@ header{padding:10px 0 2px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:c
 .brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
 h1{font-size:18px;margin:0;letter-spacing:-.01em;font-weight:700}
 .dots{display:flex;gap:12px;font-size:12px;color:var(--muted);font-weight:600}
+.mksw{display:inline-flex;padding:3px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;gap:2px;align-self:center}
+.mksw button{border:0;background:transparent;color:var(--text);border-radius:8px;padding:6px 12px;min-height:34px;font:500 13.5px var(--font,inherit);display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.mksw button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.mksw .cc{font:600 10.5px var(--font-mono,monospace);padding:2px 5px;border-radius:4px;background:var(--line);color:var(--text)}
+.mksw button[aria-pressed="true"] .cc{background:rgba(255,255,255,.22);color:inherit}
+.tabsep{width:1px;height:20px;background:var(--line);margin:0 6px;align-self:center;flex:none}
 .mkst{display:inline-flex;align-items:center;gap:5px}
 .cmgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 14px;margin-top:8px}
 .cmq{display:flex;flex-direction:column;line-height:1.25}
@@ -267,7 +273,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 <div class="wrap">
 <nav class="vnav" id="appbar" aria-label="Apps" style="margin:10px 0 6px"></nav>
 <header>
-  <div class="brand"><img src="icons/favicon.svg" alt="" width="26" height="26" style="border-radius:7px;margin-right:8px;vertical-align:-6px"><h1>Signal Desk</h1><div class="dots" id="mdots"></div></div>
+  <div class="brand"><img src="icons/favicon.svg" alt="" width="26" height="26" style="border-radius:7px;margin-right:8px;vertical-align:-6px"><h1>Signal Desk</h1><div class="mksw" id="mkSw" role="group" aria-label="Market"><button type="button" data-mkt="US" aria-pressed="true"><span class="cc">US</span>USA</button><button type="button" data-mkt="IN" aria-pressed="false"><span class="cc">IN</span>India</button></div><div class="dots" id="mdots"></div></div>
   <div class="hright"><div class="asof" id="clock"></div><span id="cdown" class="mut" style="font-size:12px;font-weight:700;font-feature-settings:'tnum'"></span><button class="btn ghost" id="acctBtn" type="button">👤 Sign in</button><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="1">● Live</option><option value="2">Every 2 min</option><option value="5">Every 5 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
 </header>
 <section aria-label="Status"><div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
@@ -649,6 +655,10 @@ let wl = new Set(load('sd-wl', []));
 let dlgHist = false;
 let dtMk = load('sd-dtmk', 'US'); if (dtMk !== 'IN') dtMk = 'US';
 let opMk = load('sd-opmk', 'US'); if (opMk !== 'IN') opMk = 'US';
+// One market switch in the header (2026-10-23): every market tab (Stocks, Day trading, Option trading, Bot trades, Bot settings)
+// shows the chosen market; News, portfolios, My tickers and Rules are shared.
+let mkt = load('sd-mkt', 'US'); if (mkt !== 'IN') mkt = 'US';
+dtMk = mkt; opMk = mkt;
 let app = load('sd-app', 'desk'); if (!['desk', 'retire', 'rentemi'].includes(app)) app = 'desk';
 const APPS = [['desk', '\ud83d\udcc8 Signal Desk'], ['retire', '\ud83c\udf34 Retirement'], ['rentemi', '\ud83c\udfe0 Rent vs EMI']];
 let hmBy = load('sd-hm', 'score');
@@ -657,7 +667,14 @@ let tf = load('sd-tf', '3M');
 let cstyle = load('sd-cs', 'candle');
 let pf = {};
 const TFN = {'1M': 22, '3M': 66, 'Max': 999};
-maN = load('sd-man', 50); maT = load('sd-mat', 'SMA'); tab = load('sd-tab', 'US'); if (tab === 'PF') tab = 'PF:p1';
+maN = load('sd-man', 50); maT = load('sd-mat', 'SMA'); tab = load('sd-tab', 'US'); if (tab === 'PF') tab = 'PF:p1'; if (tab === 'US' || tab === 'IN') tab = mkt;
+function setMkt(m) {
+  mkt = m === 'IN' ? 'IN' : 'US'; dtMk = mkt; opMk = mkt; botMk = mkt; save('sd-mkt', mkt);
+  if (tab === 'US' || tab === 'IN') { tab = mkt; save('sd-tab', tab); }
+  if (mkt === 'IN') inLoad(true);
+  resetFilters(); renderAll();
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-mkt]'); if (b) setMkt(b.dataset.mkt); });
 if (!MK[tab] && tab !== 'MY' && tab !== 'RULES' && tab !== 'PF') tab = 'US';
 $('#maN').value = maN; $('#maT').value = maT;
 
@@ -708,8 +725,9 @@ function fresh(m) {
   return {age, open, level};
 }
 function chrome() {
-  const m = MK[(tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab)) ? 'US' : tab === 'DT' ? dtMk : tab === 'OP' ? opMk : tab], f = fresh(m);
-  $('#mdots').innerHTML = ['US', 'IN'].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
+  const m = MK[mkt], f = fresh(m);
+  document.querySelectorAll('#mkSw [data-mkt]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mkt === mkt)));
+  $('#mdots').innerHTML = [mkt].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
   $('#asof').innerHTML = (tab === 'SET' ? 'Control panel \u2014 risk, capital, strategy, keys' : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'BOT' ? 'Your bot — real rules, real prices, every trade' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
   $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
   let h = linkedNote ? `<div class="banner info">${linkedNote}</div>` : '';
@@ -912,7 +930,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792789506';
+const BUILD_V = '1792790597';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1215,7 +1233,9 @@ if (FB_CONFIG) fbBoot();
 // ---------- tabs ----------
 function renderTabs() {
   if (pfOf(tab) && !pfolios.find(p => p.id === pfOf(tab))) tab = 'PF:' + pfolios[0].id;
-  $('#tabs').innerHTML = `<div role="tablist" aria-label="Views" style="display:contents">${tabsList().map(([k, l]) => `<button class="tab" role="tab" data-t="${k}" aria-selected="${k === tab}">${esc(l)}</button>`).join('')}</div>` + `<button class="tab" id="pfAdd" type="button" title="New portfolio" aria-label="New portfolio">+</button>`;
+  const tl = tabsList().filter(([k]) => k !== 'IN').map(([k, l]) => k === 'US' ? ['STK', 'Stocks'] : [k, l]);
+  const isOn = k => k === 'STK' ? (tab === 'US' || tab === 'IN') : k === tab;
+  $('#tabs').innerHTML = `<div role="tablist" aria-label="Views" style="display:contents">${tl.map(([k, l]) => (k === 'NEWS' ? '<span class="tabsep" aria-hidden="true"></span>' : '') + `<button class="tab" role="tab" data-t="${k}" aria-selected="${isOn(k)}">${esc(l)}</button>`).join('')}</div>` + `<button class="tab" id="pfAdd" type="button" title="New portfolio" aria-label="New portfolio">+</button>`;
 }
 document.getElementById('appbar').addEventListener('click', e => {
   if (e.target.closest('#thBtn')) { theme = theme === '' ? 'dark' : theme === 'dark' ? 'light' : ''; save('sd-theme', theme); thApply(); return; }
@@ -1224,7 +1244,7 @@ document.getElementById('appbar').addEventListener('click', e => {
 });
 $('#tabs').addEventListener('click', e => {
   if (e.target.closest('#pfAdd')) { addPortfolio(); return; }
-  const b = e.target.closest('[data-t]'); if (!b) return; tab = b.dataset.t; save('sd-tab', tab); resetFilters(); renderAll(); });
+  const b = e.target.closest('[data-t]'); if (!b) return; tab = b.dataset.t === 'STK' ? mkt : b.dataset.t; save('sd-tab', tab); resetFilters(); renderAll(); });
 function resetFilters() { q = ''; fr = ''; fi = ''; onlyWl = false; }
 
 // ---------- MA inputs ----------
@@ -1753,7 +1773,6 @@ ${opRows ? `<details data-k="opdd" style="margin-top:12px"><summary style="curso
   const grid = (list, kind, head, emptyTxt) => `<h3 style="margin:18px 0 8px">${head} <span class="mut" style="font-weight:400;font-size:13px">· ${list.length}</span></h3>` +
     (list.length ? `<div class="grid regime">${list.map(r => card(r, kind)).join('')}</div>` : `<div class="card empty">${emptyTxt}</div>`);
   return `<h2 style="margin-bottom:6px">Option trading — ${mk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
-<div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-opm="${k}" aria-selected="${mk === k}">${l}</button>`).join('')}</div>
 <div class="mut" style="font-size:12.5px;margin:8px 0 12px">Buying CALLs and PUTs only — you can never lose more than the premium you pay. Same engine as Day trading, with stricter filters. Tap a card for the chart. Not advice; this page places no orders.</div>
 ${mk === 'US' ? evCard() : ''}<div class="card" style="padding:12px 16px;margin-bottom:4px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Premium money (${cu})</b><input id="opAmt" aria-label="Amount to invest per option trade" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="opSplit" type="button">Split it</button><span class="mut" style="font-size:12px">total premium at risk — split across today's picks, strongest first</span></div></div>
 ${plCard}
@@ -1845,7 +1864,6 @@ ${(si => `<div><small>${si.nowLab}</small><b>${fmt(s.px)}</b><small class="${(si
 <div class="tw card" style="margin-top:6px"><table style="min-width:380px"><thead><tr><th class="lt">Stock</th><th>Bought at</th><th>Sold at</th><th>P/L %</th><th>P/L ${cu}</th></tr></thead><tbody>${trs}</tbody></table></div>`;
   }).join('') : '';
   return `<h2 style="margin-bottom:6px">Day trading — ${dtMk === 'IN' ? 'India (NSE)' : 'USA'}</h2>
-<div class="vnav" role="tablist">${[['US', 'USA'], ['IN', 'India']].map(([k, l]) => `<button class="vtab" role="tab" data-dtm="${k}" aria-selected="${dtMk === k}">${l}</button>`).join('')}</div>
 <div class="mut" style="font-size:12.5px;margin:8px 0 12px">Press ↻ Refresh prices ${dtMk === 'US' ? 'before the market opens (9:30 ET)' : 'after the market closes'} to get today's numbers. Tap any stock for details. Not advice.</div>
 ${dtMk === 'US' ? evCard() : ''}<div class="card" style="padding:12px 16px;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13.5px">Money to trade with (${cu})</b><input id="dtAmt" aria-label="Amount to invest per trade" type="number" min="0" step="any" inputmode="decimal" value="${amt}" style="width:120px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-weight:700"><button class="btn" id="dtSplit" type="button">Split it</button><span class="mut" style="font-size:12px">divided across today's buys — the strongest one gets the most</span></div></div>
 ${live ? `<div class="card" style="padding:14px 16px;margin-bottom:14px">
@@ -2304,7 +2322,7 @@ async function botLoad(force) {
 }
 setInterval(() => { if (app === 'desk' && tab === 'BOT' && !document.hidden) botLoad(); }, 60000);
 // ---------- India bot (simulation): journal bot/india-journal.json, research bot/research-in.json ----------
-let botMk = load('sd-botmk', 'US'), inJ = null, inLocked = null, inErr = '', inAt = 0, inBusy = false, inRes = null;
+let botMk = mkt, inJ = null, inLocked = null, inErr = '', inAt = 0, inBusy = false, inRes = null;
 async function inLoad(force) {
   if (inBusy || (!force && Date.now() - inAt < 55000)) return;
   inBusy = true; inAt = Date.now();
@@ -2319,11 +2337,7 @@ async function inLoad(force) {
   inBusy = false;
   if (app === 'desk' && tab === 'BOT' && botMk === 'IN') renderAll(true);
 }
-document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-botmk]'); if (!b) return; botMk = b.dataset.botmk; save('sd-botmk', botMk); if (botMk === 'IN') inLoad(true); renderAll(); });
-function botSwitch() {
-  const t = (k, l) => `<button class="vtab" type="button" role="tab" data-botmk="${k}" aria-selected="${botMk === k}">${l}</button>`;
-  return `<nav class="vnav" role="tablist" aria-label="Which bot" style="margin:0 0 12px">${t('US', '🇺🇸 USA bot')}${t('IN', '🇮🇳 India bot <span class="mut" style="font-size:11px">simulation</span>')}</nav>`;
-}
+function botSwitch() { return ''; }   // the header's market switch chooses the bot (2026-10-23)
 const inr = (v, dec = 0) => (v < 0 ? '−' : '') + '₹' + Math.abs(v).toLocaleString('en-IN', {minimumFractionDigits: dec, maximumFractionDigits: dec});
 const inrS = v => Math.abs(v) < 0.5 ? '₹0' : (v >= 0 ? '+' : '−') + '₹' + Math.abs(Math.round(v)).toLocaleString('en-IN');
 const nsSym = s => String(s || '').replace(/\.NS$/, '');
@@ -2912,7 +2926,7 @@ ${(() => { const R = readiness(c); return `<div style="margin-top:10px;font-size
 <div class="mut" style="font-size:12px;margin-top:8px">${stStop ? '<b class="neg">Paused</b> — the bot has sold everything and is idle.' : 'Running normally.'} Pause creates <code>bot/STOP</code> in the repo; the bot sees it within seconds.</div>`, 'pause, resume, run');
   const ic = inCfg || IN_DEF, inNum = (id, lab, help, val, step, min, max) => `<label style="font-size:12px"><b>${lab}</b><div class="mut" style="font-size:11.5px;margin:2px 0 4px">${help}</div><input id="in-${id}" type="number" step="${step}" min="${min}" max="${max}" value="${esc(String(val))}" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"></label>`;
   const inChk = (id, lab, help) => `<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px"><input id="in-${id}" type="checkbox" ${ic[id] ? 'checked' : ''} style="width:18px;height:18px"> <b>${lab}</b> <span class="mut" style="font-size:12px">${help}</span></label>`;
-  const india = sec('9. India bot (simulation)', `<div class="mut" style="font-size:12.5px;margin-top:6px;line-height:1.5">A separate bot for NSE stocks, running in <b>simulation</b>: real prices, no broker, no orders. It runs after each NSE close; see Bot trades → 🇮🇳 India bot. These settings are saved to <code>bot/config-in.json</code> with their own button.</div>
+  const india = sec('2. India bot (simulation)', `<div class="mut" style="font-size:12.5px;margin-top:6px;line-height:1.5">A separate bot for NSE stocks, running in <b>simulation</b>: real prices, no broker, no orders. It runs after each NSE close; see Bot trades → 🇮🇳 India bot. These settings are saved to <code>bot/config-in.json</code> with their own button.</div>
 ${inChk('breakout', 'Trend breakout', 'buys a close at a 50-day high above the 200-day; sells on a close below the 20-day low')}${inChk('rsi2', 'RSI-2 dip buying', 'the US strategy, on NSE stocks')}
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:10px">
 ${inNum('stakeInr', 'Simulated stake (₹)', 'applies when the simulation restarts', ic.stakeInr, 10000, 10000, 1000000000)}
@@ -2925,9 +2939,11 @@ ${inChk('alerts', 'India Telegram summary', 'one message after each NSE day: buy
 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px"><button class="btn" type="button" data-st="insave" ${inSaving || !connected ? 'disabled' : ''}>Save India settings</button><button class="btn ghost" type="button" data-st="inreset" ${inSaving || !connected ? 'disabled' : ''}>${inResetArm ? 'Press again to restart' : 'Restart the simulation'}</button><span class="mut" style="font-size:12px" id="inMsg">${esc(inMsg)}</span></div>
 <div class="mut" style="font-size:11.5px;margin-top:8px">Real orders on your mother’s Zerodha account are a later step: her Kite Connect app, a fixed-address server (SEBI rule since April 2026) and her login each morning.</div>`, 'NSE · simulation');
   const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:50px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span id="stDirty" class="pill r-Sell" style="font-size:11px;${stDirty ? '' : 'display:none'}">unsaved changes</span><span style="font-size:12.5px">${stBusy ? `<span id="stWait" class="mut" style="font-variant-numeric:tabular-nums;margin-right:6px">${Math.round((Date.now() - stT0) / 1000)} s</span>` : ''}${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span>${stBusy ? `<div id="stSteps" class="mut" style="flex-basis:100%;font-size:11.5px;font-family:var(--font-mono),monospace;white-space:pre-wrap">${stStepsHtml()}</div>` : ''}${stFailed && !stBusy ? `<div style="flex-basis:100%;font-size:12.5px;border-top:1px solid var(--line);padding-top:8px"><b>Can't reach GitHub from here?</b> Save another way: <button class="btn ghost" type="button" data-st="copyjson" style="font-size:12px">Copy settings</button> then <a href="https://github.com/${esc(ghRepo())}/edit/main/bot/config.json" target="_blank" rel="noopener">open bot/config.json on GitHub</a>, select all, paste, Commit changes.${stJsonBox ? `<textarea readonly rows="6" style="width:100%;margin-top:6px;font-family:var(--font-mono),monospace;font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text)">${esc(stJsonBox)}</textarea>` : ''}</div>` : ''}</div>`;
-  const body = `${bar}${connect}${syncC}${risk}${alloc}${strat}${dayS}${guards}${uni}${mode}${ctl}${india}`;
+  const body = mkt === 'IN' ? `${connect}${syncC}${india}` : `${bar}${connect}${syncC}${risk}${alloc}${strat}${dayS}${guards}${uni}${mode}${ctl}`;
+  const shownIds = new Set([...body.matchAll(/id="(sec-[^"]+)"/g)].map(x => x[1]));
+  for (let k = secIds.length - 1; k >= 0; k--) if (!shownIds.has(secIds[k][0])) secIds.splice(k, 1);
   const side = `<nav class="stnav" aria-label="Settings sections"><div class="mut" style="font-size:11.5px;margin-bottom:6px">On this page</div>${secIds.map(([id, t]) => `<a href="#${id}">${esc(t)}</a>`).join('')}<a href="docs/settings.html" target="_blank" rel="noopener" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">What each setting does ↗</a></nav>`;
-  return `<h2 style="margin-bottom:6px">Bot settings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page. <a href="docs/settings.html" target="_blank" rel="noopener"><b>What does each setting do? → the settings guide</b></a></div><div class="stwrap">${side}<div style="min-width:0">${body}</div></div>`;
+  return `<h2 style="margin-bottom:6px">Bot settings — ${mkt === 'IN' ? 'India bot' : 'USA bot'}</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page. <a href="docs/settings.html" target="_blank" rel="noopener"><b>What does each setting do? → the settings guide</b></a></div><div class="stwrap">${side}<div style="min-width:0">${body}</div></div>`;
 }
 function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {
@@ -3043,7 +3059,6 @@ function renderAll(bg) {
   } else if (tab === 'OP') {
     const sv = () => { const v = parseFloat($('#opAmt').value); if (v >= 0) { save('sd-opamt-' + opMk, v); renderAll(); } };
     if ($('#opSplit')) { $('#opSplit').addEventListener('click', sv); $('#opAmt').addEventListener('keydown', e => { if (e.key === 'Enter') sv(); }); }
-    document.querySelectorAll('[data-opm]').forEach(el => el.addEventListener('click', () => { opMk = el.dataset.opm; save('sd-opmk', opMk); renderAll(); }));
     document.querySelectorAll('#view .mt[data-s]').forEach(el => {
       el.addEventListener('click', () => openDT(el.dataset.s, el.dataset.m || opMk));
       el.addEventListener('keydown', e => { if (e.key === 'Enter') openDT(el.dataset.s, el.dataset.m || opMk); });
@@ -3051,7 +3066,6 @@ function renderAll(bg) {
   } else if (tab === 'DT') {
     const sv = () => { const v = parseFloat($('#dtAmt').value); if (v >= 0) { save('sd-dtamt-' + dtMk, v); renderAll(); } };
     if ($('#dtSplit')) { $('#dtSplit').addEventListener('click', sv); $('#dtAmt').addEventListener('keydown', e => { if (e.key === 'Enter') sv(); }); }
-    document.querySelectorAll('[data-dtm]').forEach(el => el.addEventListener('click', () => { dtMk = el.dataset.dtm; save('sd-dtmk', dtMk); renderAll(); }));
     document.querySelectorAll('#view .mt[data-s], #dttab tr[data-s], #dtsell tr[data-s]').forEach(el => {
       el.addEventListener('click', e => { if (e.target.closest('.tkt')) return; openDT(el.dataset.s, el.dataset.m || dtMk); });
       el.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('.tkt')) openDT(el.dataset.s, el.dataset.m || dtMk); });

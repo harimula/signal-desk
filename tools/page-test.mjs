@@ -107,6 +107,7 @@ async function session(label, prep) {
   let km = ''; for (let i = 0; i < 60 && !secretPuts.length && !/failed/i.test(km); i++) { await page.waitForTimeout(250); km = await page.evaluate(() => document.body.innerText.match(/Saving keys failed[^\n]*|Saved[^\n]*secret[^\n]*/i)?.[0] || ''); }
   check('keys: Save keys seals the Alpaca key in the browser and stores it as the ALPACA_KEY secret', secretPuts.some(x => x.name === 'ALPACA_KEY' && x.key_id === 'kid1' && Buffer.from(x.encrypted_value, 'base64').length === 48 + 'PKTESTKEY1234567890'.length), km + ' ' + JSON.stringify(secretPuts.map(x => x.name)) + ' ' + errors.join(' | '));
   // India bot settings: own section, own file
+  await page.evaluate(() => document.querySelector('#mkSw [data-mkt="IN"]').click()); await page.waitForTimeout(800);   // India's settings sit behind the market switch
   await page.fill('#in-stakeInr', '500000'); await page.evaluate(() => document.querySelector('[data-st="insave"]').click());
   for (let i = 0; i < 40 && !inPuts.length; i++) await page.waitForTimeout(150);
   const inSaved = inPuts[0] && JSON.parse(Buffer.from(inPuts[0].content, 'base64').toString());
@@ -117,6 +118,20 @@ async function session(label, prep) {
   const rs = inPuts[1] && JSON.parse(Buffer.from(inPuts[1].content, 'base64').toString());
   check('India settings: Restart needs a second press, then saves a reset time', armed && !!rs && !!rs.resetAt, JSON.stringify(rs));
   check('settings: no CSP violation connecting Telegram or saving keys', (await page.evaluate(() => window.__csp)).length === 0, JSON.stringify(await page.evaluate(() => window.__csp)));
+  await page.close();
+}
+// 2b. the header's market switch: every market tab follows it, shared tabs stay
+{
+  const { page, errors } = await session('market switch', () => { localStorage.clear(); localStorage.setItem('sd-tab', JSON.stringify('US')); });
+  const h2 = async t => { await page.evaluate(t => document.querySelector(`#tabs [data-t="${t}"]`).click(), t); await page.waitForTimeout(500); return page.evaluate(() => (document.querySelector('#view h2') || {}).textContent || ''); };
+  await page.evaluate(() => document.querySelector('#mkSw [data-mkt="IN"]').click()); await page.waitForTimeout(400);
+  const inDt = await h2('DT'), inOp = await h2('OP'), inSet = await h2('SET'), inBot = await h2('BOT');
+  const stocksIsIndia = await page.evaluate(() => { document.querySelector('#tabs [data-t="STK"]').click(); return JSON.parse(localStorage.getItem('sd-tab')) === 'IN'; });
+  check('market switch: India drives Stocks, Day trading, Option trading, Bot trades and Bot settings', stocksIsIndia && /India/.test(inDt) && /India/.test(inOp) && /India bot/.test(inSet) && /India bot/.test(inBot), [inDt, inOp, inSet, inBot].join(' | '));
+  await page.evaluate(() => document.querySelector('#mkSw [data-mkt="US"]').click()); await page.waitForTimeout(400);
+  const usDt = await h2('DT'), usSet = await h2('SET');
+  check('market switch: back to USA, one Stocks tab, the choice is remembered, no in-tab switches left', /USA/.test(usDt) && /USA bot/.test(usSet) && (await page.$$('#tabs [data-t="IN"], [data-dtm], [data-opm], [data-botmk]')).length === 0 && JSON.parse(await page.evaluate(() => localStorage.getItem('sd-mkt'))) === 'US', usDt + ' | ' + usSet);
+  check('market switch: no script errors', errors.length === 0, errors.join(' | '));
   await page.close();
 }
 // 3. sign in anywhere: device A syncs (token + holdings inside the encrypted blob), device B signs in with the passphrase only

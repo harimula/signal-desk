@@ -61,14 +61,16 @@ EMI calculator includes a SIP (systematic investment) plan for the money left ov
 
 ### 2.2 Signal Desk tabs
 
+A **USA / India switch** beside the Signal Desk name chooses the market (remembered per device). The tabs left of the divider — Stocks, Day trading, Option trading, Bot trades, Bot settings — show the chosen market; the tabs right of it are shared.
+
 | Tab | Purpose | Key features |
 |---|---|---|
-| **USA stocks** | Signal board for ~40 US large caps + user tickers | Overview (market cards, best setups), Screener (sortable table: rating, score, price, day %, moving-average distance, analyst targets), Heat map, drill-down dialog per stock with chart, levels and an order ticket |
-| **India stocks** | Same for NSE large caps | Same views, ₹ pricing, NSE hours |
+| **Stocks** (USA) | Signal board for ~40 US large caps + user tickers | Overview (market cards, best setups), Screener (sortable table: rating, score, price, day %, moving-average distance, analyst targets), Heat map, drill-down dialog per stock with chart, levels and an order ticket |
+| **Stocks** (India) | Same for NSE large caps | Same views, ₹ pricing, NSE hours |
 | **Day trading** | Tight intraday plans | Per stock: Buy at / Sell at / Stop at, position size for a chosen amount, copy-ready order ticket, 45-day simulated record, **P/L drill-down per stock per day** |
 | **Option trading** | CALL/PUT plans on the same setups | Strike/expiry suggestion, premium estimate, exit rules, daily and overall P/L like Day trading |
-| **Bot trades** | Everything the bot did | Every trade with entry/exit time and P/L, daily and overall P/L, risk dashboard (heat, breakers, regime), performance vs research scorecard, live/stream indicator |
-| **Bot settings** | Control panel for the bot and this device | Device sync (settings follow you, see §2.4), risk profile (Conservative/Balanced/Aggressive/Custom), capital split stocks vs options, strategy parameters, stock universe, news/event guards, paper/live mode, pause/resume/run-now, broker keys (sealed into GitHub secrets), journal passphrase |
+| **Bot trades** | Everything the chosen bot did (USA: live practice account; India: the simulation) | Every trade with entry/exit time and P/L, daily and overall P/L, risk dashboard (heat, breakers, regime), performance vs research scorecard, live/stream indicator |
+| **Bot settings** | Control panel for the chosen bot and this device (USA: sections 1–8; India: Connection, Sync, India bot) | Device sync (settings follow you, see §2.4), risk profile (Conservative/Balanced/Aggressive/Custom), capital split stocks vs options, strategy parameters, stock universe, news/event guards, paper/live mode, pause/resume/run-now, broker keys (sealed into GitHub secrets), journal passphrase |
 | **News** | What is moving markets | Market brief by category, upcoming Fed/CPI/jobs schedule, tagged headlines, **news for the stocks in your portfolios** |
 | **Portfolio (one tab per portfolio)** | Holdings with live P/L | Add/rename portfolios, holdings table, per-stock news |
 | **My tickers** | User-added symbols | Fetched on demand, scored like the built-in universe |
@@ -521,6 +523,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-23 | **One market switch** (owner chose it from a clickable prototype): a USA / India toggle beside the Signal Desk name (`sd-mkt`, per device). Stocks (replaces the USA stocks and India stocks tabs), Day trading, Option trading, Bot trades and Bot settings follow it; the header status, snapshot age and prices line show the chosen market; the in-tab switches (Day trading, Option trading, Bot trades) are gone; a divider separates the shared tabs (News, portfolios, My tickers, Rules). Bot settings shows only the chosen bot: USA = sections 1–8 as before; India = Connection, Sync and **2. India bot (simulation)**. Page checks: 27; full axe clean for both markets. | ARCHITECTURE §2.2; settings.html; docs/index.html |
 | 2026-10-23 | 5-year history (US) also measures VGT (Vanguard Information Technology) and QQQ (Nasdaq-100), owner asked *"Does the US bot beat VGT?"*: VGT +18.2 %/yr (worst fall −35.1 %), QQQ +14.2 %/yr (−35.1 %), USA bot +14.4 %/yr (−11.9 %). | docs/index.html |
 | 2026-10-23 | **5-year history card** (owner: *"see the bot history for 5 years, compare with small, mid and large caps"*). `research.mjs` replays each bot's exact rules over the last 5 years from a fresh start (India: breakout + RSI-2 50/50 as configured; US: RSI-2) and measures large/mid/small caps with dividends — India: AMFI index-fund NAVs via mfapi.in (Bandhan Nifty 50 118482, Motilal Oswal Midcap 150 147622 / Smallcap 250 147623, Direct Growth); US: SPY / IJH / IWM adjusted closes — saved as `history5` (weekly points, total, CAGR, worst fall, Sharpe, calendar years). Bot trades shows it in both views (log-scale chart + table); `--line-mid` colour token. Result: India bot +5.0 %/yr vs mid +13.0 %, small +12.2 %, Nifty 50 +5.6 % (trend breakout alone +8.2 %); USA bot +14.4 %/yr vs S&P 500 +12.4 %, mid +6.9 %, small +5.2 %, with about half the worst fall. | ARCHITECTURE §3.4; docs/index.html |
 | 2026-10-23 | Bot settings **§9 India bot (simulation)**: strategies, stake, split, size, max positions, RSI-2 level/hold, Telegram summary; own Save (writes `bot/config-in.json`) and a two-press Restart (sets `resetAt`). Page checks: 22. | settings.html; docs/index.html |
