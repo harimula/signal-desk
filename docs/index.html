@@ -452,6 +452,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-23</td><td>The bot session refreshes the site’s prices and news every 10 minutes itself (GitHub was skipping the scheduled refresh); market scan asks for 100 stocks per request and skips a failing chunk</td><td>03</td></tr>
 <tr><td>2026-10-23</td><td>Market scan status (running / in / failed with the reason) shown in the engine line on Bot trades; the asset-list request gets the 60 s limit</td><td>05</td></tr>
 <tr><td>2026-10-23</td><td>Market scan runs in the background with its own 60 s request limit and a 10-minute retry; the last good scan is kept in <code>bot/scan.json</code>. A slow scan no longer holds up the bot’s checks</td><td>03, 05</td></tr>
 <tr><td>2026-10-23</td><td>Late start fix: the bot workflow also fires from 8:45 ET and waits until 9:20, because GitHub often starts schedules 10–20 minutes late; first journal reaches the site right after the first check</td><td>03</td></tr>

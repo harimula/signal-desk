@@ -5,7 +5,7 @@
 //  - A decision cycle also runs on a steady beat (every 2s; every 1s in the last 10 minutes) as a safety net,
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp } from './bot.mjs';
 import { summary } from './config.mjs';
 
@@ -36,8 +36,19 @@ async function pollConfig() {
 }
 function commit() {
   if (process.env.BOT_NO_COMMIT === '1') return;
-  try { execSync('git add bot/journal.json && (git add bot/scan.json 2>/dev/null || true) && (git diff --cached --quiet || (git commit -q -m "Bot journal" && (git push -q || (git pull -q --rebase -X theirs origin main && git push -q))))', { stdio: 'inherit', shell: '/bin/bash' }); }
+  try { execSync('git add bot/journal.json && (git add bot/scan.json live.json news.json 2>/dev/null || true) && (git diff --cached --quiet || (git commit -q -m "Bot journal" && (git push -q || (git pull -q --rebase -X theirs origin main && git push -q))))', { stdio: 'inherit', shell: '/bin/bash' }); }
   catch (e) { console.log('commit skipped:', e.message.split('\n')[0]); }
+}
+
+// ---- site prices: GitHub's scheduler often skips the 10-minute refresh-prices runs during market hours, so the
+// session (alive all day) refreshes live.json / news.json itself, in a child process that never blocks a cycle.
+// The next commit publishes them with the journal. BOT_NO_PRICES=1 turns it off (tests).
+const PRICES_EVERY = 10 * 60000; let lastPrices = 0, pricesBusy = false;
+function refreshPrices() {
+  if (process.env.BOT_NO_PRICES === '1' || process.env.BOT_NO_COMMIT === '1') return;
+  pricesBusy = true; lastPrices = Date.now();
+  const run = (file, next) => { const c = spawn(process.execPath, [file], { stdio: 'ignore', env: process.env }); const t = setTimeout(() => c.kill(), 4 * 60000); c.on('exit', code => { clearTimeout(t); if (file === 'fetch.mjs') console.log('site prices refreshed' + (code ? ' (exit ' + code + ')' : '')); next(); }); c.on('error', () => { clearTimeout(t); next(); }); };
+  run('fetch.mjs', () => run('news.mjs', () => { pricesBusy = false; lastCommit = 0; }));    // commit right after, so the page sees them now
 }
 
 // ---- streams ----
@@ -134,6 +145,7 @@ while (Date.now() - born < LIFE && !stopping) {
     } catch (e) { console.log('cycle error', e.message); }
     lastFull = Date.now(); cycling = false;
   }
+  if (Date.now() - lastPrices >= PRICES_EVERY && !pricesBusy) refreshPrices();
   if (Date.now() - lastCommit >= COMMIT_EVERY) { commit(); lastCommit = Date.now(); }
   if (Date.now() - lastBeat >= 60000) { lastBeat = Date.now(); heartbeat(); }
   await sleep(queue.length ? 50 : 200);
