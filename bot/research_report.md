@@ -12,6 +12,10 @@ Costs 0.05%/side · 10% of equity per position · max 6 positions · out-of-samp
 | RSI-2 mean reversion + 3× range stop | on | +19.84% | 1.60 | −18.2% | **+11.89%** | **1.11** | −12.2% | 14994 | 68.6% | +0.42% | 1.50 |
 | RSI-2 with quick exits (owner's choice): same entries; sell at +10% or −5% during the day, otherwise when close > 5-day avg (max 10 days) | off | +16.38% | 1.28 | −18.5% | **+9.85%** | **0.93** | −16.8% | 17468 | 66.6% | +0.30% | 1.31 |
 | RSI-2 with quick exits (owner's choice): same entries; sell at +10% or −5% during the day, otherwise when close > 5-day avg (max 10 days) | on | +15.11% | 1.27 | −16.8% | **+9.20%** | **0.90** | −16.8% | 15892 | 66.8% | +0.31% | 1.33 |
+| RSI-2 with only the +10% take-profit (25% disaster stop) | off | +28.37% | 2.14 | −13.3% | **+16.95%** | **1.50** | −10.4% | 14930 | 70.1% | +0.58% | 1.79 |
+| RSI-2 with only the +10% take-profit (25% disaster stop) | on | +25.28% | 2.08 | −10.9% | **+15.50%** | **1.43** | −10.4% | 13704 | 70.1% | +0.56% | 1.80 |
+| RSI-2 with only the −5% stop | off | +16.49% | 1.28 | −18.5% | **+9.80%** | **0.92** | −16.2% | 17449 | 66.6% | +0.31% | 1.31 |
+| RSI-2 with only the −5% stop | on | +15.20% | 1.27 | −16.4% | **+9.15%** | **0.90** | −16.2% | 15875 | 66.8% | +0.31% | 1.33 |
 | RSI-2 short (mirror of the bot): below 200-day, RSI-2 > 90, short at next open, cover when close < 5-day avg (max 10 days) | off | +4.11% | 0.40 | −46.4% | **-1.68%** | **-0.11** | −25.9% | 9845 | 64.5% | +0.16% | 1.12 |
 | Trend breakout: close at a 50-day high above the 200-day, exit on a 20-day low | off | +6.96% | 0.57 | −50.5% | **+6.51%** | **0.64** | −16.9% | 960 | 42.0% | +3.05% | 1.81 |
 | Trend breakout: close at a 50-day high above the 200-day, exit on a 20-day low | on | +7.73% | 0.64 | −44.7% | **+7.25%** | **0.71** | −13.6% | 913 | 42.8% | +3.50% | 1.98 |
