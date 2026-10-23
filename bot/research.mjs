@@ -129,12 +129,21 @@ for (const key of Object.keys(STRATS)) for (const rg of (STRATS[key].short ? [fa
 }
 const spyDays = spy.map(b => ({ d: b.d, eq: b.c }));
 const spyAll = stats(spyDays, [], null, null), spyOos = stats(spyDays, [], split);
+// extra yardsticks (India: small and mid caps), measured over the same dates as the strategies; a missing index is skipped
+const EXTRA = MKT === 'IN' ? [['^CNXSC', 'Nifty Smallcap 100'], ['^NSEMDCP50', 'Nifty Midcap 50'], ['^CRSMID', 'Nifty Midcap 100']] : [['^RUT', 'Russell 2000 (small caps)']];
+const extras = [];
+for (const [sym, name] of EXTRA) {
+  try { const B = (await pull(sym)).filter(b => b.d >= calendar[0]); if (B.length < 250) throw new Error('too short'); const ds = B.map(b => ({ d: b.d, eq: b.c })); extras.push({ sym, name, from: B[0].d, all: stats(ds, [], null, null), oos: stats(ds, [], split) }); }
+  catch (e) { console.log('benchmark skipped', sym, e.message); }
+}
 const f = (x, d = 2) => x == null || !isFinite(x) ? 'n/a' : (+x).toFixed(d), pc = x => x == null ? 'n/a' : (x >= 0 ? '+' : '') + f(x) + '%';
 let md = `# Strategy research${MKT === 'IN' ? ' — India (NSE)' : ''} — ${Object.keys(data).length} stocks, ${calendar[0]} → ${calendar[calendar.length - 1]}\n\nCosts ${(COST * 100).toFixed(2)}%/side · 10% of equity per position · max ${MAXPOS} positions · out-of-sample = ${split} onward (never used to choose anything).\n\n`;
 md += `| Strategy | Regime filter | CAGR (all) | Sharpe (all) | Max DD | **OOS CAGR** | **OOS Sharpe** | OOS Max DD | Trades | Win % | Exp./trade | PF |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n`;
 for (const r of results) md += `| ${r.label} | ${r.regime ? 'on' : 'off'} | ${pc(r.all && r.all.cagr)} | ${f(r.all && r.all.sharpe)} | −${f(r.all && r.all.maxDD, 1)}% | **${pc(r.oos && r.oos.cagr)}** | **${f(r.oos && r.oos.sharpe)}** | −${f(r.oos && r.oos.maxDD, 1)}% | ${r.t.n} | ${f(r.t.win, 1)}% | ${pc(r.t.exp)} | ${f(r.t.pf)} |\n`;
 md += `| ${BENCH_NAME} buy & hold | – | ${pc(spyAll.cagr)} | ${f(spyAll.sharpe)} | −${f(spyAll.maxDD, 1)}% | **${pc(spyOos.cagr)}** | **${f(spyOos.sharpe)}** | −${f(spyOos.maxDD, 1)}% | – | – | – | – |\n\n`;
+for (const x of extras) md += `| ${x.name} buy & hold${x.from > calendar[0] ? ` (from ${x.from})` : ''} | – | ${pc(x.all && x.all.cagr)} | ${f(x.all && x.all.sharpe)} | −${f(x.all && x.all.maxDD, 1)}% | **${pc(x.oos && x.oos.cagr)}** | **${f(x.oos && x.oos.sharpe)}** | −${f(x.oos && x.oos.maxDD, 1)}% | – | – | – | – |\n`;
+if (extras.length) md += '\n';
 md += `Survivorship bias (today’s big companies, looking back) flatters every strategy, so treat these as an upper bound. Not financial advice.\n`;
 fs.writeFileSync(OUT.md, md);
-fs.writeFileSync(OUT.json, JSON.stringify({ at: new Date().toISOString(), market: MKT, bench: BENCH_NAME, cost: COST, symbols: Object.keys(data), split, results, spy: { all: spyAll, oos: spyOos } }));
+fs.writeFileSync(OUT.json, JSON.stringify({ at: new Date().toISOString(), market: MKT, bench: BENCH_NAME, cost: COST, symbols: Object.keys(data), split, results, spy: { all: spyAll, oos: spyOos }, extras }));
 console.log(md);

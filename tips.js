@@ -61,7 +61,6 @@
     'open day trade': 'A day trade the bot has on right now. It is always sold before the close.',
     'opened': 'When the day trade was opened (Eastern time).',
     // ---------- tables: research / performance ----------
-    'strategy': 'The trading rule set being tested.',
     'yearly return': 'Compound growth per year in the test (CAGR), after trading costs.',
     'sharpe': 'Return per unit of risk (volatility). Above 1 is good; above 2 is excellent.',
     'max drawdown': 'The worst drop from a peak to a later low during the test — the pain you would have sat through.',
@@ -83,6 +82,14 @@
     'component': 'One building block of the score.',
     'meaning': 'What this part measures and how it counts.',
     'rule': 'The rule in plain words.',
+    // ---------- India bot (simulation) ----------
+    'value now': 'What the simulated ₹ stake is worth today: cash plus every open position at its last close.',
+    'nifty 50 since start': 'How the Nifty 50 index moved since the simulation started — the bar to beat. Simply holding an index fund would have done this.',
+    'last close': 'The stock’s closing price on the day the buy was planned.', 'money set aside': 'Rupees reserved for this buy: 10% of the strategy’s money (whole shares are bought at the next open).',
+    'bought on': 'The trading day the simulated buy filled at the opening price.', 'p/l ₹': 'Profit or loss in rupees after the 0.15% costs on each side.',
+    '50-day high': 'The highest close of the previous 50 trading days. A close above it, in an uptrend, is the breakout buy signal.', 'gap': 'How far the price still is below its 50-day high.',
+    'buys if it…': 'The closing price that would push RSI-2 under the buy level, making it a buy for the next open.', 'at': 'The price of that buy or sell.', 'sold on': 'The trading day the simulated sale filled at the close.',
+    'reason': 'Which exit rule fired.', 'strategy': 'Which of the two strategies made this trade: trend breakout or RSI-2 dip buying.',
     // ---------- stat boxes ----------
     'today': 'Change in account value since yesterday’s close (open and closed trades together).',
     'realized today': 'Profit or loss locked in by trades closed today.',
@@ -199,7 +206,7 @@
     'hra tax saved per year (rent side)': 'Tax saved through House Rent Allowance when renting.', 'down the side': 'What varies along the rows of the grid.', 'across the top': 'What varies along the columns of the grid.', 'grid values': 'What each cell of the grid shows.',
   };
   // short generic words mean different things in a table and in a form: these explanations apply to table headers only
-  const TH_ONLY = new Set(['type', 'what', 'qty', 'now', 'status', 'stock', 'price', 'bought', 'side', 'entry', 'why', 'when', 'event', 'rule', 'rules', 'range', 'stop', 'win', 'trades', 'position', 'opened', 'component', 'meaning', 'strategy', 'signal']);
+  const TH_ONLY = new Set(['type', 'what', 'qty', 'now', 'status', 'stock', 'price', 'bought', 'side', 'entry', 'why', 'when', 'event', 'rule', 'rules', 'range', 'stop', 'win', 'trades', 'position', 'opened', 'component', 'meaning', 'strategy', 'signal', 'at', 'gap', 'reason']);
   // form labels that share a word with a table header
   const LBL = {
     'type': 'Simple (SMA) weighs every day equally; exponential (EMA) reacts faster to recent prices.',
@@ -209,6 +216,7 @@
     'commodity': 'Which metal or commodity, and the unit you hold it in.', 'shares': 'How many shares (or units / grams / ounces) you hold.',
     'avg buy price': 'What you paid per share on average — used for your profit and loss.', 'portfolio name': 'A name for this portfolio, e.g. “Retirement” or “Kids”.',
     'show what i type': 'Shows the passphrase as you type it, to check for typos.',
+    'last day': 'Change in value on the last day processed.',
     'target': 'Take-profit for a day trade, as a multiple of the risk (entry minus stop): 2 = aim to make twice what you risk.',
   };
   // dynamic labels

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-nJ6t8r8XzKCWCfHkWfp6SCWLE9tt/VuI5AOZKh4DgjA=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-ZRUpEb/A4HoMJpj+MY6cTfoHEmrAeppbptxy1qJe7Zo=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -912,7 +912,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792779572';
+const BUILD_V = '1792787992';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2279,7 +2279,7 @@ document.addEventListener('click', async e => {
   const t = pass.trim(), nfc = t.normalize('NFC');
   const tries = [...new Set([pass, t, nfc, nfc.charAt(0).toLowerCase() + nfc.slice(1), nfc.charAt(0).toUpperCase() + nfc.slice(1)])];
   for (const cand of tries) {
-    try { const d = await jDecrypt(botLocked, cand); save('sd-jkey', cand); botJ = {...botLocked, ...d}; botLocked = null; botErr = ''; renderAll(); return; } catch (e2) {}
+    try { const d = await jDecrypt(botLocked, cand); save('sd-jkey', cand); botJ = {...botLocked, ...d}; botLocked = null; botErr = ''; inLoad(true); renderAll(); return; } catch (e2) {}
   }
   const m = document.getElementById('jkeyMsg'); if (m) m.textContent = 'That passphrase does not open this journal. You typed ' + [...pass].length + ' characters' + (/[^\x20-\x7e]/.test(pass) ? ' (including a non-standard character)' : '') + ' \u2014 compare with the count in Bot settings on the device where it works. Tick \u201cShow what I type\u201d to check for a wrong capital letter or a stray space.';
 });
@@ -2303,9 +2303,86 @@ async function botLoad(force) {
   else if (app === 'desk' && tab === 'SET' && !stBusy) renderAll();     // the readiness checklist in section 7 uses the journal too
 }
 setInterval(() => { if (app === 'desk' && tab === 'BOT' && !document.hidden) botLoad(); }, 60000);
+// ---------- India bot (simulation): journal bot/india-journal.json, research bot/research-in.json ----------
+let botMk = load('sd-botmk', 'US'), inJ = null, inLocked = null, inErr = '', inAt = 0, inBusy = false, inRes = null;
+async function inLoad(force) {
+  if (inBusy || (!force && Date.now() - inAt < 55000)) return;
+  inBusy = true; inAt = Date.now();
+  try {
+    const r = await fetch('bot/india-journal.json?t=' + Date.now(), {cache: 'no-store'});
+    if (!r.ok) throw new Error(r.status === 404 ? 'none' : 'HTTP ' + r.status);
+    const raw = await r.json(); inErr = '';
+    if (raw.enc) { const pass = load('sd-jkey', ''); let ok = false; if (pass) { try { inJ = {...raw, ...(await jDecrypt(raw, pass))}; ok = true; inLocked = null; } catch (e2) {} } if (!ok) { inLocked = raw; inJ = null; } }
+    else inJ = raw;
+    try { const r2 = await fetch('bot/research-in.json?t=' + Math.floor(Date.now() / 600000), {cache: 'no-store'}); if (r2.ok) inRes = await r2.json(); } catch (e) {}
+  } catch (e) { inErr = e.message === 'none' ? 'The India simulation has not run yet. It runs every NSE trading day after the close (about 4:10 PM IST).' : 'Could not load the India journal (' + esc(e.message) + ').'; }
+  inBusy = false;
+  if (app === 'desk' && tab === 'BOT' && botMk === 'IN') renderAll(true);
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-botmk]'); if (!b) return; botMk = b.dataset.botmk; save('sd-botmk', botMk); if (botMk === 'IN') inLoad(true); renderAll(); });
+function botSwitch() {
+  const t = (k, l) => `<button class="vtab" type="button" role="tab" data-botmk="${k}" aria-selected="${botMk === k}">${l}</button>`;
+  return `<nav class="vnav" role="tablist" aria-label="Which bot" style="margin:0 0 12px">${t('US', '🇺🇸 USA bot')}${t('IN', '🇮🇳 India bot <span class="mut" style="font-size:11px">simulation</span>')}</nav>`;
+}
+const inr = (v, dec = 0) => (v < 0 ? '−' : '') + '₹' + Math.abs(v).toLocaleString('en-IN', {minimumFractionDigits: dec, maximumFractionDigits: dec});
+const inrS = v => Math.abs(v) < 0.5 ? '₹0' : (v >= 0 ? '+' : '−') + '₹' + Math.abs(Math.round(v)).toLocaleString('en-IN');
+const nsSym = s => String(s || '').replace(/\.NS$/, '');
+function inView() {
+  inLoad();
+  const head = `<h2 style="margin-bottom:6px">India bot — simulation</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px;line-height:1.55">No broker is connected and no real orders are placed. Every NSE trading day after the close it fills the buys it planned the evening before at that morning’s <b>official opening price</b>, sells at the <b>close</b> when an exit rule fires, and plans the next morning — exactly how the NSE test was run, in whole shares, with 0.15% costs per side. Two strategies share the stake and keep separate records. Updated about 4:10 PM IST (6:40 AM ET). Not advice.</div>`;
+  if (!inJ && inLocked) return head + `<div class="card" style="padding:16px 18px;max-width:560px"><b style="font-size:14px">🔒 The India journal is encrypted</b><div class="mut" style="font-size:12.5px;margin:6px 0 0;line-height:1.5">It uses the same journal passphrase as the USA bot. Open the 🇺🇸 USA bot view once and unlock it there (or sign in with 👤 Sign in); this view then opens by itself.</div></div>`;
+  if (!inJ) return head + `<div class="card empty" style="line-height:1.6">${inErr || 'Loading the India journal…'}</div>`;
+  const J = inJ, S = J.sleeves || {}, K = ['breakout', 'rsi2'].filter(k => S[k] && S[k].on);
+  const LAB = {breakout: 'Trend breakout', rsi2: 'RSI-2 dip buying'}, RULE = {breakout: 'Buys a stock that closes at a 50-day high while above its 200-day average; sells on a close below its 20-day low.', rsi2: `Buys an uptrend stock (above its 200-day) after RSI-2 falls below ${(J.cfg || {}).rsiThreshold || 10}; sells on a close above its 5-day average or after ${(J.cfg || {}).maxHold || 10} sessions.`};
+  const eq = J.equity || [], last = eq[eq.length - 1] || {total: J.stake}, prevE = eq[eq.length - 2] || last;
+  const cls = v => v >= 0 ? 'pos' : 'neg', pc = v => (v >= 0 ? '+' : '') + fmt(v, 2) + '%';
+  const ret = (last.total / J.stake - 1) * 100, nret = J.niftyStart && last.nifty ? (last.nifty / J.niftyStart - 1) * 100 : null;
+  const allClosed = K.flatMap(k => (S[k].closed || []).map(c => ({...c, k}))), allOpen = K.flatMap(k => (S[k].open || []).map(p => ({...p, k}))), allPend = K.flatMap(k => (S[k].pending || []).map(p => ({...p, k})));
+  const realized = allClosed.reduce((t, c) => t + c.pl, 0), inTrades = allOpen.reduce((t, p) => t + p.qty * (p.last || p.entryPx), 0), wins = allClosed.filter(c => c.pl > 0).length;
+  const dLab = d => d ? new Intl.DateTimeFormat('en-GB', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'}).format(new Date(d + 'T12:00:00Z')) : '–';
+  const status = `<div style="display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:13px;flex-wrap:wrap"><span style="width:10px;height:10px;border-radius:50%;background:var(--tb);display:inline-block"></span><b>Simulating</b><span class="mut">· started ${dLab(J.startDate)} with ${inr(J.stake)} · last NSE day processed ${dLab(J.lastDate)}${J.universe ? ` · watching ${J.universe.loaded} of the Nifty 100` : ''}</span></div>`;
+  const boxes = `<div class="lv" style="margin:0 0 14px">
+${lvBox('Value now', `${inr(last.total)} <span class="${cls(ret)}" style="font-size:12px">${pc(ret)}</span>`)}
+${lvBox('Nifty 50 since start', nret == null ? '–' : `<span class="${cls(nret)}">${pc(nret)}</span>`)}
+${lvBox('Last day', `<span class="${cls(last.total - prevE.total)}">${inrS(last.total - prevE.total)}</span>`)}
+${lvBox('Total realized', `<span class="${cls(realized)}">${inrS(realized)}</span>`)}
+${lvBox('In trades now', `${inr(inTrades)} <span class="mut" style="font-size:11.5px">${allOpen.length} position${allOpen.length === 1 ? '' : 's'}</span>`)}
+${lvBox('Closed trades', allClosed.length ? `${allClosed.length} · ${Math.round(wins / allClosed.length * 100)}% won` : '0')}
+</div>`;
+  // value vs the Nifty 50, both scaled to the stake
+  const spark = eq.length >= 2 ? (() => {
+    const W = 600, H = 90, ys = eq.flatMap(e => [e.total, e.nifty && J.niftyStart ? e.nifty / J.niftyStart * J.stake : null]).filter(v => v != null), lo = Math.min(...ys), hi = Math.max(...ys), sp = hi - lo || 1;
+    const pts = f => eq.map((e, i) => { const v = f(e); return v == null ? null : `${(i / (eq.length - 1) * W).toFixed(1)},${(H - 6 - (v - lo) / sp * (H - 12)).toFixed(1)}`; }).filter(Boolean).join(' ');
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:90px;display:block" role="img" aria-label="Simulation value against the Nifty 50 since the start"><polyline points="${pts(e => e.nifty && J.niftyStart ? e.nifty / J.niftyStart * J.stake : null)}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/><polyline points="${pts(e => e.total)}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg><div class="mut" style="font-size:11.5px;margin-top:4px"><span style="color:var(--accent)">━</span> simulation · <span>┅</span> Nifty 50 with the same ${inr(J.stake)}</div>`;
+  })() : `<div class="mut" style="font-size:12px">The chart starts after the first trading day is processed.</div>`;
+  const chart = `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">📈 Value against the Nifty 50</b>${spark}</div>`;
+  const R = k => inRes && (inRes.results || []).find(x => x.key === k && !x.regime);
+  const sleeveCard = k => { const s = S[k], cl = s.closed || [], w = cl.filter(c => c.pl > 0), gw = w.reduce((t, c) => t + c.pl, 0), gl = -cl.filter(c => c.pl <= 0).reduce((t, c) => t + c.pl, 0), v = s.value || s.start, r = R(k);
+    return `<div class="card" style="padding:12px 16px"><b style="font-size:13.5px">${LAB[k]}</b> <span class="mut" style="font-size:11.5px">· started with ${inr(s.start)}</span>
+<div class="mut" style="font-size:12px;margin-top:4px;line-height:1.5">${RULE[k]}</div>
+<div style="font-size:13px;margin-top:8px;line-height:1.7">Value <b>${inr(v)}</b> <span class="${cls(v - s.start)}">${pc((v / s.start - 1) * 100)}</span> · cash ${inr(s.cash)} · ${(s.open || []).length} open · ${(s.pending || []).length} planned<br>Closed ${cl.length}${cl.length ? ` · ${Math.round(w.length / cl.length * 100)}% won · avg ${pc(cl.reduce((t, c) => t + c.plPct, 0) / cl.length)} per trade · profit factor ${gl > 0 ? fmt(gw / gl, 2) : '–'}` : ''}</div>
+${r ? `<div class="mut" style="font-size:11.5px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)">NSE test ${esc((r.all || {}).from || '').slice(0, 4)}–${esc((r.all || {}).to || '').slice(0, 4)}: ${r.t.n.toLocaleString()} trades · ${fmt(r.t.win, 0)}% won · ${pc(r.t.exp)} per trade after costs · ${pc(r.oos.cagr)} a year in the years never used to pick it. The live record needs 50+ trades before it means much.</div>` : ''}</div>`; };
+  const cards = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin:0 0 14px">${K.map(sleeveCard).join('')}</div>`;
+  const tbl = (heads, rows, min) => `<div class="tw card"><table style="min-width:${min}px"><thead><tr>${heads.map(h => `<th class="${/^(Strategy|Stock|Why|Sells when|Bought on|Sold on|Reason)$/.test(h) ? 'lt' : ''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  const pend = allPend.length ? `<h3 style="margin:16px 0 8px">🕘 Buys planned for the next open <span class="mut" style="font-weight:400;font-size:13px">· ${allPend.length}</span></h3>` + tbl(['Strategy', 'Stock', 'Last close', 'Money set aside', 'Why'], allPend.map(p => `<tr><td class="lt">${LAB[p.k]}</td><td class="lt"><b>${esc(nsSym(p.sym))}</b></td><td>${inr(p.close || 0, 2)}</td><td>${inr(p.alloc)}</td><td class="lt mut" style="font-size:12px">${esc(p.why || '')}</td></tr>`), 640) : '';
+  const sellRule = p => p.k === 'breakout' ? 'a close below its 20-day low' : `a close above its 5-day average, or after ${(J.cfg || {}).maxHold || 10} sessions (${p.held} so far)`;
+  const openT = `<h3 style="margin:16px 0 8px">Open now <span class="mut" style="font-weight:400;font-size:13px">· ${allOpen.length}</span></h3>` + (allOpen.length ? tbl(['Strategy', 'Stock', 'Qty', 'Bought on', 'Bought at', 'Now', 'P/L ₹', 'P/L %', 'Sells when'], allOpen.map(p => { const now = p.last || p.entryPx, pl = p.qty * now - p.paid; return `<tr><td class="lt">${LAB[p.k]}</td><td class="lt"><b>${esc(nsSym(p.sym))}</b></td><td>${p.qty}</td><td class="lt">${dLab(p.entryDate)}</td><td>${inr(p.entryPx, 2)}</td><td>${inr(now, 2)}</td><td class="${cls(pl)}"><b>${inrS(pl)}</b></td><td class="${cls(pl)}">${pc(pl / p.paid * 100)}</td><td class="lt mut" style="font-size:12px">${sellRule(p)}</td></tr>`; }), 760) : '<div class="card empty">Nothing open yet.</div>');
+  const W2 = J.watch || {};
+  const watch = `<div class="card" style="padding:12px 16px;margin:16px 0 0"><b style="font-size:13.5px">👀 What the India bot is watching</b> <span class="mut" style="font-size:11.5px">· closes of ${dLab(W2.d)} · ${W2.total || 0} stocks with enough history</span>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:8px">
+<div><b style="font-size:12.5px">Trend breakout — closest to a 50-day high</b>${(W2.breakout || []).length ? `<div class="tw" style="margin-top:6px"><table style="min-width:300px"><thead><tr><th class="lt">Stock</th><th>Price</th><th>50-day high</th><th>Gap</th></tr></thead><tbody>${W2.breakout.map(x => `<tr><td class="lt"><b>${esc(nsSym(x.s))}</b></td><td>${inr(x.px, 2)}</td><td>${inr(x.level, 2)}</td><td>${x.gapPct <= 0 ? '<span class="pos">at the high</span>' : '+' + fmt(x.gapPct, 1) + '%'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="mut" style="font-size:12px">none</div>'}</div>
+<div><b style="font-size:12.5px">RSI-2 — deepest dips in uptrends</b>${(W2.rsi2 || []).length ? `<div class="tw" style="margin-top:6px"><table style="min-width:300px"><thead><tr><th class="lt">Stock</th><th>Price</th><th>RSI-2</th><th class="lt">Buys if it…</th></tr></thead><tbody>${W2.rsi2.map(x => `<tr><td class="lt"><b>${esc(nsSym(x.s))}</b></td><td>${inr(x.px, 2)}</td><td>${x.r2}</td><td class="lt">${x.r2 < ((J.cfg || {}).rsiThreshold || 10) ? '<span class="pos">qualifies now</span>' : x.buyAt == null ? '<span class="mut">needs a big drop</span>' : 'closes below <b>' + inr(x.buyAt, 2) + '</b>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="mut" style="font-size:12px">none</div>'}</div></div></div>`;
+  const closedT = `<h3 style="margin:18px 0 8px">Closed trades <span class="mut" style="font-weight:400;font-size:13px">· ${allClosed.length}${allClosed.length > 15 ? ' · latest 15 shown' : ''}</span></h3>` + (allClosed.length ? tbl(['Strategy', 'Stock', 'Qty', 'Bought on', 'At', 'Sold on', 'At', 'P/L ₹', 'P/L %', 'Reason'], [...allClosed].sort((a, b) => a.outDate < b.outDate ? 1 : -1).slice(0, 15).map(c => `<tr><td class="lt">${LAB[c.k]}</td><td class="lt"><b>${esc(nsSym(c.sym))}</b></td><td>${c.qty}</td><td class="lt">${dLab(c.inDate)}</td><td>${inr(c.inPx, 2)}</td><td class="lt">${dLab(c.outDate)}</td><td>${inr(c.outPx, 2)}</td><td class="${cls(c.pl)}"><b>${inrS(c.pl)}</b></td><td class="${cls(c.plPct)}">${pc(c.plPct)}</td><td class="lt mut" style="font-size:11.5px">${esc(c.why || '')}</td></tr>`), 860) : '<div class="card empty">No closed trades yet.</div>');
+  const acts = (J.acts || []).slice(-25).reverse();
+  const log = acts.length ? `<details data-k="inlog" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700;font-size:13.5px">What the India bot did recently</summary><div class="card" style="padding:10px 14px;margin-top:6px;font-size:12.5px;line-height:1.7">${acts.map(a => `<div><span class="mut">${dLab(a.t)}</span> · ${esc(a.m.replace(/\.NS\b/g, ''))}</div>`).join('')}</div></details>` : '';
+  return botSwitch() + head + status + boxes + chart + cards + pend + openT + watch + closedT + log +
+    `<div class="mut" style="font-size:11.5px;margin-top:14px">Simulation on real NSE prices — no money moves. Real orders need step 3: your mother’s Zerodha Kite Connect app, a fixed-address server (SEBI rule), and her one-tap login each morning. Gains on a real account are her income for Indian tax. Not financial advice.</div>`;
+}
+
 function botView() {
   botLoad();
-  const head = `<h2 style="margin-bottom:6px">Bot trades</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Every trade the bot took — RSI-2 dip buys in stocks (held 1–10 days) and CALLs on the same dips — with when it bought and when it sold. Run on an Alpaca practice account with real prices and the same rules, sizes and limits as real money. Updates about every 10 minutes and after each trade. Not advice.</div>`;
+  if (botMk === 'IN') return inView();
+  const head = botSwitch() + `<h2 style="margin-bottom:6px">Bot trades</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Every trade the bot took — RSI-2 dip buys in stocks (held 1–10 days) and CALLs on the same dips — with when it bought and when it sold. Run on an Alpaca practice account with real prices and the same rules, sizes and limits as real money. Updates about every 10 minutes and after each trade. Not advice.</div>`;
   if (!botJ && botLocked) return head + `<div class="card" style="padding:16px 18px;max-width:560px"><b style="font-size:14px">\ud83d\udd12 This bot journal is encrypted</b><div class="mut" style="font-size:12.5px;margin:6px 0 10px;line-height:1.5">Your trades, positions and account value are stored encrypted on the public site. Enter the journal passphrase you set in Bot settings to view them on this device. Last update ${botLocked.at ? new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(new Date(botLocked.at)) : '\u2013'} ET.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="jkeyIn" type="password" placeholder="Journal passphrase" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" style="flex:1;min-width:200px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" id="jkeyBtn">Unlock</button></div><label class="mut" style="display:block;font-size:12px;margin-top:8px"><input type="checkbox" id="jkeyShow"> Show what I type</label><div class="mut" id="jkeyMsg" style="font-size:12px;margin-top:6px"></div></div>`;
   if (!botJ) return head + `<div class="card empty" style="line-height:1.6">${botErr || 'Loading the bot journal…'}</div>`;
   const J = botJ, $$ = v => (v >= 0 ? '+' : '−') + '$' + fmt(Math.abs(v), 2);
