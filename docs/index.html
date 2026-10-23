@@ -68,7 +68,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
-  <div class="stamp">System documentation · v1.5<br>Updated 2026-10-22</div>
+  <div class="stamp">System documentation · v1.6<br>Updated 2026-10-22</div>
   <ol>
     <li><a href="#what"><span class="k">01</span>What it is</a></li>
     <li><a href="#functional"><span class="k">02</span>Functional</a></li>
@@ -450,6 +450,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-22</td><td>Design system pass (IBM Plex, ink-navy/cobalt light theme, navy/amber dark theme, flat cards, stat strip, sticky tabs, settings section index; axe-core clean everywhere). Stake setting: the practice account trades as the real stake</td><td>02, 04, 05</td></tr>
 <tr><td>2026-10-22</td><td>Real-money readiness: broker-side stops and targets on every stock entry, watchdog dead-man's switch, end-of-day summary, live size ramp (25%), go-live checklist in Bot settings §7, live-vs-research line, PBKDF2 600k</td><td>05, 06, 07, 08</td></tr>
 <tr><td>2026-10-22</td><td>Day-trading research on all available intraday history (5-minute bars since 2016) replaying the live rules over a parameter grid; monthly workflow; results card; apply-best button; opening-range setting</td><td>03, 05, 08</td></tr>
 <tr><td>2026-10-22</td><td>Day trading (experimental, off): 5-minute bars, SPY-VWAP market filter, opening-range breakout and VWAP-pullback setups, risk sizing, stop/target/breakeven/time-stop/flat exits, PUTs for shorts, optional CALLs, daily limits, PDT guard; settings §4b; watch card block; Performance split; <a href="daytrading-rules.html">rulebook</a></td><td>03, 05, 08</td></tr>

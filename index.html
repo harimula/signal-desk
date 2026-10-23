@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-XxOyK+tNrtjPjB9Gro/YZ3rXnZZNavp+E2Uf88UHpLY=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-gUlcheNBLNYyW08CQ5iVJHZZSlf1MWONtoqqCJtdsSY=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -14,40 +14,41 @@
 <link rel="shortcut icon" href="favicon.ico">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#11151f">
+<meta name="theme-color" content="#0b1020">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Signal Desk">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f0f3fa;--surface:#ffffff;--surface2:#eceff6;--text:#131722;--muted:#5c6372;--line:#e0e3eb;
-  --tb:#067c68;--tb-bg:#e2f4ef;--b:#147b68;--b-bg:#e6f5f2;--h:#6a6c76;--h-bg:#eef0f3;
-  --s:#b25000;--s-bg:#fdeedd;--ts:#d30e1d;--ts-bg:#fde7e9;--accent:#1f5bff;--accent-bg:#e8efff;
-  --warn:#8a6116;--warn-bg:#fcf0d4;
-  --shadow:0 1px 2px rgba(19,23,34,.04),0 4px 14px rgba(19,23,34,.05);
-  --sans:'Manrope',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  /* Signal Desk design tokens — light: cool paper, ink-navy text, cobalt for actions. Dark flips the accent to amber (an instrument panel). */
+  --bg:#f3f5f9;--surface:#ffffff;--surface2:#eaeef5;--text:#0e1526;--muted:#5b6678;--line:#d7dde8;
+  --tb:#05705f;--tb-bg:#dcf1ea;--b:#0f6e5e;--b-bg:#e2f3ef;--h:#636a78;--h-bg:#edf0f5;
+  --s:#b25000;--s-bg:#fdeedd;--ts:#d30e1d;--ts-bg:#fde7e9;--accent:#1b3c8f;--accent-bg:#e3eafa;--accent-ink:#ffffff;
+  --warn:#8a5a00;--warn-bg:#fbf0d2;--gold:#8a5a00;
+  --shadow:none;--radius:10px;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#11151f;--surface:#1e222d;--surface2:#262b38;--text:#d1d4dc;--muted:#9096a3;--line:#2a2e39;
-  --tb:#0ba88d;--tb-bg:#0d2f2a;--b:#26a69a;--b-bg:#0e2b29;--h:#8e939f;--h-bg:#272c3a;
-  --s:#ff9850;--s-bg:#33251a;--ts:#f5616d;--ts-bg:#331b20;--accent:#6091ff;--accent-bg:#1c2b4d;
-  --warn:#e8c06a;--warn-bg:#2e2715;--shadow:none;}}
+  --bg:#0b1020;--surface:#111a2e;--surface2:#182340;--text:#e7ebf3;--muted:#9aa6bc;--line:#26324f;
+  --tb:#2dd4bf;--tb-bg:#0e3a33;--b:#26a69a;--b-bg:#0e2f2c;--h:#9aa6bc;--h-bg:#1e2a44;
+  --s:#ff9850;--s-bg:#3a2a14;--ts:#f5616d;--ts-bg:#3a1a22;--accent:#f2b544;--accent-bg:#3a2e12;--accent-ink:#1a1400;--gold:#f2b544;
+  --warn:#f3cf7a;--warn-bg:#33290f;--shadow:none;}}
 :root[data-theme="dark"]{
-  --bg:#11151f;--surface:#1e222d;--surface2:#262b38;--text:#d1d4dc;--muted:#9096a3;--line:#2a2e39;
-  --tb:#0ba88d;--tb-bg:#0d2f2a;--b:#26a69a;--b-bg:#0e2b29;--h:#8e939f;--h-bg:#272c3a;
-  --s:#ff9850;--s-bg:#33251a;--ts:#f5616d;--ts-bg:#331b20;--accent:#6091ff;--accent-bg:#1c2b4d;
-  --warn:#e8c06a;--warn-bg:#2e2715;--shadow:none;}
+  --bg:#0b1020;--surface:#111a2e;--surface2:#182340;--text:#e7ebf3;--muted:#9aa6bc;--line:#26324f;
+  --tb:#2dd4bf;--tb-bg:#0e3a33;--b:#26a69a;--b-bg:#0e2f2c;--h:#9aa6bc;--h-bg:#1e2a44;
+  --s:#ff9850;--s-bg:#3a2a14;--ts:#f5616d;--ts-bg:#3a1a22;--accent:#f2b544;--accent-bg:#3a2e12;--accent-ink:#1a1400;--gold:#f2b544;
+  --warn:#f3cf7a;--warn-bg:#33290f;--shadow:none;}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--text);font:13.5px/1.5 var(--sans);padding:0 16px 56px}
+body{margin:0;background:var(--bg);color:var(--text);font:13.5px/1.5 var(--sans);padding:0 16px 56px;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1280px;margin:0 auto}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .num,table,.mpx,.big,.mchg,.kv b,.lv b,.sc,.indsc,.asof b,.pr b,#ctip{font-feature-settings:"tnum";font-variant-numeric:tabular-nums}
-header{padding:16px 0 2px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;justify-content:space-between}
+header{padding:10px 0 2px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;justify-content:space-between}
 .brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
-h1{font-size:19px;margin:0;letter-spacing:-.02em;font-weight:800}
+h1{font-size:18px;margin:0;letter-spacing:-.01em;font-weight:700}
 .dots{display:flex;gap:12px;font-size:12px;color:var(--muted);font-weight:600}
 .mkst{display:inline-flex;align-items:center;gap:5px}
 .cmgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 14px;margin-top:8px}
@@ -59,28 +60,28 @@ h1{font-size:19px;margin:0;letter-spacing:-.02em;font-weight:800}
 .subhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin:2px 0 4px;min-height:17px}
 .asof{color:var(--muted);font-size:12.5px}.asof b{color:var(--text);font-weight:600}
 #rfMsg{font-size:12px;color:var(--muted)}
-h2{font-size:15px;margin:26px 0 10px;font-weight:700;letter-spacing:-.01em}
-.banner{border-radius:8px;padding:9px 13px;margin:10px 0;font-size:12.5px}
+h2{font-size:16px;margin:24px 0 10px;font-weight:600;letter-spacing:-.01em}
+.banner{border-radius:var(--radius);padding:9px 13px;margin:10px 0;font-size:12.5px}
 .banner.warn{background:var(--warn-bg);color:var(--warn)}
-.banner.info{background:var(--surface2);color:var(--muted)}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow)}
+.banner.info{background:var(--surface);border:1px solid var(--line);color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
 .grid{display:grid;gap:10px}
 .regime{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
 .mt{padding:13px 15px}
 .mth{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
-.msym{font-weight:800;font-size:13.5px}
-.mpx{font-size:23px;font-weight:800;letter-spacing:-.02em}
-.mchg{font-size:12px;margin:1px 0 6px;font-weight:600}
+.msym{font-weight:600;font-size:13.5px}
+.mpx{font-size:24px;font-weight:600;letter-spacing:-.01em}
+.mchg{font-size:12px;margin:1px 0 6px;font-weight:500}
 .mt .spark{display:block;width:100%;margin:4px 0 8px}
 .mrail{display:flex;align-items:center;gap:10px;margin:2px 0 8px}
-.indsc{font-weight:800;font-size:13px;min-width:30px;text-align:right}
+.indsc{font-weight:600;font-size:13px;min-width:30px;text-align:right}
 .rail{position:relative;flex:1;height:5px;background:var(--surface2);border-radius:3px;display:block;min-width:60px}
 .rail i{position:absolute;top:0;bottom:0;border-radius:3px}
 .rail::after{content:'';position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line)}
 .meter{height:6px;background:var(--surface2);border-radius:3px;margin:4px 0 8px;overflow:hidden}
 .meter i{display:block;height:100%;background:var(--accent);border-radius:3px}
-.big{font-size:22px;font-weight:800}
-.pill{display:inline-block;padding:2px 9px;border-radius:5px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.big{font-size:22px;font-weight:600}
+.pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11.5px;font-weight:600;white-space:nowrap}
 .r-Top-Buy{background:var(--tb-bg);color:var(--tb)}.r-Buy{background:var(--b-bg);color:var(--b)}.r-Hold{background:var(--h-bg);color:var(--h)}
 .r-Sell{background:var(--s-bg);color:var(--s)}.r-Top-Sell{background:var(--ts-bg);color:var(--ts)}
 .pos{color:var(--tb)}.neg{color:var(--ts)}.mut{color:var(--muted)}
@@ -88,11 +89,11 @@ h2{font-size:15px;margin:26px 0 10px;font-weight:700;letter-spacing:-.01em}
 .list{padding:2px 0}
 .li{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-top:1px solid var(--line)}
 .li:first-child{border-top:0}.li:hover,.li:focus-visible{background:var(--surface2)}
-.li .sym{font-weight:800;min-width:62px;font-size:12.5px}
+.li .sym{font-weight:600;min-width:62px;font-size:12.5px;font-family:var(--font-mono)}
 .li .nm{flex:1;min-width:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
 .li .lspk{flex:none;display:flex}
-.li .sc{width:40px;text-align:right;font-weight:800}
-.lihd{cursor:default!important;background:var(--surface2);font-size:11.5px;color:var(--muted);font-weight:700;padding:6px 14px}
+.li .sc{width:40px;text-align:right;font-weight:600}
+.lihd{cursor:default!important;background:var(--surface2);font-size:11.5px;color:var(--muted);font-weight:600;padding:6px 14px}
 .inds{grid-template-columns:repeat(auto-fill,minmax(248px,1fr))}
 .ind{padding:13px 15px}
 .ind .top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
@@ -101,13 +102,13 @@ h2{font-size:15px;margin:26px 0 10px;font-weight:700;letter-spacing:-.01em}
 .indspk{margin:2px 0 8px}.indspk .spark{display:block;width:100%}
 .kv{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);padding:2px 0}
 .kv b{color:var(--text);font-weight:600;text-align:right;font-size:12px}
-.tabs{display:flex;gap:2px;margin:14px 0 0;border-bottom:1px solid var(--line);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-.tab{font:inherit;font-weight:700;color:var(--muted);background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 14px;min-height:42px;cursor:pointer;white-space:nowrap}
+.tabs{display:flex;gap:2px;margin:10px 0 0;border-bottom:1px solid var(--line);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;position:sticky;top:0;background:var(--bg);z-index:6}
+.tab{font:inherit;font-weight:600;color:var(--muted);background:transparent;border:0;border-bottom:2px solid transparent;padding:10px 14px;min-height:42px;cursor:pointer;white-space:nowrap;transition:color .12s}
 .tab[aria-selected="true"]{color:var(--text);border-bottom-color:var(--accent)}
 .tab:hover{color:var(--text)}
-.vnav{display:inline-flex;background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:2px;margin:14px 0 2px}
-.vtab{font:inherit;font-size:12.5px;border:0;background:transparent;color:var(--muted);border-radius:6px;padding:6px 14px;min-height:34px;font-weight:700;cursor:pointer;white-space:nowrap}
-.vtab[aria-selected="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow);outline:1px solid var(--line)}
+.vnav{display:inline-flex;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;margin:12px 0 2px}
+.vtab{font:inherit;font-size:12.5px;border:0;background:transparent;color:var(--muted);border-radius:7px;padding:6px 14px;min-height:34px;font-weight:600;cursor:pointer;white-space:nowrap}
+.vtab[aria-selected="true"]{background:var(--surface);color:var(--text);outline:1px solid var(--line)}
 .secrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
 .secrow h2{margin-bottom:0}
 .hmwrap{padding:12px 14px;margin-top:10px}
@@ -115,23 +116,26 @@ h2{font-size:15px;margin:26px 0 10px;font-weight:700;letter-spacing:-.01em}
 .hmt{font-size:11.5px;color:var(--muted);margin:0 0 5px;font-weight:700}
 .hmr{display:flex;flex-wrap:wrap;gap:3px}
 .hmc{border:0;border-radius:4px;padding:7px 9px;min-width:76px;cursor:pointer;text-align:left;color:var(--text);display:flex;flex-direction:column;gap:1px;font:inherit}
-.hmc b{font-size:12px;font-weight:800}
+.hmc b{font-size:12px;font-weight:600;font-family:var(--font-mono)}
 .hmc span{font-size:11px;opacity:.85;font-feature-settings:"tnum"}
 .hmc:hover,.hmc:focus-visible{filter:brightness(1.1)}
 .hmchips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{font:inherit;font-size:11.5px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 11px;cursor:pointer;color:var(--muted);font-weight:700}
+.chip{font:inherit;font-size:11.5px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 11px;cursor:pointer;color:var(--muted);font-weight:600}
 .chip.on{background:var(--accent-bg);color:var(--accent);border-color:var(--accent)}
 .tools{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;padding:12px 14px;margin:10px 0}
 .tools label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 input,select,button{font:inherit;color:var(--text)}
-.tools input,.tools select,.toolbar input,.toolbar select,.toolbar button,.addrow input,.addrow select,.lp input{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;min-height:38px}
+.tools input,.tools select,.toolbar input,.toolbar select,.toolbar button,.addrow input,.addrow select,.lp input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:36px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .tools input[type=number]{width:96px}
-.btn{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 14px;min-height:38px;font-weight:700;cursor:pointer}
-.btn.ghost{background:var(--surface2);color:var(--text)}
+.btn{background:var(--accent);color:var(--accent-ink);border:1px solid transparent;border-radius:8px;padding:8px 14px;min-height:36px;font-weight:600;cursor:pointer;transition:filter .12s,background .12s}
+.btn:hover{filter:brightness(1.06)}
+.btn.ghost{background:var(--surface);color:var(--text);border-color:var(--line)}
+.btn.ghost:hover{background:var(--surface2);filter:none}
 .btn:disabled{opacity:.5;cursor:default}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 10px}
 .toolbar input{flex:1;min-width:140px}
-.toolbar button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.toolbar button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .tw{overflow-x:auto;border-radius:8px}
 .tw{overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;max-width:100%}
 .twwrap{position:relative;padding:0 44px}
@@ -140,9 +144,18 @@ input,select,button{font:inherit;color:var(--text)}
 .twbtn:active{background:var(--surface2)}
 .twl{left:2px}.twr{right:2px}
 html{overflow-anchor:none}
+.stwrap{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
+@media (min-width:1100px){.stwrap{grid-template-columns:190px minmax(0,1fr)}}
+.stnav{display:none}
+@media (min-width:1100px){.stnav{display:flex;flex-direction:column;gap:2px;position:sticky;top:60px;font-size:12.5px}}
+.stnav a{color:var(--muted);text-decoration:none;padding:5px 8px;border-radius:6px;border-left:2px solid transparent}
+.stnav a:hover{color:var(--text);background:var(--surface2)}
+.stsec{scroll-margin-top:110px}
+#golive{display:none!important}   /* the Live-prices setup line above already offers this; one prompt is enough */
+.banner.srcnote{background:transparent;border:0;padding:0 2px;margin:6px 0 0;font-size:12px}
 #view table{width:100%}
 @media (max-width:980px){#tb th:nth-child(12),#tb td:nth-child(12),#tb th:nth-child(13),#tb td:nth-child(13),#tb th:nth-child(17),#tb td:nth-child(17),#tb th:nth-child(20),#tb td:nth-child(20){display:none}}
-#appbar{display:flex;width:100%;max-width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#appbar{display:flex;width:100%;max-width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:8px 0 0!important}
 .vnav{max-width:100%;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 @media (max-width:700px){.tw:has(#tb),.tw:has(#dttab),.tw:has(#pftab){max-height:none}}
 
@@ -156,13 +169,13 @@ tr.tkdn td,.tkdn:not(tr){animation:tkn .55s ease-out}
 table{border-collapse:separate;border-spacing:0;width:100%;min-width:1280px;background:var(--surface);font-size:12.5px}
 th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
 th:nth-child(1),td:nth-child(1),th:nth-child(2),td:nth-child(2){text-align:left}
-th{font-size:11px;color:var(--muted);font-weight:700;cursor:pointer;position:sticky;top:0;background:var(--surface);user-select:none;z-index:3}
+th{font-size:11.5px;color:var(--muted);font-weight:600;cursor:pointer;position:sticky;top:0;background:var(--surface);user-select:none;z-index:3}
 th.sorted{color:var(--text)}
 th.sorted::after{content:attr(data-dir)}
 #tb td:nth-child(1),#tb th:nth-child(1){position:sticky;left:0;background:var(--surface);z-index:2}
 #tb td:nth-child(2),#tb th:nth-child(2){position:sticky;left:38px;background:var(--surface);z-index:2;box-shadow:6px 0 6px -6px rgba(10,14,22,.3)}
 #tb th:nth-child(1),#tb th:nth-child(2){z-index:4}
-#tb td:nth-child(2) b{font-weight:800}
+#tb td:nth-child(2) b{font-weight:600;font-family:var(--font-mono)}
 #pftab{min-width:900px}#dttab{min-width:1020px}#dttab td:first-child,#dttab th:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:2}#dttab td,#dttab th{text-align:right}#dttab .lt{text-align:left}
 #pftab td:first-child,#pftab th:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:2}
 tbody tr{cursor:pointer}
@@ -170,8 +183,8 @@ tbody tr:hover td{background:var(--surface2)}
 td .mut{font-size:11.5px}
 .spc svg{display:block;margin-left:auto}
 .star{background:none;border:0;cursor:pointer;font-size:15px;color:var(--muted);padding:0 4px;min-width:30px;min-height:30px}.star.on{color:#f7a600}
-.tag{font-size:10.5px;padding:1px 6px;border-radius:4px;background:var(--accent-bg);color:var(--accent);margin-left:4px;font-weight:700}
-dialog{border:1px solid var(--line);border-radius:10px;padding:0;max-width:740px;width:calc(100% - 20px);max-height:92vh;background:var(--surface);color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.tag{font-size:10.5px;padding:1px 6px;border-radius:5px;background:var(--accent-bg);color:var(--accent);margin-left:4px;font-weight:600}
+dialog{border:1px solid var(--line);border-radius:12px;padding:0;max-width:740px;width:calc(100% - 20px);max-height:92vh;background:var(--surface);color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.45)}
 dialog::backdrop{background:rgba(8,10,16,.6)}
 .dh{display:flex;justify-content:space-between;align-items:flex-start;padding:16px 18px 10px;gap:12px;position:sticky;top:0;background:var(--surface);z-index:2;border-bottom:1px solid var(--line)}
 .dbody{padding:4px 18px 18px}
@@ -181,9 +194,9 @@ dialog::backdrop{background:rgba(8,10,16,.6)}
 .chartwrap svg{display:block}
 #ctip{display:none;position:absolute;top:8px;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:11.5px;line-height:1.5;box-shadow:var(--shadow);min-width:150px;z-index:5}
 .plan{background:var(--surface2);border-radius:8px;padding:12px 14px;margin:12px 0}
-.lv{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin:10px 0}
-.lv div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
-.lv small{display:block;color:var(--muted);font-size:10.5px;letter-spacing:.02em}.lv b{font-size:14.5px;font-weight:800}
+.lv{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;margin:10px 0;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.lv div{background:var(--surface);padding:10px 12px}
+.lv small{display:block;color:var(--muted);font-size:11.5px}.lv b{font-size:15px;font-weight:600}
 .lp{background:var(--accent-bg);border-radius:8px;padding:12px 14px;margin:12px 0}
 .lp .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .lp input{width:130px}
@@ -209,7 +222,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 .rules th,.rules td{text-align:left;white-space:normal;padding:7px 8px;vertical-align:top;position:static}
 .rules th{cursor:default}
 .rules td.n{white-space:nowrap;font-weight:700}
-.rules h3{font-size:14px;margin:0 0 10px;font-weight:800}
+.rules h3{font-size:14px;margin:0 0 10px;font-weight:600}
 .rules ul{margin:6px 0;padding-left:18px}
 @media (max-width:700px){
   #pftab{min-width:700px}#dttab{min-width:860px}
@@ -229,7 +242,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
   #tb td:nth-child(2),#tb th:nth-child(2){left:30px}
   .nm2{display:none}
   .srcnote{display:none}
-  #golive{display:none!important}
+  
   header{padding:8px 0 0;gap:6px 10px}
   .brand{gap:6px 10px;align-items:center}.dots{font-size:11px;gap:8px}
   /* one tidy control row: Sign in | refresh mode | Refresh — the clock and the duplicate "live" dot are hidden on phones */
@@ -256,7 +269,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
   <div class="brand"><img src="icons/favicon.svg" alt="" width="26" height="26" style="border-radius:7px;margin-right:8px;vertical-align:-6px"><h1>Signal Desk</h1><div class="dots" id="mdots"></div></div>
   <div class="hright"><div class="asof" id="clock"></div><span id="cdown" class="mut" style="font-size:12px;font-weight:700;font-feature-settings:'tnum'"></span><button class="btn ghost" id="acctBtn" type="button">👤 Sign in</button><select id="arSel" aria-label="Auto-refresh" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:38px;color:var(--text)"><option value="1">● Live</option><option value="2">Every 2 min</option><option value="5">Every 5 min</option></select><button class="btn" id="rfBtn" type="button">↻ Refresh prices</button></div>
 </header>
-<div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
+<section aria-label="Status"><div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
 <div class="wrap"><details id="pxBox" style="font-size:12.5px;margin:2px 0 4px"><summary style="cursor:pointer;font-weight:700">⚡ Live prices — set up once per device</summary>
 <div class="card" style="margin-top:8px;padding:14px 16px;max-width:640px">
 <div style="font-weight:700">1 · Finnhub key — prices tick live by themselves (USA)</div>
@@ -275,6 +288,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 </div></details></div>
 <div class="wrap" id="golive" style="display:none;margin-top:6px"><div class="banner info" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span><b>Want prices moving by themselves, like a broker app?</b> Paste one free key — two minutes, once per device.</span><button class="btn" id="goliveBtn" type="button">Set up live prices</button></div></div>
 <div class="wrap" id="upbar" style="display:none"><div class="banner warn" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><b>A newer version of this page is ready.</b><button class="btn" id="upbtn" type="button">Update now</button></div></div>
+</section>
 <dialog id="authDlg" style="max-width:420px;width:92vw;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);padding:20px">
 <h3 style="margin:0 0 4px">Your account</h3>
 <p class="mut" style="font-size:12px;margin:0 0 12px">Free sign-in so your portfolios, tickers and P/L history follow you on any device. Each account sees only its own data — nothing is shared between users.</p>
@@ -299,7 +313,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 <div class="mut" id="signStat" style="font-size:12px;margin-top:10px;min-height:16px"></div>
 <div style="margin-top:12px;text-align:right"><button class="btn ghost" id="signClose" type="button">Close</button></div>
 </dialog>
-<div id="banners"></div>
+<section aria-label="Notices" id="banners"></section>
 
 <nav class="tabs" id="tabs" aria-label="Views"></nav>
 
@@ -310,7 +324,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 </div>
 
 <main id="view"></main>
-<div class="foot" id="foot"></div>
+<footer class="foot" id="foot"></footer>
 </div>
 <dialog id="dlg"><div id="dc"></div></dialog>
 
@@ -695,7 +709,7 @@ function fresh(m) {
 function chrome() {
   const m = MK[(tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab)) ? 'US' : tab === 'DT' ? dtMk : tab === 'OP' ? opMk : tab], f = fresh(m);
   $('#mdots').innerHTML = ['US', 'IN'].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
-  $('#asof').innerHTML = (tab === 'SET' ? 'Control panel \u2014 risk, capital, strategy, keys' : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'BOT' ? 'Paper-trading bot — every trade it took' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
+  $('#asof').innerHTML = (tab === 'SET' ? 'Control panel \u2014 risk, capital, strategy, keys' : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'BOT' ? 'Your bot — real rules, real prices, every trade' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? 'USA intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
   $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
   let h = linkedNote ? `<div class="banner info">${linkedNote}</div>` : '';
   if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && tab !== 'SET' && !pfOf(tab)) {
@@ -897,7 +911,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792713133';
+const BUILD_V = '1792714259';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -916,7 +930,7 @@ setInterval(verCheck, 180000); setTimeout(verCheck, 3000);
   sessionStorage.setItem('sd-upd', String(tries + 1));
   location.replace(location.pathname + '?u=' + Date.now());
 } catch (e) {} })();
-try { const fo = document.getElementById('foot'); if (fo) { const sp = document.createElement('div'); sp.className = 'mut'; sp.style.cssText = 'font-size:10.5px;margin-top:6px'; sp.textContent = 'build v' + BUILD_V; fo.parentNode.insertBefore(sp, fo.nextSibling); } } catch (e) {}
+try { const fo = document.getElementById('foot'); if (fo) { const sp = document.createElement('div'); sp.className = 'mut'; sp.style.cssText = 'font-size:10.5px;margin-top:6px'; sp.textContent = 'build v' + BUILD_V; fo.appendChild(sp); } } catch (e) {}
 setInterval(() => {
   const el = $('#cdown'); if (!el) return;
   if (!(arMin > 0)) { el.textContent = ''; return; }
@@ -2290,7 +2304,7 @@ async function botLoad(force) {
 setInterval(() => { if (app === 'desk' && tab === 'BOT' && !document.hidden) botLoad(); }, 60000);
 function botView() {
   botLoad();
-  const head = `<h2 style="margin-bottom:6px">Bot trades</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Every trade the bot took — RSI-2 dip buys in stocks (held 1–10 days) and CALLs on the same dips — with when it bought and when it sold. Paper money on Alpaca. Updates about every 30 minutes and after each trade. Not advice.</div>`;
+  const head = `<h2 style="margin-bottom:6px">Bot trades</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Every trade the bot took — RSI-2 dip buys in stocks (held 1–10 days) and CALLs on the same dips — with when it bought and when it sold. Run on an Alpaca practice account with real prices and the same rules, sizes and limits as real money. Updates about every 10 minutes and after each trade. Not advice.</div>`;
   if (!botJ && botLocked) return head + `<div class="card" style="padding:16px 18px;max-width:560px"><b style="font-size:14px">\ud83d\udd12 This bot journal is encrypted</b><div class="mut" style="font-size:12.5px;margin:6px 0 10px;line-height:1.5">Your trades, positions and account value are stored encrypted on the public site. Enter the journal passphrase you set in Bot settings to view them on this device. Last update ${botLocked.at ? new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(new Date(botLocked.at)) : '\u2013'} ET.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="jkeyIn" type="password" placeholder="Journal passphrase" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" style="flex:1;min-width:200px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" id="jkeyBtn">Unlock</button></div><label class="mut" style="display:block;font-size:12px;margin-top:8px"><input type="checkbox" id="jkeyShow"> Show what I type</label><div class="mut" id="jkeyMsg" style="font-size:12px;margin-top:6px"></div></div>`;
   if (!botJ) return head + `<div class="card empty" style="line-height:1.6">${botErr || 'Loading the bot journal…'}</div>`;
   const J = botJ, $$ = v => (v >= 0 ? '+' : '−') + '$' + fmt(Math.abs(v), 2);
@@ -2303,16 +2317,16 @@ function botView() {
   const realToday = closed.filter(c => dET(c.outT) === today).reduce((t, c) => t + c.pl, 0);
   const realAll = closed.reduce((t, c) => t + c.pl, 0);
   const unreal = open.reduce((t, o) => t + o.pl, 0);
-  const acct = J.account || {}, dayAcct = (acct.equity || 0) - (acct.last_equity || 0);
+  const acct = J.account || {}, dayAcct = (acct.equity || 0) - (acct.last_equity || 0), stake = J.settings && +J.settings.stakeUsd > 0 ? +J.settings.stakeUsd : 0;
   const wins = closed.filter(c => c.pl > 0).length;
   const what = r => r.kind === 'Stock' ? `<b>${esc(r.und)}</b>` : `<b>${esc(r.und)}</b> <span class="pill ${r.kind === 'Call' ? 'r-Top-Buy' : 'r-Top-Sell'}">${r.kind.toUpperCase()}</span> <span class="mut" style="font-size:11.5px">${fmt(r.strike, r.strike % 1 ? 1 : 0)} · ${esc((r.exp || '').slice(5))}</span>`;
   const typ = r => r.kind === 'Stock' ? 'Stock' : 'Option';
   const boxes = `<div class="lv" style="margin:0 0 14px">
-${lvBox('Today (account)', `<span class="${cls(dayAcct)}">${$$(dayAcct)}</span>`)}
+${lvBox('Today', `<span class="${cls(dayAcct)}">${$$(dayAcct)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(dayAcct / stake * 100)}% of your stake</span>` : ''}`)}
 ${lvBox('Realized today', `<span class="${cls(realToday)}">${$$(realToday)}</span>`)}
-${lvBox('Total realized', `<span class="${cls(realAll)}">${$$(realAll)}</span>`)}
+${lvBox('Total realized', `<span class="${cls(realAll)}">${$$(realAll)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(realAll / stake * 100)}%</span>` : ''}`)}
 ${lvBox('Open positions now', `<span class="${cls(unreal)}">${$$(unreal)}</span>`)}
-${lvBox('Account value', '$' + fmt(acct.equity || 0, 0))}
+${stake ? lvBox('Your stake', '$' + fmt(stake, 0) + ` <span class="mut" style="font-size:11.5px">now $${fmt(stake + realAll + unreal, 0)}</span>`) : lvBox('Account value', '$' + fmt(acct.equity || 0, 0))}
 ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins / closed.length * 100)}% won` : '0')}
 </div>`;
   const openTbl = open.length ? `<h3 style="margin:16px 0 8px">Open now <span class="mut" style="font-weight:400;font-size:13px">· ${open.length}</span></h3>
@@ -2432,9 +2446,9 @@ ${Object.entries(rdJ.variants || {}).map(([k, S]) => row('<span class="mut">Best
 ${yrs.length ? `<div class="mut" style="font-size:12px;margin-top:8px"><b>Best found, year by year:</b> ${yrs.map(([y, x]) => `${y} <span class="${x.R >= 0 ? 'pos' : 'neg'}">${x.R >= 0 ? '+' : ''}${x.R}R</span> (${x.n})`).join(' · ')}</div>` : ''}
 <div class="mut" style="font-size:11.5px;margin-top:6px">Entry at the close of the signal bar plus 0.03% slippage; when one bar touches both the stop and the target the stop is assumed first; flat at 3:45 PM; one trade per stock per day, the daily maximum and the two-loss stop applied in order. The broker's intraday history for these stocks starts in ${esc(firstYear)}; nothing older exists in any public feed. Full report: <a href="bot/research_day_report.md" target="_blank" rel="noopener">research_day_report.md</a>. To use the best values: Bot settings → 4b → “Put these values in the form”.</div></div>`;
   })() : '';
-  return head + statusLine + evCard() + envCard + boxes + watchCard + riskCard + perfCard + btCard + rdCard + openTbl +
+  return head + statusLine + boxes + envCard + watchCard + riskCard + perfCard + evCard() + btCard + rdCard + openTbl +
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
-    `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? '' : ' · paper account (fake money)'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
+    `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? ' · <b>real money</b>' : stake ? ` · practice account run as a <b>$${fmt(stake, 0)} stake</b>: every size, loss limit and the day-trade rule use that figure, so this is what real money would have done` : ' · practice account'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }
 // ---------- Bot settings tab: control panel that writes bot/config.json + GitHub secrets ----------
 const ST_PRESETS = {
@@ -2540,6 +2554,7 @@ function stRead() {
   c.entryEnd = v('entryEnd') || '11:00';
   c.dayStart = v('dayStart') || '09:45'; c.dayEnd = v('dayEnd') || '15:30';
   { const x = parseFloat(v('liveSizePct')); if (isFinite(x)) c.liveSizePct = x; }
+  { const x = parseFloat(v('stakeUsd')); c.stakeUsd = isFinite(x) && x > 0 ? x : 0; }
   c.symbols = (v('symbols') || '').split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
   c.mode = document.getElementById('st-live') && document.getElementById('st-live').checked ? 'live' : 'paper';
   c.liveConfirm = c.mode === 'live' ? (v('liveConfirm') || '') : '';
@@ -2650,14 +2665,14 @@ function readiness(c) {
   const first = closed.length ? closed.map(x => x.inT).sort()[0] : null;
   const tradingDays = first ? Math.round((Date.now() - Date.parse(first)) / 864e5 * 5 / 7) : 0;
   const expLive = swing.length ? swing.reduce((t, x) => t + x.plPct, 0) / swing.length : null, expRes = research ? research.t.exp : null;
-  const eq = J && J.account ? J.account.equity : 0;
+  const eq = c.stakeUsd > 0 ? c.stakeUsd : (J && J.account ? J.account.equity : 0);
   let run = 0, pk = 0, dd = 0; [...closed].sort((a, b) => a.outT < b.outT ? -1 : 1).forEach(x => { run += x.pl; pk = Math.max(pk, run); dd = Math.max(dd, pk - run); });
   const ddPct = eq ? dd / eq * 100 : 0;
   const items = [
     ['Paper track record of at least 60 trading days', tradingDays >= 60, first ? `${tradingDays} trading days so far (since ${first.slice(0, 10)})` : 'no closed trades yet'],
     ['At least 50 closed trades', closed.length >= 50, `${closed.length} closed`],
     ['Live expectancy positive and at least half of the research figure', expLive != null && swing.length >= 30 && expLive > 0 && (expRes == null || expLive >= expRes / 2), expLive == null ? 'needs 30+ swing trades' : `live ${expLive >= 0 ? '+' : ''}${expLive.toFixed(2)}% per trade on ${swing.length}${expRes != null ? ` · research +${expRes.toFixed(2)}%` : ''}`],
-    ['Worst drawdown so far under 10% of the account', closed.length >= 20 && ddPct < 10, closed.length ? `${ddPct.toFixed(1)}% worst run` : '–'],
+    ['Worst drawdown so far under 10% of your stake', closed.length >= 20 && ddPct < 10, closed.length ? `${ddPct.toFixed(1)}% worst run${c.stakeUsd > 0 ? ' of $' + fmt(c.stakeUsd, 0) : ''}` : '–'],
     ['Protective stops placed at the broker with every stock entry', true, 'built in (OTO / bracket legs)'],
     ['Phone alerts and the watchdog switched on', !!has('NTFY_TOPIC') && !!c.alerts, has('NTFY_TOPIC') ? (c.alerts ? 'alert topic set, alerts on' : 'alerts are switched off in Guards') : 'no alert topic in section 1'],
     ['Live keys saved', !!(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET')), has('ALPACA_LIVE_KEY') ? 'set' : 'not set'],
@@ -2676,9 +2691,9 @@ function settingsView() {
   const num = ([k, lab, help, lo, hi, step]) => `<label style="display:block;font-size:12px"><b>${esc(lab)}</b><div class="mut" style="font-size:11px;margin:1px 0 3px;min-height:14px">${esc(help)}</div><input id="st-${k}" type="number" min="${lo}" max="${hi}" step="${step}" value="${c[k] != null ? esc(String(c[k])) : ''}" ${inp}></label>`;
   const grid = arr => `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:10px">${arr.map(num).join('')}</div>`;
   const chk = (k, lab, help) => `<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px"><input id="st-${k}" type="checkbox" ${c[k] ? 'checked' : ''} style="width:18px;height:18px"> <b>${lab}</b> <span class="mut" style="font-size:12px">${help}</span></label>`;
-  const sec = (t, body, sub) => `<div class="card" style="padding:14px 18px;margin-bottom:14px"><b style="font-size:15px">${t}</b>${sub ? ` <span class="mut" style="font-size:12px">· ${sub}</span>` : ''}${body}</div>`;
+  const secIds = []; const sec = (t, body, sub) => { const id = 'sec-' + t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); secIds.push([id, t]); return `<div class="card stsec" id="${id}" style="padding:14px 18px;margin-bottom:14px"><b style="font-size:15px">${t}</b>${sub ? ` <span class="mut" style="font-size:12px">· ${sub}</span>` : ''}${body}</div>`; };
   const dot = ok => `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${ok ? 'var(--tb)' : 'var(--line)'};margin-right:5px"></span>`;
-  const presetBtn = k => `<button class="btn ${c.preset === k ? '' : 'ghost'}" type="button" data-st="preset" data-v="${k}" style="flex:1;min-width:150px;text-align:left;padding:10px 12px"><b style="text-transform:capitalize">${k}</b><div style="font-size:11.5px;font-weight:400;margin-top:2px;opacity:.85${c.preset === k ? ';color:#fff' : ''}" class="${c.preset === k ? '' : 'mut'}">${ST_PRESETS[k].riskPct}% per trade · cap ${ST_PRESETS[k].maxHeat}% · day limit −${ST_PRESETS[k].dayCap}%</div></button>`;
+  const presetBtn = k => `<button class="btn ${c.preset === k ? '' : 'ghost'}" type="button" data-st="preset" data-v="${k}" style="flex:1;min-width:150px;text-align:left;padding:10px 12px"><b style="text-transform:capitalize">${k}</b><div style="font-size:11.5px;font-weight:400;margin-top:2px;opacity:.85${c.preset === k ? ';color:var(--accent-ink)' : ''}" class="${c.preset === k ? '' : 'mut'}">${ST_PRESETS[k].riskPct}% per trade · cap ${ST_PRESETS[k].maxHeat}% · day limit −${ST_PRESETS[k].dayCap}%</div></button>`;
   const connect = sec('1. Connection', connected
     ? `<div style="margin-top:8px;font-size:13px">${dot(true)}Connected to <b>${esc(ghRepo())}</b>${stRepoInfo ? ` <span class="mut">(${stRepoInfo.private ? 'private' : 'public'} repo)</span>` : ''} <button class="btn ghost" type="button" data-st="test" style="margin-left:8px;font-size:12px" ${stBusy ? 'disabled' : ''}>Test connection</button> <button class="btn ghost" type="button" data-st="disconnect" style="font-size:12px">Disconnect</button></div>
 <div style="margin-top:10px;font-size:13px">${dot(has('ALPACA_KEY') && has('ALPACA_SECRET'))}Alpaca keys ${has('ALPACA_KEY') && has('ALPACA_SECRET') ? 'set' : '<b>not set</b> — the bot cannot trade yet'} &nbsp; ${dot(has('NTFY_TOPIC'))}Phone alerts ${has('NTFY_TOPIC') ? 'set' : 'not set'} &nbsp; ${dot(has('JOURNAL_KEY'))}Journal ${has('JOURNAL_KEY') ? 'encrypted' : '<b>public</b>'} &nbsp; ${dot(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET'))}Live keys ${has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET') ? 'set' : 'not set'}</div>
@@ -2700,8 +2715,9 @@ function settingsView() {
     return `<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="font-size:13px;min-width:70px">${lab}</b><label style="font-size:12px" class="mut">Size it in <select id="st-${unitK}" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;color:var(--text)"><option value="pct" ${u ? '' : 'selected'}>% of account</option><option value="usd" ${u ? 'selected' : ''}>fixed dollars</option></select></label></div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px;font-size:11.5px"><label><span class="mut">Per trade, %</span>${f(pctK, !u, 0.5, '%')}</label><label><span class="mut">Per trade, $</span>${f(usdK, u, 100, '$')}</label><label><span class="mut">All ${lab.toLowerCase()} together, % (0 = no limit)</span>${f(capPctK, !u, 1, '0')}</label><label><span class="mut">All ${lab.toLowerCase()} together, $ (0 = no limit)</span>${f(capUsdK, u, 100, '0')}</label></div></div>`; };
   const moneyTable = `<div style="display:grid;gap:10px;margin-top:10px">${sleeve('Stocks', 'stockUnit', 'stockPct', 'stockUsd', 'stockCapPct', 'stockCapUsd')}${sleeve('CALLs', 'callUnit', 'optPct', 'callUsd', 'callCapPct', 'callCapUsd')}${sleeve('PUTs', 'putUnit', 'putPct', 'putUsd', 'putCapPct', 'putCapUsd')}</div><div class="mut" style="font-size:12px;margin-top:8px">Pick % or dollars for each. The dimmed pair is ignored. <b>Per trade</b> is the most one trade may spend; <b>all together</b> is the most that sleeve may have in open positions and waiting orders at once.</div>`;
-  const alloc = sec('3. Capital allocation', `${chk('stocks', 'Trade stocks', 'RSI-2 dip buys, held 1–10 days')}${chk('options', 'Trade CALL options', 'CALLs on the same dips — untested side, keep small')}${chk('puts', 'Trade PUT options', 'experimental: PUTs when a stock below its 200-day average pops (RSI-2 above 90) — never backtested, keep small')}${moneyTable}${grid(ST_FIELDS.alloc)}
-<div class="mut" style="font-size:12px;margin-top:8px">Position size is the <i>smaller</i> of the capital % and the risk % — the risk rule usually decides.</div>`, 'how much money each of stocks, CALLs and PUTs may use');
+  const stakeBox = `<div style="margin-top:8px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface2)"><label style="font-size:13px"><b>Money the bot works with</b> <span class="mut" style="font-size:12px">— your stake</span><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">$ <input id="st-stakeUsd" type="number" min="0" step="100" inputmode="decimal" value="${c.stakeUsd > 0 ? esc(String(c.stakeUsd)) : ''}" placeholder="whole account" style="width:130px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--text);font-size:13px"><span class="mut" style="font-size:12px">${c.stakeUsd > 0 ? `Every size, loss limit and the day-trade rule are computed on $${fmt(c.stakeUsd, 0)}, not on the account's balance — the practice account trades exactly like that much real money.` : 'Empty = the whole account balance. Enter the amount you actually intend to trade with and the practice account will behave like that much real money.'}</span></div></label></div>`;
+  const alloc = sec('3. Capital allocation', `${stakeBox}${chk('stocks', 'Trade stocks', 'RSI-2 dip buys, held 1–10 days')}${chk('options', 'Trade CALL options', 'CALLs on the same dips — untested side, keep small')}${chk('puts', 'Trade PUT options', 'experimental: PUTs when a stock below its 200-day average pops (RSI-2 above 90) — never backtested, keep small')}${moneyTable}${grid(ST_FIELDS.alloc)}
+<div class="mut" style="font-size:12px;margin-top:8px">Position size is the <i>smaller</i> of the capital % and the risk % — the risk rule usually decides.</div>`, 'your stake, and how much of it each of stocks, CALLs and PUTs may use');
   const strat = sec('4. Strategy', `${chk('intraday', 'Intraday signals', 'experimental: signals use the live price during the day instead of waiting for the day\'s close — never backtested, expect more trades')}${grid(ST_FIELDS.strat)}<div style="margin-top:10px;font-size:12px"><b>Entry window closes at</b> <input id="st-entryEnd" type="time" value="${esc(c.entryEnd || '11:00')}" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;color:var(--text)"> <span class="mut">ET (opens 9:45, or 10:15 on CPI/jobs days)</span></div>`, 'the tested values are the defaults — change with care');
   const tIn = (id, val) => `<input id="st-${id}" type="time" value="${esc(val)}" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;color:var(--text)">`;
   const dayS = sec('4b. Day trading', `${chk('dayTrade', 'Day-trade', 'experimental: opening-range breakouts and VWAP pullbacks on 5-minute bars, in and out the same day — <a href="docs/daytrading-rules.html" target="_blank" rel="noopener">the rulebook</a>')}
@@ -2714,15 +2730,17 @@ ${rdJ && rdJ.best ? `<div style="margin-top:10px;padding:8px 10px;border:1px sol
   const radio = (v, lab, help) => `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:8px"><input type="radio" name="st-universe" value="${v}" ${(c.universe || 'list') === v ? 'checked' : ''} style="width:18px;height:18px;flex:none"> <span><b>${lab}</b> <span class="mut" style="font-size:12px">${help}</span></span></label>`;
   const uni = sec('6. Stocks it watches', `${radio('scan', 'Scan the whole market', 'every morning the bot ranks every tradable US stock by trading volume and watches the most-traded ones — the list below is ignored')}${scanOn ? grid(ST_FIELDS.scan) : ''}${radio('list', 'Only my list', 'the tickers below, nothing else')}<textarea id="st-symbols" rows="3" ${inp.replace('style="', 'style="font-family:var(--font-mono),monospace;margin-top:8px;' + (scanOn ? 'opacity:.5;' : ''))}>${esc((c.symbols || []).join(', '))}</textarea><div class="mut" style="font-size:12px;margin-top:4px">${scanOn ? 'Market scan is on: the Bot trades tab shows the stocks it picked today. Sector limits only apply to stocks the bot knows the sector of.' : 'US tickers, comma-separated, up to 60. Liquid large-caps work best — the rules were tested on them.'}</div>`, 'the universe');
   const mode = sec('7. Mode', `<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px"><input id="st-live" type="checkbox" ${c.mode === 'live' ? 'checked' : ''} style="width:18px;height:18px"> <b>Trade real money</b> <span class="mut" style="font-size:12px">(uses the Live keys from section 1 \u2014 paper keys never trade real money)</span></label>
-${c.mode === 'live' || (document.getElementById('st-live') && document.getElementById('st-live').checked) ? `<div style="margin-top:8px;padding:10px 12px;border-radius:8px;background:var(--ts-bg);font-size:12.5px;line-height:1.5"><b class="neg">Real money.</b> Losses are real and yours. Only do this after months of paper results that match the research. Type <b>I UNDERSTAND THE RISK</b> to confirm:<input id="st-liveConfirm" ${inp} style="margin-top:6px" value="${esc(c.liveConfirm || '')}" autocomplete="off"></div>` : '<div class="mut" style="font-size:12px;margin-top:4px">Currently <b>paper</b> — fake money, real prices.</div>'}
+${c.mode === 'live' || (document.getElementById('st-live') && document.getElementById('st-live').checked) ? `<div style="margin-top:8px;padding:10px 12px;border-radius:8px;background:var(--ts-bg);font-size:12.5px;line-height:1.5"><b class="neg">Real money.</b> Losses are real and yours. Only do this after months of paper results that match the research. Type <b>I UNDERSTAND THE RISK</b> to confirm:<input id="st-liveConfirm" ${inp} style="margin-top:6px" value="${esc(c.liveConfirm || '')}" autocomplete="off"></div>` : `<div class="mut" style="font-size:12px;margin-top:4px">Currently the <b>practice account</b>: real prices, real rules${c.stakeUsd > 0 ? `, sized as a $${fmt(c.stakeUsd, 0)} stake` : ''}. Nothing is simplified for practice — what you see is what real money would have done.</div>`}
 ${(() => { const R = readiness(c); return `<div style="margin-top:10px;font-size:12.5px"><b>Ready for real money? ${R.ready}/${R.total}</b> <span class="mut">— the standard checklist, from your actual data</span>
 <div style="margin-top:6px;display:grid;gap:4px">${R.items.map(([t, ok, d]) => `<div style="display:flex;gap:8px;align-items:flex-start"><span style="flex:none;width:18px;text-align:center;color:${ok ? 'var(--tb)' : 'var(--ts)'}">${ok ? '✓' : '✗'}</span><span><b style="font-weight:600">${esc(t)}</b> <span class="mut">· ${esc(d)}</span></span></div>`).join('')}</div>
 <div style="margin-top:8px"><label style="font-size:12.5px"><b>Live size</b> <input id="st-liveSizePct" type="number" min="5" max="100" step="5" value="${c.liveSizePct || 25}" style="width:70px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--text)"> <span class="mut">% of the paper size — start at 25, raise it month by month while results hold. Paper mode is always 100%.</span></label></div>
 <div class="mut" style="font-size:11.5px;margin-top:6px">The checklist does not block anything — the decision is yours — but switching to real money with red items is how most accounts get hurt. The full procedure is in <a href="docs/#operations" target="_blank" rel="noopener">Operations → Going live</a>.</div></div>`; })()}`, 'paper or real money');
   const ctl = sec('8. Controls', `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${stStop ? '<button class="btn" type="button" data-st="resume">▶ Resume trading</button>' : '<button class="btn" type="button" data-st="pause" style="background:var(--ts)">⏸ Pause — sell everything now</button>'}<button class="btn ghost" type="button" data-st="run">Run the bot now</button><button class="btn ghost" type="button" data-st="research">Re-run 33-year research</button><button class="btn ghost" type="button" data-st="reload">Reload from GitHub</button></div>
 <div class="mut" style="font-size:12px;margin-top:8px">${stStop ? '<b class="neg">Paused</b> — the bot has sold everything and is idle.' : 'Running normally.'} Pause creates <code>bot/STOP</code> in the repo; the bot sees it within seconds.</div>`, 'pause, resume, run');
-  const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:8px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span id="stDirty" class="pill r-Sell" style="font-size:11px;${stDirty ? '' : 'display:none'}">unsaved changes</span><span style="font-size:12.5px">${stBusy ? `<span id="stWait" class="mut" style="font-variant-numeric:tabular-nums;margin-right:6px">${Math.round((Date.now() - stT0) / 1000)} s</span>` : ''}${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span>${stBusy ? `<div id="stSteps" class="mut" style="flex-basis:100%;font-size:11.5px;font-family:var(--font-mono),monospace;white-space:pre-wrap">${stStepsHtml()}</div>` : ''}${stFailed && !stBusy ? `<div style="flex-basis:100%;font-size:12.5px;border-top:1px solid var(--line);padding-top:8px"><b>Can't reach GitHub from here?</b> Save another way: <button class="btn ghost" type="button" data-st="copyjson" style="font-size:12px">Copy settings</button> then <a href="https://github.com/${esc(ghRepo())}/edit/main/bot/config.json" target="_blank" rel="noopener">open bot/config.json on GitHub</a>, select all, paste, Commit changes.${stJsonBox ? `<textarea readonly rows="6" style="width:100%;margin-top:6px;font-family:var(--font-mono),monospace;font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text)">${esc(stJsonBox)}</textarea>` : ''}</div>` : ''}</div>`;
-  return `<h2 style="margin-bottom:6px">Bot settings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page. <a href="docs/settings.html" target="_blank" rel="noopener"><b>What does each setting do? → the settings guide</b></a></div>${bar}${connect}${syncC}${risk}${alloc}${strat}${dayS}${guards}${uni}${mode}${ctl}`;
+  const bar = `<div class="card" style="padding:12px 16px;margin-bottom:14px;position:sticky;top:50px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" data-st="save" ${stBusy || !connected ? 'disabled' : ''}>Save settings to the bot</button><span id="stDirty" class="pill r-Sell" style="font-size:11px;${stDirty ? '' : 'display:none'}">unsaved changes</span><span style="font-size:12.5px">${stBusy ? `<span id="stWait" class="mut" style="font-variant-numeric:tabular-nums;margin-right:6px">${Math.round((Date.now() - stT0) / 1000)} s</span>` : ''}${stMsg ? esc(stMsg) : (c.updatedAt ? 'In force since ' + new Date(c.updatedAt).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) + (c.updatedBy ? ' (' + esc(c.updatedBy) + ')' : '') : '')}</span>${stBusy ? `<div id="stSteps" class="mut" style="flex-basis:100%;font-size:11.5px;font-family:var(--font-mono),monospace;white-space:pre-wrap">${stStepsHtml()}</div>` : ''}${stFailed && !stBusy ? `<div style="flex-basis:100%;font-size:12.5px;border-top:1px solid var(--line);padding-top:8px"><b>Can't reach GitHub from here?</b> Save another way: <button class="btn ghost" type="button" data-st="copyjson" style="font-size:12px">Copy settings</button> then <a href="https://github.com/${esc(ghRepo())}/edit/main/bot/config.json" target="_blank" rel="noopener">open bot/config.json on GitHub</a>, select all, paste, Commit changes.${stJsonBox ? `<textarea readonly rows="6" style="width:100%;margin-top:6px;font-family:var(--font-mono),monospace;font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text)">${esc(stJsonBox)}</textarea>` : ''}</div>` : ''}</div>`;
+  const body = `${bar}${connect}${syncC}${risk}${alloc}${strat}${dayS}${guards}${uni}${mode}${ctl}`;
+  const side = `<nav class="stnav" aria-label="Settings sections"><div class="mut" style="font-size:11.5px;margin-bottom:6px">On this page</div>${secIds.map(([id, t]) => `<a href="#${id}">${esc(t)}</a>`).join('')}<a href="docs/settings.html" target="_blank" rel="noopener" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">What each setting does ↗</a></nav>`;
+  return `<h2 style="margin-bottom:6px">Bot settings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page. <a href="docs/settings.html" target="_blank" rel="noopener"><b>What does each setting do? → the settings guide</b></a></div><div class="stwrap">${side}<div style="min-width:0">${body}</div></div>`;
 }
 function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {

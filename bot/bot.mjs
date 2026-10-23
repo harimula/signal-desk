@@ -193,7 +193,8 @@ export async function eodReport() {
     const closed = buildJournal(f || [], []).closed, pl = closed.reduce((t, c) => t + c.pl, 0), wins = closed.filter(c => c.pl > 0).length;
     const eq = +acct.equity, day = +acct.last_equity > 0 ? (eq / +acct.last_equity - 1) * 100 : 0;
     const open = positions.map(p => `${p.symbol} ${(+p.unrealized_plpc * 100) >= 0 ? '+' : ''}${(+p.unrealized_plpc * 100).toFixed(1)}%`).join(', ');
-    const detail = CFG.alertDetail === false ? '' : ` · account $${Math.round(eq).toLocaleString('en-US')} (${day >= 0 ? '+' : ''}${day.toFixed(2)}% today)`;
+    const stake = CFG.stakeUsd > 0 ? CFG.stakeUsd : eq, dayUsd = eq - (+acct.last_equity || eq);
+    const detail = CFG.alertDetail === false ? '' : (CFG.stakeUsd > 0 ? ` · stake $${Math.round(stake).toLocaleString('en-US')}: ${dayUsd >= 0 ? '+' : '\u2212'}$${Math.abs(dayUsd).toFixed(0)} today (${(dayUsd / stake * 100) >= 0 ? '+' : ''}${(dayUsd / stake * 100).toFixed(2)}%)` : ` · account $${Math.round(eq).toLocaleString('en-US')} (${day >= 0 ? '+' : ''}${day.toFixed(2)}% today)`);
     alerts.push(`\ud83d\udcc5 Day done: ${closed.length} round trip${closed.length === 1 ? '' : 's'}${closed.length ? ` (${wins} won) ${pl >= 0 ? '+' : '\u2212'}$${Math.abs(pl).toFixed(0)}` : ''}${detail} · open: ${open || 'nothing'}${lastDay && lastDay.tradesToday ? ` · ${lastDay.tradesToday} day trade${lastDay.tradesToday === 1 ? '' : 's'}` : ''}`);
     await flushAlerts();
   } catch (e) { console.log('eod report failed', e.message); }
@@ -357,7 +358,11 @@ async function run() {
   const clock = lastClock;
   if (!clock.is_open) { console.log('Market closed.'); return; }
   const acct = await T('/v2/account');
-  const equity = +acct.equity, lastEq = +acct.last_equity || equity;
+  // The stake: with stakeUsd set, the bot behaves as if the account held only that much — every size, loss limit and the
+  // pattern-day-trader rule are computed on it — so a $100k practice account trades exactly like the money you mean to use.
+  const acctEq = +acct.equity, acctLast = +acct.last_equity || acctEq;
+  const stake = CFG.stakeUsd > 0 ? Math.min(CFG.stakeUsd, acctEq) : acctEq;
+  const equity = stake, lastEq = CFG.stakeUsd > 0 ? stake - (acctEq - acctLast) : acctLast;    // today's change is the account's real change, applied to the stake
   const positions = await T('/v2/positions');
   posBySym = Object.fromEntries(positions.map(p => [p.symbol, p]));
   const openOrders = await T('/v2/orders?status=open&limit=500');
@@ -409,7 +414,8 @@ async function run() {
       const eqs = (h && h.equity || []).filter(x => x != null && x > 0);
       weekCache = { at: Date.now(), start: eqs.length ? eqs[0] : null };
     }
-    if (weekCache.start && (equity / weekCache.start - 1) * 100 <= -WEEK_CAP) { G.block = true; G.halt = true; G.reasons.push(`Down ${((1 - equity / weekCache.start) * 100).toFixed(1)}% this week (limit ${WEEK_CAP}%) \u2014 no new trades until next week`); }
+    const weekPct = weekCache.start ? (acctEq - weekCache.start) / equity * 100 : 0;        // the account's dollar change this week, measured against the stake
+    if (weekCache.start && weekPct <= -WEEK_CAP) { G.block = true; G.halt = true; G.reasons.push(`Down ${(-weekPct).toFixed(1)}% this week (limit ${WEEK_CAP}%) \u2014 no new trades until next week`); }
   } catch (e) { console.log('breaker check failed', e.message); }
   for (const r of G.reasons) act('Market check: ' + r);
   if (G.halt) alerts.push('\u26d4 ' + G.reasons[G.reasons.length - 1]);

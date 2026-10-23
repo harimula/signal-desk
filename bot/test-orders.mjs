@@ -183,6 +183,9 @@ check('day trading: at +1R the broker stop leg is moved to breakeven', () => { a
 const D6 = run(DT, { time: '2026-10-23T14:30:00Z', positions: [openPos], hist: [histBuy], live: { ORB: 102.2 } });
 check('day trading: while the trade is working, a take-profit order rests at the target and nothing is sold', () => { const s = D6.orders.filter(o => o.symbol === 'ORB' && o.side === 'sell'); assert.equal(s.length, 1, JSON.stringify(s)); assert.equal(s[0].type, 'limit'); assert.equal(+s[0].limit_price, 104); });
 
+const ST = run({ stocks: true, options: false, symbols: ['DIP'], stakeUsd: 5000 });
+check('stake: with a $5,000 stake the buy is sized on $5,000, not on the $100,000 account', () => { const o = ST.orders.find(x => x.symbol === 'DIP' && x.side === 'buy'); assert.ok(o, JSON.stringify(ST.acts)); assert.ok(+o.qty * +o.limit_price <= 500 + 120, 'spent ' + (+o.qty * +o.limit_price) + ' (10% of the stake is $500)'); });
+
 const F = run({ stocks: true, options: true, puts: true, stockUnit: 'usd', stockUsd: 5000, stockCapUsd: 50, callCapPct: 0.1, putUnit: 'usd', putUsd: 5000, putCapUsd: 100 });
 check('ceilings: nothing bought when each sleeve ceiling is below one unit', () => assert.equal(F.orders.length, 0, JSON.stringify(F.orders.map(o => o.symbol))));
 

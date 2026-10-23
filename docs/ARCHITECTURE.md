@@ -1,6 +1,6 @@
 # Signal Desk — System Documentation
 
-**Version:** 1.5 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
+**Version:** 1.6 · **Last updated:** 2026-10-22 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
 
 Signal Desk is a personal stock-signal website with an attached rules-based trading bot.
 This document is the single place that explains **what it does** (functional), **how it is
@@ -371,6 +371,7 @@ Measured in tests against a mock broker: fill → take-profit order 40 ms; crash
 | `universe`, `scanSize`, `scanMinPrice` | `list` = the `symbols` below; `scan` = each morning rank every tradable US stock (NYSE/NASDAQ/ARCA/AMEX, no OTC, plain tickers) by 20-day average dollar volume on the IEX feed and watch the top `scanSize` priced ≥ `scanMinPrice` (`bot/scan.mjs`); the scan is re-used for the day, falls back to yesterday's or the list on failure | list / 200 / $5 |
 | `dayTrade`, `dayStock`, `dayCalls`, `dayPuts` | day-trading master switch and instrument per side | false / true / false / true |
 | `dayOrMin`, `dayMaxTrades`, `dayStreak`, `dayRiskPct`, `dayTarget`, `dayRvol`, `dayTimeStop` | opening-range minutes, trades/day, loss streak, risk %, target in R, min relative volume, time stop minutes | 15 / 3 / 2 / 0.5 / 2 / 1.2 / 60 |
+| `stakeUsd` | the stake: with a value set, every size, loss limit and the PDT rule are computed as if the account held only that much (0 = whole account); the page shows P/L against it | 0 |
 | `liveSizePct` | real-money ramp: all budgets and risk figures × this % while `mode` is live (paper always 100 %) | 25 |
 | `dayOptTp`, `dayOptStop`, `dayOptDteMax`, `dayStart`, `dayEnd` | option take-profit %, option stop %, max days to expiry, entry window | 50 / 40 / 7 / 09:45 / 15:30 |
 | `alertDetail` | phone alerts include size and limit price on buys; entry price, exit price and open profit on sells | true |
@@ -507,6 +508,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-22 | **Design system pass:** IBM Plex Sans + Plex Mono (tickers), token palette — light: cool paper / ink navy / cobalt actions; dark: deep navy with an amber accent — flat cards (`--radius` 10), stat strip with hairline dividers, sticky tabs, settings page with a sticky section index, consistent 36 px controls, focus rings, reduced-motion respected; status strip and footer are landmarks (axe-core: zero findings, every tab, both themes, desktop and phone). **Stake** (`stakeUsd`): the practice account trades as the owner's real stake (sizes, loss limits, PDT, dashboard, end-of-day report) | §2, §4.1, §5.4 |
 | 2026-10-22 | **Real-money readiness:** protective stops/targets at the broker (OTO leg on swing buys, bracket on day-trade buys; exits cancel legs first; breakeven via replace; bot stop check only where no leg exists); `watchdog.yml` dead-man's switch + end-of-day summary alert + optional heartbeat ping; `liveSizePct` ramp (25 % default) applied to every budget in live mode; go-live checklist computed from real data in Bot settings §7 with a Live size field; *Live vs research* expectancy line on the Performance card; PBKDF2 raised to 600k rounds (bot journal, page sync); §7.3 rewritten as the go-live procedure | §5.2, §5.4, §6, §7.3, §8 |
 | 2026-10-22 | Day-trading **research** on all available intraday history (5-min IEX bars since 2016): `bot/research-day.mjs` replays the live rules, parameter grid, verdict; workflow `day-trading-research` (manual + monthly); results card on the Bot trades tab; “Put these values in the form” in §4b; `dayOrMin` setting; rulebook gains an Evidence section | §3.2, §5.4, §8 |
 | 2026-10-22 | **Day trading** (experimental, off): `bot/daytrade.mjs` + `dayTradeCycle` in bot.mjs (5-min bars, SPY-VWAP market filter, ORB and VWAP-pullback setups, risk sizing, stop/target/breakeven/time-stop/flat exits, PUTs for shorts, optional CALLs, daily limits, PDT guard); Bot settings §4b; watch card “⚡ Day trading” block (setups, open day trades); Performance split same-day vs swing; rulebook `docs/daytrading-rules.html`; 7 unit tests, 9 order checks | §3.2, §5.2, §5.4, §5.5, §8 |
