@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-/QzM6gQVshmGgEJ5N8Dulnw/7EWODWq2/x6iWCCbTWA=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://ntfy.sh https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-sz009IgZiHcOKWv0/U8xZhu3IqDDNDAqa9ZtUK4/xn4=' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://ntfy.sh https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -912,7 +912,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792766906';
+const BUILD_V = '1792767361';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2320,16 +2320,21 @@ function botView() {
   const unreal = open.reduce((t, o) => t + o.pl, 0);
   const acct = J.account || {}, dayAcct = (acct.equity || 0) - (acct.last_equity || 0), stake = J.settings && +J.settings.stakeUsd > 0 ? +J.settings.stakeUsd : 0;
   const wins = closed.filter(c => c.pl > 0).length;
+  // money in trades right now: market value of every open position (options: price × 100 shares per contract)
+  const mul = o => o.mult || (o.kind === 'Stock' ? 1 : 100), valOf = o => Math.abs(o.qty) * o.now * mul(o), costOf = o => Math.abs(o.qty) * o.avg * mul(o);
+  const inStk = open.filter(o => o.kind === 'Stock').reduce((t, o) => t + valOf(o), 0), inOpt = open.filter(o => o.kind !== 'Stock').reduce((t, o) => t + valOf(o), 0);
+  const inAll = inStk + inOpt, inCost = open.reduce((t, o) => t + costOf(o), 0), base = stake || acct.equity || 0, freeAmt = Math.max(0, base - inAll);
   const what = r => r.kind === 'Stock' ? `<b>${esc(r.und)}</b>` : `<b>${esc(r.und)}</b> <span class="pill ${r.kind === 'Call' ? 'r-Top-Buy' : 'r-Top-Sell'}">${r.kind.toUpperCase()}</span> <span class="mut" style="font-size:11.5px">${fmt(r.strike, r.strike % 1 ? 1 : 0)} · ${esc((r.exp || '').slice(5))}</span>`;
   const typ = r => r.kind === 'Stock' ? 'Stock' : 'Option';
   const boxes = `<div class="lv" style="margin:0 0 14px">
 ${lvBox('Today', `<span class="${cls(dayAcct)}">${$$(dayAcct)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(dayAcct / stake * 100)}% of your stake</span>` : ''}`)}
 ${lvBox('Realized today', `<span class="${cls(realToday)}">${$$(realToday)}</span>`)}
 ${lvBox('Total realized', `<span class="${cls(realAll)}">${$$(realAll)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(realAll / stake * 100)}%</span>` : ''}`)}
-${lvBox('Open positions now', `<span class="${cls(unreal)}">${$$(unreal)}</span>`)}
+${lvBox('In trades now', `$${fmt(inAll, 0)}${base ? ` <span class="mut" style="font-size:11.5px">${fmt(inAll / base * 100, 1)}% of your ${stake ? 'stake' : 'account'}</span>` : ''}`)}
 ${stake ? lvBox('Your stake', '$' + fmt(stake, 0) + ` <span class="mut" style="font-size:11.5px">now $${fmt(stake + realAll + unreal, 0)}</span>`) : lvBox('Account value', '$' + fmt(acct.equity || 0, 0))}
 ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins / closed.length * 100)}% won` : '0')}
 </div>`;
+  const moneyLine = `<div style="display:flex;flex-wrap:wrap;gap:4px 18px;align-items:baseline;margin:-4px 2px 14px;font-size:12.5px"><b style="font-size:13px">💼 Money in trades now: $${fmt(inAll, 0)}</b>${open.length ? `<span>stocks <b>$${fmt(inStk, 0)}</b></span><span>options <b>$${fmt(inOpt, 0)}</b></span><span class="mut">paid $${fmt(inCost, 0)}</span><span>open P/L <b class="${cls(unreal)}">${$$(unreal)}</b></span>` : '<span class="mut">nothing open right now</span>'}<span>free to trade <b>$${fmt(freeAmt, 0)}</b> <span class="mut">of your ${stake ? '$' + fmt(stake, 0) + ' stake' : 'account'}</span></span></div>`;
   const openTbl = open.length ? `<h3 style="margin:16px 0 8px">Open now <span class="mut" style="font-weight:400;font-size:13px">· ${open.length}</span></h3>
 <div class="tw card"><table style="min-width:640px"><thead><tr><th class="lt">What</th><th class="lt">Type</th><th>Qty</th><th class="lt">Bought</th><th>Bought at</th><th>Now</th><th>P/L $</th><th>P/L %</th><th class="lt">Status</th></tr></thead><tbody>${open.map(o => {
     const held = o.kind === 'Stock' && o.since && dET(o.since) < today;
@@ -2455,7 +2460,7 @@ ${Object.entries(rdJ.variants || {}).map(([k, S]) => row('<span class="mut">Best
 ${yrs.length ? `<div class="mut" style="font-size:12px;margin-top:8px"><b>Best found, year by year:</b> ${yrs.map(([y, x]) => `${y} <span class="${x.R >= 0 ? 'pos' : 'neg'}">${x.R >= 0 ? '+' : ''}${x.R}R</span> (${x.n})`).join(' · ')}</div>` : ''}
 <div class="mut" style="font-size:11.5px;margin-top:6px">Entry at the close of the signal bar plus 0.03% slippage; when one bar touches both the stop and the target the stop is assumed first; flat at 3:45 PM; one trade per stock per day, the daily maximum and the two-loss stop applied in order. The broker's intraday history for these stocks starts in ${esc(firstYear)}; nothing older exists in any public feed. Full report: <a href="bot/research_day_report.md" target="_blank" rel="noopener">research_day_report.md</a>. To use the best values: Bot settings → 4b → “Put these values in the form”.</div></div>`;
   })() : '';
-  return head + statusLine + engTxt + boxes + envCard + watchCard + riskCard + perfCard + evCard() + btCard + rdCard + openTbl +
+  return head + statusLine + engTxt + boxes + moneyLine + envCard + watchCard + riskCard + perfCard + evCard() + btCard + rdCard + openTbl +
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? ' · <b>real money</b>' : stake ? ` · practice account run as a <b>$${fmt(stake, 0)} stake</b>: every size, loss limit and the day-trade rule use that figure, so this is what real money would have done` : ' · practice account'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }
