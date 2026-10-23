@@ -306,7 +306,7 @@ test('money split: a partial sale of an overnight holding', () => {
 test('quick exits: the tighter exit settings are accepted and validated', () => {
   const c = normalize({ preset: 'custom', stockTp: 10, holdFloor: 5, optTakeProfit: 20, optStop: 10 }); assert.deepEqual([c.stockTp, c.holdFloor, c.optTakeProfit, c.optStop], [10, 5, 20, 10]);
   const d = normalize({ preset: 'custom', stockTp: -1, holdFloor: 0.5, optTakeProfit: 1, optStop: 1 }); assert.deepEqual([d.stockTp, d.holdFloor, d.optTakeProfit, d.optStop], [0, 2, 5, 5]);
-  assert.equal(normalize({}).stockTp, 0, 'off unless set');
+  assert.equal(normalize({}).stockTp, 10, 'the research-backed default'); assert.equal(normalize({ stockTp: 0 }).stockTp, 0, '0 turns it off');
 });
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

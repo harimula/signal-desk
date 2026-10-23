@@ -9,7 +9,7 @@ export const DEFAULT_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'META', 'GOOGL',
 export const DEFAULTS = {
   version: 1, mode: 'paper', preset: 'balanced', ...PRESETS.balanced,
   stocks: true, options: true, puts: false, intraday: false,   // puts: experimental mirror of the dip rule, OFF until ticked
-  rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, stockTp: 0, staleMin: 45,   // stockTp: sell a stock at this % gain (0 = off: RSI-2 exit only)
+  rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, stockTp: 10, staleMin: 45,   // stockTp: sell a stock at this % gain (0 = off: RSI-2 exit only); 10 = research-backed default
   newsGuard: true, eventGuard: true, alerts: true, alertDetail: true,
   symbols: DEFAULT_SYMBOLS,
   universe: 'list', scanSize: 200, scanMinPrice: 5,
