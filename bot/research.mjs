@@ -41,6 +41,12 @@ const STRATS = {
   rsi2quick: { label: 'RSI-2 with quick exits (owner\'s choice): same entries; sell at +10% or −5% during the day, otherwise when close > 5-day avg (max 10 days)', kind: 'swing',
     plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] > s200 && r < 10 ? { rank: r, stopPct: 0.05, tpPct: 0.10 } : null; },
     exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
+  rsi2tp: { label: 'RSI-2 with only the +10% take-profit (25% disaster stop)', kind: 'swing',
+    plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] > s200 && r < 10 ? { rank: r, stopPct: 0.25, tpPct: 0.10 } : null; },
+    exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
+  rsi2sl: { label: 'RSI-2 with only the −5% stop', kind: 'swing',
+    plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] > s200 && r < 10 ? { rank: r, stopPct: 0.05 } : null; },
+    exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
   // Short side (stock short is the cleanest proxy for buying puts: same direction, no decay or option spread).
   rsi2short: { label: 'RSI-2 short (mirror of the bot): below 200-day, RSI-2 > 90, short at next open, cover when close < 5-day avg (max 10 days)', kind: 'swing', short: true,
     plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] < s200 && r > 90 ? { rank: -r } : null; },
