@@ -17,4 +17,18 @@ Costs 0.15%/side · 10% of equity per position · max 6 positions · out-of-samp
 
 | Nifty Midcap 50 buy & hold (from 2007-09-24) | – | +15.80% | 0.46 | −75.1% | **+16.87%** | **0.96** | −22.6% | – | – | – | – |
 
+
+## The last 5 years (2021-10-21 → 2026-10-22), from a fresh start
+
+Benchmarks include dividends (index-fund NAVs, after the funds’ fees). The bot keeps at most 60% invested (6 positions × 10%).
+
+| | Total | Per year | Worst fall | Sharpe | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **India bot — trend breakout + RSI-2, 50/50** | +27.30% | +5.00% | −18.4% | 0.51 | -1.20% | +7.20% | +22.40% | +11.60% | +0.30% | -12.30% |
+| Trend breakout | +48.00% | +8.20% | −16.1% | 0.70 | -0.50% | +18.60% | +17.90% | +17.30% | -1.60% | -7.80% |
+| RSI-2 mean reversion | +6.50% | +1.30% | −21.5% | 0.17 | -1.90% | -4.40% | +28.10% | +5.00% | +2.80% | -17.80% |
+| Large caps — Nifty 50 index fund | +31.30% | +5.60% | −15.7% | 0.47 | -4.50% | +5.80% | +21.10% | +9.70% | +11.70% | -12.40% |
+| Mid caps — Nifty Midcap 150 index fund | +84.40% | +13.00% | −21.0% | 0.83 | -0.90% | +3.60% | +44.30% | +24.20% | +5.80% | -5.20% |
+| Small caps — Nifty Smallcap 250 index fund | +77.80% | +12.20% | −26.8% | 0.73 | +2.90% | -3.40% | +48.30% | +26.50% | -5.60% | +1.10% |
+
 Survivorship bias (today’s big companies, looking back) flatters every strategy, so treat these as an upper bound. Not financial advice.
