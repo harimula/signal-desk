@@ -81,7 +81,7 @@ if (process.argv[2] === 'child') {
         const und = u.searchParams.get('underlying_symbols'), type = u.searchParams.get('type'), px = lastC(und);
         return send({ option_contracts: [{ symbol: occ(und, type, px), expiration_date: '2026-11-13', strike_price: String(Math.round(px)), tradable: true, type }] });
       }
-      if (p === '/v1beta1/options/quotes/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) out[s] = { ap: 2.05, bp: 2.0 }; return send({ quotes: out }); }
+      if (p === '/v1beta1/options/quotes/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) out[s] = FAKE.quote || { ap: 2.05, bp: 2.0 }; return send({ quotes: out }); }
       unknown.push(req.method + ' ' + p); send({});
     });
   });
@@ -279,5 +279,34 @@ check('losing streak: three stock losses in a row stop only stocks; the CALL sti
 });
 const TM = run({ stocks: true, options: false, symbols: ['DIP'] }, { tg: true, tgAfter: [[42, '/money']] });
 check('telegram: /money shows all three parts of the split', () => assert.ok(TM.tgSent.some(m => /Split 60\/30\/10/.test(m.text) && /Stocks: .* of \$60,000 in use/.test(m.text) && /CALLs: .* of \$30,000 in use/.test(m.text) && /PUTs: .* of \$10,000 in use/.test(m.text)), JSON.stringify(TM.tgSent.map(m => m.text))));
+
+// ---- quick exits: stocks sell at the take-profit % or the stop %, options at their own % ----
+const QX = { stocks: true, options: true, symbols: ['DIP'], preset: 'custom', maxHeat: 15, stockTp: 10, holdFloor: 5, optTakeProfit: 20, optStop: 10 };
+const qHist = [{ symbol: 'QUIET', side: 'buy', status: 'filled', client_order_id: 'sd-r-QUIET-500-20261022-ab', qty: '50', limit_price: '190', filled_at: '2026-10-22T15:00:00Z' }];
+const qPos = avg => ({ symbol: 'QUIET', qty: '50', avg_entry_price: String(avg), current_price: '210.4', lastday_price: '210', market_value: '10520', unrealized_pl: String(50 * (210.4 - avg)), unrealized_plpc: String(210.4 / avg - 1) });
+const Q1 = run(QX, { positions: [qPos(190)], hist: qHist });
+check('quick exits: a stock up 10.7% is sold at 10:00 AM at the 10% take-profit (no waiting for the close)', () => assert.ok(Q1.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell' && o.type === 'market') && (Q1.acts || []).some(m => /QUIET \+10\.\d% — take profit \(target 10%\)/.test(m)), JSON.stringify(Q1.orders) + JSON.stringify(Q1.acts)));
+const Q2 = run({ ...QX, stockTp: 0 }, { positions: [qPos(190)], hist: qHist });
+check('quick exits: with the take-profit off (0), the same stock is held for the RSI-2 exit at the close (only its protective stop is placed)', () => assert.ok(!Q2.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell' && o.type !== 'stop'), JSON.stringify(Q2.orders)));
+const Q2b = run(QX, { positions: [qPos(200)], hist: qHist });
+check('quick exits: a stock up 5% (below the 10% target) is not sold', () => assert.ok(!Q2b.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell' && o.type === 'market'), JSON.stringify(Q2b.orders)));
+const oldLeg = stop => [{ id: 'leg-q', symbol: 'QUIET', side: 'sell', type: 'stop', stop_price: String(stop), qty: '50', status: 'new', client_order_id: 'sd-x-QUIET-zz' }];
+const Q3 = run(QX, { positions: [qPos(200)], hist: qHist, open: oldLeg(150) });
+check('quick exits: an older 25% broker stop is moved up to the new 5% stop (190 on a 200 buy)', () => assert.ok(Q3.patches.some(p => p.id === 'leg-q' && Math.abs(+p.stop_price - 190) < 0.01), JSON.stringify(Q3.patches) + JSON.stringify(Q3.acts)));
+const Q4 = run(QX, { positions: [qPos(230)], hist: qHist, open: oldLeg(172.5) });
+check('quick exits: a stock already 8.5% down under an older wide stop is sold (old stop cancelled first)', () => { assert.ok(Q4.deletes.includes('leg-q'), JSON.stringify(Q4.deletes)); assert.ok(Q4.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell' && o.type === 'market'), JSON.stringify(Q4.orders)); });
+const Q5 = run(QX, { positions: [qPos(230)], hist: qHist, open: oldLeg(218.5) });
+check('quick exits: when the broker already holds the right stop, the bot does not sell too (no double sale)', () => { assert.ok(!Q5.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell'), JSON.stringify(Q5.orders)); assert.ok(!Q5.patches.length && !Q5.deletes.includes('leg-q')); });
+const Q6 = run(QX);
+check('quick exits: new stock buys carry a broker stop 5% under the price', () => { const o = Q6.orders.find(x => x.symbol === 'DIP' && x.side === 'buy'); assert.ok(o && Math.abs(+o.stop_loss.stop_price / +o.limit_price - 0.95) < 0.002, JSON.stringify(o)); });
+check('quick exits: a tight option market (2.4% spread) passes the spread rule for a 10% stop', () => assert.ok(Q6.options.some(o => /^DIP\d{6}C/.test(o.symbol)), JSON.stringify(Q6.acts)));
+const Q7 = run(QX, { quote: { ap: 2.1, bp: 2.0 } }), Q7b = run({ ...QX, optStop: 5 }, { quote: { ap: 2.1, bp: 2.0 } });
+check('quick exits: a 4.8% spread passes with a 10% stop, but is too wide for a 5% stop (must be under half the stop)', () => { assert.ok(Q7.options.length, JSON.stringify(Q7.acts)); assert.ok(!Q7b.options.length && (Q7b.acts || []).some(m => /spread too wide .*over 2\.5% for a 5% stop/.test(m)), JSON.stringify(Q7b.acts)); });
+const oPos = cur => ({ symbol: optSym, qty: '2', avg_entry_price: '5', current_price: String(cur), lastday_price: '5', market_value: String(2 * cur * 100), unrealized_pl: String(2 * (cur - 5) * 100), unrealized_plpc: String(cur / 5 - 1) });
+const oHist = [{ symbol: optSym, side: 'buy', status: 'filled', client_order_id: 'sd-q-' + optSym + '-20261022-2-ab', qty: '2', limit_price: '5', filled_at: '2026-10-22T15:00:00Z' }];
+const Q8 = run(QX, { positions: [oPos(6.1)], hist: oHist }), Q9 = run(QX, { positions: [oPos(4.45)], hist: oHist }), Q10 = run(QX, { positions: [oPos(5.5)], hist: oHist });
+check('quick exits: a CALL up 22% is sold at the 20% take-profit', () => assert.ok(Q8.orders.some(o => o.symbol === optSym && o.side === 'sell' && o.type === 'market') && (Q8.acts || []).some(m => /\+22% — take profit/.test(m)), JSON.stringify(Q8.acts)));
+check('quick exits: a CALL down 11% is sold at the 10% stop', () => assert.ok(Q9.orders.some(o => o.symbol === optSym && o.side === 'sell' && o.type === 'market') && (Q9.acts || []).some(m => /-11% — option stop/.test(m)), JSON.stringify(Q9.acts)));
+check('quick exits: a CALL up 10% is kept, with its take-profit order resting at +20% ($6.00)', () => { assert.ok(!Q10.orders.some(o => o.symbol === optSym && o.type === 'market')); const tp = Q10.orders.find(o => o.symbol === optSym && o.type === 'limit' && o.side === 'sell'); assert.ok(tp && +tp.limit_price === 6, JSON.stringify(Q10.orders)); });
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

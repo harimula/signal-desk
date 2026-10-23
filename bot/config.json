@@ -18,9 +18,9 @@
  "rsiThreshold": 25,
  "maxHold": 10,
  "entryEnd": "15:30",
- "optTakeProfit": 50,
- "optStop": 50,
- "holdFloor": 25,
+ "optTakeProfit": 20,
+ "optStop": 10,
+ "holdFloor": 5,
  "staleMin": 45,
  "newsGuard": true,
  "eventGuard": true,
@@ -78,5 +78,6 @@
  "stakeUsd": 0,
  "dayStock": true,
  "dayCalls": true,
- "dayPuts": true
+ "dayPuts": true,
+ "stockTp": 10
 }

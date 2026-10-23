@@ -38,6 +38,9 @@ const STRATS = {
   rsi2stop: { label: 'RSI-2 mean reversion + 3× range stop', kind: 'swing',
     plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); if (!(s200 && r != null && C[i] > s200 && r < 10)) return null; let rg = 0; for (let k = i - 9; k <= i; k++) rg += B[k].h - B[k].l; return { rank: r, stopDist: 3 * rg / 10 }; },
     exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
+  rsi2quick: { label: 'RSI-2 with quick exits (owner\'s choice): same entries; sell at +10% or −5% during the day, otherwise when close > 5-day avg (max 10 days)', kind: 'swing',
+    plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] > s200 && r < 10 ? { rank: r, stopPct: 0.05, tpPct: 0.10 } : null; },
+    exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
   // Short side (stock short is the cleanest proxy for buying puts: same direction, no decay or option spread).
   rsi2short: { label: 'RSI-2 short (mirror of the bot): below 200-day, RSI-2 > 90, short at next open, cover when close < 5-day avg (max 10 days)', kind: 'swing', short: true,
     plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] < s200 && r > 90 ? { rank: -r } : null; },
@@ -58,7 +61,8 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
       const D = data[p.sym], j = D.idx[d]; if (j == null) continue;
       const b = D.B[j];
       let exitPx = null;
-      if (p.stop && b.l <= p.stop) exitPx = Math.min(b.o, p.stop);
+      if (p.stop && b.l <= p.stop) exitPx = Math.min(b.o, p.stop);              // the stop is checked first: a day that touches both counts as a loss
+      else if (p.tp && b.h >= p.tp) exitPx = Math.max(b.o, p.tp);
       else { p.held++; if (S.exit(D.B, D.C, j, p.held)) exitPx = b.c; }
       if (exitPx != null) {
         if (S.short) { const r = (p.entryPx - exitPx) / p.entryPx - 2 * COST; cash += p.alloc * (1 + r); trades.push(r); }
@@ -89,8 +93,9 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
         } else {
           const fill = b.o, sh = alloc / (fill * (1 + COST));
           cash -= alloc;
-          const p = { sym: c.sym, sh, px: S.short ? 2 * fill - b.c : b.c, entryPx: fill, held: 0, alloc, stop: c.pl.stopDist ? fill - c.pl.stopDist : null };
+          const p = { sym: c.sym, sh, px: S.short ? 2 * fill - b.c : b.c, entryPx: fill, held: 0, alloc, stop: c.pl.stopDist ? fill - c.pl.stopDist : c.pl.stopPct ? fill * (1 - c.pl.stopPct) : null, tp: c.pl.tpPct ? fill * (1 + c.pl.tpPct) : null };
           if (p.stop && b.l <= p.stop) { cash += sh * p.stop * (1 - COST); trades.push((p.stop * (1 - COST)) / (fill * (1 + COST)) - 1); }
+          else if (p.tp && b.h >= p.tp) { cash += sh * p.tp * (1 - COST); trades.push((p.tp * (1 - COST)) / (fill * (1 + COST)) - 1); }
           else open.push(p);
         }
       }

@@ -9,7 +9,7 @@ export const DEFAULT_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'META', 'GOOGL',
 export const DEFAULTS = {
   version: 1, mode: 'paper', preset: 'balanced', ...PRESETS.balanced,
   stocks: true, options: true, puts: false, intraday: false,   // puts: experimental mirror of the dip rule, OFF until ticked
-  rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, staleMin: 45,
+  rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, stockTp: 0, staleMin: 45,   // stockTp: sell a stock at this % gain (0 = off: RSI-2 exit only)
   newsGuard: true, eventGuard: true, alerts: true, alertDetail: true,
   symbols: DEFAULT_SYMBOLS,
   universe: 'list', scanSize: 200, scanMinPrice: 5,
@@ -36,7 +36,7 @@ export const RANGES = {
   callSharePct: [0, 100], putSharePct: [0, 100], optDayCap: [1, 50], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
   scanSize: [50, 400], scanMinPrice: [1, 500],
   liveSizePct: [5, 100], stakeUsd: [0, 1e8], dayOrMin: [5, 60], dayMaxTrades: [1, 10], dayStreak: [1, 5], dayRiskPct: [0.1, 2], dayTarget: [1, 4], dayRvol: [0.5, 3], dayTimeStop: [15, 180], dayOptTp: [10, 200], dayOptStop: [20, 80], dayOptDteMax: [1, 14],
-  rsiThreshold: [2, 30], maxHold: [1, 30], optTakeProfit: [10, 300], optStop: [20, 90], holdFloor: [5, 60], staleMin: [5, 240],
+  rsiThreshold: [2, 30], maxHold: [1, 30], optTakeProfit: [5, 300], optStop: [5, 90], holdFloor: [2, 60], stockTp: [0, 100], staleMin: [5, 240],
 };
 const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 export function normalize(raw) {

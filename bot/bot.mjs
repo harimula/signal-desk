@@ -306,6 +306,7 @@ const act = m => {                                          // same message with
 let lastWatch = null, lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
 let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
 const NM = { stock: { one: 'stock', many: 'stocks', Cap: 'Stocks' }, call: { one: 'CALL', many: 'CALLs', Cap: 'CALLs' }, put: { one: 'PUT', many: 'PUTs', Cap: 'PUTs' } };
+let stopMoved = new Set();
 let lastSplit = null, lastDayPx = {}, haltSaid = new Set();      // money split panel, yesterday's closes, halt messages already sent today
 const alerts = [];
 
@@ -596,6 +597,17 @@ async function run() {
         const fp = tick(+p.avg_entry_price * (1 - HOLD_FLOOR / 100));
         await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'stop', stop_price: String(fp), time_in_force: 'gtc', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} \u2014 protective stop placed at the broker (${fp})`);
       }
+      if (HOLD_FLOOR > 0 && brokerStop && px) {                          // the stop setting was tightened: bring older broker stops up to it
+        const fp = tick(+p.avg_entry_price * (1 - HOLD_FLOOR / 100)), leg = legs.find(o => /stop/.test(o.type));
+        const oldLeg = leg && +leg.stop_price < fp - 0.005;               // only an older, wider stop is touched; a correct one is left to the broker (no double sale)
+        if (oldLeg && px <= fp) { await out(`${p.symbol} down ${livePl.toFixed(1)}% \u2014 below the ${HOLD_FLOOR}% stop`); continue; }
+        if (oldLeg && !stopMoved.has(leg.id)) {
+          stopMoved.add(leg.id);
+          if (!DRY) await T('/v2/orders/' + leg.id, { method: 'PATCH', body: JSON.stringify({ stop_price: String(fp) }) }).then(() => act(`${p.symbol} broker stop moved up to ${fp} (${HOLD_FLOOR}% below the buy price)`)).catch(e2 => act(`${p.symbol} could not move the broker stop (${(e2.message || e2).slice(0, 60)}) \u2014 the bot watches the ${HOLD_FLOOR}% stop instead`));
+        }
+      }
+      // quick take-profit: sell as soon as the gain reaches the target, at any time of day (same day only when the day-trade rule allows)
+      if (CFG.stockTp > 0 && px && livePl >= CFG.stockTp && (day8 !== TODAY || !pdtNear)) { await out(`${p.symbol} +${livePl.toFixed(1)}% \u2014 take profit (target ${CFG.stockTp}%)`); continue; }
       if (MINS < 950 || !px) continue;                                  // exits happen in the last 10 minutes, like a closing order
       const h = held(p.symbol, day8); if (h === 0) continue;             // never sell on the day it was bought
       const x = rsi2Exit(completed(bars0, p.symbol).map(b => b.c), px, h, CFG.maxHold);
@@ -781,7 +793,8 @@ async function run() {
       const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - s.px) - Math.abs(+b.strike_price - s.px))[0];
       const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`)).quotes || {})[c.symbol];
       if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); continue; }
-      if ((q.ap - q.bp) / q.ap > 0.2) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}) \u2014 skipped`); continue; }
+      const maxSpr = Math.min(0.2, CFG.optStop / 200);                   // the spread must be under half the stop, or the stop fires on the spread alone
+      if ((q.ap - q.bp) / q.ap > maxSpr) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over ${+(maxSpr * 100).toFixed(1)}% for a ${CFG.optStop}% stop) \u2014 skipped`); continue; }
       const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.03));
       const qty = optionQty({ equity, riskPct: OPT_RISK_PCT * G.budget, price: lim, budget: slBudget(kind) });
       if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's money budget \u2014 skipped${capNote(kind)}`); continue; }
