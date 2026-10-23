@@ -49,7 +49,9 @@ if (process.argv[2] === 'child') {
     : [m5('13:30', 500, 500.5, 499, 499.4, 2e6), m5('13:35', 499.4, 499.6, 498.8, 499, 2e6), m5('13:40', 499, 499.1, 498.2, 498.4, 2e6), m5('13:45', 498.4, 498.6, 498, 498.1, 2e6), m5('13:50', 498.1, 498.2, 497.2, 497.5, 2e6)];
   const BARS5 = { ORB: ORB5, BRK: BRK5, SPY: SPY5, ...(FAKE.bars5 || {}) };
   const LIVE = { ORB: 101.55, BRK: 99.45, SPY: (FAKE.spy || 'up') === 'up' ? 502.4 : 497.4, ...(FAKE.live || {}) };
-  const orders = [], unknown = [], deletes = [], patches = [];
+  const orders = [], unknown = [], deletes = [], patches = [], tgSent = [];
+  const tgMsg = (id, chat, text) => ({ update_id: id, message: { chat: { id: chat }, date: Math.floor(FIXED / 1000), text } });
+  const tgQueue = [(FAKE.tgBefore || []).map((t, i) => tgMsg(100 + i, t[0], t[1])), (FAKE.tgAfter || []).map((t, i) => tgMsg(200 + i, t[0], t[1]))];
   const occ = (und, type, px) => und + '261113' + type[0].toUpperCase() + String(Math.round(px) * 1000).padStart(8, '0');
 
   const server = http.createServer((req, res) => {
@@ -58,6 +60,8 @@ if (process.argv[2] === 'child') {
     req.on('data', c => body += c);
     req.on('end', () => {
       const send = o => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)); };
+      if (p === '/bottest-token/getUpdates') return send({ ok: true, result: tgQueue.shift() || [] });
+      if (p === '/bottest-token/sendMessage') { tgSent.push(JSON.parse(body)); return send({ ok: true, result: { message_id: tgSent.length } }); }
       if (p === '/v2/clock') return send({ is_open: !FAKE.closed, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
       if (p === '/v2/account') return send({ equity: '100000', last_equity: '100000', cash: '100000', buying_power: '400000', pattern_day_trader: false, daytrade_count: 0, status: 'ACTIVE', multiplier: '4' });
       if (p === '/v2/positions') return send(FAKE.positions || []);
@@ -85,17 +89,20 @@ if (process.argv[2] === 'child') {
   const url = 'http://127.0.0.1:' + server.address().port;
   process.env.ALPACA_URL = url; process.env.ALPACA_DATA_URL = url;
   process.env.ALPACA_KEY = 'test'; process.env.ALPACA_SECRET = 'test';
-  if (FAKE.journalKey) process.env.JOURNAL_KEY = FAKE.journalKey;                        // privacy mode: encrypted journal (must be set before the import)
+  if (FAKE.journalKey) process.env.JOURNAL_KEY = FAKE.journalKey;
+  if (FAKE.tg) { process.env.TELEGRAM_API = url; process.env.TELEGRAM_TOKEN = 'test-token'; process.env.TELEGRAM_CHAT = '42'; process.env.NTFY_TOPIC = ''; }                        // privacy mode: encrypted journal (must be set before the import)
   fs.mkdirSync('bot', { recursive: true });
   const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
   if (FAKE.prevJournal) fs.writeFileSync('bot/journal.json', JSON.stringify(FAKE.journalKey ? await bot.encryptJournal(FAKE.prevJournal, FAKE.prevKey || FAKE.journalKey, 1000) : FAKE.prevJournal));   // what the previous run left behind
   bot.applyConfig({ symbols: ['DIP', 'POP', 'FALL'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
+  if (FAKE.tg) await bot.tgPollCycle();
   const tc0 = REAL.now(); await bot.botCycle({ journal: !!FAKE.closed }); const cycleMs = REAL.now() - tc0;
+  if (FAKE.tg) await bot.tgPollCycle();
   if (FAKE.cycles > 1) for (let k = 1; k < FAKE.cycles; k++) await bot.botCycle({ journal: true });   // a longer session: the journal is rewritten several times
   server.closeAllConnections && server.closeAllConnections(); server.close();
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
   const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
-  console.log('RESULT ' + JSON.stringify({ cycleMs, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  console.log('RESULT ' + JSON.stringify({ cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
@@ -211,5 +218,15 @@ check('journal: a previous entry written under another passphrase is skipped, no
 
 const SL = run({ stocks: true, options: false, universe: 'scan', symbols: ['DIP', 'POP', 'FALL'] }, { slowAssets: 20000 });
 check('market scan: a scan that takes minutes does not hold up the cycle; the bot trades its list meanwhile', () => { assert.ok(SL.cycleMs < 12000, 'cycle took ' + SL.cycleMs + ' ms'); assert.ok(SL.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(SL.acts)); assert.ok((SL.acts || []).some(m => /market scan started/.test(m))); });
+
+// ---- Telegram: alerts to the owner's chat, commands answered only there, /pause blocks new entries but never sells ----
+const TG = run({ stocks: true, options: false, symbols: ['DIP'] }, { tg: true, tgAfter: [[42, '/money'], [42, '/status'], [42, '/watch'], [999, '/money'], [42, '/help']] });
+const tgTxt = TG.tgSent.map(m => m.text);
+check('telegram: the buy alert arrives in the owner\'s chat with size and price', () => assert.ok(TG.tgSent.some(m => m.chat_id === '42' && /DIP RSI-2 dip buy .*\d+ shares @ \$/.test(m.text)), JSON.stringify(tgTxt)));
+check('telegram: /money, /status, /watch and /help answer in the owner\'s chat', () => { assert.ok(tgTxt.some(t => /In trades now/.test(t) && /Free to trade/.test(t))); assert.ok(tgTxt.some(t => /Watching \d+ stocks/.test(t) && /Market check/.test(t))); assert.ok(tgTxt.some(t => /Buy: DIP/.test(t))); assert.ok(tgTxt.some(t => /\/pause/.test(t) && /never buy or sell/.test(t))); });
+check('telegram: a message from any other chat is ignored and never answered', () => { assert.ok(TG.tgSent.every(m => m.chat_id === '42')); assert.equal(tgTxt.filter(t => /In trades now/.test(t)).length, 1); });
+const TP = run({ stocks: true, options: true, symbols: ['DIP'] }, { tg: true, tgBefore: [[42, '/pause']], positions: [{ symbol: 'AAPL', qty: '5', avg_entry_price: '200', current_price: '198', market_value: '990', unrealized_pl: '-10', unrealized_plpc: '-0.01' }] });
+check('telegram: /pause stops new entries (no buy on the dip stock) and confirms', () => { assert.ok(!TP.orders.some(o => o.side === 'buy'), JSON.stringify(TP.orders)); assert.ok(TP.tgSent.some(m => /Paused: no new entries/.test(m.text))); });
+check('telegram: /pause never sells what is open (only protective stop orders may be placed)', () => assert.ok(TP.orders.filter(o => o.side === 'sell').every(o => o.type === 'stop'), JSON.stringify(TP.orders)));
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

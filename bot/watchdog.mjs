@@ -20,4 +20,5 @@ if (isFinite(ageMin) && (ageMin - MAX_MIN) % 60 >= 15) { console.log('already al
 const msg = isFinite(ageMin) ? `⚠️ Bot has not checked in for ${Math.round(ageMin)} minutes during market hours. Open the Actions tab on GitHub: paper-trade-bot may have stopped. Protective stops are at the broker.` : '⚠️ Bot journal unreadable — check the site and the Actions tab.';
 console.log(msg);
 if (NTFY) await fetch('https://ntfy.sh/' + encodeURIComponent(NTFY), { method: 'POST', body: msg, headers: { Title: 'Signal Desk watchdog', Priority: 'high', Tags: 'rotating_light' } }).catch(() => {});
+  if (process.env.TELEGRAM_TOKEN && process.env.TELEGRAM_CHAT) await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN.trim()}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT.trim(), text: '\ud83d\udea8 Signal Desk watchdog\n' + msg }) }).catch(() => {});
 process.exit(0);

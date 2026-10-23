@@ -170,6 +170,11 @@ test('money settings: defaults are % of account with no ceiling; units and caps 
   srv.close();
   // ---- journal encryption: what the bot writes, the bot (at its next start) and the page can read back ----
   const { encryptJournal, decryptJournal, ntfyTopic } = await import('./bot.mjs');
+  const { parseCommand } = await import('./telegram.mjs');
+  await atest('telegram: commands are parsed with or without the @botname, any case; plain text is not a command', async () => {
+    assert.deepEqual(parseCommand('/money'), { cmd: 'money', args: [] }); assert.deepEqual(parseCommand(' /Status@SignalDeskBot now'), { cmd: 'status', args: ['now'] });
+    assert.equal(parseCommand('buy AAPL'), null); assert.equal(parseCommand(''), null);
+  });
   await atest('alerts: the topic works saved as a name or as the full ntfy link', async () => {
     for (const v of ['Lithvik', ' https://ntfy.sh/Lithvik ', 'ntfy.sh/Lithvik'.replace(/^/, 'https://'), 'http://www.ntfy.sh/Lithvik/', 'https://ntfy.sh/Lithvik?x=1']) assert.equal(ntfyTopic(v), 'Lithvik', v);
     assert.equal(ntfyTopic(''), '');

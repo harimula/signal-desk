@@ -86,6 +86,18 @@ async function session(label, prep) {
   await page.fill('#st-ntfy', 'https://ntfy.sh/my-topic-123'); await page.evaluate(() => document.querySelector('[data-st="ntfytest"]').click());
   let m1 = ''; for (let i = 0; i < 20 && !/Sent to/.test(m1); i++) { await page.waitForTimeout(200); m1 = await page.textContent('#ntfyMsg'); }
   check('alerts: "Send test alert" asks for the topic when the box is empty, then posts to ntfy.sh/<topic>', /Type your alert topic/.test(m0) && /Sent to topic/.test(m1) && /ntfy\.sh\/my-topic-123$/.test(ntfyUrl || ''), m0 + ' | ' + m1 + ' | ' + ntfyUrl);
+  // Telegram connect: token check → finds the chat from the owner's /start → test message → both values sealed as secrets
+  const tgSent = []; let tgUpd = [];
+  await page.route('https://api.telegram.org/**', r => { const m3 = r.request().url().split('/').pop(); const ok = res => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, result: res }) });
+    if (m3 === 'getMe') return ok({ username: 'lithvik_sd_bot' }); if (m3 === 'getUpdates') return ok(tgUpd); if (m3 === 'sendMessage') { tgSent.push(JSON.parse(r.request().postData())); return ok({ message_id: 1 }); } return r.abort(); });
+  await page.fill('#st-tgtok', '123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'); await page.evaluate(() => document.querySelector('[data-st="tgconnect"]').click());
+  let tm = ''; for (let i = 0; i < 20 && !/Almost there/.test(tm); i++) { await page.waitForTimeout(150); tm = await page.textContent('#tgMsg'); }
+  check('telegram: Connect asks the owner to press Start in the bot when no message has arrived yet', /Almost there/.test(tm) && /lithvik_sd_bot/.test(tm), tm);
+  tgUpd = [{ update_id: 1, message: { chat: { id: 4242, type: 'private', first_name: 'Hari' }, text: '/start', date: 1 } }];
+  await page.evaluate(() => document.querySelector('[data-st="tgconnect"]').click());
+  for (let i = 0; i < 60 && !(secretPuts.some(x => x.name === 'TELEGRAM_CHAT')); i++) await page.waitForTimeout(250);
+  check('telegram: Connect sends a test message to the chat and stores TELEGRAM_TOKEN + TELEGRAM_CHAT as sealed secrets', tgSent.some(x => x.chat_id === 4242 && /Connected to Signal Desk/.test(x.text)) && ['TELEGRAM_TOKEN', 'TELEGRAM_CHAT'].every(n => secretPuts.some(x => x.name === n && x.encrypted_value)), JSON.stringify(secretPuts.map(x => x.name)) + ' ' + (await page.textContent('#tgMsg').catch(() => '')) + ' ' + errors.join(' | '));
+  secretPuts.length = 0;
   // Save keys: the alert topic is sealed in the browser (libsodium) and sent as a GitHub secret
   await page.evaluate(() => document.querySelector('[data-st="keys"]').click());
   let km = ''; for (let i = 0; i < 60 && !secretPuts.length && !/failed/i.test(km); i++) { await page.waitForTimeout(250); km = await page.evaluate(() => document.body.innerText.match(/Saving keys failed[^\n]*|Saved[^\n]*secret[^\n]*/i)?.[0] || ''); }

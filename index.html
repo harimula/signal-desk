@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-QROHxSPaZuTymnBOtn1Igg8eylCdKTSBBpRoVihOnyc=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://ntfy.sh https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-gX+mZB13Xjr4x1tYPioSmInVEmAguV3U0/ErIbNaTfM=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://ntfy.sh https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -912,7 +912,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792769654';
+const BUILD_V = '1792772148';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2598,6 +2598,29 @@ async function stSave() {
   } catch (e) { stStep('failed: ' + (e.message || e)); stMsg = 'Save failed: ' + ghWhy(e); stFailed = true; }
   stWait(false); stBusy = false; draw();
 }
+// Telegram: check the token, find the owner's chat from the message they sent the bot, send a test, store both as secrets.
+async function tgConnect() {
+  const out = $('#tgMsg'), say = h => { if (out) out.innerHTML = h; };
+  const tok = (($('#st-tgtok') || {}).value || '').trim();
+  if (!/^\d{5,}:[A-Za-z0-9_-]{30,}$/.test(tok)) { say('Paste the token @BotFather gave you first — it looks like <code>123456789:AAH…</code>.'); return; }
+  const api = async (m, body) => { const r = await fetch('https://api.telegram.org/bot' + tok + '/' + m, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body || {})}); const j = await r.json().catch(() => ({})); if (!j.ok) throw new Error(j.description || 'HTTP ' + r.status); return j.result; };
+  try {
+    say('Checking the token…');
+    const me = await api('getMe');
+    const link = 'https://t.me/' + encodeURIComponent(me.username);
+    say('Token works (bot @' + esc(me.username) + '). Looking for your message to it…');
+    const ups = await api('getUpdates', {allowed_updates: ['message']});
+    const msgs = (ups || []).map(u => u.message).filter(m => m && m.chat && m.chat.type === 'private');
+    if (!msgs.length) { say(`Almost there: open <a href="${safeUrl(link)}" target="_blank" rel="noopener">@${esc(me.username)}</a> in Telegram, press <b>Start</b> (or send it any message), then press <b>Connect Telegram</b> again.`); return; }
+    const chat = msgs[msgs.length - 1].chat;
+    await api('sendMessage', {chat_id: chat.id, text: '\u2705 Connected to Signal Desk. Buy and sell alerts, the morning hello and the day summary will arrive here. Type /help for commands (they answer while the bot runs, about 9:20 AM\u20134:05 PM ET on trading days).'});
+    say('Test message sent to ' + esc(chat.first_name || 'you') + ' — saving to GitHub secrets…');
+    await stSecret('TELEGRAM_TOKEN', tok, 'Telegram token'); await stSecret('TELEGRAM_CHAT', String(chat.id), 'Telegram chat');
+    try { stSecrets = (await ghApi('/actions/secrets?per_page=100')).secrets.map(x => x.name); } catch (e) {}
+    if ($('#st-tgtok')) $('#st-tgtok').value = '';
+    stMsg = 'Telegram connected: alerts go to your chat with @' + me.username + '. The bot picks it up at its next start (tomorrow morning, or now if you restart it).'; renderAll();
+  } catch (e) { say('Telegram said: ' + esc(e.message || String(e)) + (/Unauthorized/i.test(e.message) ? ' — the token is wrong or was revoked; copy it again from @BotFather.' : /Conflict|webhook/i.test(e.message) ? ' — the bot is busy reading messages right now; wait a minute and try again.' : '')); }
+}
 async function stSecret(name, value, label) {
   if (!value) return;
   if (!window.sodium || !window.sodium.crypto_box_seal) {
@@ -2656,6 +2679,7 @@ document.addEventListener('click', e => {
   else if (a === 'preset') { stCfg = {...stRead(), preset: b.dataset.v, ...ST_PRESETS[b.dataset.v]}; stDirty = true; renderAll(); }
   else if (a === 'reload') { stDirty = false; stLoad(true); }
   else if (a === 'test') stTest();
+  else if (a === 'tgconnect') tgConnect();
   else if (a === 'ntfytest') {
     if ($('#st-ntfy')) $('#st-ntfy').value = ntfyName($('#st-ntfy').value);
     // the saved topic is a GitHub secret the page cannot read back, so the test uses the topic typed in the box
@@ -2698,7 +2722,7 @@ function readiness(c) {
     ['Live expectancy positive and at least half of the research figure', expLive != null && swing.length >= 30 && expLive > 0 && (expRes == null || expLive >= expRes / 2), expLive == null ? 'needs 30+ swing trades' : `live ${expLive >= 0 ? '+' : ''}${expLive.toFixed(2)}% per trade on ${swing.length}${expRes != null ? ` · research +${expRes.toFixed(2)}%` : ''}`],
     ['Worst drawdown so far under 10% of your stake', closed.length >= 20 && ddPct < 10, closed.length ? `${ddPct.toFixed(1)}% worst run${c.stakeUsd > 0 ? ' of $' + fmt(c.stakeUsd, 0) : ''}` : '–'],
     ['Protective stops placed at the broker with every stock entry', true, 'built in (OTO / bracket legs)'],
-    ['Phone alerts and the watchdog switched on', !!has('NTFY_TOPIC') && !!c.alerts, has('NTFY_TOPIC') ? (c.alerts ? 'alert topic set, alerts on' : 'alerts are switched off in Guards') : 'no alert topic in section 1'],
+    ['Phone alerts and the watchdog switched on', !!(has('NTFY_TOPIC') || has('TELEGRAM_CHAT')) && !!c.alerts, (has('NTFY_TOPIC') || has('TELEGRAM_CHAT')) ? (c.alerts ? 'alert topic set, alerts on' : 'alerts are switched off in Guards') : 'no alert topic in section 1'],
     ['Live keys saved', !!(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET')), has('ALPACA_LIVE_KEY') ? 'set' : 'not set'],
     ['Start at a quarter of the size or less', (c.liveSizePct || 25) <= 25, `${c.liveSizePct || 25}% of paper size`],
     ['Experimental sleeves small or off (PUTs, intraday, day trading)', !c.puts && !c.intraday && !c.dayTrade || ((c.putUnit === 'usd' && c.putCapUsd > 0) && !c.intraday && (!c.dayTrade || c.dayRiskPct <= 0.25)), [c.puts ? 'PUTs on' : null, c.intraday ? 'intraday on' : null, c.dayTrade ? 'day trading on' : null].filter(Boolean).join(', ') || 'all off'],
@@ -2720,7 +2744,7 @@ function settingsView() {
   const presetBtn = k => `<button class="btn ${c.preset === k ? '' : 'ghost'}" type="button" data-st="preset" data-v="${k}" style="flex:1;min-width:150px;text-align:left;padding:10px 12px"><b style="text-transform:capitalize">${k}</b><div style="font-size:11.5px;font-weight:400;margin-top:2px;opacity:.85${c.preset === k ? ';color:var(--accent-ink)' : ''}" class="${c.preset === k ? '' : 'mut'}">${ST_PRESETS[k].riskPct}% per trade · cap ${ST_PRESETS[k].maxHeat}% · day limit −${ST_PRESETS[k].dayCap}%</div></button>`;
   const connect = sec('1. Connection', connected
     ? `<div style="margin-top:8px;font-size:13px">${dot(true)}Connected to <b>${esc(ghRepo())}</b>${stRepoInfo ? ` <span class="mut">(${stRepoInfo.private ? 'private' : 'public'} repo)</span>` : ''} <button class="btn ghost" type="button" data-st="test" style="margin-left:8px;font-size:12px" ${stBusy ? 'disabled' : ''}>Test connection</button> <button class="btn ghost" type="button" data-st="disconnect" style="font-size:12px">Disconnect</button></div>
-<div style="margin-top:10px;font-size:13px">${dot(has('ALPACA_KEY') && has('ALPACA_SECRET'))}Alpaca keys ${has('ALPACA_KEY') && has('ALPACA_SECRET') ? 'set' : '<b>not set</b> — the bot cannot trade yet'} &nbsp; ${dot(has('NTFY_TOPIC'))}Phone alerts ${has('NTFY_TOPIC') ? 'set' : 'not set'} &nbsp; ${dot(has('JOURNAL_KEY'))}Journal ${has('JOURNAL_KEY') ? 'encrypted' : '<b>public</b>'} &nbsp; ${dot(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET'))}Live keys ${has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET') ? 'set' : 'not set'}</div>
+<div style="margin-top:10px;font-size:13px">${dot(has('ALPACA_KEY') && has('ALPACA_SECRET'))}Alpaca keys ${has('ALPACA_KEY') && has('ALPACA_SECRET') ? 'set' : '<b>not set</b> — the bot cannot trade yet'} &nbsp; ${dot(has('TELEGRAM_CHAT'))}Telegram ${has('TELEGRAM_CHAT') ? 'connected' : 'not connected'} &nbsp; ${dot(has('NTFY_TOPIC'))}ntfy alerts ${has('NTFY_TOPIC') ? 'set' : 'not set'} &nbsp; ${dot(has('JOURNAL_KEY'))}Journal ${has('JOURNAL_KEY') ? 'encrypted' : '<b>public</b>'} &nbsp; ${dot(has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET'))}Live keys ${has('ALPACA_LIVE_KEY') && has('ALPACA_LIVE_SECRET') ? 'set' : 'not set'}</div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px">
 <label style="font-size:12px"><b>Alpaca API key</b><input id="st-akey" ${inp} autocomplete="off" placeholder="${has('ALPACA_KEY') ? 'set — paste to replace' : 'paste key'}"></label>
 <label style="font-size:12px"><b>Alpaca secret</b><input id="st-asec" type="password" ${inp} autocomplete="off" placeholder="${has('ALPACA_SECRET') ? 'set — paste to replace' : 'paste secret'}"></label>
@@ -2728,7 +2752,12 @@ function settingsView() {
 <label style="font-size:12px"><b>Journal passphrase</b> <span class="mut">(encrypts your trades on the public site)</span><input id="st-jkey" type="password" ${inp} autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="${has('JOURNAL_KEY') ? 'set \u2014 enter to replace' : 'choose a strong passphrase'}"></label>
 <label style="font-size:12px"><b>Live API key</b> <span class="mut">(real money only)</span><input id="st-lkey" ${inp} autocomplete="off" placeholder="${has('ALPACA_LIVE_KEY') ? 'set \u2014 paste to replace' : 'leave empty for paper'}"></label>
 <label style="font-size:12px"><b>Live secret</b> <span class="mut">(real money only)</span><input id="st-lsec" type="password" ${inp} autocomplete="off" placeholder="${has('ALPACA_LIVE_SECRET') ? 'set \u2014 paste to replace' : 'leave empty for paper'}"></label></div>
-<div style="margin-top:10px"><button class="btn" type="button" data-st="keys" ${stBusy ? 'disabled' : ''}>Save keys to GitHub secrets</button> <span class="mut" style="font-size:11.5px">Encrypted in your browser with GitHub’s public key, stored only as repository secrets. Nothing is kept on this page.</span></div>`
+<div style="margin-top:10px"><button class="btn" type="button" data-st="keys" ${stBusy ? 'disabled' : ''}>Save keys to GitHub secrets</button> <span class="mut" style="font-size:11.5px">Encrypted in your browser with GitHub’s public key, stored only as repository secrets. Nothing is kept on this page.</span></div>
+<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line)"><b style="font-size:13.5px">📨 Telegram alerts and commands</b> <span class="mut" style="font-size:12px">· free, private to you · ${has('TELEGRAM_CHAT') ? '<span class="pos">connected</span>' : 'not connected yet'}</span>
+<ol class="mut" style="font-size:12.5px;margin:6px 0 8px 18px;padding:0;line-height:1.6"><li>In Telegram, open <a href="https://t.me/BotFather" target="_blank" rel="noopener" style="color:var(--accent)">@BotFather</a>, send <code>/newbot</code>, pick any name and a username ending in <code>bot</code>. It replies with a <b>token</b>.</li><li>Open your new bot from the link BotFather gives and press <b>Start</b>.</li><li>Paste the token below and press <b>Connect Telegram</b> — it finds your chat, sends a test message and saves everything as encrypted secrets.</li></ol>
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span style="flex:1;min-width:220px;max-width:420px"><input id="st-tgtok" type="password" ${inp} autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Telegram bot token" placeholder="${has('TELEGRAM_TOKEN') ? 'set — paste a new token to replace' : '123456789:AAH…'}"></span><button class="btn" type="button" data-st="tgconnect" ${stBusy ? 'disabled' : ''}>Connect Telegram</button></div>
+<div id="tgMsg" class="mut" style="font-size:12px;margin-top:6px"></div>
+<div class="mut" style="font-size:11.5px;margin-top:4px">Commands: /status · /money · /positions · /watch · /pause · /resume · /help. The bot answers only your chat and never buys or sells on a chat command.</div></div>`
     : `<div class="mut" style="margin-top:6px;font-size:13px;line-height:1.6">This page writes settings straight into your GitHub repo, where the bot reads them. Connect it once per device with a <b>fine-grained personal access token</b>: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained → Generate. Repository access: only <b>${esc(ghRepo())}</b>. Permissions: <b>Contents: Read and write</b>, <b>Secrets: Read and write</b>, <b>Actions: Read and write</b>. The token stays in this browser only.</div>
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:10px"><label style="font-size:12px"><b>GitHub token</b><input id="st-tok" type="password" ${inp} autocomplete="off" placeholder="github_pat_…"></label><label style="font-size:12px"><b>Repository</b><input id="st-repo" ${inp} value="${esc(ghRepo())}"></label></div>
 <div style="margin-top:10px"><button class="btn" type="button" data-st="connect">Connect</button></div>`, 'your GitHub repo, broker keys and alerts');

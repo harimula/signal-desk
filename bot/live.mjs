@@ -6,7 +6,7 @@
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { execSync, spawn } from 'node:child_process';
-import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello } from './bot.mjs';
+import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle } from './bot.mjs';
 import { summary } from './config.mjs';
 
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
@@ -43,7 +43,7 @@ function commit() {
 // ---- site prices: GitHub's scheduler often skips the 10-minute refresh-prices runs during market hours, so the
 // session (alive all day) refreshes live.json / news.json itself, in a child process that never blocks a cycle.
 // The next commit publishes them with the journal. BOT_NO_PRICES=1 turns it off (tests).
-const PRICES_EVERY = 10 * 60000; let lastPrices = 0, pricesBusy = false;
+const PRICES_EVERY = 10 * 60000; let lastPrices = 0, pricesBusy = false, lastTg = 0, tgBusy = false;
 function refreshPrices() {
   if (process.env.BOT_NO_PRICES === '1' || process.env.BOT_NO_COMMIT === '1') return;
   pricesBusy = true; lastPrices = Date.now();
@@ -150,6 +150,7 @@ while (Date.now() - born < LIFE && !stopping) {
     lastFull = Date.now(); cycling = false;
   }
   if (Date.now() - lastPrices >= PRICES_EVERY && !pricesBusy) refreshPrices();
+  if (Date.now() - lastTg >= 3000 && !tgBusy) { tgBusy = true; lastTg = Date.now(); tgPollCycle().finally(() => { tgBusy = false; }); }   // Telegram commands, off the decision path
   if (Date.now() - lastCommit >= COMMIT_EVERY) { commit(); lastCommit = Date.now(); }
   if (Date.now() - lastBeat >= 60000) { lastBeat = Date.now(); heartbeat(); }
   await sleep(queue.length ? 50 : 200);

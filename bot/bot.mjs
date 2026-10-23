@@ -17,6 +17,7 @@ import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
 import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
+import { tgOn, tgSend, tgPoll } from './telegram.mjs';
 import { scanUniverse } from './scan.mjs';
 import { daySetup, marketMode, dayShares, dayExit, dayTrail, encodeDayId, decodeDayId, SESSION_OPEN } from './daytrade.mjs';
 
@@ -382,12 +383,61 @@ const sentAlerts = new Map();
 async function flushAlerts() {
   if (!alerts.length) return;
   const lines = alerts.splice(0).filter(m => { const k = m.replace(/[\d.]+/g, '#'); if (sentAlerts.has(k) && Date.now() - sentAlerts.get(k) < 20 * 60000) return false; sentAlerts.set(k, Date.now()); return true; });
-  if (!NTFY || !lines.length || DRY || !CFG.alerts) return;
-  try {
+  if (!lines.length || DRY || !CFG.alerts) return;
+  if (NTFY) try {
     await fetch('https://ntfy.sh/' + encodeURIComponent(NTFY), { method: 'POST', body: lines.join('\n'),
       headers: { Title: 'Signal Desk bot' + (lines.length > 1 ? ' (' + lines.length + ')' : ''), Priority: lines.some(l => /\u26d4|\u26a0/.test(l)) ? 'high' : 'default', Tags: 'chart_with_upwards_trend' } });
   } catch (e) { console.log('alert failed', e.message); }
+  if (tgOn()) try { await tgSend(lines.join('\n\n')); } catch (e) { console.log('telegram alert failed', e.message); }
 }
+
+// ---- Telegram commands (read-only, plus pause/resume of NEW entries; never buys or sells) ----
+let userPause = false;
+const usd = v => (v < 0 ? '\u2212' : '') + '$' + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
+const usd2 = v => (v < 0 ? '\u2212' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const sgnUsd = v => (v >= 0 ? '+' : '') + usd2(v);
+export async function tgCommand(cmd) {
+  if (cmd === 'start' || cmd === 'help') return ['Signal Desk bot \u2014 commands:',
+    '/status \u2014 running? market check, what it watches', '/money \u2014 money in trades, free to trade, today', '/positions \u2014 what it holds and when it sells',
+    '/watch \u2014 today\u2019s buy / CALL / PUT candidates', '/pause \u2014 no NEW entries (open positions stay protected)', '/resume \u2014 allow new entries again',
+    '', 'Alerts for every buy and sell arrive here by themselves. I never buy or sell on a chat command.'].join('\n');
+  if (cmd === 'pause') { userPause = true; return '\u23f8 Paused: no new entries until you send /resume (or until today\u2019s session ends). Open positions keep their stops, targets and exits.'; }
+  if (cmd === 'resume') { userPause = false; return '\u25b6\ufe0f Resumed: new entries allowed again (the market check and risk limits still apply).'; }
+  if (cmd === 'status') {
+    const G = lastGuard || {}, W = lastWatch, sc = CFG.universe === 'scan' ? (scanStatus.state === 'done' ? 'market scan in' : 'market scan ' + scanStatus.state + (scanStatus.err ? ' (' + scanStatus.err.slice(0, 60) + ')' : '')) : 'your list';
+    return [`\u2699\ufe0f ${BASE.includes('paper') ? 'Practice account' : 'LIVE account'} \u00b7 ${lastClock && lastClock.is_open ? 'market open' : 'market closed'}`,
+      `Watching ${UNIVERSE.length} stocks (${sc}) \u00b7 last check ${(engine.cycleMs / 1000).toFixed(1)} s \u00b7 ${engine.hourErrors.length} errors in the last hour`,
+      userPause ? '\u23f8 Paused by you (/resume to restart new entries)' : G.block ? '\u26d4 Market check: no new trades \u2014 ' + (G.reasons || []).slice(-2).join('; ') : '\u2705 Market check: trading normally',
+      W && W.idle ? 'Not entering now: ' + W.idle : '',
+      W ? `Candidates \u2014 buy: ${W.buy.length} \u00b7 CALL: ${W.call.length} \u00b7 PUT: ${W.put.length} (/watch for names)` : ''].filter(Boolean).join('\n');
+  }
+  if (cmd === 'money' || cmd === 'positions') {
+    const [acct, pos] = await Promise.all([T('/v2/account'), T('/v2/positions')]);
+    const eq = +acct.equity, stake = CFG.stakeUsd > 0 ? Math.min(CFG.stakeUsd, eq) : eq;
+    const val = p => Math.abs(+p.market_value || 0), inStk = pos.filter(p => !isOpt(p.symbol)).reduce((t, p) => t + val(p), 0), inOpt = pos.filter(p => isOpt(p.symbol)).reduce((t, p) => t + val(p), 0);
+    const openPl = pos.reduce((t, p) => t + (+p.unrealized_pl || 0), 0), today = eq - (+acct.last_equity || eq);
+    if (cmd === 'money') return [`\ud83d\udcbc In trades now: ${usd(inStk + inOpt)} (${pos.length} position${pos.length === 1 ? '' : 's'})`,
+      `   stocks ${usd(inStk)} \u00b7 options ${usd(inOpt)} \u00b7 open P/L ${sgnUsd(openPl)}`,
+      `Free to trade: ${usd(Math.max(0, stake - inStk - inOpt))} of your ${CFG.stakeUsd > 0 ? usd(stake) + ' stake' : usd(eq) + ' account'}`,
+      `Today: ${sgnUsd(today)} (${(today / (stake || 1) * 100).toFixed(2)}%)`].join('\n');
+    if (!pos.length) return 'Holding nothing right now.';
+    const held = (lastWatch && lastWatch.held) || [];
+    return ['\ud83d\udce6 Holding:'].concat(pos.map(p => {
+      const opt = isOpt(p.symbol), mult = opt ? 100 : 1, h = held.find(x => x.s === p.symbol) || {};
+      const rule = opt ? `take-profit ${h.tp != null ? usd2(h.tp) : '+' + OPT_TP + '%'} \u00b7 stop ${h.stop != null ? usd2(h.stop) : '\u2212' + CFG.optStop + '%'} (per contract)`
+        : (h.exitLevel != null ? `sells when ${p.symbol} closes ${h.exitSide || 'above'} ${usd2(h.exitLevel)}` : 'sells by its exit rule') + (h.floor ? ` \u00b7 floor ${usd2(h.floor)}` : '');
+      return `\u2022 ${p.symbol} \u00d7${Math.abs(+p.qty)} \u2014 bought ${usd2(+p.avg_entry_price * mult)}, now ${usd2(+p.current_price * mult)}, ${sgnUsd(+p.unrealized_pl)} (${(+p.unrealized_plpc * 100).toFixed(1)}%)\n   ${rule}`;
+    })).join('\n');
+  }
+  if (cmd === 'watch') {
+    const W = lastWatch; if (!W) return 'No watch list yet \u2014 it is built after the first check of the trading day.';
+    const list = (on, a) => !on ? 'switched off' : a.length ? a.slice(0, 30).join(' ') + (a.length > 30 ? ` \u2026 +${a.length - 30}` : '') : 'none right now';
+    return [`\ud83d\udc40 Watching ${W.total} stocks${W.idle ? ' \u00b7 not entering now: ' + W.idle : ''}`, `\ud83d\udfe2 Buy: ${list(W.on.stocks, W.buy)}`, `\ud83d\udcc8 CALL: ${list(W.on.calls, W.call)}`, `\ud83d\udcc9 PUT: ${list(W.on.puts, W.put)}`,
+      'A candidate still has to pass the news guard, entry window and risk limits.'].join('\n');
+  }
+  return null;
+}
+export async function tgPollCycle() { try { return await tgPoll(tgCommand); } catch (e) { console.log('telegram poll failed', e.message); return 0; } }
 
 async function run() {
   await ensureUniverse();
@@ -455,6 +505,7 @@ async function run() {
     const weekPct = weekCache.start ? (acctEq - weekCache.start) / equity * 100 : 0;        // the account's dollar change this week, measured against the stake
     if (weekCache.start && weekPct <= -WEEK_CAP) { G.block = true; G.halt = true; G.reasons.push(`Down ${(-weekPct).toFixed(1)}% this week (limit ${WEEK_CAP}%) \u2014 no new trades until next week`); }
   } catch (e) { console.log('breaker check failed', e.message); }
+  if (userPause) { G.block = true; G.reasons.push('Paused from Telegram \u2014 no new entries until /resume; open positions are still managed'); }
   for (const r of G.reasons) act('Market check: ' + r);
   if (G.halt) alerts.push('\u26d4 ' + G.reasons[G.reasons.length - 1]);
   const sellsFor = sym => openOrders.filter(o => o.symbol === sym && o.side === 'sell');
