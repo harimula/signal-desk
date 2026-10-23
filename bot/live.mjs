@@ -13,7 +13,7 @@ if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); pro
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const LIFE = (+process.env.RUN_MINUTES || 350) * 60000, born = Date.now();
 const BEAT = +process.env.BEAT_MS || 2000, BEAT_CLOSE = 1000, MIN_GAP = 250, JOURNAL_EVERY = 120000, COMMIT_EVERY = 10 * 60000;
-let lastBeat = 0, lastFull = 0, lastJournal = 0, lastCommit = Date.now(), errors = 0, lastCfg = 0, cfgSeen = JSON.stringify(CFG), cycling = false;
+let lastBeat = 0, lastFull = 0, lastJournal = 0, lastCommit = 0, errors = 0, lastCfg = 0, cfgSeen = JSON.stringify(CFG), cycling = false;
 const queue = [];                                             // reasons to run a cycle immediately
 const wake = why => { if (!queue.includes(why)) queue.push(why); };
 
@@ -100,11 +100,15 @@ process.on('unhandledRejection', e => console.log('unhandled rejection', redact(
 
 // ---- main loop ----
 const m0 = setNow();
-if (m0 < 9 * 60 + 20 || m0 >= 16 * 60 + 5) { console.log('Outside 9:20-16:05 ET - next scheduled run will take over.'); process.exit(0); }
+// GitHub's scheduler often starts runs 10-20 minutes late, so the workflow also fires from 8:45 ET and the run waits here
+// until 9:20 instead of exiting: the session is up before the open even when the 9:20 start is delayed.
+if (m0 >= 8 * 60 + 45 && m0 < 9 * 60 + 20) { console.log(`Early start (${Math.floor(m0 / 60)}:${String(m0 % 60).padStart(2, '0')} ET) - waiting until 9:20 ET.`); while (setNow() < 9 * 60 + 20) await sleep(15000); }
+const m1 = setNow();
+if (m1 < 9 * 60 + 20 || m1 >= 16 * 60 + 5) { console.log('Outside 9:20-16:05 ET - next scheduled run will take over.'); process.exit(0); }
 // Started after the close (the run that was queued behind the day's session): if that session reached the close and wrote
 // its journal, there is nothing left to do — rewriting the journal from an empty memory or sending a second day summary
 // would only do harm. If it died early (journal older than 3:55 PM), fall through: one cycle, journal, summary, exit.
-if (m0 >= 16 * 60) {
+if (m1 >= 16 * 60) {
   const js = journalStamp(), todayET = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((o, p) => (o[p.type] = p.value, o), {});
   if (js && js.day === todayET.year + todayET.month + todayET.day && js.mins >= 15 * 60 + 55) { console.log(`Market closed and today's session already finished its journal at ${js.at} - nothing to do.`); process.exit(0); }
   console.log('Market closed and today\'s journal is incomplete - running one closing cycle.');

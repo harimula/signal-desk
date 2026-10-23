@@ -4,6 +4,7 @@ on:
     # Each run stays alive for the session (checks every second). The 5-minute schedule only
     # matters as a backup: while a run is alive the next one waits in the queue and takes over
     # if it ever stops. Outside 9:20-16:05 ET a run exits immediately.
+    - cron: '45,50,55 12 * * 1-5'   # early start: the run waits until 9:20 ET (GitHub often fires schedules late)
     - cron: '*/5 13-21 * * 1-5'
   workflow_dispatch:
 permissions:
