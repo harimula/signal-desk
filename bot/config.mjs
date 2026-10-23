@@ -49,7 +49,7 @@ export function normalize(raw) {
   const tm = v => /^\d{1,2}:\d{2}$/.test(v || '') ? v.split(':').map(Number).reduce((h, m) => h * 60 + m) : null;
   if (tm(raw.dayStart) != null && tm(raw.dayStart) >= 575 && tm(raw.dayStart) <= 720) c.dayStart = raw.dayStart;      // 9:35–12:00
   if (tm(raw.dayEnd) != null && tm(raw.dayEnd) >= 600 && tm(raw.dayEnd) <= 945) c.dayEnd = raw.dayEnd;               // 10:00–15:45
-  if (/^\d{1,2}:\d{2}$/.test(raw.entryEnd || '')) { const [h, m] = raw.entryEnd.split(':').map(Number); if (h * 60 + m >= 600 && h * 60 + m <= 900) c.entryEnd = raw.entryEnd; }
+  if (/^\d{1,2}:\d{2}$/.test(raw.entryEnd || '')) { const [h, m] = raw.entryEnd.split(':').map(Number); if (h * 60 + m >= 600 && h * 60 + m <= 945) c.entryEnd = raw.entryEnd; }   // 10:00–15:45 ET (was capped at 15:00, which silently turned a 15:30 setting into the 11:00 default)
   if (Array.isArray(raw.symbols)) { const s = [...new Set(raw.symbols.map(x => String(x).trim().toUpperCase()).filter(x => /^[A-Z.]{1,6}$/.test(x)))]; if (s.length) c.symbols = s.slice(0, 60); }
   if (raw.updatedAt) c.updatedAt = raw.updatedAt;
   return c;

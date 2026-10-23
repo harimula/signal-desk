@@ -273,6 +273,10 @@ test('day-trading research: replays the live rules over synthetic sessions and s
   assert.ok(S.winRate > 60 && S.avgR > 0.5, JSON.stringify({ n: S.n, win: S.winRate, avgR: S.avgR, exits: S.byExit }));
   assert.ok(S.years['2025'] && S.years['2025'].n === S.n);
 });
+test('swing entry window: any end time from 10:00 to 15:45 ET is kept (15:30 used to fall back to 11:00 silently)', () => {
+  assert.equal(normalize({ entryEnd: '15:30' }).entryEnd, '15:30'); assert.equal(normalize({ entryEnd: '15:45' }).entryEnd, '15:45');
+  assert.equal(normalize({ entryEnd: '16:00' }).entryEnd, '11:00'); assert.equal(normalize({ entryEnd: '09:50' }).entryEnd, '11:00');
+});
 test('stake setting: validated, 0 means the whole account', () => { assert.equal(normalize({ stakeUsd: 5000 }).stakeUsd, 5000); assert.equal(normalize({ stakeUsd: -3 }).stakeUsd, 0); assert.equal(normalize({}).stakeUsd, 0); });
 
 console.log(`\n${passed} passed, ${failed} failed`);
