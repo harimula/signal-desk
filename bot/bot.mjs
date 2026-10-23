@@ -28,7 +28,10 @@ const PRIVATE = !!process.env.JOURNAL_KEY;                  // privacy mode: enc
 export const redact = s => PRIVATE ? String(s).replace(/\$?\d[\d,]*(\.\d+)?/g, '\u2022') : String(s);
 const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
 const DRY = process.env.BOT_DRY === '1';
-const NTFY = process.env.NTFY_TOPIC || '';
+// The topic may have been saved as a bare name ("my-topic") or as the full link from the ntfy app ("https://ntfy.sh/my-topic"):
+// accept both, so a pasted link does not silently send every alert to a garbled topic.
+export const ntfyTopic = raw => String(raw || '').trim().replace(/^https?:\/\/(www\.)?ntfy\.sh\//i, '').replace(/[/?#].*$/, '').trim();
+const NTFY = ntfyTopic(process.env.NTFY_TOPIC);
 const HOLD_LOSS = 1.5, MAX_HOLD_DAYS = 30, TP = 1;
 
 // ---- settings: bot/config.json (written by the Settings tab), re-applied live by applyConfig() ----

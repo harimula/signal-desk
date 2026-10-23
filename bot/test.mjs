@@ -169,7 +169,11 @@ test('money settings: defaults are % of account with no ceiling; units and caps 
   await atest('HTTP: an order (POST) is never retried', async () => { await assert.rejects(httpCall(base, '/order', { method: 'POST', body: '{}' }), /HTTP 500/); assert.equal(hits['/order'], 1); });
   srv.close();
   // ---- journal encryption: what the bot writes, the bot (at its next start) and the page can read back ----
-  const { encryptJournal, decryptJournal } = await import('./bot.mjs');
+  const { encryptJournal, decryptJournal, ntfyTopic } = await import('./bot.mjs');
+  await atest('alerts: the topic works saved as a name or as the full ntfy link', async () => {
+    for (const v of ['Lithvik', ' https://ntfy.sh/Lithvik ', 'ntfy.sh/Lithvik'.replace(/^/, 'https://'), 'http://www.ntfy.sh/Lithvik/', 'https://ntfy.sh/Lithvik?x=1']) assert.equal(ntfyTopic(v), 'Lithvik', v);
+    assert.equal(ntfyTopic(''), '');
+  });
   await atest('journal crypto: encrypt → decrypt round trip; the blob records its own round count; a wrong passphrase is rejected', async () => {
     const body = { at: '2026-10-22T20:03:31Z', watch: { rows: [{ s: 'AAPL', r2: 4.2 }], buy: ['AAPL'] }, acts: [{ t: 't1', m: 'hello' }] };
     const blob = await encryptJournal(body, 'correct horse', 1000);

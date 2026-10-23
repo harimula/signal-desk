@@ -2,7 +2,7 @@
 // Reads the public journal (its timestamp is readable even when the journal is encrypted) and alerts the phone
 // when the bot has not checked in for too long while the market is open. Needs only NTFY_TOPIC.
 const SITE = process.env.SITE_URL || (process.env.GITHUB_REPOSITORY ? `https://${process.env.GITHUB_REPOSITORY.split('/')[0].toLowerCase()}.github.io/${process.env.GITHUB_REPOSITORY.split('/')[1]}/` : '');
-const NTFY = process.env.NTFY_TOPIC || '', MAX_MIN = +(process.env.WATCHDOG_MAX_MIN || 25);
+const NTFY = String(process.env.NTFY_TOPIC || '').trim().replace(/^https?:\/\/(www\.)?ntfy\.sh\//i, '').replace(/[/?#].*$/, '').trim(), MAX_MIN = +(process.env.WATCHDOG_MAX_MIN || 25);
 const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
 const et = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()).map(p => [p.type, p.value]));
 const mins = (+et.hour % 24) * 60 + +et.minute;
