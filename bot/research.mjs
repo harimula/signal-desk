@@ -5,8 +5,14 @@ import fs from 'node:fs';
 import { signalAt, rsi2, sma } from './strategy.mjs';
 import { regimeOf } from './risk.mjs';
 
-const YEARS = +(process.env.BT_YEARS || 40), COST = 0.0005, POS = 0.10, MAXPOS = 6;
-const UNIVERSE = (process.env.BT_SYMBOLS || 'AAPL,MSFT,KO,JNJ,PG,XOM,CVX,JPM,WMT,MCD,DIS,IBM,GE,CAT,BA,MMM,HD,INTC,ORCL,T,VZ,PFE,MRK,PEP,NKE,AXP,GS,UNH,LOW,TXN,AMD,ADBE,COST,SBUX,CSCO,QCOM,AMGN,GD,LMT').split(',');
+// Market: US (default) or IN (NSE). India: Nifty 100 names (today's list — survivorship bias, as for the US), the Nifty 50 index as
+// benchmark and regime filter, and 0.15% per side for costs (STT 0.1%, stamp duty, exchange/SEBI fees, GST, DP charge, slippage).
+const MKT = (process.env.BT_MARKET || 'US').toUpperCase();
+const NIFTY100 = 'RELIANCE,TCS,HDFCBANK,ICICIBANK,INFY,BHARTIARTL,ITC,SBIN,LT,HINDUNILVR,KOTAKBANK,AXISBANK,BAJFINANCE,MARUTI,ASIANPAINT,HCLTECH,SUNPHARMA,TITAN,ULTRACEMCO,WIPRO,NTPC,POWERGRID,ONGC,NESTLEIND,M&M,TATASTEEL,JSWSTEEL,ADANIENT,ADANIPORTS,COALINDIA,BAJAJFINSV,HDFCLIFE,SBILIFE,TECHM,GRASIM,HINDALCO,DRREDDY,CIPLA,DIVISLAB,EICHERMOT,HEROMOTOCO,BAJAJ-AUTO,BRITANNIA,APOLLOHOSP,INDUSINDBK,TATACONSUM,BPCL,SHRIRAMFIN,TRENT,BEL,HAL,LTIM,DMART,PIDILITIND,SIEMENS,GODREJCP,DABUR,HAVELLS,AMBUJACEM,SHREECEM,BANKBARODA,PNB,CANBK,IOC,GAIL,VEDL,DLF,ICICIPRULI,ICICIGI,SBICARD,MARICO,COLPAL,BERGEPAINT,TORNTPHARM,LUPIN,AUROPHARMA,ZYDUSLIFE,MOTHERSON,TVSMOTOR,BOSCHLTD,ABB,CHOLAFIN,MUTHOOTFIN,INDIGO,NAUKRI,JINDALSTEL,TATAPOWER,ADANIGREEN,ADANIPOWER,IRCTC,HDFCAMC,PFC,RECLTD,UNITDSPR,BAJAJHLDNG,ETERNAL,JIOFIN,POLYCAB,CGPOWER,VBL'.split(',').map(s => s + '.NS').join(',');
+const BENCH = MKT === 'IN' ? '^NSEI' : 'SPY', BENCH_NAME = MKT === 'IN' ? 'Nifty 50' : 'SPY';
+const OUT = MKT === 'IN' ? { json: 'bot/research-in.json', md: 'bot/research_in_report.md' } : { json: 'bot/research.json', md: 'bot/research_report.md' };
+const YEARS = +(process.env.BT_YEARS || 40), COST = +(process.env.BT_COST || (MKT === 'IN' ? 0.0015 : 0.0005)), POS = 0.10, MAXPOS = 6;
+const UNIVERSE = (process.env.BT_SYMBOLS || (MKT === 'IN' ? NIFTY100 : null) || 'AAPL,MSFT,KO,JNJ,PG,XOM,CVX,JPM,WMT,MCD,DIS,IBM,GE,CAT,BA,MMM,HD,INTC,ORCL,T,VZ,PFE,MRK,PEP,NKE,AXP,GS,UNH,LOW,TXN,AMD,ADBE,COST,SBUX,CSCO,QCOM,AMGN,GD,LMT').split(',');
 async function pull(sym) {
   if (process.env.BT_SOURCE === 'livejson') {
     const lj = JSON.parse(fs.readFileSync('live.json', 'utf8')), row = lj.rows[sym]; if (!row) throw new Error('no row');
@@ -104,7 +110,7 @@ function stats(days, trades, from, to) {
 }
 const tstats = tr => { const w = tr.filter(x => x > 0), l = tr.filter(x => x <= 0), gw = w.reduce((a, b) => a + b, 0), gl = -l.reduce((a, b) => a + b, 0); return { n: tr.length, win: tr.length ? w.length / tr.length * 100 : 0, exp: tr.length ? (gw - gl) / tr.length * 100 : 0, pf: gl > 0 ? gw / gl : null }; };
 
-const spy = await pull('SPY');
+const spy = await pull(BENCH);
 const calendar = spy.map(b => b.d), regimeOn = {};
 spy.forEach((b, i) => { regimeOn[b.d] = regimeOf(spy.slice(Math.max(0, i - 299), i + 1).map(x => x.c)).regime; });
 const data = {};
@@ -123,11 +129,11 @@ for (const key of Object.keys(STRATS)) for (const rg of (STRATS[key].short ? [fa
 const spyDays = spy.map(b => ({ d: b.d, eq: b.c }));
 const spyAll = stats(spyDays, [], null, null), spyOos = stats(spyDays, [], split);
 const f = (x, d = 2) => x == null || !isFinite(x) ? 'n/a' : (+x).toFixed(d), pc = x => x == null ? 'n/a' : (x >= 0 ? '+' : '') + f(x) + '%';
-let md = `# Strategy research — ${Object.keys(data).length} stocks, ${calendar[0]} → ${calendar[calendar.length - 1]}\n\nCosts 0.05%/side · 10% of equity per position · max ${MAXPOS} positions · out-of-sample = ${split} onward (never used to choose anything).\n\n`;
+let md = `# Strategy research${MKT === 'IN' ? ' — India (NSE)' : ''} — ${Object.keys(data).length} stocks, ${calendar[0]} → ${calendar[calendar.length - 1]}\n\nCosts ${(COST * 100).toFixed(2)}%/side · 10% of equity per position · max ${MAXPOS} positions · out-of-sample = ${split} onward (never used to choose anything).\n\n`;
 md += `| Strategy | Regime filter | CAGR (all) | Sharpe (all) | Max DD | **OOS CAGR** | **OOS Sharpe** | OOS Max DD | Trades | Win % | Exp./trade | PF |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n`;
 for (const r of results) md += `| ${r.label} | ${r.regime ? 'on' : 'off'} | ${pc(r.all && r.all.cagr)} | ${f(r.all && r.all.sharpe)} | −${f(r.all && r.all.maxDD, 1)}% | **${pc(r.oos && r.oos.cagr)}** | **${f(r.oos && r.oos.sharpe)}** | −${f(r.oos && r.oos.maxDD, 1)}% | ${r.t.n} | ${f(r.t.win, 1)}% | ${pc(r.t.exp)} | ${f(r.t.pf)} |\n`;
-md += `| SPY buy & hold | – | ${pc(spyAll.cagr)} | ${f(spyAll.sharpe)} | −${f(spyAll.maxDD, 1)}% | **${pc(spyOos.cagr)}** | **${f(spyOos.sharpe)}** | −${f(spyOos.maxDD, 1)}% | – | – | – | – |\n\n`;
+md += `| ${BENCH_NAME} buy & hold | – | ${pc(spyAll.cagr)} | ${f(spyAll.sharpe)} | −${f(spyAll.maxDD, 1)}% | **${pc(spyOos.cagr)}** | **${f(spyOos.sharpe)}** | −${f(spyOos.maxDD, 1)}% | – | – | – | – |\n\n`;
 md += `Survivorship bias (today’s big companies, looking back) flatters every strategy, so treat these as an upper bound. Not financial advice.\n`;
-fs.writeFileSync('bot/research_report.md', md);
-fs.writeFileSync('bot/research.json', JSON.stringify({ at: new Date().toISOString(), split, results, spy: { all: spyAll, oos: spyOos } }));
+fs.writeFileSync(OUT.md, md);
+fs.writeFileSync(OUT.json, JSON.stringify({ at: new Date().toISOString(), market: MKT, bench: BENCH_NAME, cost: COST, symbols: Object.keys(data), split, results, spy: { all: spyAll, oos: spyOos } }));
 console.log(md);
