@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import { sma, rsi2, liveSignal, rsi2Trigger, rsi2ExitLevel, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
 import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
-import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk } from './risk.mjs';
+import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk, sideDayPl } from './risk.mjs';
 import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
 import { tgOn, tgSend, tgPoll } from './telegram.mjs';
 import { scanUniverse } from './scan.mjs';
@@ -96,7 +96,7 @@ async function load5m(syms) {
   return out;
 }
 async function dayTradeCycle(ctx) {
-  const { equity, acct, positions, hist, liveOrders, G, capHit, slBudget, sellsFor, cid } = ctx;
+  const { equity, acct, positions, hist, liveOrders, G, capHit, slBudget, sellsFor, cid } = ctx, halt = ctx.halt || { stock: capHit, opt: capHit };
   const dayC = { start: hhmm(CFG.dayStart), end: hhmm(CFG.dayEnd), rvol: CFG.dayRvol, target: CFG.dayTarget, timeStop: CFG.dayTimeStop, orMin: CFG.dayOrMin };
   // open day trades: entry order id tells us side, stop, target and when it opened
   const dayPos = [];
@@ -146,7 +146,7 @@ async function dayTradeCycle(ctx) {
   const dayClosed = (fillsCache.closed || []).filter(c => c.inT && c.outT && c.inT.slice(0, 10) === c.outT.slice(0, 10));
   let streak = 0; for (const c of [...dayClosed].sort((a, b) => a.outT < b.outT ? 1 : -1)) { if (c.pl < 0) streak++; else break; }
   const pdtBlock = equity < 25000 && +acct.daytrade_count >= 3 && !acct.pattern_day_trader;
-  const idle = !CFG.dayTrade ? 'day trading is off' : capHit ? 'daily loss cap hit' : G.block ? 'paused by the market check' : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.dayMaxTrades ? `${tradesToday} day trades today — daily maximum reached` : streak >= CFG.dayStreak ? `${streak} day-trade losses in a row — done for the day` : MINS < dayC.start ? 'before the day-trade window' : MINS >= dayC.end ? 'day-trade window closed' : market === 'flat' ? 'market undecided (SPY on its VWAP) — waiting' : null;
+  const idle = !CFG.dayTrade ? 'day trading is off' : capHit ? 'daily loss limits hit' : G.block ? 'paused by the market check' : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.dayMaxTrades ? `${tradesToday} day trades today — daily maximum reached` : streak >= CFG.dayStreak ? `${streak} day-trade losses in a row — done for the day` : MINS < dayC.start ? 'before the day-trade window' : MINS >= dayC.end ? 'day-trade window closed' : market === 'flat' ? 'market undecided (SPY on its VWAP) — waiting' : null;
   const setups = [];
   if (CFG.dayTrade) {
     const dailyBars = await loadBars();
@@ -165,7 +165,7 @@ async function dayTradeCycle(ctx) {
     if (sg.held || positions.some(p => (isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol) === sg.sym) || liveOrders.some(o => (isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol) === sg.sym)) continue;
     if (CFG.newsGuard && symbolRisk(sg.sym, newsCache.syms)) { act(`${sg.sym} day setup skipped — ${symbolRisk(sg.sym, newsCache.syms)}`); continue; }
     const label = `${sg.sym} day trade: ${sg.setup} ${sg.side === 'long' ? 'long' : 'short'} — ${sg.why}; stop ${sg.stop}, target ${sg.target}`;
-    if (sg.side === 'long' && CFG.dayStock) {
+    if (sg.side === 'long' && CFG.dayStock && !halt.stock) {
       const lim = r2d(sg.entry * 1.001), qty = dayShares({ equity, riskPct: CFG.dayRiskPct, entry: lim, stop: sg.stop, budget: slBudget('stock') });
       if (qty < 1) { act(`${sg.sym} day setup skipped — 1 share is above the risk or money budget`); continue; }
       await send({ symbol: sg.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
@@ -173,7 +173,7 @@ async function dayTradeCycle(ctx) {
         client_order_id: encodeDayId('sd-d-', sg.sym, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label + ' · stop and target placed at the broker');
       placed++; continue;
     }
-    if ((sg.side === 'long' && CFG.dayCalls) || (sg.side === 'short' && CFG.dayPuts)) {
+    if (!halt.opt && ((sg.side === 'long' && CFG.dayCalls) || (sg.side === 'short' && CFG.dayPuts))) {
       const kind = sg.side === 'long' ? 'call' : 'put', c = await pickDayContract(sg.sym, kind, sg.entry); if (!c) { act(`${sg.sym} ${kind.toUpperCase()}: no liquid contract 1–${CFG.dayOptDteMax} days out — skipped`); continue; }
       const qty = Math.max(0, Math.min(Math.floor(slBudget(kind) / (c.lim * 100)), Math.floor(equity * CFG.dayRiskPct * (G.budget || 1) / 100 / (c.lim * 100 * CFG.dayOptStop / 100))));
       if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(c.lim * 100)}) is above the day-trade risk or money budget — skipped`); continue; }
@@ -304,7 +304,8 @@ const act = m => {                                          // same message with
   seen.set(k, Date.now()); console.log(redact(m)); acts.push({ t: new Date().toISOString(), m });
 };
 let lastWatch = null, lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
-let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [] }, lastRisk = null;
+let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
+let lastSplit = null, lastDayPx = {}, haltSaid = new Set();      // money split panel, yesterday's closes, halt messages already sent today
 const alerts = [];
 
 // One full decision cycle: manage every position, then look for new entries.
@@ -411,7 +412,11 @@ export async function tgCommand(cmd) {
     if (cmd === 'money') return [`\ud83d\udcbc In trades now: ${usd(inStk + inOpt)} (${pos.length} position${pos.length === 1 ? '' : 's'})`,
       `   stocks ${usd(inStk)} \u00b7 options ${usd(inOpt)} \u00b7 open P/L ${sgnUsd(openPl)}`,
       `Free to trade: ${usd(Math.max(0, stake - inStk - inOpt))} of your ${CFG.stakeUsd > 0 ? usd(stake) + ' stake' : usd(eq) + ' account'}`,
-      `Today: ${sgnUsd(today)} (${(today / (stake || 1) * 100).toFixed(2)}%)`].join('\n');
+      `Today: ${sgnUsd(today)} (${(today / (stake || 1) * 100).toFixed(2)}%)`].concat(CFG.split ? (() => {
+        const S = lastSplit && lastSplit.on ? lastSplit : null, sm = stake * (100 - CFG.optSharePct) / 100, om = stake * CFG.optSharePct / 100;
+        const line = (nm, money, used, t, lim, h) => `   ${nm}: ${usd(used)} of ${usd(money)} in use${t != null ? ' \u00b7 today ' + sgnUsd(t) : ''} \u00b7 ${h ? '\u26d4 stopped for today' : 'loss limit ' + lim + '%'}`;
+        return [`Split ${100 - CFG.optSharePct}/${CFG.optSharePct}:`, line('Stocks', sm, inStk, S && S.stock.today, CFG.dayCap, S && S.stock.halted), line('Options', om, inOpt, S && S.opt.today, CFG.optDayCap, S && S.opt.halted)];
+      })() : []).join('\n');
     if (!pos.length) return 'Holding nothing right now.';
     const held = (lastWatch && lastWatch.held) || [];
     return ['\ud83d\udce6 Holding:'].concat(pos.map(p => {
@@ -482,13 +487,21 @@ async function run() {
   if (RG.regime === 'bear') G.reasons.push('Bear market regime (SPY below its 50- and 200-day averages) \u2014 fewer stocks qualify, since each must be above its own 200-day');   // reported, not enforced: the filter did not improve RSI-2 in the research
   // (neutral regime: no size change for RSI-2)
   // circuit breakers: losing streak today, weekly drawdown
+  const sideStreak = { stock: null, opt: null };
   try {
     if (Date.now() - fillsCache.at > 60000) {
       const f = await T('/v2/account/activities/FILL?date=' + ymdDash(Date.now()) + '&direction=asc&page_size=100');
-      fillsCache = { at: Date.now(), closed: buildJournal(f || [], []).closed };
+      fillsCache = { at: Date.now(), closed: buildJournal(f || [], []).closed, fills: f || [] };
     }
-    const streak = lossStreak(fillsCache.closed);
-    if (streak >= MAX_STREAK) { G.block = true; G.halt = true; G.reasons.push(`${streak} losing trades in a row today \u2014 done for the day (protects against a bad tape)`); }
+    if (CFG.split) {                                                     // with the money split, a losing streak stops only its own side
+      for (const [k, kinds] of [['stock', ['Stock']], ['opt', ['Call', 'Put']]]) {
+        const n = lossStreak(fillsCache.closed.filter(c => kinds.includes(c.kind)));
+        if (n >= MAX_STREAK) sideStreak[k] = `${n} losing ${k === 'stock' ? 'stock' : 'option'} trades in a row today`;
+      }
+    } else {
+      const streak = lossStreak(fillsCache.closed);
+      if (streak >= MAX_STREAK) { G.block = true; G.halt = true; G.reasons.push(`${streak} losing trades in a row today \u2014 done for the day (protects against a bad tape)`); }
+    }
     if (Date.now() - weekCache.at > 10 * 60000) {
       const h = await T('/v2/account/portfolio/history?period=1W&timeframe=1D');
       const eqs = (h && h.equity || []).filter(x => x != null && x > 0);
@@ -522,9 +535,29 @@ async function run() {
   };
   const kindOf = sym => !isOpt(sym) ? 'stock' : (OPT_RE.exec(sym) || [])[3] === 'P' ? 'put' : 'call';
   for (const p of positions) SL[kindOf(p.symbol)].used += Math.abs(+p.market_value || 0);
-  const slBudget = k => Math.max(0, Math.min(SL[k].per * G.budget, SL[k].cap > 0 ? SL[k].cap - SL[k].used : Infinity));
-  const capNote = k => SL[k].cap > 0 && SL[k].cap - SL[k].used < SL[k].per ? ` (${k} money ceiling $${Math.round(SL[k].cap)}, $${Math.round(SL[k].used)} already in use)` : '';
+  // ---- money split: stocks and options each own a share of the stake and have their own daily loss limit ----
+  const SPLIT = !!CFG.split, sideOf = k => k === 'stock' ? 'stock' : 'opt';
+  const SIDE = { stock: { money: SPLIT ? equity * (100 - CFG.optSharePct) / 100 : equity, capPct: LOSS_CAP },
+    opt: { money: SPLIT ? equity * CFG.optSharePct / 100 : equity, capPct: SPLIT ? CFG.optDayCap : LOSS_CAP } };
+  const sideUsed = sd => sd === 'stock' ? SL.stock.used : SL.call.used + SL.put.used;
+  const slBudget = k => Math.max(0, Math.min(SL[k].per * G.budget, SL[k].cap > 0 ? SL[k].cap - SL[k].used : Infinity, SPLIT ? SIDE[sideOf(k)].money - sideUsed(sideOf(k)) : Infinity));
+  const capNote = k => SPLIT && SIDE[sideOf(k)].money - sideUsed(sideOf(k)) < SL[k].per ? ` (${k === 'stock' ? 'stock' : 'options'} money $${Math.round(SIDE[sideOf(k)].money)}, $${Math.round(sideUsed(sideOf(k)))} already in use)`
+    : SL[k].cap > 0 && SL[k].cap - SL[k].used < SL[k].per ? ` (${k} money ceiling $${Math.round(SL[k].cap)}, $${Math.round(SL[k].used)} already in use)` : '';
   const capHit = dayPct <= -LOSS_CAP;
+  for (const p of positions) if (+p.lastday_price > 0) lastDayPx[p.symbol] = +p.lastday_price;
+  const sideDay = sideDayPl({ positions, fills: fillsCache.fills || [], lastDay: lastDayPx });
+  const halt = { stock: null, opt: null };
+  if (SPLIT) for (const k of ['stock', 'opt']) {
+    const S = SIDE[k]; S.today = sideDay[k]; S.limit = S.money * S.capPct / 100;
+    if (S.today <= -S.limit) halt[k] = `${k === 'stock' ? 'stocks' : 'options'} down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`;
+    else if (sideStreak[k]) halt[k] = sideStreak[k];
+  } else if (capHit) halt.stock = halt.opt = `daily loss cap ${LOSS_CAP}% hit`;
+  for (const k of ['stock', 'opt']) if (halt[k] && !haltSaid.has(TODAY + k)) {
+    haltSaid.add(TODAY + k);
+    if (!SPLIT) { if (k === 'stock') alerts.push(`\u26d4 ${halt[k]} \u2014 no new trades today`); continue; }
+    const msg = `${halt[k]} \u2014 no new ${k === 'stock' ? 'stock' : 'option'} trades today${k === 'opt' ? '; open options are closed' : ''}; ${k === 'stock' ? 'options' : 'stocks'} carry on`;
+    act(msg); alerts.push('\u26d4 ' + msg);
+  }
 
   // ---- cancel stale entries ----
   for (const o of openOrders) {
@@ -537,6 +570,10 @@ async function run() {
   }
   const liveOrders = openOrders.filter(o => !o._cancelled);
   for (const o of liveOrders) if (o.side === 'buy') SL[kindOf(o.symbol)].used += (+o.qty || 0) * (+o.limit_price || 0) * (isOpt(o.symbol) ? 100 : 1);
+  const r0 = x => Math.round(x);
+  lastSplit = { at: new Date().toISOString(), on: SPLIT, optShare: CFG.optSharePct, stake: r0(equity),
+    stock: { money: r0(SIDE.stock.money), used: r0(sideUsed('stock')), today: SPLIT ? sideDay.stock : null, limitPct: SIDE.stock.capPct, halted: halt.stock },
+    opt: { money: r0(SIDE.opt.money), used: r0(sideUsed('opt')), today: SPLIT ? sideDay.opt : null, limitPct: SIDE.opt.capPct, halted: halt.opt } };
 
   // ---- RSI-2 swing positions: sell at the close once above the 5-day average (or after 10 sessions) ----
   const swingStk = stockPos.map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-r-' + p.symbol + '-')) })).filter(x => x.e);
@@ -570,7 +607,7 @@ async function run() {
       const daysToExp = (Date.parse(dash8(exp)) - Date.parse(ymdDash(Date.now()))) / 864e5;
       if (plpc >= OPT_TP) await out(`${p.symbol} +${plpc.toFixed(0)}% \u2014 take profit`);
       else if (plpc <= -CFG.optStop) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
-      else if (capHit) await out(`${p.symbol} daily loss cap hit \u2014 closing options`);
+      else if (halt.opt) await out(`${p.symbol} ${SPLIT ? 'options daily loss limit' : 'daily loss cap'} hit \u2014 closing options`);
       else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options`);
       else if (daysToExp <= 3) await out(`${p.symbol} ${daysToExp} days to expiry \u2014 out before time decay accelerates`);
       else if (MINS >= 950 && px && held(und, day8) > 0) { const isPut = cid(e).startsWith('sd-p-'); const x = (isPut ? rsi2ShortExit : rsi2Exit)(completed(bars0, und).map(b => b.c), px, held(und, day8), CFG.maxHold); if (x.exit) await out(`${p.symbol} stock ${x.why} \u2014 selling the ${isPut ? 'PUT' : 'CALL'}`); }
@@ -619,7 +656,7 @@ async function run() {
     const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }); await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
     if (plpc >= OPT_TP) await out(`${p.symbol} +${plpc.toFixed(0)}% \u2014 take profit`);
     else if (plpc <= -CFG.optStop) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
-    else if (capHit) await out(`${p.symbol} daily loss cap hit \u2014 closing options`);
+    else if (halt.opt) await out(`${p.symbol} ${SPLIT ? 'options daily loss limit' : 'daily loss cap'} hit \u2014 closing options`);
     else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options before the volatility`);
     else if (exp <= TODAY) await out(`${p.symbol} expires today \u2014 out`);
     else if (day < TODAY && MINS >= 940) await out(`${p.symbol} time stop \u2014 options are held one night at most`);
@@ -627,11 +664,12 @@ async function run() {
   }
 
   // ---- day trading (own windows and limits; manages its open trades every beat, even when the switch is off) ----
-  try { await dayTradeCycle({ equity, acct, positions, hist, liveOrders, G, capHit, slBudget, sellsFor, cid }); }
+  try { await dayTradeCycle({ equity, acct, positions, hist, liveOrders, G, capHit: !!(halt.stock && halt.opt), halt, slBudget, sellsFor, cid }); }
   catch (e) { act('Day-trade engine error: ' + (e.message || e).slice(0, 120)); }
 
   // ---- what the bot is looking at (always, even when it cannot enter: the Bot trades tab shows it) ----
-  const gated = capHit || MINS < G.minStart || MINS >= ENTRY_END || G.block;
+  const bothHalted = !!(halt.stock && halt.opt);
+  const gated = bothHalted || MINS < G.minStart || MINS >= ENTRY_END || G.block;
   if (gated && lastWatch && Date.now() - Date.parse(lastWatch.at) < 20000) return;   // nothing to enter: refresh the watch list every 20 s, not every beat
   const bars = await loadBars();
   const last = await latestPrices(UNIVERSE);
@@ -669,12 +707,12 @@ async function run() {
       else { row.tp = r2d(avg * mult * (1 + OPT_TP / 100)); row.stop = r2d(avg * mult * (1 - CFG.optStop / 100)); const m2 = OPT_RE.exec(p.symbol); row.exp = '20' + m2[2].slice(0, 2) + '-' + m2[2].slice(2, 4) + '-' + m2[2].slice(4, 6); }
       heldRows.push(row);
     }
-    lastWatch = { at: new Date().toISOString(), idle: capHit ? 'daily loss cap hit' : MINS < G.minStart ? 'before the entry window' : MINS >= ENTRY_END ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'both daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= ENTRY_END ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
       buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
   }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
   // ---- new entries ----
-  if (capHit) { act(`Daily loss cap ${LOSS_CAP}% hit (${dayPct.toFixed(2)}%) — no new trades today`); return; }
+  if (bothHalted) { if (!SPLIT) act(`Daily loss cap ${LOSS_CAP}% hit (${dayPct.toFixed(2)}%) — no new trades today`); return; }
   if (MINS < G.minStart || MINS >= ENTRY_END) { console.log('Outside the RSI-2 entry window.'); return; }
   if (G.block) { console.log('Paused by market check.'); return; }
 
@@ -698,7 +736,7 @@ async function run() {
   if (sigs.length) act(`RSI-2 dips ${CFG.intraday ? 'right now (intraday)' : 'today'}: ${sigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
   const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
 
-  if (STK_ON) {
+  if (STK_ON && !halt.stock) {
     let slots = MAX_POS - stockPos.length - liveOrders.filter(o => o.side === 'buy' && !isOpt(o.symbol)).length;
     for (const s of sigs) {
       if (slots <= 0) break;
@@ -721,7 +759,7 @@ async function run() {
   }
 
   // CALLs on the same RSI-2 dips (puts are off: the short side was not part of the winning research)
-  if ((OPT_ON || PUT_ON) && !G.noOptions) {
+  if ((OPT_ON || PUT_ON) && !G.noOptions && !halt.opt) {
     let slots = MAX_OPT - optPos.length - liveOrders.filter(o => o.side === 'buy' && isOpt(o.symbol)).length;
     const hasOptOn = und => optPos.some(p => OPT_RE.exec(p.symbol)[1] === und) || liveOrders.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === und);
     const optSets = [];
@@ -803,7 +841,7 @@ async function writeJournal() {
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
     settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, engine: { cycleMs: engine.cycleMs, cycleMax: engine.cycleMax, cycles: engine.cycles, avgCallMs: engine.calls ? Math.round(engine.callMs / engine.calls) : 0, calls: engine.calls, errorsHour: engine.hourErrors.length, lastError: engine.lastError, symbols: UNIVERSE.length, beatMs: +process.env.BEAT_MS || 2000, scan: CFG.universe === 'scan' ? { ...scanStatus } : null },
     // panels the bot only computes while the market is open: a process that has not computed them yet keeps the previous ones
-    risk: lastRisk || prev.risk || null, watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
+    risk: lastRisk || prev.risk || null, split: lastSplit || prev.split || null, watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
     limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {
     // Only the timestamp, paper/live flag, stream health and engine health stay readable; the page decrypts the rest with the same passphrase.

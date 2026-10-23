@@ -59,3 +59,30 @@ export function openRisk({ positions, orders, stopFor }) {
   }
   return r;
 }
+
+// Today's profit or loss for each side of the money split (stocks / options), from the positions held now and today's fills:
+// value now − value at yesterday's close + money from today's sells − money spent on today's buys, symbol by symbol.
+// It counts swing positions bought before today as well as same-day round trips. `lastDay` holds yesterday's closing price for
+// symbols that were sold out today (the bot remembers it from earlier checks); a missing one counts those shares at their sale price.
+const OPT_SYM = /^[A-Z.]+\d{6}[CP]\d{8}$/;
+export function sideDayPl({ positions = [], fills = [], lastDay = {} } = {}) {
+  const per = {}, get = s => per[s] || (per[s] = { now: 0, qty: 0, last: null, buyQ: 0, sellQ: 0, cash: 0, sellAmt: 0, px: null });
+  for (const p of positions) {
+    const x = get(p.symbol), m = OPT_SYM.test(p.symbol) ? 100 : 1;
+    x.qty = +p.qty || 0; x.now = x.qty * (+p.current_price || 0) * m; x.last = +p.lastday_price > 0 ? +p.lastday_price : null; x.px = +p.current_price || null;
+  }
+  for (const f of fills) {
+    if (!f || !f.symbol) continue;
+    const x = get(f.symbol), m = OPT_SYM.test(f.symbol) ? 100 : 1, q = Math.abs(+f.qty || 0), px = +f.price || 0;
+    if (/^buy/.test(f.side)) { x.buyQ += q; x.cash -= q * px * m; } else { x.sellQ += q; x.cash += q * px * m; x.sellAmt += q * px; }
+  }
+  const out = { stock: 0, opt: 0 };
+  for (const [sym, x] of Object.entries(per)) {
+    const m = OPT_SYM.test(sym) ? 100 : 1, prevQ = Math.max(0, x.qty - x.buyQ + x.sellQ);
+    let lp = x.last || (+lastDay[sym] > 0 ? +lastDay[sym] : null);
+    if (prevQ > 1e-9 && !lp) lp = x.sellQ > 0 ? x.sellAmt / x.sellQ : x.px || 0;
+    out[m === 100 ? 'opt' : 'stock'] += x.now - prevQ * (lp || 0) * m + x.cash;
+  }
+  out.stock = Math.round(out.stock * 100) / 100; out.opt = Math.round(out.opt * 100) / 100;
+  return out;
+}

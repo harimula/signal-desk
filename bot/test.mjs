@@ -1,7 +1,7 @@
 // Unit tests for the bot's rules. Run: node bot/test.mjs  (also runs on every push via GitHub Actions)
 import assert from 'node:assert/strict';
 import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit, rsi2Trigger, rsi2ExitLevel } from './strategy.mjs';
-import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf } from './risk.mjs';
+import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
 import { buildJournal, parseSym } from './journal.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
@@ -274,6 +274,33 @@ test('swing entry window: any end time from 10:00 to 15:45 ET is kept (15:30 use
   assert.equal(normalize({ entryEnd: '16:00' }).entryEnd, '11:00'); assert.equal(normalize({ entryEnd: '09:50' }).entryEnd, '11:00');
 });
 test('stake setting: validated, 0 means the whole account', () => { assert.equal(normalize({ stakeUsd: 5000 }).stakeUsd, 5000); assert.equal(normalize({ stakeUsd: -3 }).stakeUsd, 0); assert.equal(normalize({}).stakeUsd, 0); });
+
+test('money split: settings default to 80/20 with their own loss limits, and are validated', () => {
+  const c = normalize({}); assert.equal(c.split, true); assert.equal(c.optSharePct, 20); assert.equal(c.optDayCap, 10);
+  const d = normalize({ preset: 'custom', split: false, optSharePct: 150, optDayCap: 0 }); assert.equal(d.split, false); assert.equal(d.optSharePct, 95); assert.equal(d.optDayCap, 1);
+  assert.equal(normalize({ split: 'yes' }).split, true, 'a non-boolean is ignored');
+});
+test('money split: today\'s P/L per side counts overnight holdings from yesterday\'s close', () => {
+  const r = sideDayPl({ positions: [{ symbol: 'AAA', qty: '10', current_price: '105', lastday_price: '100' }] });
+  assert.equal(r.stock, 50); assert.equal(r.opt, 0);
+});
+test('money split: a buy made today counts from its fill price, not from yesterday', () => {
+  const r = sideDayPl({ positions: [{ symbol: 'AAA', qty: '10', current_price: '103', lastday_price: '99' }], fills: [{ symbol: 'AAA', side: 'buy', qty: '10', price: '100' }] });
+  assert.equal(r.stock, 30);
+});
+test('money split: a position sold out today counts against yesterday\'s close the bot remembered', () => {
+  assert.equal(sideDayPl({ fills: [{ symbol: 'AAA', side: 'sell', qty: '10', price: '95' }], lastDay: { AAA: 100 } }).stock, -50);
+  assert.equal(sideDayPl({ fills: [{ symbol: 'AAA', side: 'sell', qty: '10', price: '95' }] }).stock, 0, 'unknown close: counted at the sale price, not as a $950 gain');
+});
+test('money split: options land on the options side, priced per contract (x100)', () => {
+  const r = sideDayPl({ positions: [{ symbol: 'AAA261113C00100000', qty: '2', current_price: '3', lastday_price: '4' }, { symbol: 'BBB', qty: '1', current_price: '50', lastday_price: '50' }],
+    fills: [{ symbol: 'CCC261113P00050000', side: 'buy', qty: '1', price: '2' }, { symbol: 'CCC261113P00050000', side: 'sell', qty: '1', price: '2.5' }] });
+  assert.equal(r.opt, -200 + 50); assert.equal(r.stock, 0);
+});
+test('money split: a partial sale of an overnight holding', () => {
+  const r = sideDayPl({ positions: [{ symbol: 'AAA', qty: '6', current_price: '110', lastday_price: '100' }], fills: [{ symbol: 'AAA', side: 'sell', qty: '4', price: '105' }] });
+  assert.equal(r.stock, 6 * 10 + 4 * 5);
+});
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

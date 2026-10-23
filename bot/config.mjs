@@ -22,6 +22,9 @@ export const DEFAULTS = {
   // Money per trade and a total ceiling for each sleeve (stock / CALL / PUT). Each sleeve uses either % of the account or
   // a fixed dollar amount, whichever its Unit says. A cap of 0 means no ceiling beyond the position-count limits.
   stockUnit: 'pct', callUnit: 'pct', putUnit: 'pct',
+  // Money split: stocks and options each get their own share of the stake and their own daily loss limit (dayCap is then
+  // a % of the stock money, optDayCap a % of the options money); off = one shared pool and one account-wide dayCap.
+  split: true, optSharePct: 20, optDayCap: 10,
   putPct: 1, stockUsd: 10000, callUsd: 2000, putUsd: 1000,
   stockCapPct: 0, callCapPct: 0, putCapPct: 0, stockCapUsd: 0, callCapUsd: 0, putCapUsd: 0,
 };
@@ -30,7 +33,7 @@ export const RANGES = {
   riskPct: [0.05, 3], optRiskPct: [0.05, 3], maxHeat: [0.5, 15], perSector: [1, 10], maxPositions: [1, 20], maxOptions: [0, 10],
   dayCap: [0.5, 20], weekCap: [1, 30], streak: [1, 10], stockPct: [1, 30], optPct: [0.5, 10],
   putPct: [0.5, 10], stockUsd: [0, 1e7], callUsd: [0, 1e7], putUsd: [0, 1e7],
-  stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
+  optSharePct: [5, 95], optDayCap: [1, 50], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
   scanSize: [50, 400], scanMinPrice: [1, 500],
   liveSizePct: [5, 100], stakeUsd: [0, 1e8], dayOrMin: [5, 60], dayMaxTrades: [1, 10], dayStreak: [1, 5], dayRiskPct: [0.1, 2], dayTarget: [1, 4], dayRvol: [0.5, 3], dayTimeStop: [15, 180], dayOptTp: [10, 200], dayOptStop: [20, 80], dayOptDteMax: [1, 14],
   rsiThreshold: [2, 30], maxHold: [1, 30], optTakeProfit: [10, 300], optStop: [20, 90], holdFloor: [5, 60], staleMin: [5, 240],
@@ -42,7 +45,7 @@ export function normalize(raw) {
   if (raw.preset && PRESETS[raw.preset]) { c.preset = raw.preset; Object.assign(c, PRESETS[raw.preset]); }
   else if (raw.preset === 'custom') c.preset = 'custom';
   for (const k of Object.keys(RANGES)) if (raw[k] != null && isFinite(+raw[k]) && (c.preset === 'custom' || !(k in PRESETS.balanced))) c[k] = clamp(+raw[k], RANGES[k]);
-  for (const k of ['stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
+  for (const k of ['split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
   if (raw.universe === 'scan' || raw.universe === 'list') c.universe = raw.universe;
   for (const k of ['stockUnit', 'callUnit', 'putUnit']) if (raw[k] === 'pct' || raw[k] === 'usd') c[k] = raw[k];
   c.mode = raw.mode === 'live' && raw.liveConfirm === 'I UNDERSTAND THE RISK' ? 'live' : 'paper';
@@ -56,4 +59,4 @@ export function normalize(raw) {
 }
 export const entryEndMin = c => { const [h, m] = c.entryEnd.split(':').map(Number); return h * 60 + m; };
 const money = (c, unit, pct, usd) => c[unit] === 'usd' ? '$' + c[usd] : c[pct] + '%';
-export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''}${c.mode === 'live' ? ' · LIVE at ' + c.liveSizePct + '% size' : ''}${c.stakeUsd > 0 ? ' · stake $' + c.stakeUsd : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;
+export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''}${c.mode === 'live' ? ' · LIVE at ' + c.liveSizePct + '% size' : ''}${c.stakeUsd > 0 ? ' · stake $' + c.stakeUsd : ''}${c.split ? ' · split ' + (100 - c.optSharePct) + '/' + c.optSharePct + ' stocks/options' : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;
