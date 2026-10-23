@@ -83,15 +83,16 @@ async function session(label, prep) {
   const tipOn = await page.$eval('#sd-tip', e => e.classList.contains('on') && /breakout/.test(e.textContent)).catch(() => false);
   await page.mouse.move(2, 2); await page.evaluate(() => window.renderAll()); await page.waitForTimeout(200);
   check('hover help: settings labels are explained, the card shows on hover, and a redraw keeps it', nTips >= 40 && tipOn && (await page.$$eval('[data-tip]', e => e.length)) >= nTips, `${nTips} labels, card ${tipOn}`);
-  await page.fill('#st-optSharePct', '30');
-  await page.evaluate(() => document.querySelector('#st-optSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(200);
-  const splitNote = await page.evaluate(() => (document.querySelector('#st-split') || {}).checked === true && /Options 30%/.test(document.querySelector('#st-split').closest('div').textContent.replace(/\s+/g, ' ')));
-  check('money split: on by default, and the share typed in updates the stocks / options note', splitNote);
+  const note0 = await page.evaluate(() => (document.querySelector('#stSplitNote') || {}).textContent || '');
+  await page.fill('#st-callSharePct', '25');
+  await page.evaluate(() => document.querySelector('#st-callSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(200);
+  const note1 = await page.evaluate(() => (document.querySelector('#st-split') || {}).checked === true && (document.querySelector('#stSplitNote') || {}).textContent || '');
+  check('money split: on by default at 60/30/10, and a share typed in updates the stocks / CALLs / PUTs note', /Stocks 60%.*CALLs 30%.*PUTs 10%/.test(note0) && /Stocks 65%.*CALLs 25%.*PUTs 10%/.test(note1), note0 + ' → ' + note1);
   await page.evaluate(() => document.querySelector('[data-st="save"]').click());
   let msg = '';
   for (let i = 0; i < 80; i++) { await page.waitForTimeout(250); msg = await page.evaluate(() => (document.querySelector('[data-st="save"]').parentElement.textContent || '').replace(/\s+/g, ' ')); if (/Saved|failed/.test(msg)) break; }
   check('settings: Save reaches GitHub with the typed value', puts.length === 1 && JSON.parse(Buffer.from(puts[0].content, 'base64')).rsiThreshold === 12, msg.slice(0, 120));
-  check('money split: Save writes split and the options share to config.json', puts.length === 1 && (c => c.split === true && c.optSharePct === 30 && c.optDayCap === 10)(JSON.parse(Buffer.from(puts[0].content, 'base64'))), puts.length ? Buffer.from(puts[0].content, 'base64').toString().slice(0, 0) : 'no save');
+  check('money split: Save writes the split and the CALL / PUT shares to config.json', puts.length === 1 && (c => c.split === true && c.callSharePct === 25 && c.putSharePct === 10 && c.optDayCap === 10)(JSON.parse(Buffer.from(puts[0].content, 'base64'))), puts.length ? Buffer.from(puts[0].content, 'base64').toString().slice(0, 0) : 'no save');
   check('settings: Save bar reports success', /Saved /.test(msg), msg.slice(0, 120));
   check('settings: no script error during save', errors.length === 0, errors.join(' | '));
   // Telegram connect: token check → finds the chat from the owner's /start → test message → both values sealed as secrets

@@ -275,9 +275,10 @@ test('swing entry window: any end time from 10:00 to 15:45 ET is kept (15:30 use
 });
 test('stake setting: validated, 0 means the whole account', () => { assert.equal(normalize({ stakeUsd: 5000 }).stakeUsd, 5000); assert.equal(normalize({ stakeUsd: -3 }).stakeUsd, 0); assert.equal(normalize({}).stakeUsd, 0); });
 
-test('money split: settings default to 80/20 with their own loss limits, and are validated', () => {
-  const c = normalize({}); assert.equal(c.split, true); assert.equal(c.optSharePct, 20); assert.equal(c.optDayCap, 10);
-  const d = normalize({ preset: 'custom', split: false, optSharePct: 150, optDayCap: 0 }); assert.equal(d.split, false); assert.equal(d.optSharePct, 95); assert.equal(d.optDayCap, 1);
+test('money split: settings default to 60/30/10 (stocks/CALLs/PUTs) with their own loss limits, and are validated', () => {
+  const c = normalize({}); assert.equal(c.split, true); assert.equal(c.callSharePct, 30); assert.equal(c.putSharePct, 10); assert.equal(c.optDayCap, 10);
+  const d = normalize({ preset: 'custom', split: false, callSharePct: 150, putSharePct: 5, optDayCap: 0 }); assert.equal(d.split, false); assert.equal(d.callSharePct, 100); assert.equal(d.putSharePct, 0, 'shares capped at the whole stake'); assert.equal(d.optDayCap, 1);
+  const e = normalize({ callSharePct: 70, putSharePct: 50 }); assert.equal(e.callSharePct + e.putSharePct, 100);
   assert.equal(normalize({ split: 'yes' }).split, true, 'a non-boolean is ignored');
 });
 test('money split: today\'s P/L per side counts overnight holdings from yesterday\'s close', () => {
@@ -292,10 +293,10 @@ test('money split: a position sold out today counts against yesterday\'s close t
   assert.equal(sideDayPl({ fills: [{ symbol: 'AAA', side: 'sell', qty: '10', price: '95' }], lastDay: { AAA: 100 } }).stock, -50);
   assert.equal(sideDayPl({ fills: [{ symbol: 'AAA', side: 'sell', qty: '10', price: '95' }] }).stock, 0, 'unknown close: counted at the sale price, not as a $950 gain');
 });
-test('money split: options land on the options side, priced per contract (x100)', () => {
+test('money split: CALLs and PUTs land on their own parts, priced per contract (x100)', () => {
   const r = sideDayPl({ positions: [{ symbol: 'AAA261113C00100000', qty: '2', current_price: '3', lastday_price: '4' }, { symbol: 'BBB', qty: '1', current_price: '50', lastday_price: '50' }],
     fills: [{ symbol: 'CCC261113P00050000', side: 'buy', qty: '1', price: '2' }, { symbol: 'CCC261113P00050000', side: 'sell', qty: '1', price: '2.5' }] });
-  assert.equal(r.opt, -200 + 50); assert.equal(r.stock, 0);
+  assert.equal(r.call, -200); assert.equal(r.put, 50); assert.equal(r.opt, -150); assert.equal(r.stock, 0);
 });
 test('money split: a partial sale of an overnight holding', () => {
   const r = sideDayPl({ positions: [{ symbol: 'AAA', qty: '6', current_price: '110', lastday_price: '100' }], fills: [{ symbol: 'AAA', side: 'sell', qty: '4', price: '105' }] });
