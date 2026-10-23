@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-2AMRGh6+90AwT1EPgtqy4S4nXAkoZZezKcVSN1QjEbU=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-37EB7fh7/t1V7qEz0N33DCJtIuMHz9u32iKrT2kyHdU=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -912,7 +912,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792789198';
+const BUILD_V = '1792789506';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2384,8 +2384,8 @@ function h5Card(H, cur) {
   if (!H || !(H.series || []).length) return '';
   const S = H.series.filter(x => !x.missing && x.pts && x.pts.length > 1), miss = H.series.filter(x => x.missing);
   if (!S.length) return '';
-  const COL = {bot: 'var(--accent)', breakout: 'var(--accent)', rsi2: 'var(--accent)', large: 'var(--muted)', mid: 'var(--line-mid)', small: 'var(--tb)'};
-  const DASH = {breakout: '2 3', rsi2: '6 3', large: '5 4'};
+  const COL = {bot: 'var(--accent)', breakout: 'var(--accent)', rsi2: 'var(--accent)', large: 'var(--muted)', mid: 'var(--line-mid)', small: 'var(--tb)', tech: 'var(--ts)', nasdaq: 'var(--ts)'};
+  const DASH = {breakout: '2 3', rsi2: '6 3', large: '5 4', nasdaq: '3 3'};
   const t0 = Date.parse(H.from), t1 = Date.parse(H.to), W = 640, Ht = 220, padR = 4, padL = 0;
   const all = S.flatMap(x => x.pts.map(p => p[1])), lo = Math.min(...all, 1), hi = Math.max(...all), ly = v => Math.log(v);
   const y = v => (Ht - 10 - (ly(v) - ly(lo)) / ((ly(hi) - ly(lo)) || 1) * (Ht - 22)).toFixed(1), x = d => (padL + (Date.parse(d) - t0) / ((t1 - t0) || 1) * (W - padR - padL)).toFixed(1);
@@ -2400,7 +2400,7 @@ function h5Card(H, cur) {
   const pcs = v => v == null ? '–' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${fmt(v, 1)}%</span>`;
   const rows = S.map(s => `<tr${s.kind === 'bot' ? ' style="background:var(--surface2)"' : ''}><td class="lt">${s.kind === 'bot' ? '<b>' + esc(s.label) + '</b>' : s.kind === 'part' ? '<span class="mut">↳ ' + esc(s.label) + '</span>' : esc(s.label)}</td><td><b>${money(cur.base * (1 + s.total / 100))}</b></td><td>${pcs(s.cagr)}</td><td class="neg">−${fmt(s.maxDD, 1)}%</td><td>${fmt(s.sharpe, 2)}</td>${years.map(yy => `<td>${pcs((s.years || {})[yy])}</td>`).join('')}</tr>`).join('');
   const fd = d => new Intl.DateTimeFormat('en-GB', {month: 'short', year: 'numeric', timeZone: 'UTC'}).format(new Date(d + 'T12:00:00Z'));
-  return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">📜 The last 5 years — the bot’s rules vs large, mid and small caps</b> <span class="mut" style="font-size:11.5px">· ${fd(H.from)} → ${fd(H.to)} · ${money(cur.base)} at the start, fresh start, costs included</span>
+  return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">📜 The last 5 years — the bot’s rules vs the market</b> <span class="mut" style="font-size:11.5px">· ${fd(H.from)} → ${fd(H.to)} · ${money(cur.base)} at the start, fresh start, costs included</span>
 <div style="position:relative;margin-top:8px"><svg viewBox="0 0 ${W} ${Ht}" preserveAspectRatio="none" style="width:100%;height:230px;display:block" role="img" aria-label="Growth of ${money(cur.base)} over 5 years for the bot and the index funds">${grid}${lines}</svg>${gLab}</div>
 <div class="mut" style="font-size:11.5px;margin-top:4px;line-height:1.9">${key}</div>
 <div class="tw" style="margin-top:8px"><table style="min-width:${560 + years.length * 60}px"><thead><tr><th class="lt">5 years</th><th>${money(cur.base)} became</th><th>Per year</th><th>Worst fall</th><th>Sharpe</th>${years.map(yy => `<th>${yy}${yy === years[0] ? '*' : yy === years[years.length - 1] ? '*' : ''}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>

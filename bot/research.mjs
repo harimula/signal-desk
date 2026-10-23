@@ -149,7 +149,7 @@ async function pullAdj(sym) {
 }
 const BENCH5 = MKT === 'IN'
   ? [['large', 'Large caps — Nifty 50 index fund', () => pullMf(118482)], ['mid', 'Mid caps — Nifty Midcap 150 index fund', () => pullMf(147622)], ['small', 'Small caps — Nifty Smallcap 250 index fund', () => pullMf(147623)]]
-  : [['large', 'Large caps — S&P 500 (SPY)', () => pullAdj('SPY')], ['mid', 'Mid caps — S&P MidCap 400 (IJH)', () => pullAdj('IJH')], ['small', 'Small caps — Russell 2000 (IWM)', () => pullAdj('IWM')]];
+  : [['large', 'Large caps — S&P 500 (SPY)', () => pullAdj('SPY')], ['mid', 'Mid caps — S&P MidCap 400 (IJH)', () => pullAdj('IJH')], ['small', 'Small caps — Russell 2000 (IWM)', () => pullAdj('IWM')], ['tech', 'Tech — Vanguard Information Technology (VGT)', () => pullAdj('VGT')], ['nasdaq', 'Nasdaq-100 (QQQ)', () => pullAdj('QQQ')]];
 function curveStats(pts) {                                   // pts: [[date, value]] from 1.0
   const v = pts.map(p => p[1]), n = v.length, yrs = (Date.parse(pts[n - 1][0]) - Date.parse(pts[0][0])) / (365.25 * 864e5);
   let pk = v[0], dd = 0; for (const x of v) { pk = Math.max(pk, x); dd = Math.max(dd, 1 - x / pk); }
