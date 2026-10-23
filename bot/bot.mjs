@@ -48,16 +48,30 @@ export function applyConfig(raw) {
 }
 // Market-scan universe: rebuilt once per trading day (and whenever the scan settings change).
 let scanCache = { day: '', key: '', symbols: null, info: null };
+// The market scan downloads ~20 daily bars for every US stock (12,000+), which can take minutes. It runs in the
+// background so a slow or failing scan never holds up a decision cycle (open positions are managed every beat);
+// until it is in, the bot uses the last successful scan (bot/scan.json, kept in the repo) or, failing that, the list.
+// A failed scan is retried after 10 minutes, not on every beat.
+let scanJob = null, scanFailAt = 0;
+const SCAN_FILE = 'bot/scan.json';
+function savedScan() { try { const j = JSON.parse(fs.readFileSync(SCAN_FILE, 'utf8')); return Array.isArray(j.symbols) && j.symbols.length >= 5 ? j : null; } catch (e) { return null; } }
 async function ensureUniverse() {
   if (CFG.universe !== 'scan') { UNIVERSE = CFG.symbols; return; }
   const key = CFG.scanSize + ':' + CFG.scanMinPrice;
   if (scanCache.symbols && scanCache.day === TODAY && scanCache.key === key) { UNIVERSE = scanCache.symbols; return; }
-  try {
-    const r = await scanUniverse({ T, D, size: CFG.scanSize, minPrice: CFG.scanMinPrice, log: m => act(m) });
-    if (r.symbols.length >= 5) { scanCache = { day: TODAY, key, symbols: r.symbols, info: r }; UNIVERSE = r.symbols; barsCache = { at: 0, bars: null }; }
-    else act('market scan returned too few stocks (' + r.symbols.length + ') \u2014 keeping the previous list');
-  } catch (e) { act('market scan failed (' + (e.message || e).slice(0, 80) + ') \u2014 using ' + (scanCache.symbols ? "yesterday's scan" : 'the listed stocks')); }
-  if (!scanCache.symbols) UNIVERSE = CFG.symbols;
+  if (!scanCache.symbols) { const sv = savedScan(); if (sv) scanCache = { day: sv.day || '', key: sv.key || '', symbols: sv.symbols, info: sv.info || null }; }
+  if (!scanJob && Date.now() - scanFailAt > 10 * 60000) {
+    act('market scan started (runs in the background; the bot keeps working meanwhile)');
+    scanJob = scanUniverse({ T, D, size: CFG.scanSize, minPrice: CFG.scanMinPrice, log: m => act(m) }).then(r => {
+      if (r.symbols.length >= 5) {
+        scanCache = { day: TODAY, key, symbols: r.symbols, info: r }; barsCache = { at: 0, bars: null };
+        try { fs.writeFileSync(SCAN_FILE, JSON.stringify({ day: TODAY, key, symbols: r.symbols, info: { at: r.at, scanned: r.scanned } })); } catch (e) {}
+      } else { scanFailAt = Date.now(); act('market scan returned too few stocks (' + r.symbols.length + ') \u2014 keeping the previous list'); }
+    }).catch(e => { scanFailAt = Date.now(); act('market scan failed (' + (e.message || e).slice(0, 80) + ') \u2014 using ' + (scanCache.symbols ? 'the last good scan' : 'the listed stocks') + '; retrying in 10 min'); })
+      .finally(() => { scanJob = null; });
+  }
+  if (scanJob) await Promise.race([scanJob, sleepMs(3000)]);            // a quick scan (or a test) lands in this cycle; a slow one in a later one
+  UNIVERSE = scanCache.symbols || CFG.symbols;
 }
 
 // =====================================================================================================================
@@ -219,11 +233,12 @@ async function call(base, path, opt = {}) {
   let lastErr = null;
   for (let attempt = 0; attempt <= (retriable ? HTTP_RETRIES : 0); attempt++) {
     if (attempt) await sleepMs(Math.min(8000, 1000 * 2 ** (attempt - 1)) + Math.random() * 300);
-    const ac = new AbortController(), timer = setTimeout(() => ac.abort(), HTTP_TIMEOUT_MS), tCall = Date.now();
+    const lim = opt.timeoutMs || HTTP_TIMEOUT_MS, ac = new AbortController(), timer = setTimeout(() => ac.abort(), lim), tCall = Date.now();
     let again = false;
     engine.calls++;
     try {
-      const r = await fetch(base + path, { headers: H, ...opt, signal: ac.signal });
+      const { timeoutMs, ...fo } = opt; void timeoutMs;
+      const r = await fetch(base + path, { headers: H, ...fo, signal: ac.signal });
       engine.callMs += Date.now() - tCall;
       if (r.status === 204) return null;
       const tx = await r.text();
@@ -231,7 +246,7 @@ async function call(base, path, opt = {}) {
       lastErr = new Error(path.split('?')[0] + ' HTTP ' + r.status + ' ' + tx.slice(0, 200));
       again = r.status === 429 || r.status >= 500;                                 // other 4xx: our mistake, retrying will not help
     } catch (e) {
-      lastErr = new Error(path.split('?')[0] + ' ' + (e.name === 'AbortError' ? `timed out after ${HTTP_TIMEOUT_MS / 1000}s` : e.message));
+      lastErr = new Error(path.split('?')[0] + ' ' + (e.name === 'AbortError' ? `timed out after ${lim / 1000}s` : e.message));
       again = e.name === 'AbortError' || /fetch failed|ECONN|ETIMEDOUT|EAI_AGAIN|socket/i.test(e.message);
     } finally { clearTimeout(timer); }
     if (!again || !retriable) break;

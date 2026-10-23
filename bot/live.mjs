@@ -36,7 +36,7 @@ async function pollConfig() {
 }
 function commit() {
   if (process.env.BOT_NO_COMMIT === '1') return;
-  try { execSync('git add bot/journal.json && (git diff --cached --quiet || (git commit -q -m "Bot journal" && (git push -q || (git pull -q --rebase -X theirs origin main && git push -q))))', { stdio: 'inherit', shell: '/bin/bash' }); }
+  try { execSync('git add bot/journal.json && (git add bot/scan.json 2>/dev/null || true) && (git diff --cached --quiet || (git commit -q -m "Bot journal" && (git push -q || (git pull -q --rebase -X theirs origin main && git push -q))))', { stdio: 'inherit', shell: '/bin/bash' }); }
   catch (e) { console.log('commit skipped:', e.message.split('\n')[0]); }
 }
 

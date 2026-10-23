@@ -51,6 +51,7 @@ jobs:
           git config user.name "signal-desk-bot"
           git config user.email "bot@users.noreply.github.com"
           git add bot/journal.json
+          git add bot/scan.json 2>/dev/null || true
           git diff --cached --quiet && exit 0
           git commit -m "Bot journal"
           for i in 1 2 3; do

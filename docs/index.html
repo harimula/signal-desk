@@ -439,7 +439,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <section id="testing">
 <h2><span class="k">08</span>Testing and quality</h2>
 <ul>
-  <li><code>bot/test-orders.mjs</code>: a fake broker serves a just-dipped and a just-popped stock and the test checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked), money limits, market scan, journal continuity across restarts, and the day-trading engine — 42 checks. Runs in CI.</li>
+  <li><code>bot/test-orders.mjs</code>: a fake broker serves a just-dipped and a just-popped stock and the test checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked), money limits, market scan, journal continuity across restarts, and the day-trading engine — 43 checks. Runs in CI.</li>
   <li><code>bot/test.mjs</code>: 55 unit tests (indicators, journal encryption round trip, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
   <li>Integration tests against mock brokers (REST + websocket) with a fake clock: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.</li>
   <li>Page checks in headless Chromium at desktop and phone widths for every tab, including scroll preservation during live ticks.</li>
@@ -452,6 +452,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-23</td><td>Market scan runs in the background with its own 60 s request limit and a 10-minute retry; the last good scan is kept in <code>bot/scan.json</code>. A slow scan no longer holds up the bot’s checks</td><td>03, 05</td></tr>
 <tr><td>2026-10-23</td><td>Late start fix: the bot workflow also fires from 8:45 ET and waits until 9:20, because GitHub often starts schedules 10–20 minutes late; first journal reaches the site right after the first check</td><td>03</td></tr>
 <tr><td>2026-10-23</td><td>Watch card on phones: long BUY / CALL / PUT ticker lists now wrap inside the card instead of running past it; count of stocks under each list</td><td>02</td></tr>
 <tr><td>2026-10-22</td><td>Journal continuity fix: a run starting after the close (or at 9:20 before the open) no longer blanks the watch list, market check, risk panel, day block and action log — the bot decrypts its own previous journal and carries them forward; action log no longer duplicates on rewrite; the after-close run exits at once when the day’s session already finished (no second day summary); the watch card is always present on the Bot trades tab</td><td>05, 07, 08</td></tr>

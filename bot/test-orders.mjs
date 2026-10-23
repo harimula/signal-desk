@@ -61,6 +61,7 @@ if (process.argv[2] === 'child') {
       if (p === '/v2/clock') return send({ is_open: !FAKE.closed, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
       if (p === '/v2/account') return send({ equity: '100000', last_equity: '100000', cash: '100000', buying_power: '400000', pattern_day_trader: false, daytrade_count: 0, status: 'ACTIVE', multiplier: '4' });
       if (p === '/v2/positions') return send(FAKE.positions || []);
+      if (p === '/v2/assets' && FAKE.slowAssets) return setTimeout(() => send([]), FAKE.slowAssets);
       if (p === '/v2/assets') return send(Object.keys(BARS).map(s => ({ symbol: s, tradable: true, exchange: 'NASDAQ' })).concat([{ symbol: 'OTCX', tradable: true, exchange: 'OTC' }, { symbol: 'WARR.WS', tradable: true, exchange: 'NYSE' }]));
       if (p === '/v2/account/activities/FILL') return send([]);
       if (p === '/v2/account/portfolio/history') return send({ equity: [100000, 100000], timestamp: [1, 2], base_value: 100000 });
@@ -89,12 +90,12 @@ if (process.argv[2] === 'child') {
   const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
   if (FAKE.prevJournal) fs.writeFileSync('bot/journal.json', JSON.stringify(FAKE.journalKey ? await bot.encryptJournal(FAKE.prevJournal, FAKE.prevKey || FAKE.journalKey, 1000) : FAKE.prevJournal));   // what the previous run left behind
   bot.applyConfig({ symbols: ['DIP', 'POP', 'FALL'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
-  await bot.botCycle({ journal: !!FAKE.closed });
+  const tc0 = REAL.now(); await bot.botCycle({ journal: !!FAKE.closed }); const cycleMs = REAL.now() - tc0;
   if (FAKE.cycles > 1) for (let k = 1; k < FAKE.cycles; k++) await bot.botCycle({ journal: true });   // a longer session: the journal is rewritten several times
-  server.close();
+  server.closeAllConnections && server.closeAllConnections(); server.close();
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
   const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
-  console.log('RESULT ' + JSON.stringify({ acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  console.log('RESULT ' + JSON.stringify({ cycleMs, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
@@ -207,5 +208,8 @@ check('journal: an open-market cycle replaces the carried-over watch list with a
 check('journal: rewriting the journal several times never duplicates the action log', () => { const a = J2.acts || []; assert.ok(a.length > 1, JSON.stringify(a)); assert.equal(new Set(a).size, a.length, 'duplicates: ' + JSON.stringify(a)); assert.equal(a[0], 'Earlier today: DIP RSI-2 dip buy'); });
 const J3 = run({ stocks: true, options: true }, { time: '2026-10-23T20:01:00Z', closed: true, journalKey: 'test-pass', prevKey: 'old-pass', prevJournal: prevJ });
 check('journal: a previous entry written under another passphrase is skipped, not a crash (fresh journal, still encrypted)', () => { assert.ok(J3.enc); assert.equal(J3.watch, null); assert.ok(Array.isArray(J3.acts)); });
+
+const SL = run({ stocks: true, options: false, universe: 'scan', symbols: ['DIP', 'POP', 'FALL'] }, { slowAssets: 20000 });
+check('market scan: a scan that takes minutes does not hold up the cycle; the bot trades its list meanwhile', () => { assert.ok(SL.cycleMs < 12000, 'cycle took ' + SL.cycleMs + ' ms'); assert.ok(SL.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(SL.acts)); assert.ok((SL.acts || []).some(m => /market scan started/.test(m))); });
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

@@ -26,10 +26,10 @@ export async function scanUniverse({ T, D, size = 200, minPrice = 5, log = () =>
   const syms = (assets || []).filter(a => a.tradable && EXCHANGES.has(a.exchange) && SYM_OK.test(a.symbol)).map(a => a.symbol).sort();
   log(`market scan: ${syms.length} tradable US stocks`);
   const start = new Date(Date.now() - 32 * 864e5).toISOString(), bars = {};
-  for (const part of chunk(syms, 1000)) {
+  for (const part of chunk(syms, 500)) {                      // 500 symbols × ~22 bars per request: big, so each gets a 60 s limit
     let token = '';
     for (let k = 0; k < 30; k++) {
-      const j = await D(`/v2/stocks/bars?symbols=${part.join(',')}&timeframe=1Day&start=${start}&limit=10000&feed=iex&sort=asc${token ? '&page_token=' + token : ''}`);
+      const j = await D(`/v2/stocks/bars?symbols=${part.join(',')}&timeframe=1Day&start=${start}&limit=10000&feed=iex&sort=asc${token ? '&page_token=' + token : ''}`, { timeoutMs: 60000 });
       for (const [s, arr] of Object.entries(j.bars || {})) bars[s] = (bars[s] || []).concat(arr);
       token = j.next_page_token; if (!token) break;
     }
