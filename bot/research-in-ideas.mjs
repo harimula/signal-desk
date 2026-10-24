@@ -35,7 +35,12 @@ async function pullMf(code) {
 const sma = (C, n, i) => { if (i < n - 1) return null; let s = 0; for (let k = i - n + 1; k <= i; k++) s += C[k]; return s / n; };
 
 // ---- the portfolio engine with lot-level Indian tax ----
-function run({ data, cal, from, kind, pos = 0.10, maxPos = 10, top = 20, safe = false, nifty }) {
+function run(o) { const pre = runOnce({ ...o, noTax: true }), post = runOnce(o);
+  // before-tax figures from an identical run with no tax; after-tax from the taxed run
+  for (const y of Object.keys(post.years)) post.years[y].pre = pre.years[y] ? pre.years[y].after : null;
+  return { ...post, preTaxEnd: pre.afterEnd, maxDDPre: pre.maxDD };
+}
+function runOnce({ data, cal, from, kind, pos = 0.10, maxPos = 10, top = 20, safe = false, nifty, noTax = false }) {
   const days = cal.filter(d => d >= from);
   let cash = STAKE; const lots = {};                                      // sym -> [{ sh, cost (per share, incl. buying cost), d }]
   const yr = {}, Y = d => d.slice(0, 4); let carry = 0, trades = 0, wins = 0;
@@ -47,7 +52,7 @@ function run({ data, cal, from, kind, pos = 0.10, maxPos = 10, top = 20, safe = 
     const b = yr[y] || { st: 0, lt: 0 }; let st = b.st, lt = b.lt;
     if (carry < 0) { const use = Math.min(-carry, Math.max(0, st)); st -= use; carry += use; const use2 = Math.min(-carry, Math.max(0, lt)); lt -= use2; carry += use2; }
     if (st < 0) { const use = Math.min(-st, Math.max(0, lt)); lt -= use; st += use; }
-    const tax = ST * Math.max(0, st) + LT * Math.max(0, lt - LT_FREE);
+    const tax = noTax ? 0 : ST * Math.max(0, st) + LT * Math.max(0, lt - LT_FREE);
     carry += Math.min(0, st) + Math.min(0, lt);
     (yr[y] = yr[y] || { st: 0, lt: 0 }).tax = tax; cash -= tax; return tax;
   };
