@@ -692,7 +692,12 @@ async function run() {
     const B = completed(bars, sym); if (B.length < 205) continue;
     const px0 = last[sym] && last[sym].p, s = CFG.intraday && px0 ? liveSignal(B, px0, 'long', CFG.rsiThreshold) : rsi2Signal(B, B.map(b => b.c), B.length - 1, CFG.rsiThreshold); if (s) sigs.push({ sym, ...s, px: last[sym] && last[sym].p });
   }
-  sigs.sort((a, b) => a.r2 - b.r2);                                      // deepest dip first, like the backtest
+  // Leaders first (setting pickBy = 'leaders'): among today's dips, buy the stocks that beat the market over the last 3 months.
+  // The research (33 years) ranked this above the deepest-dip order in every period. 'dip' = deepest dip first, like the original test.
+  const spyR60 = spyPrev && spyPrev.closes.length > 61 ? spyPrev.closes[spyPrev.closes.length - 1] / spyPrev.closes[spyPrev.closes.length - 61] - 1 : 0;
+  for (const s of sigs) { const C = completed(bars, s.sym).map(b => b.c); s.lead = C.length > 61 ? r2d(((C[C.length - 1] / C[C.length - 61] - 1) - spyR60) * 100) : null; }
+  if (CFG.pickBy === 'leaders') sigs.sort((a, b) => (b.lead ?? -1e9) - (a.lead ?? -1e9) || a.r2 - b.r2);
+  else sigs.sort((a, b) => a.r2 - b.r2);                                 // deepest dip first, like the backtest
   const shortSigs = [];                                                  // PUT candidates (switch is OFF unless Trade puts is ticked)
   if (PUT_ON) for (const sym of UNIVERSE) {
     const B = completed(bars, sym); if (B.length < 205) continue;
@@ -707,7 +712,8 @@ async function run() {
       const r = rsi2(cl), m = sma(cl, 200);
       if (r == null || m == null) continue;
       const base = B.map(b => b.c);                                  // completed closes only: the trigger is a level for today's close
-      rows.push({ s: sym, px: r2d((last[sym] && last[sym].p) || cl[cl.length - 1]), r2: Math.round(r * 10) / 10, up: cl[cl.length - 1] > m, s200: r2d(m),
+      const lead = base.length > 61 ? r2d(((base[base.length - 1] / base[base.length - 61] - 1) - spyR60) * 100) : null;
+      rows.push({ s: sym, px: r2d((last[sym] && last[sym].p) || cl[cl.length - 1]), r2: Math.round(r * 10) / 10, up: cl[cl.length - 1] > m, s200: r2d(m), lead,
         prev: r2d(base[base.length - 1]), buyAt: rsi2Trigger(base, CFG.rsiThreshold, 'long'), putAt: PUT_ON ? rsi2Trigger(base, CFG.rsiThreshold, 'short') : null });
     }
     const heldRows = [];
@@ -721,7 +727,7 @@ async function run() {
       else { row.tp = r2d(avg * mult * (1 + OPT_TP / 100)); row.stop = r2d(avg * mult * (1 - CFG.optStop / 100)); const m2 = OPT_RE.exec(p.symbol); row.exp = '20' + m2[2].slice(0, 2) + '-' + m2[2].slice(2, 4) + '-' + m2[2].slice(4, 6); }
       heldRows.push(row);
     }
-    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= ENTRY_END ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= ENTRY_END ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
       buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
   }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
@@ -747,7 +753,7 @@ async function run() {
 
   // ---- RSI-2 entries (selected by the 33-year out-of-sample research) ----
   lastSignals = { longs: [], shorts: [], rsi2: sigs, at: Date.now() };
-  if (sigs.length) act(`RSI-2 dips ${CFG.intraday ? 'right now (intraday)' : 'today'}: ${sigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
+  if (sigs.length) act(`RSI-2 dips ${CFG.intraday ? 'right now (intraday)' : 'today'}${CFG.pickBy === 'leaders' ? ', leaders first' : ''}: ${sigs.map(s => s.sym + ' (RSI-2 ' + s.r2 + (s.lead != null ? ', ' + (s.lead >= 0 ? '+' : '') + s.lead + '% vs market' : '') + ')').join(', ')}`);
   const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
 
   if (STK_ON && !halt.stock) {

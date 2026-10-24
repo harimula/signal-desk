@@ -13,6 +13,7 @@ export const DEFAULTS = {
   newsGuard: true, eventGuard: true, alerts: true, alertDetail: true,
   symbols: DEFAULT_SYMBOLS,
   universe: 'list', scanSize: 200, scanMinPrice: 5,
+  pickBy: 'leaders',   // which dips to buy first when there are more than slots: 'leaders' = strongest 3-month return vs the market; 'dip' = deepest dip
   // Day trading (experimental, OFF): rules in docs/daytrading-rules.html. Longs as shares (or CALLs), shorts as PUTs.
   dayTrade: false, dayStock: true, dayCalls: false, dayPuts: true,
   dayOrMin: 15, dayMaxTrades: 3, dayStreak: 2, dayRiskPct: 0.5, dayTarget: 2, dayRvol: 1.2, dayTimeStop: 60, dayOptTp: 50, dayOptStop: 40, dayOptDteMax: 7,
@@ -47,6 +48,7 @@ export function normalize(raw) {
   for (const k of Object.keys(RANGES)) if (raw[k] != null && isFinite(+raw[k]) && (c.preset === 'custom' || !(k in PRESETS.balanced))) c[k] = clamp(+raw[k], RANGES[k]);
   for (const k of ['split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
   if (raw.universe === 'scan' || raw.universe === 'list') c.universe = raw.universe;
+  if (raw.pickBy === 'leaders' || raw.pickBy === 'dip') c.pickBy = raw.pickBy;
   for (const k of ['stockUnit', 'callUnit', 'putUnit']) if (raw[k] === 'pct' || raw[k] === 'usd') c[k] = raw[k];
   if (c.callSharePct + c.putSharePct > 100) c.putSharePct = 100 - c.callSharePct;                  // the three shares can never add up to more than the stake
   c.mode = raw.mode === 'live' && raw.liveConfirm === 'I UNDERSTAND THE RISK' ? 'live' : 'paper';

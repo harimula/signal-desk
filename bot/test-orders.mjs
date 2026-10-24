@@ -31,6 +31,7 @@ if (process.argv[2] === 'child') {
   }, []);
   const BARS = {
     DIP: series(80, 120, [-0.04, -0.04]),        // uptrend, two sharp down days  -> RSI-2 ~ 0, above 200-day
+    LAG: (() => { const a = series(60, 118, [-0.05, -0.05]); const f = a[234].c; for (let i = 235; i < 298; i++) Object.assign(a[i], { o: f, h: f * 1.004, l: f * 0.996, c: f }); for (let i = 298; i < 300; i++) { const c = a[i - 1].c * 0.95; Object.assign(a[i], { o: c, h: c * 1.004, l: c * 0.996, c }); } return a; })(),   // also dipping (−5% twice) but flat for the 3 months before: 'leaders first' picks DIP (still rising), 'deepest dip' would pick LAG
     POP: series(120, 80, [0.04, 0.04]),          // downtrend, two sharp up days  -> RSI-2 ~ 100, below 200-day
     FALL: series(80, 120, [0.001, 0.001]),       // uptrend, quiet at yesterday's close; the live price below drops it 10%
     SPY: series(400, 520, [0.001, 0.001]),
@@ -158,7 +159,7 @@ check('intraday on: stocks that qualified at the close still qualify, and the wa
 
 const S = run({ stocks: true, options: false, universe: 'scan', scanSize: 50, scanMinPrice: 5, symbols: ['AAPL'] });
 check('market scan: the list setting is ignored and the most-traded stocks are watched instead', () => { assert.equal(S.watch.universe, 'scan'); assert.ok(S.watch.rows.some(r => r.s === 'DIP')); assert.ok(!S.watch.rows.some(r => r.s === 'AAPL')); });
-check('market scan: a penny stock is dropped even though it dipped and trades heavily', () => { assert.ok(!S.orders.some(o => o.symbol === 'JUNK')); assert.ok(!S.watch.rows.some(r => r.s === 'JUNK')); assert.equal(S.watch.scanned, 8); });
+check('market scan: a penny stock is dropped even though it dipped and trades heavily', () => { assert.ok(!S.orders.some(o => o.symbol === 'JUNK')); assert.ok(!S.watch.rows.some(r => r.s === 'JUNK')); assert.equal(S.watch.scanned, 9); });
 check('market scan: the dip stock found by the scan is bought', () => assert.ok(S.orders.some(o => o.symbol === 'DIP' && o.side === 'buy')));
 
 // ---- day trading ----
@@ -308,5 +309,12 @@ const Q8 = run(QX, { positions: [oPos(6.1)], hist: oHist }), Q9 = run(QX, { posi
 check('quick exits: a CALL up 22% is sold at the 20% take-profit', () => assert.ok(Q8.orders.some(o => o.symbol === optSym && o.side === 'sell' && o.type === 'market') && (Q8.acts || []).some(m => /\+22% — take profit/.test(m)), JSON.stringify(Q8.acts)));
 check('quick exits: a CALL down 11% is sold at the 10% stop', () => assert.ok(Q9.orders.some(o => o.symbol === optSym && o.side === 'sell' && o.type === 'market') && (Q9.acts || []).some(m => /-11% — option stop/.test(m)), JSON.stringify(Q9.acts)));
 check('quick exits: a CALL up 10% is kept, with its take-profit order resting at +20% ($6.00)', () => { assert.ok(!Q10.orders.some(o => o.symbol === optSym && o.type === 'market')); const tp = Q10.orders.find(o => o.symbol === optSym && o.type === 'limit' && o.side === 'sell'); assert.ok(tp && +tp.limit_price === 6, JSON.stringify(Q10.orders)); });
+
+// ---- leaders first: with room for one stock, the strongest 3-month performer among the dips is bought, not the deepest dip ----
+const LF = { stocks: true, options: false, symbols: ['DIP', 'LAG'], preset: 'custom', maxPositions: 1, maxHeat: 15 };
+const L1 = run(LF), L2 = run({ ...LF, pickBy: 'dip' });
+check('leaders first (default): DIP is bought, LAG (deeper dip, weaker run) is left', () => { assert.ok(L1.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(L1.orders) + JSON.stringify(L1.acts)); assert.ok(!L1.orders.some(o => o.symbol === 'LAG')); assert.equal(L1.watch.pickBy, 'leaders'); });
+check('leaders first: the watch list shows each stock\'s 3-month return vs the market, and the log names the order', () => { const d = L1.watch.rows.find(r => r.s === 'DIP'), l = L1.watch.rows.find(r => r.s === 'LAG'); assert.ok(d && l && d.lead > l.lead, JSON.stringify([d, l])); assert.ok((L1.acts || []).some(m => /leaders first/.test(m) && /vs market/.test(m)), JSON.stringify(L1.acts)); });
+check('deepest dip (pickBy = dip): the order is by RSI-2 and leaders are not preferred (DIP, the stronger runner, is not favoured)', () => { assert.ok(!(L2.acts || []).some(m => /leaders first/.test(m))); assert.equal(L2.watch.pickBy, 'dip'); assert.equal(L2.orders.filter(o => o.side === 'buy').length, 1); });
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

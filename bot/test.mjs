@@ -308,5 +308,6 @@ test('quick exits: the tighter exit settings are accepted and validated', () => 
   const d = normalize({ preset: 'custom', stockTp: -1, holdFloor: 0.5, optTakeProfit: 1, optStop: 1 }); assert.deepEqual([d.stockTp, d.holdFloor, d.optTakeProfit, d.optStop], [0, 2, 5, 5]);
   assert.equal(normalize({}).stockTp, 10, 'the research-backed default'); assert.equal(normalize({ stockTp: 0 }).stockTp, 0, '0 turns it off');
 });
+test('leaders first: the setting defaults to leaders and accepts only leaders or dip', () => { assert.equal(normalize({}).pickBy, 'leaders'); assert.equal(normalize({ pickBy: 'dip' }).pickBy, 'dip'); assert.equal(normalize({ pickBy: 'x' }).pickBy, 'leaders'); });
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
