@@ -49,8 +49,8 @@
  "spyStart": "09:50",
  "spyEnd": "14:00",
  "split": true,
- "callSharePct": 30,
- "putSharePct": 10,
+ "callSharePct": 20,
+ "putSharePct": 5,
  "optDayCap": 10,
  "stockUnit": "pct",
  "callUnit": "pct",
@@ -110,7 +110,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-24T13:46:16.655Z",
+ "updatedAt": "2026-10-24T13:59:47.372Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
