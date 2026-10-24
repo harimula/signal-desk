@@ -13,7 +13,7 @@ const NIFTY100 = NIFTY100_LIST.map(s => s + '.NS').join(',');                   
 const BENCH = MKT === 'IN' ? '^NSEI' : 'SPY', BENCH_NAME = MKT === 'IN' ? 'Nifty 50' : 'SPY';
 const OUT = MKT === 'IN' ? { json: 'bot/research-in.json', md: 'bot/research_in_report.md' } : { json: 'bot/research.json', md: 'bot/research_report.md' };
 const YEARS = +(process.env.BT_YEARS || 40), COST = +(process.env.BT_COST || (MKT === 'IN' ? 0.0015 : 0.0005)), POS0 = 0.10, MAXPOS0 = 6;
-let POS = POS0, MAXPOS = MAXPOS0;                 // sizing: changed only for the 5-year sizing variants below, then restored
+let POS = POS0, MAXPOS = MAXPOS0, CAP = 1;   // CAP: the most of the money that may be invested at once (a money-split stock share)                 // sizing: changed only for the 5-year sizing variants below, then restored
 const UNIVERSE = (process.env.BT_SYMBOLS || (MKT === 'IN' ? NIFTY100 : null) || 'AAPL,MSFT,KO,JNJ,PG,XOM,CVX,JPM,WMT,MCD,DIS,IBM,GE,CAT,BA,MMM,HD,INTC,ORCL,T,VZ,PFE,MRK,PEP,NKE,AXP,GS,UNH,LOW,TXN,AMD,ADBE,COST,SBUX,CSCO,QCOM,AMGN,GD,LMT').split(',');
 async function pull(sym) {
   if (process.env.BT_SOURCE === 'livejson') {
@@ -95,10 +95,14 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
         const pl = S.plan(D.B, D.C, i); if (pl) cands.push({ sym, pl, j: D.idx[d] });
       }
       cands.sort((a, b) => a.pl.rank - b.pl.rank);
+      let invested = equityPrev - cash;
       for (const c of cands) {
         if (open.length >= MAXPOS) break;
-        const D = data[c.sym], b = D.B[c.j], alloc = equityPrev * POS * (c.pl.size || 1);
+        const D = data[c.sym], b = D.B[c.j]; let alloc = equityPrev * POS * (c.pl.size || 1);
+        if (CAP < 1 && invested + alloc > equityPrev * CAP) alloc = equityPrev * CAP - invested;      // the stock share is full: buy what fits, then stop
+        if (alloc < equityPrev * POS * 0.25) break;
         if (alloc > cash) break;
+        invested += alloc;
         if (S.kind === 'intraday') {
           const fill = b.o < c.pl.entry ? b.o : (b.l <= c.pl.entry ? c.pl.entry : null); if (fill == null) continue;
           let ex; if (fill <= c.pl.stop) ex = b.c; else if (b.l <= c.pl.stop) ex = c.pl.stop; else if (b.h >= c.pl.target) ex = Math.max(c.pl.target, fill); else ex = b.c;
@@ -202,6 +206,30 @@ for (const [key, label, get] of BENCH5) {
     const pts = raw.map(([d, x]) => [d, x / raw[0][1]]);
     h5.series.push({ key, kind: 'bench', label, ...curveStats(pts), pts: thin(pts) });
   } catch (e) { console.log('5-year benchmark skipped', key, e.message); h5.series.push({ key, kind: 'bench', label, missing: String(e.message).slice(0, 80) }); }
+}
+
+// ---- the 5-year card's mode buttons: the three presets with the default rules, and the owner's saved settings ----
+if (MKT === 'US') {
+  const SPYI = Object.fromEntries(spy.map((b, i) => [b.d, i])), SPYC = spy.map(b => b.c);
+  let cfg = {}; try { cfg = JSON.parse(fs.readFileSync('bot/config.json', 'utf8')); } catch (e) {}
+  const mk = ({ thr, tp, stop, hold, leaders }) => ({ kind: 'swing',
+    plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); if (!(s200 && r != null && C[i] > s200 && r < thr)) return null;
+      let rank = r; if (leaders && i >= 60) { const k = SPYI[B[i].d], m = k != null && k >= 60 ? SPYC[k] / SPYC[k - 60] - 1 : 0; rank = -((C[i] / C[i - 60] - 1) - m); }
+      return { rank, stopPct: stop / 100, tpPct: tp > 0 ? tp / 100 : null }; },
+    exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= hold; } });
+  const def = { thr: 10, tp: 10, stop: 25, hold: 10, leaders: true };            // the bot's defaults for the strategy settings
+  const spyShare = cfg.spyOn === false ? 0 : (cfg.spySharePct ?? 5);
+  const stockShare = cfg.split === false ? 1 : Math.max(0, 100 - (cfg.callSharePct ?? 30) - (cfg.putSharePct ?? 10) - spyShare) / 100;
+  const mine = { thr: cfg.rsiThreshold ?? 10, tp: cfg.stockTp ?? 10, stop: cfg.holdFloor ?? 25, hold: cfg.maxHold ?? 10, leaders: (cfg.pickBy || 'leaders') === 'leaders' };
+  const minePos = cfg.stockUnit === 'usd' ? 0.10 : (cfg.stockPct ?? 10) / 100, mineMax = cfg.maxPositions ?? 6;
+  h5.modes = {};
+  const runMode = (key, label, strat, pos, mx, cap) => { POS = pos; MAXPOS = mx; CAP = cap; const c = botCurve(strat); POS = POS0; MAXPOS = MAXPOS0; CAP = 1; h5.modes[key] = { label, pos, maxPos: mx, cap, trades: c.trades, ...curveStats(c.pts), pts: thin(c.pts) }; };
+  runMode('conservative', 'Conservative — 8% × up to 4 stocks', mk(def), 0.08, 4, 1);
+  runMode('balanced', 'Balanced — 10% × up to 6 stocks', mk(def), 0.10, 6, 1);
+  runMode('aggressive', 'Aggressive — 12% × up to 8 stocks', mk(def), 0.12, 8, 1);
+  runMode('mine', `Your settings — ${Math.round(minePos * 100)}% × up to ${mineMax} stocks, buy below ${mine.thr}, ${mine.tp > 0 ? '+' + mine.tp + '% take-profit' : 'no take-profit'}, ${mine.leaders ? 'leaders first' : 'deepest dip first'}${stockShare < 1 ? ', stocks ' + Math.round(stockShare * 100) + '% of the money' : ''}`, mk(mine), minePos, mineMax, stockShare);
+  h5.modes.mine.settings = { ...mine, pos: minePos, maxPos: mineMax, stockShare, preset: cfg.preset || 'balanced', savedAt: cfg.updatedAt || null };
+  for (const [k, m] of Object.entries(h5.modes)) console.log('mode', k, m.cagr, m.maxDD, m.trades);
 }
 
 // ---- five ideas to make the USA bot different, each from the owner's settings, Aggressive sizing (12% × 8) ----
