@@ -62,7 +62,7 @@ Benchmarks include dividends (ETF adjusted closes). The bot keeps at most 60% in
 | 2a · Only dips on days the whole market also fell | +25.83% | −17.9% | **+13.55%** | −14.1% | 13355 | 68.3% | +12.70% | $144,039 |
 | 2b · Only dips on market panic days (S&P 500 down 1% or more) | +10.59% | −14.8% | **+6.16%** | −14.3% | 4758 | 69.1% | +6.90% | $122,552 |
 | 3 · Leaders first: among the dips, buy those that beat the market most over 3 months | +56.97% | −19.6% | **+33.01%** | −16.8% | 20377 | 70.5% | +31.60% | $236,054 |
-| 4 · Second engine: half the money on your dip rule, half on trend breakout | +48.66% | −18.7% | **+30.06%** | −17.9% | 21280 | 68.9% | +27.50% | $212,341 |
+| 4 · Second engine: half the money on your dip rule, half on trend breakout | +29.48% | −20.4% | **+20.68%** | −15.0% | 21280 | 68.9% | +16.70% | $160,540 |
 | 5 · Bigger buys when the market is nervous (1.5× when S&P 500 swings exceed their 1-year norm, 0.75× when calm) | +45.06% | −20.7% | **+27.15%** | −20.7% | 17754 | 69.9% | +25.20% | $200,149 |
 
 Survivorship bias (today’s big companies, looking back) flatters every strategy, so treat these as an upper bound. Not financial advice.
