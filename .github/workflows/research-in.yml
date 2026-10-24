@@ -15,10 +15,12 @@ jobs:
       - run: node bot/research.mjs
         env:
           BT_MARKET: IN
+      - run: node bot/research-in-ideas.mjs
+        continue-on-error: true
       - run: |
           git config user.name "signal-desk-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add bot/research_in_report.md bot/research-in.json
+          git add bot/research_in_report.md bot/research-in.json bot/research-in-ideas.json bot/research_in_ideas.md
           git diff --cached --quiet && exit 0
           git commit -m "Strategy research report (India)"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X ours origin main || git rebase --abort; sleep 3; done
