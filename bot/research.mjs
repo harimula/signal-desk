@@ -235,7 +235,9 @@ if (MKT === 'US') {
   POS = POS0; MAXPOS = MAXPOS0;
   // idea 4: half the money on your dip rule, half on trend breakout (each on its own half)
   const bd = Object.fromEntries(brk.days.map(x => [x.d, x.eq]));
-  curves.combo = { days: curves.base.days.map(x => ({ d: x.d, eq: 0.5 * x.eq + 0.5 * (bd[x.d] ?? 1) })), trades: curves.base.trades.concat(brk.trades) };
+  { let eq = 1, pa = null, pb = null; const cd = [];                    // rebalanced to 50/50 every day, so neither half swamps the other
+    for (const x of curves.base.days) { const b = bd[x.d]; if (pa != null && b != null && pb != null) eq *= 1 + 0.5 * (x.eq / pa - 1) + 0.5 * (b / pb - 1); cd.push({ d: x.d, eq }); pa = x.eq; if (b != null) pb = b; }
+    curves.combo = { days: cd, trades: curves.base.trades.concat(brk.trades) }; }
   IDEAS.splice(5, 0, ['combo', '4 · Second engine: half the money on your dip rule, half on trend breakout', null]);
   const T = 0.408, afterTax = yrs => { let v = 100000, carry = 0; for (const r of yrs) { const g = v * r, n = g + carry; let t = 0; if (n > 0) { t = n * T; carry = 0; } else carry = n; v += g - t; } return Math.round(v); };
   ideas = IDEAS.map(([key, label]) => {
