@@ -12,8 +12,11 @@ const { chromium } = await import('playwright');
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mime = { '.html': 'text/html', '.json': 'application/json', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain', '.webmanifest': 'application/manifest+json' };
+let journalFixture = null;                                                  // when set, served in place of the encrypted bot/journal.json
 const srv = http.createServer((req, res) => {
-  const p = path.join(ROOT, decodeURIComponent(new URL(req.url, 'http://x').pathname.replace(/\/$/, '/index.html')));
+  const pn = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  if (journalFixture && /\/bot\/journal\.json$/.test(pn)) { res.setHeader('content-type', 'application/json'); return res.end(fs.readFileSync(path.join(ROOT, 'tools/fixtures', journalFixture))); }
+  const p = path.join(ROOT, pn.replace(/\/$/, '/index.html'));
   if (!p.startsWith(ROOT) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.statusCode = 404; return res.end('nf'); }
   res.setHeader('content-type', mime[path.extname(p)] || 'application/octet-stream'); res.end(fs.readFileSync(p));
 });
@@ -73,7 +76,7 @@ async function session(label, prep) {
   await page.waitForTimeout(1200);
   await page.fill('#st-rsiThreshold', '12');
   await page.evaluate(() => document.querySelector('#st-rsiThreshold').dispatchEvent(new Event('change', { bubbles: true })));
-  await page.focus('#st-maxHold'); await page.keyboard.type('1');
+  await page.fill('#st-maxHold', '1'); await page.focus('#st-maxHold'); await page.keyboard.type('1');   // → 11, inside the 1–30 range
   await page.evaluate(() => document.querySelector('#st-maxHold').dispatchEvent(new Event('change', { bubbles: true })));
   check('settings: a setting missing from config.json shows its default instead of an empty box', await page.evaluate(() => ['dayOrMin', 'dayMaxTrades', 'dayTarget', 'dayOptDteMax'].every(k => { const el = document.getElementById('st-' + k); return el && el.value !== ''; })), await page.evaluate(() => ['dayOrMin', 'dayMaxTrades', 'dayTarget'].map(k => k + '=' + (document.getElementById('st-' + k) || {}).value).join(' ')));
   check('settings: typing does not move the cursor', (await page.evaluate(() => document.activeElement.id)) === 'st-maxHold');
@@ -93,10 +96,18 @@ async function session(label, prep) {
   check('money split: with CALLs 30 / PUTs 10 / SPY 5 the note reads 55/30/10/5, and a share typed in updates it', /Stocks 55%.*CALLs 30%.*PUTs 10%.*SPY quick options 5%/.test(note0) && /Stocks 60%.*CALLs 25%.*PUTs 10%/.test(note1), note0 + ' → ' + note1);
   check('SPY sleeve: section 4c shows, on by default, with its eight settings and the time window', await page.evaluate(() => (document.querySelector('#st-spyOn') || {}).checked === true && ['spySharePct', 'spyTp', 'spyStop', 'spyHoldMin', 'spyMaxTrades', 'spyStreak', 'spyDayCap', 'spyDte', 'spyStart', 'spyEnd'].every(k => document.getElementById('st-' + k)) && document.getElementById('st-spySharePct').value === '5'));
   await page.fill('#st-callSharePct', '90'); await page.evaluate(() => document.querySelector('#st-callSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(300);
-  const overErr = await page.evaluate(() => ({ n: document.querySelectorAll('[role="alert"]').length, txt: [...document.querySelectorAll('[role="alert"]')].map(e => e.textContent).join(' | '), dis: document.querySelector('[data-st="save"]').disabled }));
+  const overErr = await page.evaluate(() => ({ n: document.querySelectorAll('[role="status"]').length, txt: [...document.querySelectorAll('[role="status"]')].map(e => e.textContent).join(' | '), dis: document.querySelector('[data-st="save"]').disabled }));
   check('money shares over 100% (CALLs 90 + PUTs 10 + SPY 5): an error shows in sections 3 and 4c and on the save bar, and Save is disabled', overErr.n >= 3 && overErr.dis && /= 105% — 5% more than the whole stake/.test(overErr.txt), JSON.stringify(overErr));
   await page.fill('#st-callSharePct', '25'); await page.evaluate(() => document.querySelector('#st-callSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(300);
-  check('money shares back under 100%: the error clears and Save is enabled again', await page.evaluate(() => document.querySelectorAll('[role="alert"]').length === 0 && !document.querySelector('[data-st="save"]').disabled));
+  check('money shares back under 100%: the error clears and Save is enabled again', await page.evaluate(() => document.querySelectorAll('[role="status"]').length === 0 && !document.querySelector('[data-st="save"]').disabled));
+  // out-of-range values are refused, not silently changed by the bot
+  await page.fill('#st-spyEnd', '15:45'); await page.evaluate(() => document.querySelector('#st-spyEnd').dispatchEvent(new Event('change', { bubbles: true })));
+  await page.fill('#st-stockPct', '50'); await page.evaluate(() => document.querySelector('#st-stockPct').dispatchEvent(new Event('change', { bubbles: true })));
+  await page.evaluate(() => document.querySelector('[data-st="save"]').click()); await page.waitForTimeout(600);
+  const badMsg = await page.evaluate(() => (document.querySelector('[data-st="save"]').parentElement.textContent || '').replace(/\s+/g, ' '));
+  check('settings: a value the bot would clamp (per-trade 50%, SPY until 15:45) is refused with a message naming both, and nothing is saved', /Not saved/.test(badMsg) && /50/.test(badMsg) && /SPY trades until/.test(badMsg) && puts.length === 0, badMsg.slice(0, 200) + ' puts=' + puts.length);
+  await page.fill('#st-spyEnd', '14:00'); await page.evaluate(() => document.querySelector('#st-spyEnd').dispatchEvent(new Event('change', { bubbles: true })));
+  await page.fill('#st-stockPct', '12'); await page.evaluate(() => document.querySelector('#st-stockPct').dispatchEvent(new Event('change', { bubbles: true })));
   await page.fill('#st-spyTp', '20'); await page.evaluate(() => document.querySelector('#st-spyTp').dispatchEvent(new Event('change', { bubbles: true })));
   check('leaders first: the strategy section offers the choice, with Leaders first selected by default', await page.evaluate(() => { const r = document.querySelector('input[name="st-pickBy"]:checked'); return !!r && r.value === 'leaders' && document.querySelectorAll('input[name="st-pickBy"]').length === 2; }));
   await page.evaluate(() => { const r = document.querySelector('input[name="st-pickBy"][value="dip"]'); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }); await page.waitForTimeout(300);
@@ -177,6 +188,26 @@ async function session(label, prep) {
   check('sign-in: no script errors on either device', errA.length + errB.length === 0, errA.concat(errB).join(' | '));
   await A.close(); await B.close();
 }
+// 4. Bot trades rendered with real-looking data (the live journal is encrypted, so without this the cards are never executed)
+for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT, SPY and day-trade rows)'], ['journal-old.json', 'older journal shape (no watch rows, no split, no spy, no day block)']]) {
+  journalFixture = fx;
+  const { page, errors } = await session('bot trades · ' + label, () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); });
+  await page.evaluate(() => document.querySelector('#tabs [data-t="BOT"]').click()); await page.waitForTimeout(1500);
+  await page.evaluate(() => document.querySelectorAll('main details').forEach(d => { d.open = true; }));
+  const txt = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  if (fx === 'journal-full.json') {
+    check('bot trades: the money-split cards show all four parts with their money', /Stocks.*\$55,000/.test(txt) && /CALLs.*\$30,000/.test(txt) && /PUTs.*\$10,000/.test(txt) && /SPY quick options.*\$5,000/.test(txt), txt.slice(0, 300));
+    check('bot trades: the SPY card shows the open trade with its exits and the 3-mo-vs-market column exists', /SPY quick options/.test(txt) && /in a trade/.test(txt) && /\$235\.75/.test(txt) && /3-mo vs market/.test(txt), txt.slice(0, 200));
+    check('bot trades: Open now describes each kind correctly (swing stock, CALL, PUT, SPY quick trade, day trade) from the settings', /RSI-2 swing — sells at \+10%/.test(txt) && /CALL — sells with the stock/.test(txt) && /PUT — sells with the stock/.test(txt) && /SPY quick trade — out at \+15%/.test(txt) && /day trade — stop and target at the broker/.test(txt), txt.match(/Open now.{0,900}/)?.[0]);
+    check('bot trades: option prices are shown per contract (×100) in the held table and per share in Open now, both labelled', /\$440\.00/.test(txt) && /\$4\.40/.test(txt), '');
+    check('bot trades: the rules line reads the cancel time from settings', /cancelled after 45 min/.test(txt));
+  } else {
+    check('bot trades: an older journal without watch rows / split / spy renders without a blank page', /Bot trades|Your bot/.test(txt) && txt.length > 500, txt.slice(0, 200));
+  }
+  check(`bot trades (${fx}): no script errors`, errors.length === 0, errors.join(' | '));
+  await page.close();
+}
+journalFixture = null;
 await browser.close(); srv.close();
 console.log(failed ? `\n${failed} page check(s) FAILED` : '\nall page checks passed');
 process.exit(failed ? 1 : 0);
