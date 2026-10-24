@@ -46,9 +46,28 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 .ex{font-size:14px;color:var(--muted);margin-top:6px}
 .s table td,.s table th{padding:3px 14px 3px 0;vertical-align:top}
 .s table th{color:var(--muted);font-weight:600}
+
+/* back to the app: always visible at the top (the site runs as a home-screen app with no browser back button) */
+.backbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;margin:0 calc(-1 * max(16px,env(safe-area-inset-left)));padding:calc(env(safe-area-inset-top,0px) + 8px) max(16px,env(safe-area-inset-left)) 8px;background:var(--bg);border-bottom:1px solid var(--line)}
+.backbar a.back{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:9px;background:var(--accent);color:#fff;font-weight:600;font-size:14px;text-decoration:none}
+.backbar a.back:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.backbar .where{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:860px){
+  nav ol, nav.idx ol{flex-wrap:nowrap !important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px !important;gap:4px 16px !important}
+  nav ol::-webkit-scrollbar, nav.idx ol::-webkit-scrollbar{display:none}
+  nav ol a, nav.idx ol a{white-space:nowrap}
+  nav, nav.idx{position:sticky !important;top:calc(env(safe-area-inset-top,0px) + 57px) !important;z-index:15;background:var(--bg);padding-top:8px !important}
+  nav .stamp, nav.idx .stamp, nav > div:first-child, nav.idx .brand{display:none}
+  .lede{font-size:16px !important}
+  h1{font-size:26px !important}
+  main{padding-top:12px !important}
+  section{scroll-margin-top:120px !important}
+}
 </style>
 </head>
 <body>
+<div class="backbar"><a class="back" href="../">← Back to Signal Desk</a><span class="where">Bot settings guide</span></div>
+
 <div class="page">
 <nav aria-label="Sections">
   <div><b>Bot settings guide</b></div>

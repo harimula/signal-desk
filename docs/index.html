@@ -63,8 +63,26 @@ pre.mermaid{margin:0;font-family:var(--mono);font-size:12px;color:var(--muted);w
 .rule{font-size:14px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;margin-top:40px}
 a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+
+/* back to the app: always visible at the top (the site runs as a home-screen app with no browser back button) */
+.backbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;margin:0 calc(-1 * max(16px,env(safe-area-inset-left)));padding:calc(env(safe-area-inset-top,0px) + 8px) max(16px,env(safe-area-inset-left)) 8px;background:var(--bg);border-bottom:1px solid var(--line)}
+.backbar a.back{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:9px;background:var(--accent);color:#fff;font-weight:600;font-size:14px;text-decoration:none}
+.backbar a.back:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.backbar .where{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:860px){
+  nav ol, nav.idx ol{flex-wrap:nowrap !important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px !important;gap:4px 16px !important}
+  nav ol::-webkit-scrollbar, nav.idx ol::-webkit-scrollbar{display:none}
+  nav ol a, nav.idx ol a{white-space:nowrap}
+  nav, nav.idx{position:sticky !important;top:calc(env(safe-area-inset-top,0px) + 57px) !important;z-index:15;background:var(--bg);padding-top:8px !important}
+  nav .stamp, nav.idx .stamp, nav > div:first-child, nav.idx .brand{display:none}
+  .lede{font-size:16px !important}
+  h1{font-size:26px !important}
+  main{padding-top:12px !important}
+  section{scroll-margin-top:120px !important}
+}
 </style>
 
+<div class="backbar"><a class="back" href="../">← Back to Signal Desk</a><span class="where">System documentation</span></div>
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
@@ -452,6 +470,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-24</td><td>5-year card: Conservative / Balanced / Aggressive / My settings buttons and a before-tax / after-tax switch (short-term tax for the bot, long-term for the funds; your rates, editable). Documentation opens inside the app with a “Back to Signal Desk” button and fits a phone.</td></tr>
 <tr><td>2026-10-24</td><td><b>Full audit.</b> Bot: the live price streams had never connected (the workflow ran Node 20, which has no WebSocket) → Node 22; SPY and day-trade option contracts were requested from the wrong Alpaca host → fixed; STOP is checked first and each step guarded; the day and SPY engines manage only their own positions; no double SPY entry; one sell lock shared by all lanes; broker-call failures no longer abort a check; the 9:20 start waits for the open instead of exiting; polling throttled; day-state (yesterday's closes, /pause, alerts sent) survives a restart; SPY expiry counts trading days. Pages: settings refuse values the bot would change; Open-now status by position kind from the settings; go-live checklist counts SPY; older journals render; every label has hover help; stale ntfy wording gone; accessibility labels. Tests: fake broker on two hosts, STOP, old day-trade ids, manual SPY options, re-entry, fixture journals for Bot trades. Settings guide rewritten with a worked example for every setting.</td></tr>
 <tr><td>2026-10-24</td><td>SPY quick options now react in well under a second: orders fire from the live SPY tick, exits from the option’s own quote stream</td></tr>
 <tr><td>2026-10-24</td><td>SPY quick options: exits checked every second while a trade is open; a SPY price tick through the level starts a check at once</td></tr>

@@ -201,6 +201,15 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
     check('bot trades: Open now describes each kind correctly (swing stock, CALL, PUT, SPY quick trade, day trade) from the settings', /RSI-2 swing — sells at \+10%/.test(txt) && /CALL — sells with the stock/.test(txt) && /PUT — sells with the stock/.test(txt) && /SPY quick trade — out at \+15%/.test(txt) && /day trade — stop and target at the broker/.test(txt), txt.match(/Open now.{0,900}/)?.[0]);
     check('bot trades: option prices are shown per contract (×100) in the held table and per share in Open now, both labelled', /\$440\.00/.test(txt) && /\$4\.40/.test(txt), '');
     check('bot trades: the rules line reads the cancel time from settings', /cancelled after 45 min/.test(txt));
+    // 5-year card: mode buttons and the tax switch (served research.json carries the modes)
+    const h5 = async () => page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /The last 5 years/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
+    const hasModes = await page.$('[data-h5mode="aggressive"]');
+    if (hasModes) {
+      await page.click('[data-h5tax="after"]'); await page.waitForTimeout(300); const a1 = await h5();
+      await page.click('[data-h5mode="conservative"]'); await page.waitForTimeout(300); const a2 = await h5();
+      await page.click('[data-h5tax="before"]'); await page.waitForTimeout(300); const a3 = await h5();
+      check('5-year card: the mode buttons change the bot line, the tax switch changes the view, both before and after amounts show', /USA bot — My settings|USA bot — /.test(a1) && /USA bot — Conservative/.test(a2) && /after tax/.test(a1) && !/· after tax/.test(a3) && /short-term/.test(a1) && /long-term/.test(a1), [a1.slice(0, 160), a2.slice(0, 120)].join(' || '));
+    } else check('5-year card: research.json has no modes yet (skipped)', true);
   } else {
     check('bot trades: an older journal without watch rows / split / spy renders without a blank page', /Bot trades|Your bot/.test(txt) && txt.length > 500, txt.slice(0, 200));
   }
@@ -209,5 +218,11 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
 }
 journalFixture = null;
 await browser.close(); srv.close();
+// 5. documentation pages: a way back to the app, opened in the same window (the site runs as a home-screen app)
+{
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  check('docs links open inside the app (no target=_blank on docs/ links)', !/href="docs\/[^"]*"[^>]*target="_blank"/.test(html));
+  for (const f of ['docs/index.html', 'docs/settings.html', 'docs/daytrading-rules.html']) { const d = fs.readFileSync(path.join(ROOT, f), 'utf8'); check(`${f}: has the sticky “Back to Signal Desk” button`, /class="backbar"><a class="back" href="\.\.\/">/.test(d)); }
+}
 console.log(failed ? `\n${failed} page check(s) FAILED` : '\nall page checks passed');
 process.exit(failed ? 1 : 0);
