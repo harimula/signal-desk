@@ -1,6 +1,7 @@
 // Unit tests for the bot's rules. Run: node bot/test.mjs  (also runs on every push via GitHub Actions)
 import assert from 'node:assert/strict';
 import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit, rsi2Trigger, rsi2ExitLevel } from './strategy.mjs';
+import { spySignal, spyExit, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
 import { buildJournal, parseSym } from './journal.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
@@ -309,5 +310,35 @@ test('quick exits: the tighter exit settings are accepted and validated', () => 
   assert.equal(normalize({}).stockTp, 10, 'the research-backed default'); assert.equal(normalize({ stockTp: 0 }).stockTp, 0, '0 turns it off');
 });
 test('leaders first: the setting defaults to leaders and accepts only leaders or dip', () => { assert.equal(normalize({}).pickBy, 'leaders'); assert.equal(normalize({ pickBy: 'dip' }).pickBy, 'dip'); assert.equal(normalize({ pickBy: 'x' }).pickBy, 'leaders'); });
+test('SPY sleeve: settings default to on, 5%, +15/−15, 10 min, 6 trades, 2 losses, 25% day cap, next-day expiry — and are validated', () => {
+  const c = normalize({}); assert.deepEqual([c.spyOn, c.spySharePct, c.spyTp, c.spyStop, c.spyHoldMin, c.spyMaxTrades, c.spyStreak, c.spyDayCap, c.spyDte], [true, 5, 15, 15, 10, 6, 2, 25, 1]);
+  const d = normalize({ preset: 'custom', spySharePct: 80, spyDte: 0, spyHoldMin: 1, spyStart: '09:30', spyEnd: '15:59' }); assert.equal(d.spySharePct, 50); assert.equal(d.spyDte, 1, 'never same-day'); assert.equal(d.spyHoldMin, 2); assert.equal(d.spyStart, '09:50'); assert.equal(d.spyEnd, '15:30');
+  const e = normalize({ preset: 'custom', callSharePct: 60, putSharePct: 35, spySharePct: 20 }); assert.equal(e.spySharePct, 5, 'the SPY share is cut so the four shares fit the stake');
+});
+const b5 = (m, o, h, l, c, v = 1e6) => ({ m, o, h, l, c, v });
+const up = [b5(570, 500, 501, 499.5, 500.6), b5(575, 500.6, 501.2, 500.4, 501), b5(580, 501, 501.8, 500.9, 501.6), b5(585, 501.6, 502, 501.4, 501.9), b5(590, 501.9, 502.5, 501.8, 502.3, 1.2e6)];
+test('SPY sleeve: a break above the 15-minute high with SPY above VWAP is a CALL signal; no break = waiting; flat on VWAP = nothing', () => {
+  const s = spySignal({ bars: up, px: 502.7, mins: 600 }); assert.equal(s.side, 'call'); assert.equal(s.market, 'up'); assert.equal(s.level, 502.5);
+  assert.match(spySignal({ bars: up, px: 502.2, mins: 600 }).idle, /waiting for a break above 502\.5/);
+  assert.match(spySignal({ bars: up, px: 501.25, mins: 600 }).idle, /VWAP/);
+});
+test('SPY sleeve: the mirror is a PUT; a quiet last bar (below-average volume) does not trigger', () => {
+  const dn = up.map(b => ({ ...b, o: 1000 - b.o, h: 1000 - b.l, l: 1000 - b.h, c: 1000 - b.c })); assert.equal(spySignal({ bars: dn, px: 497.3, mins: 600 }).side, 'put');
+  const quiet = up.map((b, i) => i === 4 ? { ...b, v: 5e5 } : b); assert.equal(spySignal({ bars: quiet, px: 502.7, mins: 600 }).side, undefined);
+});
+test('SPY sleeve: outside the window it stays out; bars still forming are not used', () => {
+  assert.match(spySignal({ bars: up, px: 502.7, mins: 585 }).idle, /before the window/); assert.match(spySignal({ bars: up, px: 502.7, mins: 931 }).idle, /closed/);
+  const early = spySignal({ bars: up, px: 502.7, mins: 592 }); assert.equal(early.level, 502, 'the 9:50 bar is not complete at 9:52, so the level is the earlier 15-minute high'); assert.equal(early.side, 'call');
+});
+test('SPY sleeve: exits — +15% take-profit, −15% stop, 10-minute time stop, flat at 3:45, otherwise hold', () => {
+  assert.equal(spyExit({ entryPx: 2, optPx: 2.3, openedMins: 600, mins: 603 }).kind, 'tp'); assert.equal(spyExit({ entryPx: 2, optPx: 1.7, openedMins: 600, mins: 603 }).kind, 'stop');
+  assert.equal(spyExit({ entryPx: 2, optPx: 2.05, openedMins: 600, mins: 610 }).kind, 'time'); assert.equal(spyExit({ entryPx: 2, optPx: 2.05, openedMins: 940, mins: 945 }).kind, 'flat');
+  assert.equal(spyExit({ entryPx: 2, optPx: 2.05, openedMins: 600, mins: 605 }), null); assert.equal(spyExit({ entryPx: 2, optPx: 2.5, openedMins: 600, mins: 603, cfg: { spyTp: 30 } }), null);
+});
+test('SPY sleeve: order ids round-trip and SPY options are recognised', () => {
+  const id = encodeSpyId('put', 'SPY261024P00502000', 2.05, '20261023', 600, 'abc'); const d = decodeSpyId(id); assert.deepEqual(d, { kind: 'put', sym: 'SPY261024P00502000', entry: 2.05, day8: '20261023', openMins: 600 });
+  assert.ok(isSpyOption('SPY261024C00502000')); assert.ok(!isSpyOption('AAPL261024C00200000')); assert.ok(!isSpyOption('SPY'));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

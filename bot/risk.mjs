@@ -65,7 +65,7 @@ export function openRisk({ positions, orders, stopFor }) {
 // It counts swing positions bought before today as well as same-day round trips. `lastDay` holds yesterday's closing price for
 // symbols that were sold out today (the bot remembers it from earlier checks); a missing one counts those shares at their sale price.
 const OPT_SYM = /^[A-Z.]+\d{6}[CP]\d{8}$/, OPT_KIND = /^[A-Z.]+\d{6}([CP])\d{8}$/;
-export function sideDayPl({ positions = [], fills = [], lastDay = {} } = {}) {
+export function sideDayPl({ positions = [], fills = [], lastDay = {}, spy = null } = {}) {
   const per = {}, get = s => per[s] || (per[s] = { now: 0, qty: 0, last: null, buyQ: 0, sellQ: 0, cash: 0, sellAmt: 0, px: null });
   for (const p of positions) {
     const x = get(p.symbol), m = OPT_SYM.test(p.symbol) ? 100 : 1;
@@ -76,14 +76,14 @@ export function sideDayPl({ positions = [], fills = [], lastDay = {} } = {}) {
     const x = get(f.symbol), m = OPT_SYM.test(f.symbol) ? 100 : 1, q = Math.abs(+f.qty || 0), px = +f.price || 0;
     if (/^buy/.test(f.side)) { x.buyQ += q; x.cash -= q * px * m; } else { x.sellQ += q; x.cash += q * px * m; x.sellAmt += q * px; }
   }
-  const out = { stock: 0, call: 0, put: 0 };
+  const out = { stock: 0, call: 0, put: 0, spy: 0 };
   for (const [sym, x] of Object.entries(per)) {
     const m = OPT_SYM.test(sym) ? 100 : 1, prevQ = Math.max(0, x.qty - x.buyQ + x.sellQ);
     let lp = x.last || (+lastDay[sym] > 0 ? +lastDay[sym] : null);
     if (prevQ > 1e-9 && !lp) lp = x.sellQ > 0 ? x.sellAmt / x.sellQ : x.px || 0;
-    const kd = OPT_KIND.exec(sym); out[!kd ? 'stock' : kd[1] === 'P' ? 'put' : 'call'] += x.now - prevQ * (lp || 0) * m + x.cash;
+    const kd = OPT_KIND.exec(sym); out[!kd ? 'stock' : spy && spy(sym) ? 'spy' : kd[1] === 'P' ? 'put' : 'call'] += x.now - prevQ * (lp || 0) * m + x.cash;
   }
-  for (const k of ['stock', 'call', 'put']) out[k] = Math.round(out[k] * 100) / 100;
+  for (const k of ['stock', 'call', 'put', 'spy']) out[k] = Math.round(out[k] * 100) / 100;
   out.opt = Math.round((out.call + out.put) * 100) / 100;
   return out;
 }

@@ -87,14 +87,16 @@ async function session(label, prep) {
   await page.fill('#st-callSharePct', '25');
   await page.evaluate(() => document.querySelector('#st-callSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(200);
   const note1 = await page.evaluate(() => (document.querySelector('#st-split') || {}).checked === true && (document.querySelector('#stSplitNote') || {}).textContent || '');
-  check('money split: on by default at 60/30/10, and a share typed in updates the stocks / CALLs / PUTs note', /Stocks 60%.*CALLs 30%.*PUTs 10%/.test(note0) && /Stocks 65%.*CALLs 25%.*PUTs 10%/.test(note1), note0 + ' → ' + note1);
+  check('money split: on by default at 55/30/10 + SPY 5, and a share typed in updates the note', /Stocks 55%.*CALLs 30%.*PUTs 10%.*SPY quick options 5%/.test(note0) && /Stocks 60%.*CALLs 25%.*PUTs 10%/.test(note1), note0 + ' → ' + note1);
+  check('SPY sleeve: section 4c shows, on by default, with its eight settings and the time window', await page.evaluate(() => (document.querySelector('#st-spyOn') || {}).checked === true && ['spySharePct', 'spyTp', 'spyStop', 'spyHoldMin', 'spyMaxTrades', 'spyStreak', 'spyDayCap', 'spyDte', 'spyStart', 'spyEnd'].every(k => document.getElementById('st-' + k)) && document.getElementById('st-spySharePct').value === '5'));
+  await page.fill('#st-spyTp', '20'); await page.evaluate(() => document.querySelector('#st-spyTp').dispatchEvent(new Event('change', { bubbles: true })));
   check('leaders first: the strategy section offers the choice, with Leaders first selected by default', await page.evaluate(() => { const r = document.querySelector('input[name="st-pickBy"]:checked'); return !!r && r.value === 'leaders' && document.querySelectorAll('input[name="st-pickBy"]').length === 2; }));
   await page.evaluate(() => { const r = document.querySelector('input[name="st-pickBy"][value="dip"]'); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }); await page.waitForTimeout(300);
   await page.evaluate(() => document.querySelector('[data-st="save"]').click());
   let msg = '';
   for (let i = 0; i < 80; i++) { await page.waitForTimeout(250); msg = await page.evaluate(() => (document.querySelector('[data-st="save"]').parentElement.textContent || '').replace(/\s+/g, ' ')); if (/Saved|failed/.test(msg)) break; }
   check('settings: Save reaches GitHub with the typed value', puts.length === 1 && JSON.parse(Buffer.from(puts[0].content, 'base64')).rsiThreshold === 12, msg.slice(0, 120));
-  check('money split: Save writes the split and the CALL / PUT shares to config.json', puts.length === 1 && (c => c.split === true && c.callSharePct === 25 && c.putSharePct === 10 && c.optDayCap === 10 && c.pickBy === 'dip')(JSON.parse(Buffer.from(puts[0].content, 'base64'))), puts.length ? Buffer.from(puts[0].content, 'base64').toString().slice(0, 0) : 'no save');
+  check('money split: Save writes the split and the CALL / PUT shares to config.json', puts.length === 1 && (c => c.split === true && c.callSharePct === 25 && c.putSharePct === 10 && c.optDayCap === 10 && c.pickBy === 'dip' && c.spyOn === true && c.spySharePct === 5 && c.spyTp === 20 && c.spyStart === '09:50')(JSON.parse(Buffer.from(puts[0].content, 'base64'))), puts.length ? Buffer.from(puts[0].content, 'base64').toString().slice(0, 0) : 'no save');
   check('settings: Save bar reports success', /Saved /.test(msg), msg.slice(0, 120));
   check('settings: no script error during save', errors.length === 0, errors.join(' | '));
   // Telegram connect: token check → finds the chat from the owner's /start → test message → both values sealed as secrets

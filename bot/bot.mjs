@@ -20,6 +20,7 @@ import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
 import { tgOn, tgSend, tgPoll } from './telegram.mjs';
 import { scanUniverse } from './scan.mjs';
 import { daySetup, marketMode, dayShares, dayExit, dayTrail, encodeDayId, decodeDayId, SESSION_OPEN } from './daytrade.mjs';
+import { spySignal, spyExit, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
 
 const PAPER = { key: process.env.ALPACA_KEY, secret: process.env.ALPACA_SECRET, url: process.env.ALPACA_URL || 'https://paper-api.alpaca.markets' };
 const LIVE = { key: process.env.ALPACA_LIVE_KEY, secret: process.env.ALPACA_LIVE_SECRET, url: 'https://api.alpaca.markets' };
@@ -187,6 +188,62 @@ async function dayTradeCycle(ctx) {
     setups: setups.slice(0, 12).map(x => ({ sym: x.sym, setup: x.setup, side: x.side, entry: x.entry, stop: x.stop, target: x.target, rvol: x.rvol, why: x.why, held: x.held })),
     open: dayPos.map(({ p, d, und, opt }) => ({ s: p.symbol, und, kind: opt ? (d.kind === 'dp' ? 'put' : 'call') : 'stock', side: d.side, qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * (opt ? 100 : 1)), cur: r2d(+p.current_price * (opt ? 100 : 1)), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, undPx: last[und] && last[und].p, stop: (dayState[p.symbol] || {}).stop || d.stop, target: d.target, opened: d.openMins })) };
 }
+// ---- SPY quick options sleeve (rules in bot/spyopt.mjs) ----
+let spyState = {};                                                       // per open symbol: { tpPlaced }
+async function spyCycle(ctx) {
+  const { equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid } = ctx;
+  const open = positions.filter(p => isSpyOption(p.symbol)).map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && o.symbol === p.symbol), d: null })).map(x => ({ ...x, d: x.e ? decodeSpyId(cid(x.e)) : null }));
+  const todayIds = hist.filter(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
+  const tradesToday = todayIds.length;
+  if (!CFG.spyOn && !open.length) { lastSpy = { at: new Date().toISOString(), on: false, money: 0, used: 0, today: null, halted: null, idle: 'switched off', tradesToday, max: CFG.spyMaxTrades, open: [] }; return; }
+  // unfilled entries older than 3 minutes have missed their moment
+  for (const o of liveOrders) if (o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 3 * 60000) {
+    act(`${o.symbol} SPY option buy at ${o.limit_price} unfilled for 3 min \u2014 cancelled`); if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
+  }
+  const live = liveOrders.filter(o => !o._cancelled);
+  // manage the open trade
+  for (const { p, e, d } of open) {
+    const sells = sellsFor(p.symbol); if (sells.some(o => o.type === 'market')) continue;
+    const qty = Math.abs(+p.qty), avg = +p.avg_entry_price, cur = +p.current_price, entry = d ? d.entry : avg;
+    const openedMins = d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null);
+    const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} SPY ${d ? d.kind.toUpperCase() : 'option'} ${why}`); delete spyState[p.symbol]; };
+    const x = spyExit({ entryPx: entry, optPx: cur, openedMins, mins: MINS, cfg: CFG });
+    if (x && x.kind === 'tp' && sells.some(o => o.type === 'limit')) continue;           // the resting take-profit order at the broker handles it
+    if (x) { await out(x.why); continue; }
+    if (halt.spy) { await out(`\u2014 ${halt.spy}; closing`); continue; }
+    if (!sells.length && !(spyState[p.symbol] || {}).tpPlaced) {                            // resting take-profit, placed once
+      spyState[p.symbol] = { tpPlaced: true };
+      await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(entry * (1 + CFG.spyTp / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} SPY option \u2014 take-profit order at +${CFG.spyTp}%`);
+    }
+  }
+  // new entry: one position at a time
+  const bars5 = await load5m([]), spyBars = bars5.SPY || [], px = ((await latestPrices(['SPY'])).SPY || {}).p;
+  const sig = CFG.spyOn ? spySignal({ bars: spyBars, px, mins: MINS, cfg: CFG }) : null;
+  const dayClosed = (fillsCache.closed || []).filter(c => isSpyOption(c.sym) && c.outT && c.outT.slice(0, 10) === ymdDash(Date.now()));
+  const pdtBlock = equity < 25000 && +acct.daytrade_count >= 3 && !acct.pattern_day_trader;
+  const pending = live.some(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)));
+  const idle = !CFG.spyOn ? 'switched off' : halt.spy ? halt.spy : G.block ? 'paused by the market check' : userPause ? 'paused from Telegram' : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.spyMaxTrades ? `${tradesToday} SPY trades today \u2014 daily maximum reached` : open.length || pending ? 'in a trade' : sig && sig.idle ? sig.idle : !sig ? 'waiting for SPY bars' : null;
+  const r0 = x => Math.round(x);
+  const openRows = open.map(({ p, d, e }) => ({ s: p.symbol, kind: d ? d.kind : 'call', qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
+  lastSpy = { at: new Date().toISOString(), on: !!CFG.spyOn, money: r0(SIDE.spy.money), used: r0(SL_used(positions, live)), today: SIDE.spy.today ?? null, halted: halt.spy, idle, tradesToday, max: CFG.spyMaxTrades, market: sig && sig.market || null, vwap: sig && sig.vwap || null, level: sig && sig.level || null, spyPx: px || null,
+    window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by 3:45 PM`, open: openRows, closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte } };
+  if (idle || !sig || !sig.side) return;
+  const kind = sig.side, from = new Date(Date.now() + 864e5), to = new Date(Date.now() + CFG.spyDte * 864e5);
+  const cj = await D(`/v2/options/contracts?underlying_symbols=SPY&type=${kind}&status=active&expiration_date_gte=${ymdDash(+from)}&expiration_date_lte=${ymdDash(+to)}&strike_price_gte=${r2d(px * 0.99)}&strike_price_lte=${r2d(px * 1.01)}&limit=200`).catch(() => ({}));
+  const cs = (cj.option_contracts || []).filter(c => c.tradable !== false); if (!cs.length) { act(`SPY ${kind.toUpperCase()}: no contract 1\u2013${CFG.spyDte} day${CFG.spyDte > 1 ? 's' : ''} out near ${px} \u2014 skipped`); return; }
+  const ex = [...new Set(cs.map(c => c.expiration_date))].sort()[0];
+  const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - px) - Math.abs(+b.strike_price - px))[0];
+  const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[c.symbol];
+  if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); return; }
+  if ((q.ap - q.bp) / q.ap > 0.05) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over 5%) \u2014 skipped`); return; }
+  const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02));
+  const budget = Math.max(0, SIDE.spy.money * (G.budget || 1) - SL_used(positions, live)), qty = Math.floor(budget / (lim * 100));
+  if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above the SPY sleeve's free money ($${Math.round(budget)}) \u2014 skipped`); return; }
+  await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: encodeSpyId(kind, c.symbol, lim, TODAY, MINS, rid()) },
+    `SPY ${kind.toUpperCase()} quick trade: ${sig.why} \u00b7 out at +${CFG.spyTp}% / \u2212${CFG.spyStop}% or after ${CFG.spyHoldMin} min`);
+  lastSpy.idle = 'in a trade'; lastSpy.tradesToday = tradesToday + 1;
+}
+const SL_used = (positions, live) => positions.filter(p => isSpyOption(p.symbol)).reduce((t, p) => t + Math.abs(+p.market_value || 0), 0) + live.filter(o => o.side === 'buy' && isSpyOption(o.symbol)).reduce((t, o) => t + (+o.qty || 0) * (+o.limit_price || 0) * 100, 0);
 const vwapOf = bars => { let pv = 0, vv = 0; for (const b of bars) { pv += (b.h + b.l + b.c) / 3 * (b.v || 0); vv += b.v || 0; } return vv ? pv / vv : bars[bars.length - 1].c; };
 // Nearest-the-money contract expiring 1–N trading days out, with a tight enough market.
 async function pickDayContract(und, kind, px) {
@@ -305,7 +362,8 @@ const act = m => {                                          // same message with
 };
 let lastWatch = null, lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
 let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
-const NM = { stock: { one: 'stock', many: 'stocks', Cap: 'Stocks' }, call: { one: 'CALL', many: 'CALLs', Cap: 'CALLs' }, put: { one: 'PUT', many: 'PUTs', Cap: 'PUTs' } };
+const NM = { stock: { one: 'stock', many: 'stocks', Cap: 'Stocks' }, call: { one: 'CALL', many: 'CALLs', Cap: 'CALLs' }, put: { one: 'PUT', many: 'PUTs', Cap: 'PUTs' }, spy: { one: 'SPY option', many: 'SPY options', Cap: 'SPY options' } };
+let lastSpy = null;
 let stopMoved = new Set();
 let lastSplit = null, lastDayPx = {}, haltSaid = new Set();      // money split panel, yesterday's closes, halt messages already sent today
 const alerts = [];
@@ -415,10 +473,11 @@ export async function tgCommand(cmd) {
       `   stocks ${usd(inStk)} \u00b7 options ${usd(inOpt)} \u00b7 open P/L ${sgnUsd(openPl)}`,
       `Free to trade: ${usd(Math.max(0, stake - inStk - inOpt))} of your ${CFG.stakeUsd > 0 ? usd(stake) + ' stake' : usd(eq) + ' account'}`,
       `Today: ${sgnUsd(today)} (${(today / (stake || 1) * 100).toFixed(2)}%)`].concat(CFG.split ? (() => {
-        const S = lastSplit && lastSplit.on ? lastSplit : null, cs = CFG.callSharePct, ps = CFG.putSharePct, sh = { stock: 100 - cs - ps, call: cs, put: ps };
-        const used = { stock: inStk, call: pos.filter(p => isOpt(p.symbol) && (OPT_RE.exec(p.symbol) || [])[3] === 'C').reduce((t, p) => t + val(p), 0), put: pos.filter(p => isOpt(p.symbol) && (OPT_RE.exec(p.symbol) || [])[3] === 'P').reduce((t, p) => t + val(p), 0) };
-        const line = k => { const t = S && S[k] ? S[k].today : null, h = S && S[k] && S[k].halted; return `   ${NM[k].Cap}: ${usd(used[k])} of ${usd(stake * sh[k] / 100)} in use${t != null ? ' \u00b7 today ' + sgnUsd(t) : ''} \u00b7 ${h ? '\u26d4 stopped for today' : 'loss limit ' + (k === 'stock' ? CFG.dayCap : CFG.optDayCap) + '%'}`; };
-        return [`Split ${sh.stock}/${cs}/${ps} (stocks/CALLs/PUTs):`, line('stock'), line('call'), line('put')];
+        const S = lastSplit && lastSplit.on ? lastSplit : null, cs = CFG.callSharePct, ps = CFG.putSharePct, ys = CFG.spyOn ? CFG.spySharePct : 0, sh = { stock: 100 - cs - ps - ys, call: cs, put: ps, spy: ys };
+        const kd = p => isOpt(p.symbol) ? (isSpyOption(p.symbol) ? 'spy' : (OPT_RE.exec(p.symbol) || [])[3] === 'P' ? 'put' : 'call') : 'stock';
+        const used = { stock: 0, call: 0, put: 0, spy: 0 }; for (const p of pos) used[kd(p)] += val(p);
+        const line = k => { const t = S && S[k] ? S[k].today : null, h = S && S[k] && S[k].halted; return `   ${NM[k].Cap}: ${usd(used[k])} of ${usd(stake * sh[k] / 100)} in use${t != null ? ' \u00b7 today ' + sgnUsd(t) : ''} \u00b7 ${h ? '\u26d4 stopped for today' : 'loss limit ' + (k === 'stock' ? CFG.dayCap : k === 'spy' ? CFG.spyDayCap : CFG.optDayCap) + '%'}`; };
+        return [`Split ${sh.stock}/${cs}/${ps}${ys ? '/' + ys : ''} (stocks/CALLs/PUTs${ys ? '/SPY' : ''}):`, line('stock'), line('call'), line('put')].concat(ys ? [line('spy')] : []);
       })() : []).join('\n');
     if (!pos.length) return 'Holding nothing right now.';
     const held = (lastWatch && lastWatch.held) || [];
@@ -490,7 +549,7 @@ async function run() {
   if (RG.regime === 'bear') G.reasons.push('Bear market regime (SPY below its 50- and 200-day averages) \u2014 fewer stocks qualify, since each must be above its own 200-day');   // reported, not enforced: the filter did not improve RSI-2 in the research
   // (neutral regime: no size change for RSI-2)
   // circuit breakers: losing streak today, weekly drawdown
-  const sideStreak = { stock: null, call: null, put: null };
+  const sideStreak = { stock: null, call: null, put: null, spy: null };
   try {
     if (Date.now() - fillsCache.at > 60000) {
       const f = await T('/v2/account/activities/FILL?date=' + ymdDash(Date.now()) + '&direction=asc&page_size=100');
@@ -498,7 +557,7 @@ async function run() {
     }
     if (CFG.split) {                                                     // with the money split, a losing streak stops only its own side
       for (const [k, kind] of [['stock', 'Stock'], ['call', 'Call'], ['put', 'Put']]) {
-        const n = lossStreak(fillsCache.closed.filter(c => c.kind === kind));
+        const n = lossStreak(fillsCache.closed.filter(c => c.kind === kind && !isSpyOption(c.sym)));
         if (n >= MAX_STREAK) sideStreak[k] = `${n} losing ${NM[k].one} trades in a row today`;
       }
     } else {
@@ -535,29 +594,34 @@ async function run() {
     stock: { per: amt('stockUnit', 'stockPct', 'stockUsd'), cap: amt('stockUnit', 'stockCapPct', 'stockCapUsd'), used: 0 },
     call:  { per: amt('callUnit', 'optPct', 'callUsd'),     cap: amt('callUnit', 'callCapPct', 'callCapUsd'),     used: 0 },
     put:   { per: amt('putUnit', 'putPct', 'putUsd'),       cap: amt('putUnit', 'putCapPct', 'putCapUsd'),       used: 0 },
+    spy:   { per: equity * (CFG.spyOn ? CFG.spySharePct : 0) / 100, cap: 0, used: 0 },     // the SPY sleeve spends its whole share on one trade at a time
   };
-  const kindOf = sym => !isOpt(sym) ? 'stock' : (OPT_RE.exec(sym) || [])[3] === 'P' ? 'put' : 'call';
+  const kindOf = sym => !isOpt(sym) ? 'stock' : isSpyOption(sym) ? 'spy' : (OPT_RE.exec(sym) || [])[3] === 'P' ? 'put' : 'call';
   for (const p of positions) SL[kindOf(p.symbol)].used += Math.abs(+p.market_value || 0);
   // ---- money split: stocks and options each own a share of the stake and have their own daily loss limit ----
-  const SPLIT = !!CFG.split, KINDS = ['stock', 'call', 'put'];
-  const share = { call: CFG.callSharePct, put: CFG.putSharePct, stock: 100 - CFG.callSharePct - CFG.putSharePct };
-  const SIDE = Object.fromEntries(KINDS.map(k => [k, { money: SPLIT ? equity * share[k] / 100 : equity, capPct: !SPLIT ? LOSS_CAP : k === 'stock' ? LOSS_CAP : CFG.optDayCap }]));
+  const SPLIT = !!CFG.split, KINDS = ['stock', 'call', 'put', 'spy'], spyShare = CFG.spyOn ? CFG.spySharePct : 0;
+  const share = { call: CFG.callSharePct, put: CFG.putSharePct, spy: spyShare, stock: 100 - CFG.callSharePct - CFG.putSharePct - spyShare };
+  // the SPY sleeve always lives on its own share (even with the split off): it is an experiment and must never spend the others' money
+  const SIDE = Object.fromEntries(KINDS.map(k => [k, { money: k === 'spy' ? equity * spyShare / 100 : SPLIT ? equity * share[k] / 100 : equity, capPct: k === 'spy' ? CFG.spyDayCap : !SPLIT ? LOSS_CAP : k === 'stock' ? LOSS_CAP : CFG.optDayCap }]));
   const sideUsed = k => SL[k].used;
   const slBudget = k => Math.max(0, Math.min(SL[k].per * G.budget, SL[k].cap > 0 ? SL[k].cap - SL[k].used : Infinity, SPLIT ? SIDE[k].money - SL[k].used : Infinity));
   const capNote = k => SPLIT && SIDE[k].money - SL[k].used < SL[k].per ? ` (${NM[k].one} money $${Math.round(SIDE[k].money)}, $${Math.round(SL[k].used)} already in use)`
     : SL[k].cap > 0 && SL[k].cap - SL[k].used < SL[k].per ? ` (${k} money ceiling $${Math.round(SL[k].cap)}, $${Math.round(SL[k].used)} already in use)` : '';
   const capHit = dayPct <= -LOSS_CAP;
   for (const p of positions) if (+p.lastday_price > 0) lastDayPx[p.symbol] = +p.lastday_price;
-  const sideDay = sideDayPl({ positions, fills: fillsCache.fills || [], lastDay: lastDayPx });
-  const halt = { stock: null, call: null, put: null };
+  const sideDay = sideDayPl({ positions, fills: fillsCache.fills || [], lastDay: lastDayPx, spy: isSpyOption });
+  const halt = { stock: null, call: null, put: null, spy: null };
+  { const n = lossStreak(fillsCache.closed.filter(c => isSpyOption(c.sym))); if (n >= CFG.spyStreak) sideStreak.spy = `${n} losing SPY option trades in a row today`; }
   if (SPLIT) for (const k of KINDS) {
     const S = SIDE[k]; S.today = sideDay[k]; S.limit = S.money * S.capPct / 100;
     if (S.money > 0 && S.today <= -S.limit) halt[k] = `${NM[k].many} down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`;
     else if (sideStreak[k]) halt[k] = sideStreak[k];
-  } else if (capHit) halt.stock = halt.call = halt.put = `daily loss cap ${LOSS_CAP}% hit`;
+  } else { if (capHit) halt.stock = halt.call = halt.put = `daily loss cap ${LOSS_CAP}% hit`;
+    const S = SIDE.spy; S.today = sideDay.spy; S.limit = S.money * S.capPct / 100;                        // the SPY sleeve keeps its own brakes either way
+    if (S.money > 0 && S.today <= -S.limit) halt.spy = `SPY options down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`; else if (sideStreak.spy) halt.spy = sideStreak.spy; }
   for (const k of KINDS) if (halt[k] && !haltSaid.has(TODAY + k)) {
     haltSaid.add(TODAY + k);
-    if (!SPLIT) { if (k === 'stock') alerts.push(`\u26d4 ${halt[k]} \u2014 no new trades today`); continue; }
+    if (!SPLIT && k !== 'spy') { if (k === 'stock') alerts.push(`\u26d4 ${halt[k]} \u2014 no new trades today`); continue; }
     const others = KINDS.filter(x => x !== k && !halt[x]).map(x => NM[x].many);
     const msg = `${halt[k]} \u2014 no new ${NM[k].one} trades today${k !== 'stock' ? '; open ' + NM[k].many + ' are closed' : ''}${others.length ? '; ' + others.join(' and ') + ' carry on' : ''}`;
     act(msg); alerts.push('\u26d4 ' + msg);
@@ -574,6 +638,9 @@ async function run() {
   }
   const liveOrders = openOrders.filter(o => !o._cancelled);
   for (const o of liveOrders) if (o.side === 'buy') SL[kindOf(o.symbol)].used += (+o.qty || 0) * (+o.limit_price || 0) * (isOpt(o.symbol) ? 100 : 1);
+  // ---- SPY quick options: its own engine, every beat (manages its open trade even when switched off) ----
+  try { await spyCycle({ equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid }); }
+  catch (e) { act('SPY options engine error: ' + (e.message || e).slice(0, 120)); }
   const r0 = x => Math.round(x);
   lastSplit = { at: new Date().toISOString(), on: SPLIT, shares: share, stake: r0(equity),
     ...Object.fromEntries(KINDS.map(k => [k, { money: r0(SIDE[k].money), used: r0(sideUsed(k)), today: SPLIT ? sideDay[k] : null, limitPct: SIDE[k].capPct, halted: halt[k] }])) };
@@ -863,7 +930,7 @@ async function writeJournal() {
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
     settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, engine: { cycleMs: engine.cycleMs, cycleMax: engine.cycleMax, cycles: engine.cycles, avgCallMs: engine.calls ? Math.round(engine.callMs / engine.calls) : 0, calls: engine.calls, errorsHour: engine.hourErrors.length, lastError: engine.lastError, symbols: UNIVERSE.length, beatMs: +process.env.BEAT_MS || 2000, scan: CFG.universe === 'scan' ? { ...scanStatus } : null },
     // panels the bot only computes while the market is open: a process that has not computed them yet keeps the previous ones
-    risk: lastRisk || prev.risk || null, split: lastSplit || prev.split || null, watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
+    risk: lastRisk || prev.risk || null, split: lastSplit || prev.split || null, spy: lastSpy || prev.spy || null, watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
     limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {
     // Only the timestamp, paper/live flag, stream health and engine health stay readable; the page decrypts the rest with the same passphrase.

@@ -69,7 +69,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <main>
 <h1>What every bot setting does</h1>
 <p class="lede">One entry per control on the <b>Bot settings</b> tab: what it changes, the default, and when you'd move it. Defaults marked <span class="tag tested">tested</span> are the values the 33-year research used; anything marked <span class="tag exp">experimental</span> was never backtested.</p>
-<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · last updated 2026-10-24 (leaders first)</p>
+<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · last updated 2026-10-24 (SPY quick options)</p>
 
 <section id="how">
 <h2>How settings work<small>where they live and when they take effect</small></h2>
@@ -162,6 +162,15 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 </section>
 
 <section id="s5">
+<h2>4c · SPY quick options<small>CALLs and PUTs on SPY, minutes at a time — experimental</small></h2>
+<div class="s"><h3>SPY quick options (on/off)</h3><div class="meta">Default <b>on</b> · <span class="tag exp">experimental · not backtested</span></div><p>A separate part of the bot that trades only SPY options, holding each for minutes. It spends only its own share of the stake and has its own brakes, so it can never touch the money of the stock, CALL or PUT parts. <b>These rules have not been tested on history</b> — minute-by-minute options prices are a paid dataset the project does not have — so judge it on the practice account before trusting it. Switched off, any open trade is still managed to its exit.</p></div>
+<div class="s"><h3>How it trades</h3><p>Direction from SPY against its day’s VWAP (volume-weighted average price): above → CALLs only, below → PUTs only, sitting on it → nothing. It buys when SPY breaks the high (CALL) or low (PUT) of the last 15 minutes and the last 5-minute bar closed that way on at least average volume. The contract is nearest the money, expiring 1 day out (never same-day), with a bid/ask spread under 5%. One trade at a time; a take-profit order rests at the broker; the stop, the time stop and the 3:45 PM flat rule are watched by the bot.</p></div>
+<div class="s"><h3>SPY share of the stake</h3><div class="meta">Default <b>5 %</b> · range 0–50 %</div><p>The money this part may use; one trade spends up to all of it. Stocks get whatever CALLs, PUTs and this leave. If the shares add up to more than 100 %, this one is cut first on Save.</p></div>
+<div class="s"><h3>Take-profit / Stop</h3><div class="meta">Default <b>+15 % / −15 %</b> · ranges 5–100 % / 5–60 %</div><p>On the option’s own price. Same-size wins and losses with a 10-minute hold is a fast, coin-flip-like trade; the edge, if any, has to come from the direction filter.</p></div>
+<div class="s"><h3>Time stop</h3><div class="meta">Default <b>10 min</b> · range 2–120</div><p>Out after this many minutes whatever the price.</p></div>
+<div class="s"><h3>Max trades per day / Losses in a row / Daily loss limit</h3><div class="meta">Default <b>6 / 2 / 25 %</b></div><p>The sleeve’s own brakes: a daily maximum, a losing-streak stop, and a loss limit as a % of its own money. Any of them ends its day; the other parts carry on. Telegram says which.</p></div>
+<div class="s"><h3>Expiry, max days out</h3><div class="meta">Default <b>1</b> · range 1–5</div><p>1 = the next trading day. Same-day (0DTE) options are never bought.</p></div>
+<div class="s"><h3>Trades from / until</h3><div class="meta">Default <b>9:50 AM – 3:30 PM ET</b></div><p>No entries before the first 15 minutes of bars exist or after the end time; open trades are flat by 3:45 PM.</p></div>
 <h2>5 · Guards<small>what makes the bot stand aside</small></h2>
 <div class="s"><h3>Economic calendar guard</h3><div class="meta">Default <b>on</b></div><p>No new trades around Fed decisions (from 30 min before to 60 min after, options closed before), CPI and jobs mornings (entries from 10:15, half size until 11:00) and Fed-minutes afternoons. The calendar is in <code>events.json</code> through 2027.</p></div>
 <div class="s"><h3>Breaking-news guard</h3><div class="meta">Default <b>on</b></div><p>Scans headlines every minute. A fresh war / policy / crisis headline pauses new trades for 30 minutes; a stock with its own fresh news or earnings is skipped. Matching is whole-word and phrase-based ("Radware", "awards", "software" cannot trigger it; "invasion", "missile strike" can). The Bot trades tab shows exactly which headline it reacted to.</p></div>

@@ -1,3 +1,4 @@
+import { SPY_DEFAULTS } from './spyopt.mjs';
 // Bot configuration: presets, defaults, validation. The front-end Settings tab writes bot/config.json;
 // the bot re-reads it every minute. Secrets (API keys) are NEVER in this file.
 export const PRESETS = {
@@ -26,6 +27,8 @@ export const DEFAULTS = {
   // Money split: stocks, CALLs and PUTs each get their own share of the stake (stocks = 100 − CALLs − PUTs) and their own daily
   // loss limit (dayCap is then a % of the stock money, optDayCap a % of the CALL money and of the PUT money); off = one shared pool.
   split: true, callSharePct: 30, putSharePct: 10, optDayCap: 10,
+  // SPY quick options sleeve (bot/spyopt.mjs): its own share of the stake, off the top of the stock share; experimental, not backtested
+  ...SPY_DEFAULTS,
   putPct: 1, stockUsd: 10000, callUsd: 2000, putUsd: 1000,
   stockCapPct: 0, callCapPct: 0, putCapPct: 0, stockCapUsd: 0, callCapUsd: 0, putCapUsd: 0,
 };
@@ -34,7 +37,7 @@ export const RANGES = {
   riskPct: [0.05, 3], optRiskPct: [0.05, 3], maxHeat: [0.5, 15], perSector: [1, 10], maxPositions: [1, 20], maxOptions: [0, 10],
   dayCap: [0.5, 20], weekCap: [1, 30], streak: [1, 10], stockPct: [1, 30], optPct: [0.5, 10],
   putPct: [0.5, 10], stockUsd: [0, 1e7], callUsd: [0, 1e7], putUsd: [0, 1e7],
-  callSharePct: [0, 100], putSharePct: [0, 100], optDayCap: [1, 50], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
+  callSharePct: [0, 100], putSharePct: [0, 100], optDayCap: [1, 50], spySharePct: [0, 50], spyTp: [5, 100], spyStop: [5, 60], spyHoldMin: [2, 120], spyMaxTrades: [1, 20], spyStreak: [1, 6], spyDayCap: [5, 100], spyDte: [1, 5], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
   scanSize: [50, 400], scanMinPrice: [1, 500],
   liveSizePct: [5, 100], stakeUsd: [0, 1e8], dayOrMin: [5, 60], dayMaxTrades: [1, 10], dayStreak: [1, 5], dayRiskPct: [0.1, 2], dayTarget: [1, 4], dayRvol: [0.5, 3], dayTimeStop: [15, 180], dayOptTp: [10, 200], dayOptStop: [20, 80], dayOptDteMax: [1, 14],
   rsiThreshold: [2, 30], maxHold: [1, 30], optTakeProfit: [5, 300], optStop: [5, 90], holdFloor: [2, 60], stockTp: [0, 100], staleMin: [5, 240],
@@ -46,15 +49,20 @@ export function normalize(raw) {
   if (raw.preset && PRESETS[raw.preset]) { c.preset = raw.preset; Object.assign(c, PRESETS[raw.preset]); }
   else if (raw.preset === 'custom') c.preset = 'custom';
   for (const k of Object.keys(RANGES)) if (raw[k] != null && isFinite(+raw[k]) && (c.preset === 'custom' || !(k in PRESETS.balanced))) c[k] = clamp(+raw[k], RANGES[k]);
-  for (const k of ['split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
+  for (const k of ['spyOn', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
   if (raw.universe === 'scan' || raw.universe === 'list') c.universe = raw.universe;
   if (raw.pickBy === 'leaders' || raw.pickBy === 'dip') c.pickBy = raw.pickBy;
   for (const k of ['stockUnit', 'callUnit', 'putUnit']) if (raw[k] === 'pct' || raw[k] === 'usd') c[k] = raw[k];
-  if (c.callSharePct + c.putSharePct > 100) c.putSharePct = 100 - c.callSharePct;                  // the three shares can never add up to more than the stake
+  if (!c.spyOn) c.spySharePct = Math.min(c.spySharePct, 100);
+  const spyShare = c.spyOn ? c.spySharePct : 0;                                                      // the shares can never add up to more than the stake
+  if (c.callSharePct + c.putSharePct + spyShare > 100) c.spySharePct = Math.max(0, 100 - c.callSharePct - c.putSharePct);
+  if (c.callSharePct + c.putSharePct > 100) c.putSharePct = 100 - c.callSharePct;
   c.mode = raw.mode === 'live' && raw.liveConfirm === 'I UNDERSTAND THE RISK' ? 'live' : 'paper';
   const tm = v => /^\d{1,2}:\d{2}$/.test(v || '') ? v.split(':').map(Number).reduce((h, m) => h * 60 + m) : null;
   if (tm(raw.dayStart) != null && tm(raw.dayStart) >= 575 && tm(raw.dayStart) <= 720) c.dayStart = raw.dayStart;      // 9:35–12:00
   if (tm(raw.dayEnd) != null && tm(raw.dayEnd) >= 600 && tm(raw.dayEnd) <= 945) c.dayEnd = raw.dayEnd;               // 10:00–15:45
+  if (tm(raw.spyStart) != null && tm(raw.spyStart) >= 575 && tm(raw.spyStart) <= 720) c.spyStart = raw.spyStart;   // 9:35–12:00
+  if (tm(raw.spyEnd) != null && tm(raw.spyEnd) >= 600 && tm(raw.spyEnd) <= 930) c.spyEnd = raw.spyEnd;               // 10:00–15:30
   if (/^\d{1,2}:\d{2}$/.test(raw.entryEnd || '')) { const [h, m] = raw.entryEnd.split(':').map(Number); if (h * 60 + m >= 600 && h * 60 + m <= 945) c.entryEnd = raw.entryEnd; }   // 10:00–15:45 ET (was capped at 15:00, which silently turned a 15:30 setting into the 11:00 default)
   if (Array.isArray(raw.symbols)) { const s = [...new Set(raw.symbols.map(x => String(x).trim().toUpperCase()).filter(x => /^[A-Z.]{1,6}$/.test(x)))]; if (s.length) c.symbols = s.slice(0, 60); }
   if (raw.updatedAt) c.updatedAt = raw.updatedAt;

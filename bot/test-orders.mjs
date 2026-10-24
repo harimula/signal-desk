@@ -103,7 +103,7 @@ if (process.argv[2] === 'child') {
   server.closeAllConnections && server.closeAllConnections(); server.close();
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
   const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
-  console.log('RESULT ' + JSON.stringify({ split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  console.log('RESULT ' + JSON.stringify({ spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
@@ -240,7 +240,7 @@ check('split 60/30/10: CALLs already use their $30,000 → the CALL is skipped; 
   assert.ok(M1.options.some(o => /^POP\d{6}P/.test(o.symbol)), JSON.stringify(M1.acts));
   assert.ok((M1.acts || []).some(m => /CALL money \$30000, \$29900 already in use/.test(m)), JSON.stringify(M1.acts));
 });
-check('split: the journal publishes each part\'s money, use and today\'s result', () => { const S = M1.split; assert.ok(S && S.on); assert.deepEqual(S.shares, { call: 30, put: 10, stock: 60 }); assert.equal(S.stock.money, 60000); assert.equal(S.call.money, 30000); assert.equal(S.put.money, 10000); assert.equal(S.call.used, 29900); assert.equal(S.call.today, 0); assert.equal(S.call.halted, null); });
+check('split: the journal publishes each part\'s money, use and today\'s result', () => { const S = M1.split; assert.ok(S && S.on); assert.deepEqual(S.shares, { call: 30, put: 10, spy: 5, stock: 55 }); assert.equal(S.stock.money, 55000); assert.equal(S.spy.money, 5000); assert.equal(S.call.money, 30000); assert.equal(S.put.money, 10000); assert.equal(S.call.used, 29900); assert.equal(S.call.today, 0); assert.equal(S.call.halted, null); });
 const M1p = run(XS, { positions: [pos(putSym, 5, 19.9, 19.9, 19.9)] });
 check('split: PUTs already use their $10,000 → the PUT is skipped while the CALL goes through', () => { assert.ok(!M1p.options.some(o => /^POP\d{6}P/.test(o.symbol)), JSON.stringify(M1p.options)); assert.ok(M1p.options.some(o => /^DIP\d{6}C/.test(o.symbol)), JSON.stringify(M1p.acts)); });
 const M0 = run({ ...XS, split: false }, { positions: [pos(optSym, 10, 1, 29.9, 29.9)] });
@@ -255,7 +255,7 @@ check('CALL loss limit: CALLs down $3,750 today (limit 10% of $30,000) → no ne
   assert.ok(M3.split.call.halted && M3.split.call.today === -3750, JSON.stringify(M3.split));
 });
 check('CALL loss limit: stocks and PUTs carry on (the dip stock is bought, the PUT on the pop is placed)', () => { assert.ok(M3.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(M3.acts)); assert.ok(M3.options.some(o => /^POP\d{6}P/.test(o.symbol)), JSON.stringify(M3.acts)); });
-check('CALL loss limit: one Telegram alert names the part that stopped and the ones that carry on', () => { const t = M3.tgSent.map(m => m.text).filter(x => /CALLs down \$3750/.test(x)); assert.equal(t.length, 1, JSON.stringify(M3.tgSent.map(m => m.text))); assert.match(t[0], /stocks and PUTs carry on/); });
+check('CALL loss limit: one Telegram alert names the part that stopped and the ones that carry on', () => { const t = M3.tgSent.map(m => m.text).filter(x => /CALLs down \$3750/.test(x)); assert.equal(t.length, 1, JSON.stringify(M3.tgSent.map(m => m.text))); assert.match(t[0], /stocks and PUTs and SPY options carry on/); });
 const putHist = [{ symbol: putSym, side: 'buy', status: 'filled', client_order_id: 'sd-p-' + putSym + '-20261022-10-ab', qty: '10', limit_price: '3', filled_at: '2026-10-22T15:00:00Z' }];
 const M3p = run(XS, { positions: [pos(putSym, 10, 3, 2, 3)], hist: putHist });
 check('PUT loss limit: PUTs down $1,000 today (limit 10% of $10,000) → no new PUT, the open PUT is closed, the CALL still goes through', () => {
@@ -264,7 +264,7 @@ check('PUT loss limit: PUTs down $1,000 today (limit 10% of $10,000) → no new 
 });
 const losers = [pos('QUIET', 100, 212, 200, 210), pos('FALL', 200, 92, 80, 92)];
 const M4 = run(XS, { positions: losers });
-check('stock loss limit: stocks down $3,400 today (limit 3% of $60,000) → no stock buy, but the CALL and the PUT still go through', () => {
+check('stock loss limit: stocks down $3,400 today (limit 3% of $55,000) → no stock buy, but the CALL and the PUT still go through', () => {
   assert.ok(!M4.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(M4.orders)); assert.ok(M4.options.some(o => /^DIP\d{6}C/.test(o.symbol)) && M4.options.some(o => /^POP\d{6}P/.test(o.symbol)), JSON.stringify(M4.acts));
   assert.ok(M4.split.stock.halted && M4.split.stock.today === -3400, JSON.stringify(M4.split));
 });
@@ -279,7 +279,7 @@ check('losing streak: three stock losses in a row stop only stocks; the CALL sti
   assert.match(M6.split.stock.halted || '', /3 losing stock trades in a row/);
 });
 const TM = run({ stocks: true, options: false, symbols: ['DIP'] }, { tg: true, tgAfter: [[42, '/money']] });
-check('telegram: /money shows all three parts of the split', () => assert.ok(TM.tgSent.some(m => /Split 60\/30\/10/.test(m.text) && /Stocks: .* of \$60,000 in use/.test(m.text) && /CALLs: .* of \$30,000 in use/.test(m.text) && /PUTs: .* of \$10,000 in use/.test(m.text)), JSON.stringify(TM.tgSent.map(m => m.text))));
+check('telegram: /money shows all four parts of the split', () => assert.ok(TM.tgSent.some(m => /Split 55\/30\/10\/5/.test(m.text) && /Stocks: .* of \$55,000 in use/.test(m.text) && /CALLs: .* of \$30,000 in use/.test(m.text) && /PUTs: .* of \$10,000 in use/.test(m.text) && /SPY options: .* of \$5,000 in use/.test(m.text)), JSON.stringify(TM.tgSent.map(m => m.text))));
 
 // ---- quick exits: stocks sell at the take-profit % or the stop %, options at their own % ----
 const QX = { stocks: true, options: true, symbols: ['DIP'], preset: 'custom', maxHeat: 15, stockTp: 10, holdFloor: 5, optTakeProfit: 20, optStop: 10 };
@@ -316,5 +316,45 @@ const L1 = run(LF), L2 = run({ ...LF, pickBy: 'dip' });
 check('leaders first (default): DIP is bought, LAG (deeper dip, weaker run) is left', () => { assert.ok(L1.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(L1.orders) + JSON.stringify(L1.acts)); assert.ok(!L1.orders.some(o => o.symbol === 'LAG')); assert.equal(L1.watch.pickBy, 'leaders'); });
 check('leaders first: the watch list shows each stock\'s 3-month return vs the market, and the log names the order', () => { const d = L1.watch.rows.find(r => r.s === 'DIP'), l = L1.watch.rows.find(r => r.s === 'LAG'); assert.ok(d && l && d.lead > l.lead, JSON.stringify([d, l])); assert.ok((L1.acts || []).some(m => /leaders first/.test(m) && /vs market/.test(m)), JSON.stringify(L1.acts)); });
 check('deepest dip (pickBy = dip): the order is by RSI-2 and leaders are not preferred (DIP, the stronger runner, is not favoured)', () => { assert.ok(!(L2.acts || []).some(m => /leaders first/.test(m))); assert.equal(L2.watch.pickBy, 'dip'); assert.equal(L2.orders.filter(o => o.side === 'buy').length, 1); });
+
+// ---- SPY quick options sleeve: CALL on an upside break, PUT on a downside break, 5% of the stake, its own exits and brakes ----
+const m5 = (hm, o, h, l, c, v) => ({ t: '2026-10-23T' + hm + ':00Z', o, h, l, c, v, n: 100, vw: c });
+const spyUp = [m5('13:30', 500, 501, 499.5, 500.6, 2e6), m5('13:35', 500.6, 501.2, 500.4, 501, 2e6), m5('13:40', 501, 501.8, 500.9, 501.6, 2e6), m5('13:45', 501.6, 502, 501.4, 501.9, 2e6), m5('13:50', 501.9, 502.5, 501.8, 502.3, 2.5e6)];
+const spyDn = spyUp.map(b => ({ ...b, o: 1000 - b.o, h: 1000 - b.l, l: 1000 - b.h, c: 1000 - b.c }));
+const SO = { stocks: false, options: false, symbols: ['QUIET'], preset: 'custom' };
+const Y1 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+check('SPY sleeve (default on): SPY breaks the 15-minute high above its VWAP → one SPY CALL, id sd-yc-, sized from the $5,000 share', () => {
+  const o = Y1.orders.find(x => /^SPY\d{6}C/.test(x.symbol) && x.side === 'buy'); assert.ok(o, JSON.stringify(Y1.orders) + JSON.stringify(Y1.acts)); assert.match(o.client_order_id, /^sd-yc-SPY/);
+  assert.ok(+o.qty * +o.limit_price * 100 <= 5000 && +o.qty >= 1, 'spent ' + (+o.qty * +o.limit_price * 100)); assert.equal(o.time_in_force, 'day');
+});
+check('SPY sleeve: the journal carries the sleeve\'s money, use, window and rules', () => { const S = Y1.spy; assert.ok(S && S.on, JSON.stringify(S)); assert.equal(S.money, 5000); assert.equal(S.max, 6); assert.deepEqual(S.rules, { tp: 15, stop: 15, holdMin: 10, dte: 1 }); assert.equal(S.market, 'up'); });
+const Y2 = run(SO, { bars5: { SPY: spyDn }, live: { SPY: 497.3 }, spy: 'down' });
+check('SPY sleeve: SPY breaks the 15-minute low below its VWAP → a SPY PUT (sd-yp-)', () => assert.ok(Y2.orders.some(x => /^SPY\d{6}P/.test(x.symbol) && /^sd-yp-/.test(x.client_order_id)), JSON.stringify(Y2.orders) + JSON.stringify(Y2.acts)));
+const Y3 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
+check('SPY sleeve: no break of the 15-minute high → nothing bought, the journal says what it waits for', () => { assert.ok(!Y3.orders.some(x => /^SPY/.test(x.symbol))); assert.match(Y3.spy.idle || '', /waiting for a break above 502\.5/); });
+const Y0 = run({ ...SO, spyOn: false }, { bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+check('SPY sleeve switched off: the same break buys nothing, and the stock share grows back to 60%', () => { assert.ok(!Y0.orders.some(x => /^SPY/.test(x.symbol)), JSON.stringify(Y0.orders)); assert.equal(Y0.spy.on, false); assert.equal(Y0.split.stock.money, 60000); });
+const spySym = 'SPY261024C00502000', spyPos = cur => ({ symbol: spySym, qty: '20', avg_entry_price: '2.05', current_price: String(cur), lastday_price: '2.05', market_value: String(20 * cur * 100), unrealized_pl: String(20 * (cur - 2.05) * 100), unrealized_plpc: String(cur / 2.05 - 1) });
+const spyBuy = openMins => [{ symbol: spySym, side: 'buy', status: 'filled', client_order_id: `sd-yc-${spySym}-205-20261023-${openMins}-ab`, qty: '20', limit_price: '2.05', filled_at: '2026-10-23T13:55:00Z' }];
+const Y4 = run(SO, { positions: [spyPos(2.4)], hist: spyBuy(595), bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
+check('SPY sleeve: an open CALL up 17% is sold at market (take-profit +15%)', () => assert.ok(Y4.orders.some(o => o.symbol === spySym && o.side === 'sell' && o.type === 'market') && (Y4.acts || []).some(m => /take profit/.test(m)), JSON.stringify(Y4.orders) + JSON.stringify(Y4.acts)));
+const Y5 = run(SO, { positions: [spyPos(1.7)], hist: spyBuy(595), bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
+check('SPY sleeve: an open CALL down 17% is sold at market (stop −15%)', () => assert.ok(Y5.orders.some(o => o.symbol === spySym && o.side === 'sell' && o.type === 'market') && (Y5.acts || []).some(m => /stop \(limit/.test(m)), JSON.stringify(Y5.acts)));
+const Y6 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(588), bars5: { SPY: spyUp }, live: { SPY: 502.2 } });   // opened 9:48, now 10:00 → 12 min
+check('SPY sleeve: a CALL held 12 minutes is sold (time stop 10 min) whatever the price', () => assert.ok(Y6.orders.some(o => o.symbol === spySym && o.side === 'sell' && o.type === 'market') && (Y6.acts || []).some(m => /10 minutes are up/.test(m)), JSON.stringify(Y6.acts)));
+const Y7 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.7 } });   // opened 9:56, now 10:00 → 4 min, +2%
+check('SPY sleeve: while a trade is open it rests a take-profit order at +15% ($2.36), buys nothing more, and reports "in a trade"', () => {
+  const sells = Y7.orders.filter(o => o.symbol === spySym && o.side === 'sell'); assert.equal(sells.length, 1, JSON.stringify(Y7.orders)); assert.equal(sells[0].type, 'limit'); assert.ok(Math.abs(+sells[0].limit_price - 2.36) < 0.011, sells[0].limit_price);
+  assert.ok(!Y7.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol))); assert.equal(Y7.spy.idle, 'in a trade'); assert.equal(Y7.spy.open.length, 1);
+});
+const sixToday = Array.from({ length: 6 }, (_, i) => ({ symbol: spySym, side: 'buy', status: 'filled', client_order_id: `sd-yc-${spySym}-205-20261023-${580 + i}-z${i}`, qty: '1', limit_price: '2.05' }));
+const Y8 = run(SO, { hist: sixToday, bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+check('SPY sleeve: after 6 trades today the daily maximum stops new ones', () => { assert.ok(!Y8.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol)), JSON.stringify(Y8.orders)); assert.match(Y8.spy.idle || '', /daily maximum/); });
+const spyLoss = [['buy', 2.05, '13:35'], ['sell', 1.7, '13:40'], ['buy', 2.05, '13:45'], ['sell', 1.7, '13:50']].map(([side, price, hm], i) => ({ symbol: spySym, side, qty: '20', price: String(price), order_id: 'y' + i, transaction_time: '2026-10-23T' + hm + ':00Z' }));
+const Y9 = run(SO, { fills: spyLoss, bars5: { SPY: spyUp }, live: { SPY: 502.7 }, tg: true });
+check('SPY sleeve: two losses in a row ($1,400 = 28% of its $5,000) end its day; one Telegram alert; stocks are untouched', () => {
+  assert.ok(!Y9.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol)), JSON.stringify(Y9.orders)); assert.ok(Y9.spy.halted, JSON.stringify(Y9.spy));
+  assert.equal(Y9.tgSent.filter(m => /SPY options down \$1400/.test(m.text)).length, 1, JSON.stringify(Y9.tgSent.map(m => m.text))); assert.ok(!Y9.split.stock.halted);
+});
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));
