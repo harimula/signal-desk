@@ -55,8 +55,10 @@ if (process.argv[2] === 'child') {
   const tgQueue = [(FAKE.tgBefore || []).map((t, i) => tgMsg(100 + i, t[0], t[1])), (FAKE.tgAfter || []).map((t, i) => tgMsg(200 + i, t[0], t[1]))];
   const occ = (und, type, px) => und + '261113' + type[0].toUpperCase() + String(Math.round(px) * 1000).padStart(8, '0');
 
-  const server = http.createServer((req, res) => {
+  const TRADING_ONLY = /^\/v2\/(account|positions|orders|clock|assets|calendar|options\/contracts)/, DATA_ONLY = /^\/v2\/stocks\/|^\/v1beta1\//;
+  const handler = isData => (req, res) => {
     const u = new URL(req.url, 'http://x'), p = u.pathname;
+    if (!/^\/bottest-token/.test(p) && ((isData && TRADING_ONLY.test(p)) || (!isData && DATA_ONLY.test(p)))) { unknown.push((isData ? 'DATA ' : 'TRADING ') + req.method + ' ' + p); res.statusCode = 404; res.setHeader('content-type', 'application/json'); return res.end('{"message":"wrong host"}'); }
     let body = '';
     req.on('data', c => body += c);
     req.on('end', () => {
@@ -65,11 +67,13 @@ if (process.argv[2] === 'child') {
       if (p === '/bottest-token/sendMessage') { tgSent.push(JSON.parse(body)); return send({ ok: true, result: { message_id: tgSent.length } }); }
       if (p === '/v2/clock') return send({ is_open: !FAKE.closed, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
       if (p === '/v2/account') return send({ equity: '100000', last_equity: '100000', cash: '100000', buying_power: '400000', pattern_day_trader: false, daytrade_count: 0, status: 'ACTIVE', multiplier: '4' });
-      if (p === '/v2/positions') return send(FAKE.positions || []);
+      if (p === '/v2/positions' && req.method === 'GET') return send(FAKE.positions || []);
       if (p === '/v2/assets' && FAKE.slowAssets) return setTimeout(() => send([]), FAKE.slowAssets);
       if (p === '/v2/assets') return send(Object.keys(BARS).map(s => ({ symbol: s, tradable: true, exchange: 'NASDAQ' })).concat([{ symbol: 'OTCX', tradable: true, exchange: 'OTC' }, { symbol: 'WARR.WS', tradable: true, exchange: 'NYSE' }]));
       if (p === '/v2/account/activities/FILL') return send(FAKE.fills || []);
       if (p === '/v2/account/portfolio/history') return send({ equity: [100000, 100000], timestamp: [1, 2], base_value: 100000 });
+      if (p === '/v2/orders' && req.method === 'DELETE') { deletes.push('all-orders'); return send([]); }
+      if (p.startsWith('/v2/positions') && req.method === 'DELETE') { deletes.push('all-positions'); return send([]); }
       if (p.startsWith('/v2/orders/') && req.method === 'DELETE') { deletes.push(p.split('/').pop()); return send(null); }
       if (p.startsWith('/v2/orders/') && req.method === 'PATCH') { patches.push({ id: p.split('/').pop(), ...JSON.parse(body || '{}') }); return send({ id: 'r' + patches.length, status: 'replaced' }); }
       if (p === '/v2/orders' && req.method === 'POST') { const o = JSON.parse(body); orders.push(o); return send({ id: 'o' + orders.length, status: 'accepted', ...o }); }
@@ -85,15 +89,17 @@ if (process.argv[2] === 'child') {
       if (p === '/v1beta1/options/quotes/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) out[s] = FAKE.quote || { ap: 2.05, bp: 2.0 }; return send({ quotes: out }); }
       unknown.push(req.method + ' ' + p); send({});
     });
-  });
-  await new Promise(r => server.listen(0, '127.0.0.1', r));
-  const url = 'http://127.0.0.1:' + server.address().port;
-  process.env.ALPACA_URL = url; process.env.ALPACA_DATA_URL = url;
+  };
+  const server = http.createServer(handler(false)), dataServer = http.createServer(handler(true));
+  await new Promise(r => server.listen(0, '127.0.0.1', r)); await new Promise(r => dataServer.listen(0, '127.0.0.1', r));
+  const url = 'http://127.0.0.1:' + server.address().port, dataUrl = 'http://127.0.0.1:' + dataServer.address().port;
+  process.env.ALPACA_URL = url; process.env.ALPACA_DATA_URL = dataUrl;
   process.env.ALPACA_KEY = 'test'; process.env.ALPACA_SECRET = 'test';
   if (FAKE.journalKey) process.env.JOURNAL_KEY = FAKE.journalKey;
   if (FAKE.tg) { process.env.TELEGRAM_API = url; process.env.TELEGRAM_TOKEN = 'test-token'; process.env.TELEGRAM_CHAT = '42'; }                        // privacy mode: encrypted journal (must be set before the import)
   fs.mkdirSync('bot', { recursive: true });
   const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
+  if (FAKE.stop) fs.writeFileSync('bot/STOP', 'stop');
   if (FAKE.prevJournal) fs.writeFileSync('bot/journal.json', JSON.stringify(FAKE.journalKey ? await bot.encryptJournal(FAKE.prevJournal, FAKE.prevKey || FAKE.journalKey, 1000) : FAKE.prevJournal));   // what the previous run left behind
   bot.applyConfig({ symbols: ['DIP', 'POP', 'FALL'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
   if (FAKE.tg) await bot.tgPollCycle();
@@ -103,11 +109,12 @@ if (process.argv[2] === 'child') {
   let fast = null;
   if (FAKE.fast) { const before = orders.length; FAKE.positions = FAKE.fast.positions; await bot.spyFast(); fast = { placed: orders.slice(before), hasOpen: bot.spyHasOpen() }; }
   let tickEntry = null;
+  if (FAKE.tick2) { const before = orders.length; const ok = await bot.spyEnter(FAKE.tick2); tickEntry = { ok, placed: orders.slice(before) }; }
   if (FAKE.tick) { const before = orders.length; const ok = await bot.spyEnter(FAKE.tick); const again = await bot.spyEnter(FAKE.tick); tickEntry = { ok, again, placed: orders.slice(before), open: bot.spyOpenSymbols() }; }
   let quoteExit = null;
   if (FAKE.quote2) { const before = orders.length; await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); quoteExit = { placed: orders.slice(before), deletes: [...deletes] }; }
   const spyW = bot.spyWatch();
-  server.closeAllConnections && server.closeAllConnections(); server.close();
+  server.closeAllConnections && server.closeAllConnections(); server.close(); dataServer.closeAllConnections && dataServer.closeAllConnections(); dataServer.close();
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
   const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
   console.log('RESULT ' + JSON.stringify({ tickEntry, quoteExit, fast, spyWatch: spyW, spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
@@ -390,5 +397,19 @@ check('SPY quote exit: a streamed quote with the mid 16% under the entry sells a
 });
 const Y15 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 }, quote2: { sym: spySym, bp: 2.30, ap: 2.34 } });
 check('SPY quote exit: a quote at +10% (inside the limits) places nothing; a quote at the take-profit is left to the resting order', () => assert.equal(Y15.quoteExit.placed.length, 0, JSON.stringify(Y15.quoteExit)));
+
+// ---- audit fixes: STOP, hosts, old day-trade ids, manual SPY options, same-contract re-entry ----
+check('hosts: no request ever goes to the wrong Alpaca host (options contracts live on the trading API, bars and quotes on the data API)', () => { const bad = [A, B, D1, Y1, Y12].flatMap(r => r.unknown.filter(u => /^(DATA|TRADING) /.test(u))); assert.deepEqual(bad, []); });
+const KS = run({ stocks: true, options: true, symbols: ['DIP'] }, { stop: true, positions: [{ symbol: 'AAPL', qty: '5', avg_entry_price: '200', current_price: '198', market_value: '990', unrealized_pl: '-10', unrealized_plpc: '-0.01' }], bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick2: 502.7 });
+check('bot/STOP: cancels every order and closes every position, buys nothing, and a SPY tick afterwards places nothing', () => { assert.ok(KS.deletes.includes('all-orders') && KS.deletes.includes('all-positions'), JSON.stringify(KS.deletes)); assert.equal(KS.orders.length, 0, JSON.stringify(KS.orders)); assert.ok(KS.tickEntry && !KS.tickEntry.ok && KS.tickEntry.placed.length === 0, JSON.stringify(KS.tickEntry)); });
+const oldDay = { symbol: 'QUIET', side: 'buy', status: 'filled', client_order_id: 'sd-d-QUIET-20500-20300-20900-20261001-590-zz', qty: '50', limit_price: '205' };
+const swingBuy = { symbol: 'QUIET', side: 'buy', status: 'filled', client_order_id: 'sd-r-QUIET-500-20261022-ab', qty: '50', limit_price: '205', filled_at: '2026-10-22T15:00:00Z' };
+const OD = run({ stocks: true, options: false, symbols: ['DIP'], dayTrade: true }, { time: '2026-10-23T19:52:00Z', positions: [qPos(205)], hist: [oldDay, swingBuy] });
+check('an old day-trade id (Oct 1) must not capture today\'s swing position in QUIET: the day engine leaves it to the swing rules (no "day trade" sale)', () => { assert.ok(!(OD.acts || []).some(m => /QUIET day trade/.test(m)), JSON.stringify(OD.acts)); assert.ok(!OD.day || !(OD.day.open || []).some(o => o.s === 'QUIET'), 'day engine must not list QUIET as its position'); });
+const manualSpy = { ...spyPos(1.5), symbol: 'SPY261024C00510000' };
+const MS = run(SO, { positions: [manualSpy], hist: [{ symbol: 'SPY261024C00510000', side: 'buy', status: 'filled', client_order_id: 'hand-made', qty: '20', limit_price: '2.05' }], bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
+check('a SPY option bought by hand (no sd-y id) is left alone by the sleeve: no stop sale, no take-profit order', () => assert.ok(!MS.orders.some(o => o.symbol === 'SPY261024C00510000'), JSON.stringify(MS.orders)));
+const RE = run(SO, { hist: [{ symbol: 'SPY261113C00502000', side: 'buy', status: 'filled', client_order_id: 'sd-yc-SPY261113C00502000-205-20261023-585-q1', qty: '20', limit_price: '2.05', filled_at: '2026-10-23T13:46:00Z' }], bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+check('SPY re-entry: a second trade in the same contract later in the day is placed (the duplicate guard keys SPY buys by order id, not by symbol)', () => assert.ok(RE.orders.some(o => /^SPY\d{6}C/.test(o.symbol) && o.side === 'buy'), JSON.stringify(RE.orders) + JSON.stringify(RE.acts)));
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

@@ -17,7 +17,7 @@ const BEAT = +process.env.BEAT_MS || 2000, BEAT_CLOSE = 1000, MIN_GAP = 250, JOU
 let lastBeat = 0, lastFull = 0, lastJournal = 0, lastCommit = 0, errors = 0, lastCfg = 0, cfgSeen = JSON.stringify(CFG), cycling = false;
 const queue = [];                                             // reasons to run a cycle immediately
 const wake = why => { if (!queue.includes(why)) queue.push(why); };
-let lastSpyFast = 0, spyBusy = false;
+let lastSpyFast = 0, spyBusy = false, lastFastCheck = 0;
 
 // ---- settings hot-reload (Settings tab -> bot/config.json) ----
 const ghPagesBase = () => { const r = process.env.GITHUB_REPOSITORY || ''; const [o, n] = r.split('/'); return o && n ? `https://${o.toLowerCase()}.github.io/${n}/` : ''; };
@@ -62,6 +62,7 @@ let tradeWs = null, dataWs = null, optWs = null, subscribed = [], optSubscribed 
 const heldUnds = new Set();                                   // underlyings of open positions (kept subscribed)
 function openWs(url, onOpen, onMsg, label, opts = {}) {
   let ws;
+  if (typeof WebSocket === 'undefined') { console.log(label, 'cannot open: this Node has no WebSocket (needs Node 22+) - running on polling only'); return null; }
   try { ws = opts.headers ? new WebSocket(url, { headers: opts.headers }) : new WebSocket(url); } catch (e) { console.log(label, 'cannot open:', e.message); return null; }
   ws.onopen = () => { console.log(label, 'connected'); onOpen(ws); };
   ws.onmessage = ev => {
@@ -158,8 +159,8 @@ while (Date.now() - born < LIFE && !stopping) {
   await pollConfig();
   const beat = mins >= 15 * 60 + 50 ? BEAT_CLOSE : BEAT;
   let why = queue.shift() || (Date.now() - lastFull >= beat ? 'beat' : null);
-  if (!why && !(tradeOk && dataOk)) { try { why = await fastCheck(); errors = 0; } catch (e) { errors++; if (errors > 20) await sleep(5000); } }   // streams down: poll instead
-  if (why && !cycling && Date.now() - lastFull >= MIN_GAP) {
+  if (!why && !(tradeOk && dataOk) && Date.now() - lastFastCheck >= 1000) { lastFastCheck = Date.now(); try { why = await fastCheck(); errors = 0; } catch (e) { errors++; if (errors > 20) await sleep(5000); } }   // streams down: poll instead, at most once a second
+  if (why && !cycling && !spyBusy && Date.now() - lastFull >= MIN_GAP) {
     cycling = true;
     if (why !== 'beat') console.log('▶', why);
     try {
@@ -167,7 +168,14 @@ while (Date.now() - born < LIFE && !stopping) {
       if (Date.now() - lastJournal >= JOURNAL_EVERY) lastJournal = Date.now();
       if (!helloSent && r.open) { helloSent = true; await morningHello(); }
       const ck = clockInfo();
-      if (!r.open && ck && !ck.is_open) { console.log('Market is closed - stopping.'); break; }
+      if (!r.open && ck && !ck.is_open) {
+        // closed: leave only when the day is over or the next open is not today; before the bell, wait for it (the 9:20 start must not exit)
+        const todayET = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+        const openDay = ck.next_open ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(ck.next_open)) : '';
+        if (setNow() >= 16 * 60 || openDay !== todayET) { console.log('Market is closed - stopping.'); break; }
+        const waitMs = Math.max(5000, Math.min(60000, Date.parse(ck.next_open) - Date.now()));
+        console.log(`Market opens at ${ck.next_open} - waiting.`); await sleep(waitMs);
+      }
       resubscribe(); resubscribeOptions();
     } catch (e) { console.log('cycle error', e.message); }
     lastFull = Date.now(); cycling = false;
