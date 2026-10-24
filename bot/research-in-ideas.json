@@ -1,0 +1,296 @@
+{
+ "at": "2026-10-24T18:31:46.203Z",
+ "from": "2021-10-22",
+ "to": "2026-10-23",
+ "stake": 1000000,
+ "rules": {
+  "cost": 0.0015,
+  "stcg": 0.2,
+  "ltcg": 0.125,
+  "ltFree": 125000
+ },
+ "loaded": {
+  "mid150": 149,
+  "nifty200": 200
+ },
+ "results": [
+  {
+   "key": "breakoutMid",
+   "label": "A · Trend breakout on Midcap 150 stocks",
+   "from": "2021-10-22",
+   "to": "2026-10-23",
+   "preTaxEnd": 1602889,
+   "afterEnd": 1600934,
+   "maxDD": 27.2,
+   "trades": 249,
+   "winRate": 41,
+   "years": {
+    "2021": {
+     "pre": -5.5,
+     "after": -5.5,
+     "tax": 0
+    },
+    "2022": {
+     "pre": -1.4,
+     "after": -1.4,
+     "tax": 0
+    },
+    "2023": {
+     "pre": 61.1,
+     "after": 57.8,
+     "tax": 31245
+    },
+    "2024": {
+     "pre": 36.3,
+     "after": 28.4,
+     "tax": 115698
+    },
+    "2025": {
+     "pre": -1.1,
+     "after": -1.9,
+     "tax": 14189
+    },
+    "2026": {
+     "pre": -13.6,
+     "after": -13.6,
+     "tax": 0
+    }
+   },
+   "taxPaid": 161132
+  },
+  {
+   "key": "momentum",
+   "label": "B · Monthly momentum, top 20 of Nifty 200",
+   "from": "2021-10-22",
+   "to": "2026-10-23",
+   "preTaxEnd": 4428658,
+   "afterEnd": 4381812,
+   "maxDD": 29.7,
+   "trades": 278,
+   "winRate": 49.6,
+   "years": {
+    "2021": {
+     "pre": 6.2,
+     "after": 6.2,
+     "tax": 0
+    },
+    "2022": {
+     "pre": 21.6,
+     "after": 21.6,
+     "tax": 0
+    },
+    "2023": {
+     "pre": 86.9,
+     "after": 82.8,
+     "tax": 54060
+    },
+    "2024": {
+     "pre": 87.9,
+     "after": 77.8,
+     "tax": 238979
+    },
+    "2025": {
+     "pre": 15.9,
+     "after": 12.5,
+     "tax": 143045
+    },
+    "2026": {
+     "pre": -6.3,
+     "after": -7.2,
+     "tax": 40209
+    }
+   },
+   "taxPaid": 476293
+  },
+  {
+   "key": "momentumSafe",
+   "label": "C · Momentum + safety switch (cash when Nifty < 200-day)",
+   "from": "2021-10-22",
+   "to": "2026-10-23",
+   "preTaxEnd": 3787251,
+   "afterEnd": 3707033,
+   "maxDD": 18.8,
+   "trades": 263,
+   "winRate": 54,
+   "years": {
+    "2021": {
+     "pre": 6.2,
+     "after": 6.2,
+     "tax": 0
+    },
+    "2022": {
+     "pre": 6.5,
+     "after": 6.5,
+     "tax": 0
+    },
+    "2023": {
+     "pre": 73.6,
+     "after": 69.4,
+     "tax": 46817
+    },
+    "2024": {
+     "pre": 82.5,
+     "after": 73.4,
+     "tax": 174228
+    },
+    "2025": {
+     "pre": 22.7,
+     "after": 17.9,
+     "tax": 160498
+    },
+    "2026": {
+     "pre": -3.3,
+     "after": -5.4,
+     "tax": 80218
+    }
+   },
+   "taxPaid": 461762
+  },
+  {
+   "key": "currentBot",
+   "label": "Current India bot (breakout + RSI-2 on Nifty 100, 50/50)",
+   "preTaxEnd": 1281000,
+   "afterEnd": 1190055,
+   "maxDD": 18.9,
+   "trades": 2617,
+   "years": {
+    "2021": {
+     "pre": -0.4,
+     "after": -0.4,
+     "tax": 0
+    },
+    "2022": {
+     "pre": 8.1,
+     "after": 6.6,
+     "tax": 15335
+    },
+    "2023": {
+     "pre": 22.3,
+     "after": 17.8,
+     "tax": 47336
+    },
+    "2024": {
+     "pre": 11.7,
+     "after": 9.4,
+     "tax": 29266
+    },
+    "2025": {
+     "pre": 0.3,
+     "after": 0.2,
+     "tax": 821
+    },
+    "2026": {
+     "pre": -13.2,
+     "after": -13.2,
+     "tax": 0
+    }
+   },
+   "approx": true
+  },
+  {
+   "key": "nifty50",
+   "label": "Nifty 50 index fund",
+   "fund": true,
+   "preTaxEnd": 1312826,
+   "afterEnd": 1289348,
+   "maxDD": 15.7,
+   "years": {
+    "2021": {
+     "pre": -4.2,
+     "after": -4.2
+    },
+    "2022": {
+     "pre": 5.8,
+     "after": 5.8
+    },
+    "2023": {
+     "pre": 21.1,
+     "after": 21.1
+    },
+    "2024": {
+     "pre": 9.7,
+     "after": 9.7
+    },
+    "2025": {
+     "pre": 11.7,
+     "after": 11.7
+    },
+    "2026": {
+     "pre": -12.8,
+     "after": -14.4,
+     "tax": 23478
+    }
+   }
+  },
+  {
+   "key": "mid150",
+   "label": "Nifty Midcap 150 index fund",
+   "fund": true,
+   "preTaxEnd": 1820047,
+   "afterEnd": 1733166,
+   "maxDD": 21,
+   "years": {
+    "2021": {
+     "pre": -0.2,
+     "after": -0.2
+    },
+    "2022": {
+     "pre": 3.6,
+     "after": 3.6
+    },
+    "2023": {
+     "pre": 44.3,
+     "after": 44.3
+    },
+    "2024": {
+     "pre": 24.2,
+     "after": 24.2
+    },
+    "2025": {
+     "pre": 5.8,
+     "after": 5.8
+    },
+    "2026": {
+     "pre": -7.2,
+     "after": -11.6,
+     "tax": 86881
+    }
+   }
+  },
+  {
+   "key": "mom30",
+   "label": "Nifty 200 Momentum 30 index fund (UTI)",
+   "fund": true,
+   "preTaxEnd": 1356331,
+   "afterEnd": 1327415,
+   "maxDD": 31.5,
+   "years": {
+    "2021": {
+     "pre": 0.2,
+     "after": 0.2
+    },
+    "2022": {
+     "pre": -5.5,
+     "after": -5.5
+    },
+    "2023": {
+     "pre": 41.4,
+     "after": 41.4
+    },
+    "2024": {
+     "pre": 21.3,
+     "after": 21.3
+    },
+    "2025": {
+     "pre": -5.1,
+     "after": -5.1
+    },
+    "2026": {
+     "pre": -12,
+     "after": -13.9,
+     "tax": 28916
+    }
+   }
+  }
+ ]
+}
