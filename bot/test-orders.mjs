@@ -100,10 +100,13 @@ if (process.argv[2] === 'child') {
   const tc0 = REAL.now(); await bot.botCycle({ journal: !!FAKE.closed }); const cycleMs = REAL.now() - tc0;
   if (FAKE.tg) await bot.tgPollCycle();
   if (FAKE.cycles > 1) for (let k = 1; k < FAKE.cycles; k++) await bot.botCycle({ journal: true });   // a longer session: the journal is rewritten several times
+  let fast = null;
+  if (FAKE.fast) { const before = orders.length; FAKE.positions = FAKE.fast.positions; await bot.spyFast(); fast = { placed: orders.slice(before), hasOpen: bot.spyHasOpen() }; }
+  const spyW = bot.spyWatch();
   server.closeAllConnections && server.closeAllConnections(); server.close();
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
   const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
-  console.log('RESULT ' + JSON.stringify({ spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  console.log('RESULT ' + JSON.stringify({ fast, spyWatch: spyW, spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
@@ -356,5 +359,15 @@ check('SPY sleeve: two losses in a row ($1,400 = 28% of its $5,000) end its day;
   assert.ok(!Y9.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol)), JSON.stringify(Y9.orders)); assert.ok(Y9.spy.halted, JSON.stringify(Y9.spy));
   assert.equal(Y9.tgSent.filter(m => /SPY options down \$1400/.test(m.text)).length, 1, JSON.stringify(Y9.tgSent.map(m => m.text))); assert.ok(!Y9.split.stock.halted);
 });
+
+// ---- the SPY fast lane: 1-second exits while a trade is open, and the stream level that wakes an entry ----
+const Y10 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 }, fast: { positions: [spyPos(1.7)] } });
+check('SPY fast lane: a cycle leaves the trade open (+2%); a second later the option is through the stop → the fast lane sells at market without waiting for the next cycle', () => {
+  assert.ok(!Y10.orders.slice(0, Y10.orders.length - (Y10.fast ? Y10.fast.placed.length : 0)).some(o => o.symbol === spySym && o.type === 'market'), 'cycle itself must not have sold');
+  assert.ok(Y10.fast && Y10.fast.placed.some(o => o.symbol === spySym && o.side === 'sell' && o.type === 'market'), JSON.stringify(Y10.fast));
+});
+const Y11 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 }, fast: { positions: [spyPos(2.12)] } });
+check('SPY fast lane: with the trade still fine, the fast check places nothing', () => assert.ok(Y11.fast && Y11.fast.placed.length === 0, JSON.stringify(Y11.fast)));
+check('SPY fast lane: while watching, the sleeve publishes the level a SPY tick must cross (502.5, direction up) so the stream can wake a cycle at once', () => { assert.deepEqual(Y3.spyWatch, { level: 502.5, market: 'up' }); assert.equal(Y7.spyWatch, null, 'not while in a trade'); assert.equal(Y8.spyWatch, null, 'not after the daily maximum'); });
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

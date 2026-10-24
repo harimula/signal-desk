@@ -6,7 +6,7 @@
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { execSync, spawn } from 'node:child_process';
-import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle } from './bot.mjs';
+import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch } from './bot.mjs';
 import { summary } from './config.mjs';
 
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
@@ -16,6 +16,7 @@ const BEAT = +process.env.BEAT_MS || 2000, BEAT_CLOSE = 1000, MIN_GAP = 250, JOU
 let lastBeat = 0, lastFull = 0, lastJournal = 0, lastCommit = 0, errors = 0, lastCfg = 0, cfgSeen = JSON.stringify(CFG), cycling = false;
 const queue = [];                                             // reasons to run a cycle immediately
 const wake = why => { if (!queue.includes(why)) queue.push(why); };
+let lastSpyFast = 0, spyBusy = false;
 
 // ---- settings hot-reload (Settings tab -> bot/config.json) ----
 const ghPagesBase = () => { const r = process.env.GITHUB_REPOSITORY || ''; const [o, n] = r.split('/'); return o && n ? `https://${o.toLowerCase()}.github.io/${n}/` : ''; };
@@ -100,7 +101,11 @@ function resubscribe() {
 const floorPx = {};                                            // symbol -> price at which the hard floor trips (set by the cycle)
 export function setFloor(sym, px) { if (px) floorPx[sym] = px; else delete floorPx[sym]; }
 const floorFired = new Set();
-function onTick(sym, px) { if (floorPx[sym] && px <= floorPx[sym] && !floorFired.has(sym)) { floorFired.add(sym); wake('floor ' + sym); setTimeout(() => floorFired.delete(sym), 15000); } }
+function onTick(sym, px) {
+  if (floorPx[sym] && px <= floorPx[sym] && !floorFired.has(sym)) { floorFired.add(sym); wake('floor ' + sym); setTimeout(() => floorFired.delete(sym), 15000); }
+  // SPY quick options: a tick through the sleeve's level starts a full cycle at once instead of waiting for the next beat
+  if (sym === 'SPY') { const w = spyWatch(); if (w && ((w.market === 'up' && px > w.level) || (w.market === 'down' && px < w.level)) && !floorFired.has('spy')) { floorFired.add('spy'); wake('SPY broke ' + w.level); setTimeout(() => floorFired.delete('spy'), 10000); } }
+}
 
 // ---- graceful shutdown: GitHub (or a person) cancelling the run sends SIGINT/SIGTERM. Finish the cycle in flight,
 // write the journal and push it, then leave. Resting orders at the broker are untouched: they are day orders.
@@ -149,6 +154,7 @@ while (Date.now() - born < LIFE && !stopping) {
     } catch (e) { console.log('cycle error', e.message); }
     lastFull = Date.now(); cycling = false;
   }
+  if (Date.now() - lastSpyFast >= 1000 && !cycling && !spyBusy && spyHasOpen()) { spyBusy = true; lastSpyFast = Date.now(); spyFast().catch(e => console.log('spy fast lane', e.message)).finally(() => { spyBusy = false; }); }   // 1-second exits while a SPY trade is open
   if (Date.now() - lastPrices >= PRICES_EVERY && !pricesBusy) refreshPrices();
   if (Date.now() - lastTg >= 3000 && !tgBusy) { tgBusy = true; lastTg = Date.now(); tgPollCycle().finally(() => { tgBusy = false; }); }   // Telegram commands, off the decision path
   if (Date.now() - lastCommit >= COMMIT_EVERY) { commit(); lastCommit = Date.now(); }

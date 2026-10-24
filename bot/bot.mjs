@@ -190,18 +190,9 @@ async function dayTradeCycle(ctx) {
 }
 // ---- SPY quick options sleeve (rules in bot/spyopt.mjs) ----
 let spyState = {};                                                       // per open symbol: { tpPlaced }
-async function spyCycle(ctx) {
-  const { equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid } = ctx;
-  const open = positions.filter(p => isSpyOption(p.symbol)).map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && o.symbol === p.symbol), d: null })).map(x => ({ ...x, d: x.e ? decodeSpyId(cid(x.e)) : null }));
-  const todayIds = hist.filter(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
-  const tradesToday = todayIds.length;
-  if (!CFG.spyOn && !open.length) { lastSpy = { at: new Date().toISOString(), on: false, money: 0, used: 0, today: null, halted: null, idle: 'switched off', tradesToday, max: CFG.spyMaxTrades, open: [] }; return; }
-  // unfilled entries older than 3 minutes have missed their moment
-  for (const o of liveOrders) if (o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 3 * 60000) {
-    act(`${o.symbol} SPY option buy at ${o.limit_price} unfilled for 3 min \u2014 cancelled`); if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
-  }
-  const live = liveOrders.filter(o => !o._cancelled);
-  // manage the open trade
+// Exits on the open SPY option: take-profit (resting at the broker), stop, time stop, 3:45 flat, or the sleeve's halt.
+// Called from the full cycle and, while a trade is open, from the 1-second fast lane (spyFast) so a stop reacts within ~1 s.
+async function spyManage({ open, sellsFor, halt }) {
   for (const { p, e, d } of open) {
     const sells = sellsFor(p.symbol); if (sells.some(o => o.type === 'market')) continue;
     const qty = Math.abs(+p.qty), avg = +p.avg_entry_price, cur = +p.current_price, entry = d ? d.entry : avg;
@@ -216,6 +207,33 @@ async function spyCycle(ctx) {
       await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(entry * (1 + CFG.spyTp / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} SPY option \u2014 take-profit order at +${CFG.spyTp}%`);
     }
   }
+}
+// Fast lane (live.mjs, every second while a SPY trade is open): two broker calls, then the same exit rules. Nothing else.
+export const spyHasOpen = () => !!(lastSpy && lastSpy.on !== undefined && lastSpy.open && lastSpy.open.length);
+export async function spyFast() {
+  if (!spyHasOpen() || !HAVE_KEYS) return;
+  setNow();
+  const [positions, openOrders] = await Promise.all([T('/v2/positions'), T('/v2/orders?status=open&limit=200')]);
+  const open = positions.filter(p => isSpyOption(p.symbol)).map(p => ({ p, e: null, d: decodeSpyId((lastSpy.open.find(o => o.s === p.symbol) || {}).id || '') }));
+  for (const x of open) { const row = lastSpy.open.find(o => o.s === x.p.symbol); if (!x.d && row) x.d = { kind: row.kind, entry: row.entry, openMins: row.opened }; }
+  const sellsFor = sym => openOrders.filter(o => o.symbol === sym && o.side === 'sell');
+  await spyManage({ open, sellsFor, halt: { spy: lastSpy.halted } });
+  if (!open.length) lastSpy.open = [];
+}
+// What the fast lane needs from the stream: while the sleeve is watching, the level a SPY tick must cross to wake a full cycle.
+export const spyWatch = () => lastSpy && lastSpy.on && !lastSpy.halted && !(lastSpy.open && lastSpy.open.length) && lastSpy.level && lastSpy.market && lastSpy.market !== 'flat' && !/maximum|paused|limit|off|closed|before/.test(lastSpy.idle || '') ? { level: lastSpy.level, market: lastSpy.market } : null;
+async function spyCycle(ctx) {
+  const { equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid } = ctx;
+  const open = positions.filter(p => isSpyOption(p.symbol)).map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && o.symbol === p.symbol), d: null })).map(x => ({ ...x, d: x.e ? decodeSpyId(cid(x.e)) : null }));
+  const todayIds = hist.filter(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
+  const tradesToday = todayIds.length;
+  if (!CFG.spyOn && !open.length) { lastSpy = { at: new Date().toISOString(), on: false, money: 0, used: 0, today: null, halted: null, idle: 'switched off', tradesToday, max: CFG.spyMaxTrades, open: [] }; return; }
+  // unfilled entries older than 3 minutes have missed their moment
+  for (const o of liveOrders) if (o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 3 * 60000) {
+    act(`${o.symbol} SPY option buy at ${o.limit_price} unfilled for 3 min \u2014 cancelled`); if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
+  }
+  const live = liveOrders.filter(o => !o._cancelled);
+  await spyManage({ open, sellsFor, halt });
   // new entry: one position at a time
   const bars5 = await load5m([]), spyBars = bars5.SPY || [], px = ((await latestPrices(['SPY'])).SPY || {}).p;
   const sig = CFG.spyOn ? spySignal({ bars: spyBars, px, mins: MINS, cfg: CFG }) : null;
@@ -224,7 +242,7 @@ async function spyCycle(ctx) {
   const pending = live.some(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)));
   const idle = !CFG.spyOn ? 'switched off' : halt.spy ? halt.spy : G.block ? 'paused by the market check' : userPause ? 'paused from Telegram' : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.spyMaxTrades ? `${tradesToday} SPY trades today \u2014 daily maximum reached` : open.length || pending ? 'in a trade' : sig && sig.idle ? sig.idle : !sig ? 'waiting for SPY bars' : null;
   const r0 = x => Math.round(x);
-  const openRows = open.map(({ p, d, e }) => ({ s: p.symbol, kind: d ? d.kind : 'call', qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
+  const openRows = open.map(({ p, d, e }) => ({ s: p.symbol, id: e ? cid(e) : '', entry: d ? d.entry : +p.avg_entry_price, kind: d ? d.kind : 'call', qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
   lastSpy = { at: new Date().toISOString(), on: !!CFG.spyOn, money: r0(SIDE.spy.money), used: r0(SL_used(positions, live)), today: SIDE.spy.today ?? null, halted: halt.spy, idle, tradesToday, max: CFG.spyMaxTrades, market: sig && sig.market || null, vwap: sig && sig.vwap || null, level: sig && sig.level || null, spyPx: px || null,
     window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by 3:45 PM`, open: openRows, closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte } };
   if (idle || !sig || !sig.side) return;
