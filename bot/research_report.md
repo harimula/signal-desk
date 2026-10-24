@@ -53,4 +53,16 @@ Benchmarks include dividends (ETF adjusted closes). The bot keeps at most 60% in
 | Stock part of a 60/30/10 split, your settings (12% of the stake per stock = 20% of the part, max 5) | +232.20% | +27.20% | −26.2% | 1.33 | 1958 |
 | PUT stand-in: short stock on RSI-2 pops, run on its own money (25% each, max 4) | -24.20% | -5.40% | −45.9% | -0.14 | 1234 |
 
+## Five ideas to make the bot different (Aggressive sizing, your settings as the base)
+
+| Idea | Per year, 33 yrs | Worst fall | **Per year since 2016-09-06** | Worst fall since | Trades | Win % | Last 5 yrs per year | $100k after 40.8% tax, 5 yrs |
+|---|---|---|---|---|---|---|---|---|
+| Your settings today (buy below 25, +10% take-profit, 25% stop) | +51.72% | −18.7% | **+30.06%** | −17.9% | 20121 | 70.4% | +27.50% | $212,341 |
+| 1 · Quality dips only: the stock passes 6+ of the 8 trend-template points | +47.31% | −17.3% | **+27.27%** | −17.3% | 18119 | 70.5% | +23.60% | $192,572 |
+| 2a · Only dips on days the whole market also fell | +25.83% | −17.9% | **+13.55%** | −14.1% | 13355 | 68.3% | +12.70% | $144,039 |
+| 2b · Only dips on market panic days (S&P 500 down 1% or more) | +10.59% | −14.8% | **+6.16%** | −14.3% | 4758 | 69.1% | +6.90% | $122,552 |
+| 3 · Leaders first: among the dips, buy those that beat the market most over 3 months | +56.97% | −19.6% | **+33.01%** | −16.8% | 20377 | 70.5% | +31.60% | $236,054 |
+| 4 · Second engine: half the money on your dip rule, half on trend breakout | +48.66% | −18.7% | **+30.06%** | −17.9% | 21280 | 68.9% | +27.50% | $212,341 |
+| 5 · Bigger buys when the market is nervous (1.5× when S&P 500 swings exceed their 1-year norm, 0.75× when calm) | +45.06% | −20.7% | **+27.15%** | −20.7% | 17754 | 69.9% | +25.20% | $200,149 |
+
 Survivorship bias (today’s big companies, looking back) flatters every strategy, so treat these as an upper bound. Not financial advice.
