@@ -83,11 +83,14 @@ async function session(label, prep) {
   const tipOn = await page.$eval('#sd-tip', e => e.classList.contains('on') && /breakout/.test(e.textContent)).catch(() => false);
   await page.mouse.move(2, 2); await page.evaluate(() => window.renderAll()); await page.waitForTimeout(200);
   check('hover help: settings labels are explained, the card shows on hover, and a redraw keeps it', nTips >= 40 && tipOn && (await page.$$eval('[data-tip]', e => e.length)) >= nTips, `${nTips} labels, card ${tipOn}`);
+  // the owner's saved shares vary; set CALLs 30 / PUTs 10 / SPY 5 first so the checks below do not depend on config.json
+  for (const [id, v] of [['st-callSharePct', '30'], ['st-putSharePct', '10'], ['st-spySharePct', '5']]) { await page.fill('#' + id, v); await page.evaluate(id => document.getElementById(id).dispatchEvent(new Event('change', { bubbles: true })), id); await page.waitForTimeout(150); }
+  await page.evaluate(() => { const r = document.querySelector('#st-spyOn'); if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } }); await page.waitForTimeout(200);
   const note0 = await page.evaluate(() => (document.querySelector('#stSplitNote') || {}).textContent || '');
   await page.fill('#st-callSharePct', '25');
   await page.evaluate(() => document.querySelector('#st-callSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(200);
   const note1 = await page.evaluate(() => (document.querySelector('#st-split') || {}).checked === true && (document.querySelector('#stSplitNote') || {}).textContent || '');
-  check('money split: on by default at 55/30/10 + SPY 5, and a share typed in updates the note', /Stocks 55%.*CALLs 30%.*PUTs 10%.*SPY quick options 5%/.test(note0) && /Stocks 60%.*CALLs 25%.*PUTs 10%/.test(note1), note0 + ' → ' + note1);
+  check('money split: with CALLs 30 / PUTs 10 / SPY 5 the note reads 55/30/10/5, and a share typed in updates it', /Stocks 55%.*CALLs 30%.*PUTs 10%.*SPY quick options 5%/.test(note0) && /Stocks 60%.*CALLs 25%.*PUTs 10%/.test(note1), note0 + ' → ' + note1);
   check('SPY sleeve: section 4c shows, on by default, with its eight settings and the time window', await page.evaluate(() => (document.querySelector('#st-spyOn') || {}).checked === true && ['spySharePct', 'spyTp', 'spyStop', 'spyHoldMin', 'spyMaxTrades', 'spyStreak', 'spyDayCap', 'spyDte', 'spyStart', 'spyEnd'].every(k => document.getElementById('st-' + k)) && document.getElementById('st-spySharePct').value === '5'));
   await page.fill('#st-callSharePct', '90'); await page.evaluate(() => document.querySelector('#st-callSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(300);
   const overErr = await page.evaluate(() => ({ n: document.querySelectorAll('[role="alert"]').length, txt: [...document.querySelectorAll('[role="alert"]')].map(e => e.textContent).join(' | '), dis: document.querySelector('[data-st="save"]').disabled }));
