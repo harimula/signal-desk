@@ -189,7 +189,7 @@ if (parts.length > 1) for (const [k] of parts) h5.series.push({ key: k, kind: 'p
 // sizing variants for the USA bot (shown in the research report, not on the chart): the presets' money per stock × max stocks
 if (MKT === 'US') {
   h5.variants = [];
-  for (const [nm, pos, mx, key] of [['Balanced (10% × 6 stocks), tested rules', 0.10, 6, 'rsi2'], ['Aggressive (12% × 8 stocks), tested rules', 0.12, 8, 'rsi2'], ['Aggressive + 10% take-profit', 0.12, 8, 'rsi2tp10'], ['Aggressive with your settings (buy below 25, +10% take-profit)', 0.12, 8, 'rsi2own'], ['All-in (16% × 6 = 96%), tested rules', 0.16, 6, 'rsi2']]) {
+  for (const [nm, pos, mx, key] of [['Balanced (10% × 6 stocks), tested rules', 0.10, 6, 'rsi2'], ['Aggressive (12% × 8 stocks), tested rules', 0.12, 8, 'rsi2'], ['Aggressive + 10% take-profit', 0.12, 8, 'rsi2tp10'], ['Aggressive with your settings (buy below 25, +10% take-profit)', 0.12, 8, 'rsi2own'], ['All-in (16% × 6 = 96%), tested rules', 0.16, 6, 'rsi2'], ['Stock part of a 60/30/10 split, your settings (12% of the stake per stock = 20% of the part, max 5)', 0.20, 5, 'rsi2own'], ['PUT stand-in: short stock on RSI-2 pops, run on its own money (25% each, max 4)', 0.25, 4, 'rsi2short']]) {
     POS = pos; MAXPOS = mx; const c = botCurve(key); POS = POS0; MAXPOS = MAXPOS0;
     h5.variants.push({ label: nm, pos, maxPos: mx, strat: key, trades: c.trades, ...curveStats(c.pts) });
   }
