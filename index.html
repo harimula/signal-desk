@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-URliOLYfOGFSTEYvcwWFxllU7UH70VhN7cqsG5FmLNc=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-/DbTcTI0OBIFiRhe0kY2mzmZhp5nES5o/UzGkM5Fk4Y=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -930,7 +930,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792852442';
+const BUILD_V = '1792853560';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2409,7 +2409,7 @@ function spyCard(J) {
 <div class="mut" style="font-size:12px;margin-top:6px">${Y.on ? `CALLs when SPY is above its VWAP and breaks the 15-minute high; PUTs below it on a break of the low · contracts expiring ${R.dte === 1 ? 'the next day' : 'up to ' + R.dte + ' days out'} · out at <b>+${R.tp}%</b> / <b>−${R.stop}%</b> or after <b>${R.holdMin} min</b> · at most ${Y.max} trades a day · ${esc(Y.window || '')}` : 'Switched off in Bot settings → 4c. Its open trades, if any, are still managed.'}</div>
 ${fresh ? `<div style="font-size:12.5px;margin-top:8px">${Y.idle ? `<b>Now:</b> ${esc(Y.idle)}` : '<b>Now:</b> signal — placing a trade'}${Y.spyPx ? ` <span class="mut">· SPY $${fmt(Y.spyPx)}${Y.vwap ? ', VWAP $' + fmt(Y.vwap) : ''}${Y.market && Y.market !== 'flat' ? ', ' + (Y.market === 'up' ? 'above → CALLs' : 'below → PUTs') : ''}</span>` : ''}${Y.tradesToday ? ` <span class="mut">· ${Y.tradesToday} of ${Y.max} trades today</span>` : ''}</div>` : `<div class="mut" style="font-size:12px;margin-top:8px">Last update ${esc(tET(Y.at))} — the sleeve runs only while the market is open.</div>`}
 ${openRows ? `<div class="tw" style="margin-top:8px"><table style="min-width:640px"><thead><tr><th class="lt">Trade</th><th>Qty</th><th>Opened</th><th>Bought</th><th>Now</th><th>P/L</th><th class="lt" style="text-align:left">Exits</th></tr></thead><tbody>${openRows}</tbody></table></div>` : ''}
-<div class="mut" style="font-size:11.5px;margin-top:8px">Experimental: these rules are the bot’s own and have <b>not</b> been tested on history (minute-level options prices are a paid dataset). The sleeve can only ever spend its own share. While a trade is open its exits are checked every second; a SPY price tick through the entry level starts a check at once. Not advice.</div></div>`;
+<div class="mut" style="font-size:11.5px;margin-top:8px">Experimental: these rules are the bot’s own and have <b>not</b> been tested on history (minute-level options prices are a paid dataset). The sleeve can only ever spend its own share. Entries fire from the live SPY price tick that crosses the level, and exits from the option’s own live quotes — both well under a second — with a 1-second check as the fallback. Not advice.</div></div>`;
 }
 function h5Card(H, cur) {
   if (!H || !(H.series || []).length) return '';

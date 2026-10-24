@@ -102,11 +102,15 @@ if (process.argv[2] === 'child') {
   if (FAKE.cycles > 1) for (let k = 1; k < FAKE.cycles; k++) await bot.botCycle({ journal: true });   // a longer session: the journal is rewritten several times
   let fast = null;
   if (FAKE.fast) { const before = orders.length; FAKE.positions = FAKE.fast.positions; await bot.spyFast(); fast = { placed: orders.slice(before), hasOpen: bot.spyHasOpen() }; }
+  let tickEntry = null;
+  if (FAKE.tick) { const before = orders.length; const ok = await bot.spyEnter(FAKE.tick); const again = await bot.spyEnter(FAKE.tick); tickEntry = { ok, again, placed: orders.slice(before), open: bot.spyOpenSymbols() }; }
+  let quoteExit = null;
+  if (FAKE.quote2) { const before = orders.length; await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); quoteExit = { placed: orders.slice(before), deletes: [...deletes] }; }
   const spyW = bot.spyWatch();
   server.closeAllConnections && server.closeAllConnections(); server.close();
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
   const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
-  console.log('RESULT ' + JSON.stringify({ fast, spyWatch: spyW, spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  console.log('RESULT ' + JSON.stringify({ tickEntry, quoteExit, fast, spyWatch: spyW, spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
   process.exit(0);
 }
 
@@ -369,5 +373,22 @@ check('SPY fast lane: a cycle leaves the trade open (+2%); a second later the op
 const Y11 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 }, fast: { positions: [spyPos(2.12)] } });
 check('SPY fast lane: with the trade still fine, the fast check places nothing', () => assert.ok(Y11.fast && Y11.fast.placed.length === 0, JSON.stringify(Y11.fast)));
 check('SPY fast lane: while watching, the sleeve publishes the level a SPY tick must cross (502.5, direction up) so the stream can wake a cycle at once', () => { assert.deepEqual(Y3.spyWatch, { level: 502.5, market: 'up' }); assert.equal(Y7.spyWatch, null, 'not while in a trade'); assert.equal(Y8.spyWatch, null, 'not after the daily maximum'); });
+
+// ---- sub-second paths: a SPY tick places the order directly; an option quote through the stop sells directly ----
+const Y12 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7 });
+check('SPY tick entry: the cycle leaves the sleeve watching 502.5; a streamed tick at 502.7 places the CALL at once, and a second tick does not place another', () => {
+  assert.ok(Y12.tickEntry && Y12.tickEntry.ok, JSON.stringify(Y12.tickEntry)); assert.equal(Y12.tickEntry.again, false);
+  assert.equal(Y12.tickEntry.placed.filter(o => o.side === 'buy').length, 1); assert.match(Y12.tickEntry.placed[0].client_order_id, /^sd-yc-SPY/); assert.match((Y12.acts || []).join(' | ') + ' ' + JSON.stringify(Y12.tickEntry), /live tick|sd-yc/);
+});
+const Y13 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.4 });
+check('SPY tick entry: a tick that does not cross the level places nothing', () => assert.ok(Y13.tickEntry && !Y13.tickEntry.ok && Y13.tickEntry.placed.length === 0, JSON.stringify(Y13.tickEntry)));
+const tpLeg = [{ id: 'leg-tp-spy', symbol: spySym, side: 'sell', type: 'limit', limit_price: '2.36', qty: '20', status: 'new', client_order_id: 'sd-x-' + spySym + '-zz' }];
+const Y14 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), open: tpLeg, bars5: { SPY: spyUp }, live: { SPY: 502.2 }, quote2: { sym: spySym, bp: 1.70, ap: 1.74 } });
+check('SPY quote exit: a streamed quote with the mid 16% under the entry sells at market once (the resting take-profit order is cancelled first), not twice', () => {
+  const sells = Y14.quoteExit.placed.filter(o => o.symbol === spySym && o.side === 'sell' && o.type === 'market'); assert.equal(sells.length, 1, JSON.stringify(Y14.quoteExit));
+  assert.ok(Y14.quoteExit.deletes.includes('leg-tp-spy'), 'take-profit order cancelled: ' + JSON.stringify(Y14.quoteExit.deletes)); assert.match(sells[0].client_order_id, /^sd-x-SPY/); assert.equal(sells[0].qty, '20');
+});
+const Y15 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 }, quote2: { sym: spySym, bp: 2.30, ap: 2.34 } });
+check('SPY quote exit: a quote at +10% (inside the limits) places nothing; a quote at the take-profit is left to the resting order', () => assert.equal(Y15.quoteExit.placed.length, 0, JSON.stringify(Y15.quoteExit)));
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

@@ -1,6 +1,7 @@
 // Unit tests for the bot's rules. Run: node bot/test.mjs  (also runs on every push via GitHub Actions)
 import assert from 'node:assert/strict';
 import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit, rsi2Trigger, rsi2ExitLevel } from './strategy.mjs';
+import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { spySignal, spyExit, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
 import { buildJournal, parseSym } from './journal.mjs';
@@ -338,6 +339,16 @@ test('SPY sleeve: exits — +15% take-profit, −15% stop, 10-minute time stop, 
 test('SPY sleeve: order ids round-trip and SPY options are recognised', () => {
   const id = encodeSpyId('put', 'SPY261024P00502000', 2.05, '20261023', 600, 'abc'); const d = decodeSpyId(id); assert.deepEqual(d, { kind: 'put', sym: 'SPY261024P00502000', entry: 2.05, day8: '20261023', openMins: 600 });
   assert.ok(isSpyOption('SPY261024C00502000')); assert.ok(!isSpyOption('AAPL261024C00200000')); assert.ok(!isSpyOption('SPY'));
+});
+
+test('msgpack: an Alpaca option quote frame decodes (reference bytes from the Python msgpack library)', () => {
+  const ref = Buffer.from('918aa154a171a153b2535059323631303237433030363834303030a26278a143a26270cb4000666666666666a2627378a26178a14ea26170cb40008f5c28f5c28fa2617350a163a141a174d7ff1d6f345468fb4e20', 'hex');
+  const q = mpDecode(ref)[0]; assert.equal(q.T, 'q'); assert.equal(q.S, 'SPY261027C00684000'); assert.equal(q.bp, 2.05); assert.equal(q.ap, 2.07); assert.equal(q.bs, 120); assert.equal(q.as, 80); assert.match(q.t, /^2025-10-24T10:00:00/);
+});
+test('msgpack: every type round-trips (ints of all sizes, negatives, floats, long strings, arrays, maps, nil, booleans)', () => {
+  const v = { nil: null, t: true, f: false, small: 5, neg: -3, u8: 200, u16: 60000, u32: 4000000000, i8: -100, i16: -30000, i32: -2000000000, big: 2 ** 40, flt: 3.25, str: 'héllo', long: 'x'.repeat(300), arr: Array.from({ length: 20 }, (_, i) => i), nested: { a: [1, { b: 'c' }] } };
+  assert.deepEqual(mpDecode(mpEncode(v)), v);
+  assert.deepEqual(mpDecode(mpEncode({ action: 'subscribe', quotes: ['SPY261027C00684000'] })), { action: 'subscribe', quotes: ['SPY261027C00684000'] });
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

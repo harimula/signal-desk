@@ -6,7 +6,8 @@
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { execSync, spawn } from 'node:child_process';
-import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch } from './bot.mjs';
+import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols } from './bot.mjs';
+import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { summary } from './config.mjs';
 
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
@@ -56,19 +57,20 @@ function refreshPrices() {
 const EP = endpoints();
 const tradeWsUrl = () => process.env.ALPACA_TRADE_WS || EP.trading.replace(/^http/, 'ws') + '/stream';
 const DATA_WS = process.env.ALPACA_DATA_WS || 'wss://stream.data.alpaca.markets/v2/iex';
-let tradeWs = null, dataWs = null, subscribed = [], tradeOk = false, dataOk = false;
+const OPT_WS = process.env.ALPACA_OPT_WS || 'wss://stream.data.alpaca.markets/v1beta1/indicative';   // options quotes: MessagePack only
+let tradeWs = null, dataWs = null, optWs = null, subscribed = [], optSubscribed = [], tradeOk = false, dataOk = false, optOk = false;
 const heldUnds = new Set();                                   // underlyings of open positions (kept subscribed)
-function openWs(url, onOpen, onMsg, label) {
+function openWs(url, onOpen, onMsg, label, opts = {}) {
   let ws;
-  try { ws = new WebSocket(url); } catch (e) { console.log(label, 'cannot open:', e.message); return null; }
+  try { ws = opts.headers ? new WebSocket(url, { headers: opts.headers }) : new WebSocket(url); } catch (e) { console.log(label, 'cannot open:', e.message); return null; }
   ws.onopen = () => { console.log(label, 'connected'); onOpen(ws); };
   ws.onmessage = ev => {
-    const parse = txt => { try { onMsg(JSON.parse(txt)); } catch (e) {} };
+    const parse = raw => { try { onMsg(opts.msgpack ? mpDecode(raw) : JSON.parse(typeof raw === 'string' ? raw : Buffer.from(raw).toString())); } catch (e) {} };
     if (typeof ev.data === 'string') parse(ev.data);
-    else if (ev.data && ev.data.arrayBuffer) ev.data.arrayBuffer().then(b => parse(Buffer.from(b).toString()));   // paper stream uses binary frames
-    else if (ev.data) parse(Buffer.from(ev.data).toString());
+    else if (ev.data && ev.data.arrayBuffer) ev.data.arrayBuffer().then(b => parse(Buffer.from(b)));   // binary frames (paper trade stream, options stream)
+    else if (ev.data) parse(Buffer.from(ev.data));
   };
-  ws.onclose = () => { console.log(label, 'closed - reconnecting in 5s'); if (label === 'trade-stream') tradeOk = false; else dataOk = false; setTimeout(() => connectStreams(label), 5000); };
+  ws.onclose = () => { console.log(label, 'closed - reconnecting in 5s'); if (label === 'trade-stream') tradeOk = false; else if (label === 'options-stream') { optOk = false; optSubscribed = []; } else dataOk = false; setTimeout(() => connectStreams(label), 5000); };
   ws.onerror = e => console.log(label, 'error', (e && e.message) || '');
   return ws;
 }
@@ -88,6 +90,22 @@ function connectStreams(which = 'both') {
       else if (m.T === 'error') console.log('data-stream error', m.msg);
     }
   }, 'data-stream');
+  // options quotes for the SPY sleeve's open trade: exits react to each quote instead of the 1-second poll (which stays as the fallback)
+  if (which === 'both' || which === 'options-stream') optWs = openWs(OPT_WS, ws => ws.send(mpEncode({ action: 'auth', key: EP.key, secret: EP.secret })), arr => {
+    for (const m of Array.isArray(arr) ? arr : [arr]) {
+      if (m.T === 'success' && m.msg === 'authenticated') { optOk = true; optSubscribed = []; resubscribeOptions(); }
+      else if (m.T === 'q' && m.S) { spyOnQuote(m.S, +m.bp, +m.ap).catch(e => console.log('spy quote exit', e.message)); }
+      else if (m.T === 'error') console.log('options-stream error', m.code, m.msg);
+    }
+  }, 'options-stream', { msgpack: true, headers: { 'Content-Type': 'application/msgpack' } });
+}
+function resubscribeOptions() {
+  if (!optWs || optWs.readyState !== 1 || !optOk) return;
+  const want = spyOpenSymbols();
+  if (want.join(',') === optSubscribed.join(',')) return;
+  if (optSubscribed.length) optWs.send(mpEncode({ action: 'unsubscribe', quotes: optSubscribed }));
+  if (want.length) optWs.send(mpEncode({ action: 'subscribe', quotes: want }));
+  optSubscribed = want; if (want.length) console.log('options-stream: quotes for', want.join(','));
 }
 function resubscribe() {
   if (!dataWs || dataWs.readyState !== 1 || !dataOk) return;
@@ -104,7 +122,7 @@ const floorFired = new Set();
 function onTick(sym, px) {
   if (floorPx[sym] && px <= floorPx[sym] && !floorFired.has(sym)) { floorFired.add(sym); wake('floor ' + sym); setTimeout(() => floorFired.delete(sym), 15000); }
   // SPY quick options: a tick through the sleeve's level starts a full cycle at once instead of waiting for the next beat
-  if (sym === 'SPY') { const w = spyWatch(); if (w && ((w.market === 'up' && px > w.level) || (w.market === 'down' && px < w.level)) && !floorFired.has('spy')) { floorFired.add('spy'); wake('SPY broke ' + w.level); setTimeout(() => floorFired.delete('spy'), 10000); } }
+  if (sym === 'SPY') { const w = spyWatch(); if (w && ((w.market === 'up' && px > w.level) || (w.market === 'down' && px < w.level)) && !floorFired.has('spy')) { floorFired.add('spy'); setTimeout(() => floorFired.delete('spy'), 10000); spyEnter(px).then(ok => { console.log('\u26a1 SPY tick through', w.level, ok ? '- order placed' : '- no order'); resubscribeOptions(); wake('SPY broke ' + w.level); }).catch(e => console.log('spy tick entry', e.message)); } }
 }
 
 // ---- graceful shutdown: GitHub (or a person) cancelling the run sends SIGINT/SIGTERM. Finish the cycle in flight,
@@ -150,11 +168,11 @@ while (Date.now() - born < LIFE && !stopping) {
       if (!helloSent && r.open) { helloSent = true; await morningHello(); }
       const ck = clockInfo();
       if (!r.open && ck && !ck.is_open) { console.log('Market is closed - stopping.'); break; }
-      resubscribe();
+      resubscribe(); resubscribeOptions();
     } catch (e) { console.log('cycle error', e.message); }
     lastFull = Date.now(); cycling = false;
   }
-  if (Date.now() - lastSpyFast >= 1000 && !cycling && !spyBusy && spyHasOpen()) { spyBusy = true; lastSpyFast = Date.now(); spyFast().catch(e => console.log('spy fast lane', e.message)).finally(() => { spyBusy = false; }); }   // 1-second exits while a SPY trade is open
+  if (Date.now() - lastSpyFast >= 1000 && !cycling && !spyBusy && spyHasOpen()) { spyBusy = true; lastSpyFast = Date.now(); spyFast().catch(e => console.log('spy fast lane', e.message)).finally(() => { spyBusy = false; resubscribeOptions(); }); }   // 1-second exits while a SPY trade is open (fallback to the quote stream)
   if (Date.now() - lastPrices >= PRICES_EVERY && !pricesBusy) refreshPrices();
   if (Date.now() - lastTg >= 3000 && !tgBusy) { tgBusy = true; lastTg = Date.now(); tgPollCycle().finally(() => { tgBusy = false; }); }   // Telegram commands, off the decision path
   if (Date.now() - lastCommit >= COMMIT_EVERY) { commit(); lastCommit = Date.now(); }
@@ -164,6 +182,6 @@ while (Date.now() - born < LIFE && !stopping) {
 try { await botCycle({ journal: true }); } catch (e) { console.log('final cycle error', e.message); }
 if (setNow() >= 16 * 60 && !stopping) await eodReport();   // the session that reaches the close sends the day's summary
 commit();
-try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); } catch (e) {}
+try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); optWs && optWs.close(); } catch (e) {}
 console.log('Session runner finished.');
 process.exit(0);

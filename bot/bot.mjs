@@ -209,7 +209,7 @@ async function spyManage({ open, sellsFor, halt }) {
   }
 }
 // Fast lane (live.mjs, every second while a SPY trade is open): two broker calls, then the same exit rules. Nothing else.
-export const spyHasOpen = () => !!(lastSpy && lastSpy.on !== undefined && lastSpy.open && lastSpy.open.length);
+export const spyHasOpen = () => !!(lastSpy && lastSpy.open && lastSpy.open.length);
 export async function spyFast() {
   if (!spyHasOpen() || !HAVE_KEYS) return;
   setNow();
@@ -218,7 +218,9 @@ export async function spyFast() {
   for (const x of open) { const row = lastSpy.open.find(o => o.s === x.p.symbol); if (!x.d && row) x.d = { kind: row.kind, entry: row.entry, openMins: row.opened }; }
   const sellsFor = sym => openOrders.filter(o => o.symbol === sym && o.side === 'sell');
   await spyManage({ open, sellsFor, halt: { spy: lastSpy.halted } });
-  if (!open.length) lastSpy.open = [];
+  const pendingBuy = openOrders.some(o => o.side === 'buy' && isSpyOption(o.symbol));
+  for (const x of open) { const row = lastSpy.open.find(o => o.s === x.p.symbol); if (row) { row.pending = false; row.qty = Math.abs(+x.p.qty); row.entry = +x.p.avg_entry_price || row.entry; } }
+  if (!open.length && !pendingBuy) { lastSpy.open = []; spyPendingUntil = 0; }
 }
 // What the fast lane needs from the stream: while the sleeve is watching, the level a SPY tick must cross to wake a full cycle.
 export const spyWatch = () => lastSpy && lastSpy.on && !lastSpy.halted && !(lastSpy.open && lastSpy.open.length) && lastSpy.level && lastSpy.market && lastSpy.market !== 'flat' && !/maximum|paused|limit|off|closed|before/.test(lastSpy.idle || '') ? { level: lastSpy.level, market: lastSpy.market } : null;
@@ -242,25 +244,66 @@ async function spyCycle(ctx) {
   const pending = live.some(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)));
   const idle = !CFG.spyOn ? 'switched off' : halt.spy ? halt.spy : G.block ? 'paused by the market check' : userPause ? 'paused from Telegram' : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.spyMaxTrades ? `${tradesToday} SPY trades today \u2014 daily maximum reached` : open.length || pending ? 'in a trade' : sig && sig.idle ? sig.idle : !sig ? 'waiting for SPY bars' : null;
   const r0 = x => Math.round(x);
-  const openRows = open.map(({ p, d, e }) => ({ s: p.symbol, id: e ? cid(e) : '', entry: d ? d.entry : +p.avg_entry_price, kind: d ? d.kind : 'call', qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
+  const openRows = open.map(({ p, d, e }) => ({ s: p.symbol, id: e ? cid(e) : '', entry: d ? d.entry : +p.avg_entry_price, pending: false, kind: d ? d.kind : 'call', qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
+  const keepPending = lastSpy && lastSpy.open ? lastSpy.open.filter(o => o.pending && live.some(l => l.symbol === o.s && l.side === 'buy')) : [];
   lastSpy = { at: new Date().toISOString(), on: !!CFG.spyOn, money: r0(SIDE.spy.money), used: r0(SL_used(positions, live)), today: SIDE.spy.today ?? null, halted: halt.spy, idle, tradesToday, max: CFG.spyMaxTrades, market: sig && sig.market || null, vwap: sig && sig.vwap || null, level: sig && sig.level || null, spyPx: px || null,
-    window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by 3:45 PM`, open: openRows, closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte } };
-  if (idle || !sig || !sig.side) return;
-  const kind = sig.side, from = new Date(Date.now() + 864e5), to = new Date(Date.now() + CFG.spyDte * 864e5);
+    window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by 3:45 PM`, open: openRows.concat(keepPending), closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte } };
+  if (idle || !sig || !sig.side || Date.now() < spyPendingUntil) return;
+  await spyPlace(sig.side, px, sig.why, SIDE.spy.money * (G.budget || 1) - SL_used(positions, live));
+}
+// Places the SPY option order (contract → quote → limit buy). Shared by the full cycle and the tick-driven spyEnter.
+let spyPendingUntil = 0, spyEntering = false;
+async function spyPlace(kind, px, why, budget) {
+  const from = new Date(Date.now() + 864e5), to = new Date(Date.now() + CFG.spyDte * 864e5);
   const cj = await D(`/v2/options/contracts?underlying_symbols=SPY&type=${kind}&status=active&expiration_date_gte=${ymdDash(+from)}&expiration_date_lte=${ymdDash(+to)}&strike_price_gte=${r2d(px * 0.99)}&strike_price_lte=${r2d(px * 1.01)}&limit=200`).catch(() => ({}));
-  const cs = (cj.option_contracts || []).filter(c => c.tradable !== false); if (!cs.length) { act(`SPY ${kind.toUpperCase()}: no contract 1\u2013${CFG.spyDte} day${CFG.spyDte > 1 ? 's' : ''} out near ${px} \u2014 skipped`); return; }
+  const cs = (cj.option_contracts || []).filter(c => c.tradable !== false); if (!cs.length) { act(`SPY ${kind.toUpperCase()}: no contract 1\u2013${CFG.spyDte} day${CFG.spyDte > 1 ? 's' : ''} out near ${px} \u2014 skipped`); return null; }
   const ex = [...new Set(cs.map(c => c.expiration_date))].sort()[0];
   const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - px) - Math.abs(+b.strike_price - px))[0];
   const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[c.symbol];
-  if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); return; }
-  if ((q.ap - q.bp) / q.ap > 0.05) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over 5%) \u2014 skipped`); return; }
-  const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02));
-  const budget = Math.max(0, SIDE.spy.money * (G.budget || 1) - SL_used(positions, live)), qty = Math.floor(budget / (lim * 100));
-  if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above the SPY sleeve's free money ($${Math.round(budget)}) \u2014 skipped`); return; }
-  await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: encodeSpyId(kind, c.symbol, lim, TODAY, MINS, rid()) },
-    `SPY ${kind.toUpperCase()} quick trade: ${sig.why} \u00b7 out at +${CFG.spyTp}% / \u2212${CFG.spyStop}% or after ${CFG.spyHoldMin} min`);
-  lastSpy.idle = 'in a trade'; lastSpy.tradesToday = tradesToday + 1;
+  if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); return null; }
+  if ((q.ap - q.bp) / q.ap > 0.05) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over 5%) \u2014 skipped`); return null; }
+  const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02)), qty = Math.floor(Math.max(0, budget) / (lim * 100));
+  if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above the SPY sleeve's free money ($${Math.round(budget)}) \u2014 skipped`); return null; }
+  const id = encodeSpyId(kind, c.symbol, lim, TODAY, MINS, rid());
+  await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: id },
+    `SPY ${kind.toUpperCase()} quick trade: ${why} \u00b7 out at +${CFG.spyTp}% / \u2212${CFG.spyStop}% or after ${CFG.spyHoldMin} min`);
+  spyPendingUntil = Date.now() + 3 * 60000;                                                     // no second entry until this one has filled or been cancelled
+  if (lastSpy) { lastSpy.idle = 'in a trade'; lastSpy.tradesToday = (lastSpy.tradesToday || 0) + 1; lastSpy.open = [{ s: c.symbol, id, entry: lim, kind, qty, opened: MINS, avg: r2d(lim * 100), cur: r2d(lim * 100), pl: 0, plpc: 0, tp: r2d(lim * (1 + CFG.spyTp / 100) * 100), stop: r2d(lim * (1 - CFG.spyStop / 100) * 100), pending: true }]; }
+  return c.symbol;
 }
+// Tick-driven entry (live.mjs → onTick for SPY): the streamed price crossed the level the last full check was waiting for.
+// Everything else (window, brakes, one-at-a-time) was decided by that check seconds ago and is re-read from lastSpy.
+export async function spyEnter(px) {
+  const w = spyWatch(); if (!w || spyEntering || !HAVE_KEYS || Date.now() < spyPendingUntil || !lastSpy || Date.now() - Date.parse(lastSpy.at) > 90000) return false;
+  if (!((w.market === 'up' && px > w.level) || (w.market === 'down' && px < w.level))) return false;
+  setNow(); const start = hhmmMin(CFG.spyStart), end = hhmmMin(CFG.spyEnd); if (MINS < start || MINS >= end) return false;
+  spyEntering = true;
+  try {
+    const kind = w.market === 'up' ? 'call' : 'put';
+    const sym = await spyPlace(kind, px, `SPY ${px} ${kind === 'call' ? 'broke above' : 'broke below'} ${w.level} (live tick)`, lastSpy.money - (lastSpy.used || 0));
+    return !!sym;
+  } finally { spyEntering = false; }
+}
+const hhmmMin = s => { const [h, m] = String(s).split(':').map(Number); return h * 60 + m; };
+// Quote-driven exit (live.mjs → options stream): the open option's own bid/ask just changed. Stop, time stop and flat are
+// decided here from the mid price; the take-profit is the resting limit order at the broker. One sell per position.
+const spySelling = new Set();
+export async function spyOnQuote(sym, bp, ap) {
+  if (!lastSpy || !lastSpy.open || !lastSpy.open.length || !(bp > 0) || !(ap > 0)) return;
+  const row = lastSpy.open.find(o => o.s === sym); if (!row || row.pending || spySelling.has(sym)) return;
+  const mid = (bp + ap) / 2; setNow();
+  row.cur = r2d(mid * 100); row.pl = r2d((mid - row.entry) * 100 * (row.qty || 0)); row.plpc = Math.round((mid / row.entry - 1) * 1000) / 10;
+  const x = spyExit({ entryPx: row.entry, optPx: mid, openedMins: row.opened, mins: MINS, cfg: CFG });
+  if (!x || x.kind === 'tp') return;
+  spySelling.add(sym); setTimeout(() => spySelling.delete(sym), 60000);
+  try {
+    const openOrders = await T('/v2/orders?status=open&limit=200');
+    for (const o of openOrders) if (o.symbol === sym && o.side === 'sell' && !DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
+    await send({ symbol: sym, qty: String(row.qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + sym + '-' + rid() }, `${sym} SPY ${row.kind.toUpperCase()} ${x.why} (live quote)`);
+    delete spyState[sym];
+  } catch (e) { act('SPY quote exit failed: ' + (e.message || e).slice(0, 80)); }
+}
+export const spyOpenSymbols = () => lastSpy && lastSpy.open ? lastSpy.open.filter(o => !o.pending).map(o => o.s) : [];
 const SL_used = (positions, live) => positions.filter(p => isSpyOption(p.symbol)).reduce((t, p) => t + Math.abs(+p.market_value || 0), 0) + live.filter(o => o.side === 'buy' && isSpyOption(o.symbol)).reduce((t, o) => t + (+o.qty || 0) * (+o.limit_price || 0) * 100, 0);
 const vwapOf = bars => { let pv = 0, vv = 0; for (const b of bars) { pv += (b.h + b.l + b.c) / 3 * (b.v || 0); vv += b.v || 0; } return vv ? pv / vv : bars[bars.length - 1].c; };
 // Nearest-the-money contract expiring 1–N trading days out, with a tight enough market.

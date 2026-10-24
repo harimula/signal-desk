@@ -2,7 +2,7 @@
   "name": "signal-desk",
   "private": true,
   "version": "1.5.0",
-  "description": "Stock signals site and RSI-2 paper-trading bot. No runtime dependencies.",
+  "description": "Stock signals site and RSI-2 paper-trading bot. No runtime dependencies (MessagePack codec is in-house).",
   "type": "module",
   "engines": {
     "node": ">=20"
