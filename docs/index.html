@@ -68,7 +68,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
-  <div class="stamp">System documentation · v1.7<br>Updated 2026-10-23</div>
+  <div class="stamp">System documentation · v1.8<br>Updated 2026-10-24</div>
   <ol>
     <li><a href="#what"><span class="k">01</span>What it is</a></li>
     <li><a href="#functional"><span class="k">02</span>Functional</a></li>
@@ -452,6 +452,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-24</td><td><b>Full audit.</b> Bot: the live price streams had never connected (the workflow ran Node 20, which has no WebSocket) → Node 22; SPY and day-trade option contracts were requested from the wrong Alpaca host → fixed; STOP is checked first and each step guarded; the day and SPY engines manage only their own positions; no double SPY entry; one sell lock shared by all lanes; broker-call failures no longer abort a check; the 9:20 start waits for the open instead of exiting; polling throttled; day-state (yesterday's closes, /pause, alerts sent) survives a restart; SPY expiry counts trading days. Pages: settings refuse values the bot would change; Open-now status by position kind from the settings; go-live checklist counts SPY; older journals render; every label has hover help; stale ntfy wording gone; accessibility labels. Tests: fake broker on two hosts, STOP, old day-trade ids, manual SPY options, re-entry, fixture journals for Bot trades. Settings guide rewritten with a worked example for every setting.</td></tr>
 <tr><td>2026-10-24</td><td>SPY quick options now react in well under a second: orders fire from the live SPY tick, exits from the option’s own quote stream</td></tr>
 <tr><td>2026-10-24</td><td>SPY quick options: exits checked every second while a trade is open; a SPY price tick through the level starts a check at once</td></tr>
 <tr><td>2026-10-24</td><td>Bot settings: all money shares (stocks, CALLs, PUTs, SPY) sit together in 3 · Capital allocation with an allocation bar</td></tr>

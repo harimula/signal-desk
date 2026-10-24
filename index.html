@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-qboMmwoFa1doRw/wD9O9BpLkdLb5sJpGXS4a7IeP1pE=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-c+dxECox0UIQx3+yOVR68CE3MsXy61mtOW//0/Q9qaw=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -930,7 +930,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792857524';
+const BUILD_V = '1792857897';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -3024,7 +3024,7 @@ ${inChk('alerts', 'India Telegram summary', 'one message after each NSE day: buy
   const shownIds = new Set([...body.matchAll(/id="(sec-[^"]+)"/g)].map(x => x[1]));
   for (let k = secIds.length - 1; k >= 0; k--) if (!shownIds.has(secIds[k][0])) secIds.splice(k, 1);
   const side = `<nav class="stnav" aria-label="Settings sections"><div class="mut" style="font-size:11.5px;margin-bottom:6px">On this page</div>${secIds.map(([id, t]) => `<a href="#${id}">${esc(t)}</a>`).join('')}<a href="docs/settings.html" target="_blank" rel="noopener" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">What each setting does ↗</a></nav>`;
-  return `<h2 style="margin-bottom:6px">Bot settings — ${mkt === 'IN' ? 'India bot' : 'USA bot'}</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">${mkt === 'IN' ? 'The India simulation reads these after each NSE close.' : 'Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.'} <a href="docs/settings.html" target="_blank" rel="noopener"><b>What does each setting do? → the settings guide</b></a></div><div class="stwrap${mkt === 'IN' ? ' one' : ''}">${mkt === 'IN' ? '' : side}<div style="min-width:0">${body}</div></div>`;
+  return `<h2 style="margin-bottom:6px">Bot settings — ${mkt === 'IN' ? 'India bot' : 'USA bot'}</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">${mkt === 'IN' ? 'The India simulation reads these after each NSE close.' : 'Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.'} <a href="docs/settings.html" target="_blank" rel="noopener"><b>What does each setting do? → the settings guide, with a worked example for every setting</b></a> <span class="mut">· guide updated 2026-10-24</span></div><div class="stwrap${mkt === 'IN' ? ' one' : ''}">${mkt === 'IN' ? '' : side}<div style="min-width:0">${body}</div></div>`;
 }
 function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {
