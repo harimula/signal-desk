@@ -64,7 +64,7 @@ const STRATS = {
 };
 
 function simulate(key, data, calendar, regimeOn, useRegime) {
-  const S = STRATS[key];
+  const S = typeof key === 'string' ? STRATS[key] : key;
   let cash = 1, open = [];                       // open: {sym, sh, px (last mark), entryPx, held, stop}
   const days = [], trades = [];
   for (let t = 1; t < calendar.length; t++) {
@@ -97,7 +97,7 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
       cands.sort((a, b) => a.pl.rank - b.pl.rank);
       for (const c of cands) {
         if (open.length >= MAXPOS) break;
-        const D = data[c.sym], b = D.B[c.j], alloc = equityPrev * POS;
+        const D = data[c.sym], b = D.B[c.j], alloc = equityPrev * POS * (c.pl.size || 1);
         if (alloc > cash) break;
         if (S.kind === 'intraday') {
           const fill = b.o < c.pl.entry ? b.o : (b.l <= c.pl.entry ? c.pl.entry : null); if (fill == null) continue;
@@ -204,6 +204,47 @@ for (const [key, label, get] of BENCH5) {
   } catch (e) { console.log('5-year benchmark skipped', key, e.message); h5.series.push({ key, kind: 'bench', label, missing: String(e.message).slice(0, 80) }); }
 }
 
+// ---- five ideas to make the USA bot different, each from the owner's settings, Aggressive sizing (12% × 8) ----
+let ideas = null;
+if (MKT === 'US') {
+  const SI = Object.fromEntries(spy.map((b, i) => [b.d, i])), SC = spy.map(b => b.c);
+  const spyRet = (d, n) => { const i = SI[d]; return i != null && i >= n ? SC[i] / SC[i - n] - 1 : null; };
+  const vol20 = SC.map((_, i) => { if (i < 21) return null; let m = 0, v = 0; const r = []; for (let k = i - 19; k <= i; k++) r.push(SC[k] / SC[k - 1] - 1); m = r.reduce((a, b) => a + b, 0) / 20; v = r.reduce((a, b) => a + (b - m) ** 2, 0) / 20; return Math.sqrt(v * 252); });
+  const volMed = vol20.map((_, i) => { if (i < 272) return null; const w = vol20.slice(i - 251, i + 1).filter(x => x != null).sort((a, b) => a - b); return w[w.length >> 1]; });
+  const ownDip = (C, i) => { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] > s200 && r < 25 ? r : null; };
+  const own = { stopPct: 0.25, tpPct: 0.10 }, exit = (B, C, j, held) => { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; };
+  const template = (B, C, i) => {                   // the site's 8-point trend template (the gate to a Top Buy rating)
+    if (i < 260) return 0; const p = C[i], m50 = sma(C, 50, i), m100 = sma(C, 100, i), m200 = sma(C, 200, i), m100a = sma(C, 100, i - 21);
+    let hi = -1, lo = 1e18; for (let k = i - 251; k <= i; k++) { hi = Math.max(hi, B[k].h); lo = Math.min(lo, B[k].l); }
+    const r60 = C[i] / C[i - 60] - 1, r120 = C[i] / C[i - 120] - 1, s60 = spyRet(B[i].d, 60), s120 = spyRet(B[i].d, 120);
+    return [p > m100 && p > m200, m100 > m200, m50 > m100 && m50 > m200, p > m50, m100 > m100a, p >= lo * 1.25, p >= hi * 0.75, (s60 != null && r60 > s60) || (s120 != null && r120 > s120)].filter(Boolean).length;
+  };
+  const mk = plan => ({ kind: 'swing', plan, exit });
+  const IDEAS = [
+    ['base', 'Your settings today (buy below 25, +10% take-profit, 25% stop)', mk((B, C, i) => { const r = ownDip(C, i); return r == null ? null : { rank: r, ...own }; })],
+    ['quality', '1 · Quality dips only: the stock passes 6+ of the 8 trend-template points', mk((B, C, i) => { const r = ownDip(C, i); return r == null || template(B, C, i) < 6 ? null : { rank: r, ...own }; })],
+    ['mktdown', '2a · Only dips on days the whole market also fell', mk((B, C, i) => { const r = ownDip(C, i), m = spyRet(B[i].d, 1); return r == null || m == null || m >= 0 ? null : { rank: r, ...own }; })],
+    ['panic', '2b · Only dips on market panic days (S&P 500 down 1% or more)', mk((B, C, i) => { const r = ownDip(C, i), m = spyRet(B[i].d, 1); return r == null || m == null || m > -0.01 ? null : { rank: r, ...own }; })],
+    ['leaders', '3 · Leaders first: among the dips, buy those that beat the market most over 3 months', mk((B, C, i) => { const r = ownDip(C, i), m = spyRet(B[i].d, 60); return r == null || i < 60 ? null : { rank: -((C[i] / C[i - 60] - 1) - (m || 0)), ...own }; })],
+    ['fear', '5 · Bigger buys when the market is nervous (1.5× when S&P 500 swings exceed their 1-year norm, 0.75× when calm)', mk((B, C, i) => { const r = ownDip(C, i); if (r == null) return null; const k = SI[B[i].d], hiVol = k != null && vol20[k] != null && volMed[k] != null && vol20[k] > volMed[k]; return { rank: r, ...own, size: hiVol ? 1.5 : 0.75 }; })],
+  ];
+  POS = 0.12; MAXPOS = 8;
+  const run = S => simulate(S, data, calendar, regimeOn, false);
+  const curves = Object.fromEntries(IDEAS.map(([k, , S]) => [k, run(S)]));
+  const brk = run(STRATS.breakout);
+  POS = POS0; MAXPOS = MAXPOS0;
+  // idea 4: half the money on your dip rule, half on trend breakout (each on its own half)
+  const bd = Object.fromEntries(brk.days.map(x => [x.d, x.eq]));
+  curves.combo = { days: curves.base.days.map(x => ({ d: x.d, eq: 0.5 * x.eq + 0.5 * (bd[x.d] ?? 1) })), trades: curves.base.trades.concat(brk.trades) };
+  IDEAS.splice(5, 0, ['combo', '4 · Second engine: half the money on your dip rule, half on trend breakout', null]);
+  const T = 0.408, afterTax = yrs => { let v = 100000, carry = 0; for (const r of yrs) { const g = v * r, n = g + carry; let t = 0; if (n > 0) { t = n * T; carry = 0; } else carry = n; v += g - t; } return Math.round(v); };
+  ideas = IDEAS.map(([key, label]) => {
+    const c = curves[key], d5 = c.days.filter(x => x.d >= from5), pts = d5.map(x => [x.d, x.eq / d5[0].eq]), c5 = curveStats(pts);
+    return { key, label, all: stats(c.days, c.trades), oos: stats(c.days, c.trades, split), t: tstats(c.trades), five: { cagr: c5.cagr, maxDD: c5.maxDD, years: c5.years, afterTax: afterTax(Object.keys(c5.years).sort().map(y => c5.years[y] / 100)) } };
+  });
+  for (const x of ideas) console.log('idea', x.key, x.all.cagr.toFixed(1), x.oos.cagr.toFixed(1), x.five.cagr, x.five.afterTax);
+}
+
 const f = (x, d = 2) => x == null || !isFinite(x) ? 'n/a' : (+x).toFixed(d), pc = x => x == null ? 'n/a' : (x >= 0 ? '+' : '') + f(x) + '%';
 let md = `# Strategy research${MKT === 'IN' ? ' — India (NSE)' : ''} — ${Object.keys(data).length} stocks, ${calendar[0]} → ${calendar[calendar.length - 1]}\n\nCosts ${(COST * 100).toFixed(2)}%/side · 10% of equity per position · max ${MAXPOS} positions · out-of-sample = ${split} onward (never used to choose anything).\n\n`;
 md += `| Strategy | Regime filter | CAGR (all) | Sharpe (all) | Max DD | **OOS CAGR** | **OOS Sharpe** | OOS Max DD | Trades | Win % | Exp./trade | PF |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n`;
@@ -214,7 +255,8 @@ if (extras.length) md += '\n';
 md += `\n## The last 5 years (${h5.from} → ${h5.to}), from a fresh start\n\nBenchmarks include dividends (${MKT === 'IN' ? 'index-fund NAVs, after the funds’ fees' : 'ETF adjusted closes'}). The bot keeps at most 60% invested (6 positions × 10%).\n\n| | Total | Per year | Worst fall | Sharpe | ${Object.keys((h5.series[0] || {}).years || {}).join(' | ')} |\n|---|---|---|---|---|${Object.keys((h5.series[0] || {}).years || {}).map(() => '---').join('|')}|\n`;
 for (const x of h5.series) md += x.missing ? `| ${x.label} | n/a (${x.missing}) |\n` : `| ${x.kind === 'bot' ? '**' + x.label + '**' : x.label} | ${pc(x.total)} | ${pc(x.cagr)} | −${f(x.maxDD, 1)}% | ${f(x.sharpe)} | ${Object.keys(h5.series[0].years).map(y => x.years[y] == null ? '–' : pc(x.years[y])).join(' | ')} |\n`;
 if (h5.variants) { md += `\n### USA bot sizing variants, same 5 years\n\n| Variant | Total | Per year | Worst fall | Sharpe | Trades |\n|---|---|---|---|---|---|\n`; for (const x of h5.variants) md += `| ${x.label} | ${pc(x.total)} | ${pc(x.cagr)} | −${f(x.maxDD, 1)}% | ${f(x.sharpe)} | ${x.trades} |\n`; }
+if (ideas) { md += `\n## Five ideas to make the bot different (Aggressive sizing, your settings as the base)\n\n| Idea | Per year, 33 yrs | Worst fall | **Per year since ${split}** | Worst fall since | Trades | Win % | Last 5 yrs per year | $100k after 40.8% tax, 5 yrs |\n|---|---|---|---|---|---|---|---|---|\n`; for (const x of ideas) md += `| ${x.label} | ${pc(x.all.cagr)} | −${f(x.all.maxDD, 1)}% | **${pc(x.oos.cagr)}** | −${f(x.oos.maxDD, 1)}% | ${x.t.n} | ${f(x.t.win, 1)}% | ${pc(x.five.cagr)} | $${x.five.afterTax.toLocaleString('en-US')} |\n`; }
 md += `\nSurvivorship bias (today’s big companies, looking back) flatters every strategy, so treat these as an upper bound. Not financial advice.\n`;
 fs.writeFileSync(OUT.md, md);
-fs.writeFileSync(OUT.json, JSON.stringify({ at: new Date().toISOString(), market: MKT, bench: BENCH_NAME, cost: COST, symbols: Object.keys(data), split, results, spy: { all: spyAll, oos: spyOos }, extras, history5: h5 }));
+fs.writeFileSync(OUT.json, JSON.stringify({ at: new Date().toISOString(), market: MKT, bench: BENCH_NAME, cost: COST, symbols: Object.keys(data), split, results, ideas, spy: { all: spyAll, oos: spyOos }, extras, history5: h5 }));
 console.log(md);
