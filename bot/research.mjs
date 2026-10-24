@@ -12,7 +12,8 @@ const MKT = (process.env.BT_MARKET || 'US').toUpperCase();
 const NIFTY100 = NIFTY100_LIST.map(s => s + '.NS').join(',');                        // one list for the research and the India bot
 const BENCH = MKT === 'IN' ? '^NSEI' : 'SPY', BENCH_NAME = MKT === 'IN' ? 'Nifty 50' : 'SPY';
 const OUT = MKT === 'IN' ? { json: 'bot/research-in.json', md: 'bot/research_in_report.md' } : { json: 'bot/research.json', md: 'bot/research_report.md' };
-const YEARS = +(process.env.BT_YEARS || 40), COST = +(process.env.BT_COST || (MKT === 'IN' ? 0.0015 : 0.0005)), POS = 0.10, MAXPOS = 6;
+const YEARS = +(process.env.BT_YEARS || 40), COST = +(process.env.BT_COST || (MKT === 'IN' ? 0.0015 : 0.0005)), POS0 = 0.10, MAXPOS0 = 6;
+let POS = POS0, MAXPOS = MAXPOS0;                 // sizing: changed only for the 5-year sizing variants below, then restored
 const UNIVERSE = (process.env.BT_SYMBOLS || (MKT === 'IN' ? NIFTY100 : null) || 'AAPL,MSFT,KO,JNJ,PG,XOM,CVX,JPM,WMT,MCD,DIS,IBM,GE,CAT,BA,MMM,HD,INTC,ORCL,T,VZ,PFE,MRK,PEP,NKE,AXP,GS,UNH,LOW,TXN,AMD,ADBE,COST,SBUX,CSCO,QCOM,AMGN,GD,LMT').split(',');
 async function pull(sym) {
   if (process.env.BT_SOURCE === 'livejson') {
@@ -46,6 +47,12 @@ const STRATS = {
     exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
   rsi2sl: { label: 'RSI-2 with only the −5% stop', kind: 'swing',
     plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] > s200 && r < 10 ? { rank: r, stopPct: 0.05 } : null; },
+    exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
+  rsi2own: { label: 'RSI-2 with the owner\'s settings: buy below 25, sell at +10% or on the bounce, 25% stop', kind: 'swing',
+    plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] > s200 && r < 25 ? { rank: r, stopPct: 0.25, tpPct: 0.10 } : null; },
+    exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
+  rsi2tp10: { label: 'RSI-2 (buy below 10) with +10% take-profit, 25% stop', kind: 'swing',
+    plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); return s200 && r != null && C[i] > s200 && r < 10 ? { rank: r, stopPct: 0.25, tpPct: 0.10 } : null; },
     exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= 10; } },
   // Short side (stock short is the cleanest proxy for buying puts: same direction, no decay or option spread).
   rsi2short: { label: 'RSI-2 short (mirror of the bot): below 200-day, RSI-2 > 90, short at next open, cover when close < 5-day avg (max 10 days)', kind: 'swing', short: true,
@@ -179,6 +186,14 @@ const curves = Object.fromEntries(parts.map(([k]) => [k, botCurve(k)]));
 const botPts = curves[parts[0][0]].pts.map(([d], i) => [d, parts.reduce((t, [k, w]) => t + w * curves[k].pts[i][1], 0)]);
 h5.series.push({ key: 'bot', kind: 'bot', label: MKT === 'IN' ? 'India bot — trend breakout + RSI-2, 50/50' : 'USA bot — RSI-2 dip buying', trades: parts.reduce((t, [k]) => t + curves[k].trades, 0), ...curveStats(botPts), pts: thin(botPts) });
 if (parts.length > 1) for (const [k] of parts) h5.series.push({ key: k, kind: 'part', label: STRATS[k].label.split(':')[0].split('(')[0].trim(), trades: curves[k].trades, ...curveStats(curves[k].pts), pts: thin(curves[k].pts) });
+// sizing variants for the USA bot (shown in the research report, not on the chart): the presets' money per stock × max stocks
+if (MKT === 'US') {
+  h5.variants = [];
+  for (const [nm, pos, mx, key] of [['Balanced (10% × 6 stocks), tested rules', 0.10, 6, 'rsi2'], ['Aggressive (12% × 8 stocks), tested rules', 0.12, 8, 'rsi2'], ['Aggressive + 10% take-profit', 0.12, 8, 'rsi2tp10'], ['Aggressive with your settings (buy below 25, +10% take-profit)', 0.12, 8, 'rsi2own'], ['All-in (16% × 6 = 96%), tested rules', 0.16, 6, 'rsi2']]) {
+    POS = pos; MAXPOS = mx; const c = botCurve(key); POS = POS0; MAXPOS = MAXPOS0;
+    h5.variants.push({ label: nm, pos, maxPos: mx, strat: key, trades: c.trades, ...curveStats(c.pts) });
+  }
+}
 for (const [key, label, get] of BENCH5) {
   try {
     const { B } = await get(); const m = Object.fromEntries(B.map(b => [b.d, b.c]));
@@ -198,6 +213,7 @@ for (const x of extras) md += `| ${x.name} buy & hold${x.from > calendar[0] ? ` 
 if (extras.length) md += '\n';
 md += `\n## The last 5 years (${h5.from} → ${h5.to}), from a fresh start\n\nBenchmarks include dividends (${MKT === 'IN' ? 'index-fund NAVs, after the funds’ fees' : 'ETF adjusted closes'}). The bot keeps at most 60% invested (6 positions × 10%).\n\n| | Total | Per year | Worst fall | Sharpe | ${Object.keys((h5.series[0] || {}).years || {}).join(' | ')} |\n|---|---|---|---|---|${Object.keys((h5.series[0] || {}).years || {}).map(() => '---').join('|')}|\n`;
 for (const x of h5.series) md += x.missing ? `| ${x.label} | n/a (${x.missing}) |\n` : `| ${x.kind === 'bot' ? '**' + x.label + '**' : x.label} | ${pc(x.total)} | ${pc(x.cagr)} | −${f(x.maxDD, 1)}% | ${f(x.sharpe)} | ${Object.keys(h5.series[0].years).map(y => x.years[y] == null ? '–' : pc(x.years[y])).join(' | ')} |\n`;
+if (h5.variants) { md += `\n### USA bot sizing variants, same 5 years\n\n| Variant | Total | Per year | Worst fall | Sharpe | Trades |\n|---|---|---|---|---|---|\n`; for (const x of h5.variants) md += `| ${x.label} | ${pc(x.total)} | ${pc(x.cagr)} | −${f(x.maxDD, 1)}% | ${f(x.sharpe)} | ${x.trades} |\n`; }
 md += `\nSurvivorship bias (today’s big companies, looking back) flatters every strategy, so treat these as an upper bound. Not financial advice.\n`;
 fs.writeFileSync(OUT.md, md);
 fs.writeFileSync(OUT.json, JSON.stringify({ at: new Date().toISOString(), market: MKT, bench: BENCH_NAME, cost: COST, symbols: Object.keys(data), split, results, spy: { all: spyAll, oos: spyOos }, extras, history5: h5 }));
