@@ -1,5 +1,5 @@
 {
- "at": "2026-10-24T18:31:46.203Z",
+ "at": "2026-10-24T18:36:36.031Z",
  "from": "2021-10-22",
  "to": "2026-10-23",
  "stake": 1000000,
@@ -19,7 +19,7 @@
    "label": "A · Trend breakout on Midcap 150 stocks",
    "from": "2021-10-22",
    "to": "2026-10-23",
-   "preTaxEnd": 1602889,
+   "preTaxEnd": 1747468,
    "afterEnd": 1600934,
    "maxDD": 27.2,
    "trades": 249,
@@ -41,29 +41,30 @@
      "tax": 31245
     },
     "2024": {
-     "pre": 36.3,
+     "pre": 35.8,
      "after": 28.4,
      "tax": 115698
     },
     "2025": {
-     "pre": -1.1,
+     "pre": -0.5,
      "after": -1.9,
      "tax": 14189
     },
     "2026": {
-     "pre": -13.6,
+     "pre": -13.9,
      "after": -13.6,
      "tax": 0
     }
    },
-   "taxPaid": 161132
+   "taxPaid": 161132,
+   "maxDDPre": 25.1
   },
   {
    "key": "momentum",
    "label": "B · Monthly momentum, top 20 of Nifty 200",
    "from": "2021-10-22",
    "to": "2026-10-23",
-   "preTaxEnd": 4428658,
+   "preTaxEnd": 4870791,
    "afterEnd": 4381812,
    "maxDD": 29.7,
    "trades": 278,
@@ -85,29 +86,30 @@
      "tax": 54060
     },
     "2024": {
-     "pre": 87.9,
+     "pre": 86.6,
      "after": 77.8,
      "tax": 238979
     },
     "2025": {
-     "pre": 15.9,
+     "pre": 15.7,
      "after": 12.5,
      "tax": 143045
     },
     "2026": {
-     "pre": -6.3,
+     "pre": -6.6,
      "after": -7.2,
      "tax": 40209
     }
    },
-   "taxPaid": 476293
+   "taxPaid": 476293,
+   "maxDDPre": 25.2
   },
   {
    "key": "momentumSafe",
    "label": "C · Momentum + safety switch (cash when Nifty < 200-day)",
    "from": "2021-10-22",
    "to": "2026-10-23",
-   "preTaxEnd": 3787251,
+   "preTaxEnd": 4305535,
    "afterEnd": 3707033,
    "maxDD": 18.8,
    "trades": 263,
@@ -129,22 +131,23 @@
      "tax": 46817
     },
     "2024": {
-     "pre": 82.5,
+     "pre": 82.4,
      "after": 73.4,
      "tax": 174228
     },
     "2025": {
-     "pre": 22.7,
+     "pre": 22.9,
      "after": 17.9,
      "tax": 160498
     },
     "2026": {
-     "pre": -3.3,
+     "pre": -2.2,
      "after": -5.4,
      "tax": 80218
     }
    },
-   "taxPaid": 461762
+   "taxPaid": 461762,
+   "maxDDPre": 18.8
   },
   {
    "key": "currentBot",
