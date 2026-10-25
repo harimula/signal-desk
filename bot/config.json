@@ -1,10 +1,10 @@
 {
  "mode": "paper",
- "preset": "aggressive",
+ "preset": "custom",
  "riskPct": 1,
  "optRiskPct": 1,
  "maxHeat": 6,
- "perSector": 3,
+ "perSector": 5,
  "maxPositions": 8,
  "maxOptions": 6,
  "dayCap": 5,
@@ -44,6 +44,7 @@
  "spyStop": 15,
  "spyHoldMin": 10,
  "spyMaxTrades": 6,
+ "spyMaxOpen": 3,
  "spyStreak": 2,
  "spyDayCap": 25,
  "spyDte": 1,
@@ -111,7 +112,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-25T17:13:37.251Z",
+ "updatedAt": "2026-10-25T17:54:24.051Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
