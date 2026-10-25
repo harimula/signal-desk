@@ -94,7 +94,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <main>
 <h1>What every bot setting does — with a worked example</h1>
 <p class="lede">One entry per control on the <b>Bot settings</b> tab: what it changes, the default, your current value, the allowed range, and a concrete example in dollars so you can see what the number actually does. Defaults marked <span class="tag tested">tested</span> are the values the 33-year research used. <span class="tag exp">experimental</span> parts were never tested on history.</p>
-<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · <b>last updated 2026-10-24</b> (full audit: examples for every setting, 4c SPY quick options, money shares in one place, out-of-range values refused)</p>
+<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · <b>last updated 2026-10-25</b> (SPY money per trade; earlier: full audit, worked examples for every setting)</p>
 
 <section id="how">
 <h2>How settings work<small>where they live and when they take effect</small></h2>
@@ -195,6 +195,8 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <div class="s"><h3>SPY quick-options share</h3><div class="meta">Default <b>5%</b> · <b>yours: 5%</b> · range 0–50%</div><p>The money the SPY sleeve (section 4c) may use. One SPY trade spends up to all of it. Switch the sleeve off in 4c and this share goes back to stocks.</p>
 <p class="ex"><b>Example.</b> 5% = $5,000. A SPY CALL quoted $2.05 ($205 a contract) → $5,000 ÷ $205 = <b>24 contracts</b>. At the +15% take-profit that is +$738; at the −15% stop −$738.</p></div>
 
+<div class="s"><h3>SPY money per trade</h3><div class="meta">Default <b>100%</b> · range 10–100% · <b>yours: 100%</b></div><p>How much of the SPY share one SPY trade may use. Trades still run <b>one at a time</b>; the rest of the share simply waits. Lower it to make each SPY trade — and each SPY loss — smaller.</p>
+<p class="ex"><b>Example.</b> SPY share 5% = $5,000; contracts at $2.05 ($205 each). <b>100%:</b> 24 contracts ($4,920); a −15% stop costs about <b>$744</b> (0.74% of the account). <b>50%:</b> $2,500 → 12 contracts ($2,460); the same stop costs about <b>$372</b>. <b>20%:</b> $1,000 → 4 contracts; about $124. The daily loss limit (25% of $5,000 = $1,250) and “2 losses in a row” still apply, so at 50% two losing trades cost about $744 instead of $1,488.</p></div>
 <div class="s"><h3>Options daily loss limit</h3><div class="meta">Default <b>10%</b> · <b>yours: 10%</b> · range 1–50%</div><p>If CALLs lose this % of the CALL money in a day, new CALLs stop and open CALLs are closed; the same for PUTs on the PUT money.</p>
 <p class="ex"><b>Example.</b> CALL money $20,000 × 10% = <b>$2,000</b>; PUT money $5,000 × 10% = <b>$500</b>. Two losing PUTs of $300 each → PUTs stop for the day; CALLs and stocks carry on.</p></div>
 

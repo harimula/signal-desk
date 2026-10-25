@@ -168,6 +168,7 @@
     'long-term': 'Your tax rate on gains from holdings kept over a year — the index funds, if held the whole 5 years. For a high earner: 20% + 3.8% = 23.8%.',
     'before tax': 'What the money became, ignoring taxes.',
     'after tax': 'What you would keep after federal tax: the bot pays short-term tax on each year’s profit; a fund held 5 years pays a little on dividends each year and long-term tax on the gain when sold.',
+    'spy money per trade': 'How much of the SPY share one trade may use. 100% = all of it (one $5,000 trade on a $5,000 share); 50% = $2,500 per trade, so a losing trade costs half as much. Trades still run one at a time.',
     'spy take-profit': 'Sell the SPY option as soon as it is up this % from its buy price. The order rests at the broker, so it fills at exchange speed. Example: bought at $2.00, 15% → sold at $2.30.',
     'spy stop': 'Sell the SPY option when it is down this % from its buy price. Example: bought at $2.00, 15% → sold at about $1.70. Checked on every live quote.',
     'spy time stop': 'Sell the SPY option after this many minutes whatever the price. Quick trades that have not worked by then are closed.',

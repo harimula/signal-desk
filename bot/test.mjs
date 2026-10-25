@@ -351,5 +351,6 @@ test('msgpack: every type round-trips (ints of all sizes, negatives, floats, lon
   assert.deepEqual(mpDecode(mpEncode({ action: 'subscribe', quotes: ['SPY261027C00684000'] })), { action: 'subscribe', quotes: ['SPY261027C00684000'] });
 });
 
+test('SPY money per trade: defaults to 100% and is kept between 10% and 100%', () => { assert.equal(normalize({}).spyTradePct, 100); assert.equal(normalize({ preset: 'custom', spyTradePct: 50 }).spyTradePct, 50); assert.equal(normalize({ preset: 'custom', spyTradePct: 5 }).spyTradePct, 10); assert.equal(normalize({ preset: 'custom', spyTradePct: 150 }).spyTradePct, 100); });
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

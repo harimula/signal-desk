@@ -341,7 +341,7 @@ check('SPY sleeve (default on): SPY breaks the 15-minute high above its VWAP →
   const o = Y1.orders.find(x => /^SPY\d{6}C/.test(x.symbol) && x.side === 'buy'); assert.ok(o, JSON.stringify(Y1.orders) + JSON.stringify(Y1.acts)); assert.match(o.client_order_id, /^sd-yc-SPY/);
   assert.ok(+o.qty * +o.limit_price * 100 <= 5000 && +o.qty >= 1, 'spent ' + (+o.qty * +o.limit_price * 100)); assert.equal(o.time_in_force, 'day');
 });
-check('SPY sleeve: the journal carries the sleeve\'s money, use, window and rules', () => { const S = Y1.spy; assert.ok(S && S.on, JSON.stringify(S)); assert.equal(S.money, 5000); assert.equal(S.max, 6); assert.deepEqual(S.rules, { tp: 15, stop: 15, holdMin: 10, dte: 1 }); assert.equal(S.market, 'up'); });
+check('SPY sleeve: the journal carries the sleeve\'s money, use, window and rules', () => { const S = Y1.spy; assert.ok(S && S.on, JSON.stringify(S)); assert.equal(S.money, 5000); assert.equal(S.max, 6); assert.deepEqual(S.rules, { tp: 15, stop: 15, holdMin: 10, dte: 1, tradePct: 100 }); assert.equal(S.market, 'up'); });
 const Y2 = run(SO, { bars5: { SPY: spyDn }, live: { SPY: 497.3 }, spy: 'down' });
 check('SPY sleeve: SPY breaks the 15-minute low below its VWAP → a SPY PUT (sd-yp-)', () => assert.ok(Y2.orders.some(x => /^SPY\d{6}P/.test(x.symbol) && /^sd-yp-/.test(x.client_order_id)), JSON.stringify(Y2.orders) + JSON.stringify(Y2.acts)));
 const Y3 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
@@ -411,5 +411,16 @@ const MS = run(SO, { positions: [manualSpy], hist: [{ symbol: 'SPY261024C0051000
 check('a SPY option bought by hand (no sd-y id) is left alone by the sleeve: no stop sale, no take-profit order', () => assert.ok(!MS.orders.some(o => o.symbol === 'SPY261024C00510000'), JSON.stringify(MS.orders)));
 const RE = run(SO, { hist: [{ symbol: 'SPY261113C00502000', side: 'buy', status: 'filled', client_order_id: 'sd-yc-SPY261113C00502000-205-20261023-585-q1', qty: '20', limit_price: '2.05', filled_at: '2026-10-23T13:46:00Z' }], bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
 check('SPY re-entry: a second trade in the same contract later in the day is placed (the duplicate guard keys SPY buys by order id, not by symbol)', () => assert.ok(RE.orders.some(o => /^SPY\d{6}C/.test(o.symbol) && o.side === 'buy'), JSON.stringify(RE.orders) + JSON.stringify(RE.acts)));
+
+// ---- SPY money per trade: one trade uses only its % of the SPY share (both the regular check and the instant tick path) ----
+const spend = r => r.orders.filter(o => /^SPY\d{6}[CP]/.test(o.symbol) && o.side === 'buy').reduce((t, o) => t + +o.qty * +o.limit_price * 100, 0);
+const P100 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.7 } }), P50 = run({ ...SO, spyTradePct: 50 }, { bars5: { SPY: spyUp }, live: { SPY: 502.7 } }), P20 = run({ ...SO, spyTradePct: 20 }, { bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+check('SPY money per trade 100% (default): one trade spends up to the whole $5,000 share (24 contracts at $2.05)', () => { assert.ok(spend(P100) <= 5000 && spend(P100) > 4500, 'spent ' + spend(P100)); });
+check('SPY money per trade 50%: one trade spends at most $2,500 (12 contracts)', () => { assert.ok(spend(P50) <= 2500 && spend(P50) > 2000, 'spent ' + spend(P50)); assert.equal(P50.spy.rules.tradePct, 50); });
+check('SPY money per trade 20%: at most $1,000 (4 contracts)', () => assert.ok(spend(P20) <= 1000 && spend(P20) > 600, 'spent ' + spend(P20)));
+const PT = run({ ...SO, spyTradePct: 50 }, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7 });
+check('SPY money per trade 50% on the instant tick path too: at most $2,500', () => { const sp = PT.tickEntry.placed.filter(o => o.side === 'buy').reduce((t, o) => t + +o.qty * +o.limit_price * 100, 0); assert.ok(PT.tickEntry.ok && sp <= 2500 && sp > 2000, 'spent ' + sp + ' ' + JSON.stringify(PT.tickEntry)); });
+const PF = run({ ...SO, spyTradePct: 100 }, { positions: [{ ...spyPos(2.0), qty: '15', market_value: '3000' }], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
+check('SPY money per trade never exceeds what is free: with $3,000 already in a trade, the sleeve does not open a second one (one at a time)', () => assert.ok(!PF.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol)), JSON.stringify(PF.orders)));
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

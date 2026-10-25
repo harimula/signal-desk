@@ -249,9 +249,9 @@ async function spyCycle(ctx) {
   const openRows = open.map(({ p, d, e }) => ({ s: p.symbol, id: e ? cid(e) : '', entry: d ? d.entry : +p.avg_entry_price, pending: false, kind: d ? d.kind : 'call', qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
   const keepPending = lastSpy && lastSpy.open ? lastSpy.open.filter(o => o.pending && live.some(l => l.symbol === o.s && l.side === 'buy')) : [];
   lastSpy = { at: new Date().toISOString(), on: !!CFG.spyOn, budget: G.budget || 1, money: r0(SIDE.spy.money), used: r0(SL_used(positions, live)), today: SIDE.spy.today ?? null, halted: halt.spy, idle, tradesToday, max: CFG.spyMaxTrades, market: sig && sig.market || null, vwap: sig && sig.vwap || null, level: sig && sig.level || null, spyPx: px || null,
-    window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by 3:45 PM`, open: openRows.concat(keepPending), closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte } };
+    window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by 3:45 PM`, open: openRows.concat(keepPending), closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte, tradePct: CFG.spyTradePct } };
   if (idle || !sig || !sig.side || Date.now() < spyPendingUntil || spyEntering) return;
-  await spyPlace(sig.side, px, sig.why, SIDE.spy.money * (G.budget || 1) - SL_used(positions, live));
+  await spyPlace(sig.side, px, sig.why, Math.min(SIDE.spy.money * CFG.spyTradePct / 100, SIDE.spy.money - SL_used(positions, live)) * (G.budget || 1));   // one trade: its % of the SPY money, never more than is free
 }
 // Places the SPY option order (contract → quote → limit buy). Shared by the full cycle and the tick-driven spyEnter.
 let spyPendingUntil = 0, spyEntering = false;
@@ -271,7 +271,7 @@ async function spyPlaceInner(kind, px, why, budget) {
   if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); return null; }
   if ((q.ap - q.bp) / q.ap > 0.05) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over 5%) \u2014 skipped`); return null; }
   const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02)), qty = Math.floor(Math.max(0, budget) / (lim * 100));
-  if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above the SPY sleeve's free money ($${Math.round(budget)}) \u2014 skipped`); return null; }
+  if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's SPY money ($${Math.round(budget)}, ${CFG.spyTradePct}% of the SPY share) \u2014 skipped`); return null; }
   const id = encodeSpyId(kind, c.symbol, lim, TODAY, MINS, rid());
   const placedOrder = await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: id },
     `SPY ${kind.toUpperCase()} quick trade: ${why} \u00b7 out at +${CFG.spyTp}% / \u2212${CFG.spyStop}% or after ${CFG.spyHoldMin} min`);
@@ -287,7 +287,7 @@ export async function spyEnter(px) {
   if (!((w.market === 'up' && px > w.level) || (w.market === 'down' && px < w.level))) return false;
   setNow(); const start = hhmmMin(CFG.spyStart), end = hhmmMin(CFG.spyEnd); if (MINS < start || MINS >= end) return false;
   const kind = w.market === 'up' ? 'call' : 'put';
-  const sym = await spyPlace(kind, px, `SPY ${px} ${kind === 'call' ? 'broke above' : 'broke below'} ${w.level} (live tick)`, (lastSpy.money - (lastSpy.used || 0)) * (lastSpy.budget || 1));
+  const sym = await spyPlace(kind, px, `SPY ${px} ${kind === 'call' ? 'broke above' : 'broke below'} ${w.level} (live tick)`, Math.min(lastSpy.money * (CFG.spyTradePct ?? 100) / 100, lastSpy.money - (lastSpy.used || 0)) * (lastSpy.budget || 1));
   return !!sym;
 }
 const hhmmMin = s => { const [h, m] = String(s).split(':').map(Number); return h * 60 + m; };

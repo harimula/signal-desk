@@ -8,11 +8,12 @@
 //   Contract   — nearest-the-money, expiring 1..spyDte days out (default 1 = the next trading day; never same-day), spread ≤ 5%.
 //   Exits      — take-profit +spyTp% (resting limit order at the broker), stop −spyStop%, time stop after spyHoldMin minutes,
 //                flat by spyFlat (3:45 PM). Whichever comes first.
+//   Size       — one trade uses spyTradePct % of the sleeve's money (default 100 = all of it), never more than is free.
 //   Brakes     — one position at a time, spyMaxTrades a day, spyStreak losses in a row ends the day, spyDayCap % of the
 //                sleeve lost today ends the day (bot.mjs applies it like the other money-split parts).
 import { vwap } from './daytrade.mjs';
 
-export const SPY_DEFAULTS = { spyOn: true, spySharePct: 5, spyTp: 15, spyStop: 15, spyHoldMin: 10, spyMaxTrades: 6, spyStreak: 2, spyDayCap: 25, spyDte: 1, spyStart: '09:50', spyEnd: '15:30', spyFlat: 945 };
+export const SPY_DEFAULTS = { spyOn: true, spySharePct: 5, spyTradePct: 100, spyTp: 15, spyStop: 15, spyHoldMin: 10, spyMaxTrades: 6, spyStreak: 2, spyDayCap: 25, spyDte: 1, spyStart: '09:50', spyEnd: '15:30', spyFlat: 945 };
 
 // Entry signal from completed 5-minute SPY bars (each {o,h,l,c,v,m}) and the live price. mins = minutes past midnight ET.
 export function spySignal({ bars, px, mins, cfg = {} }) {
