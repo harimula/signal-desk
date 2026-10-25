@@ -172,6 +172,7 @@ async function dayTradeCycle(ctx) {
       await send({ symbol: sg.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
         order_class: 'bracket', take_profit: { limit_price: String(tick(sg.target)) }, stop_loss: { stop_price: String(tick(sg.stop)) },
         client_order_id: encodeDayId('sd-d-', sg.sym, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label + ' · stop and target placed at the broker');
+      if (ctx.useSL) ctx.useSL('stock', qty * lim);                            // the next entry this check sees the money as spent
       placed++; continue;
     }
     if ((sg.side === 'long' && CFG.dayCalls && !halt.call) || (sg.side === 'short' && CFG.dayPuts && !halt.put)) {
@@ -180,6 +181,7 @@ async function dayTradeCycle(ctx) {
       if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(c.lim * 100)}) is above the day-trade risk or money budget — skipped`); continue; }
       await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(c.lim), time_in_force: 'day', client_order_id: encodeDayId(kind === 'put' ? 'sd-dp-' : 'sd-dc-', c.symbol, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label.replace('day trade:', `day trade ${kind.toUpperCase()}:`));
       dayState[c.symbol] = { stop: sg.stop };
+      if (ctx.useSL) ctx.useSL(kind, qty * c.lim * 100);
       placed++;
     }
   }
@@ -216,16 +218,16 @@ export async function spyFast() {
   if (!spyHasOpen() || !HAVE_KEYS) return;
   setNow();
   const [positions, openOrders] = await Promise.all([T('/v2/positions'), T('/v2/orders?status=open&limit=200')]);
-  const open = positions.filter(p => isSpyOption(p.symbol)).map(p => ({ p, e: null, d: decodeSpyId((lastSpy.open.find(o => o.s === p.symbol) || {}).id || '') }));
+  const open = positions.filter(p => isSpyOption(p.symbol) && lastSpy.open.some(o => o.s === p.symbol)).map(p => ({ p, e: null, d: decodeSpyId((lastSpy.open.find(o => o.s === p.symbol) || {}).id || '') }));   // the sleeve's own trades only
   for (const x of open) { const row = lastSpy.open.find(o => o.s === x.p.symbol); if (!x.d && row) x.d = { kind: row.kind, entry: row.entry, openMins: row.opened }; }
   const sellsFor = sym => openOrders.filter(o => o.symbol === sym && o.side === 'sell');
   await spyManage({ open, sellsFor, halt: { spy: lastSpy.halted } });
   const pendingBuy = openOrders.some(o => o.side === 'buy' && isSpyOption(o.symbol));
   for (const x of open) { const row = lastSpy.open.find(o => o.s === x.p.symbol); if (row) { row.pending = false; row.qty = Math.abs(+x.p.qty); row.entry = +x.p.avg_entry_price || row.entry; } }
-  if (!open.length && !pendingBuy) { lastSpy.open = []; spyPendingUntil = 0; }
+  if (!open.length && !pendingBuy && Date.now() - spyPlacedAt > 10000) { lastSpy.open = []; spyPendingUntil = 0; }   // a just-placed order may not be listed yet
 }
 // What the fast lane needs from the stream: while the sleeve is watching, the level a SPY tick must cross to wake a full cycle.
-export const spyWatch = () => lastSpy && lastSpy.on && !lastSpy.halted && !(lastSpy.open && lastSpy.open.length) && lastSpy.level && lastSpy.market && lastSpy.market !== 'flat' && !/maximum|paused|limit|off|closed|before/.test(lastSpy.idle || '') ? { level: lastSpy.level, market: lastSpy.market } : null;
+export const spyWatch = () => lastSpy && lastSpy.on && !lastSpy.halted && !(lastSpy.open && lastSpy.open.length) && (lastSpy.tradesToday || 0) < (lastSpy.max || 0) && lastSpy.level && lastSpy.market && lastSpy.market !== 'flat' && !/maximum|paused|limit|off|closed|before/.test(lastSpy.idle || '') ? { level: lastSpy.level, market: lastSpy.market } : null;
 async function spyCycle(ctx) {
   const { equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid } = ctx;
   const open = positions.filter(p => isSpyOption(p.symbol)).map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && o.symbol === p.symbol && /^sd-y[cp]-/.test(cid(o))), d: null })).map(x => ({ ...x, d: x.e ? decodeSpyId(cid(x.e)) : null })).filter(x => x.d);   // the sleeve's own trades only — never touch a SPY option bought by hand
@@ -246,7 +248,7 @@ async function spyCycle(ctx) {
   const pending = live.some(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)));
   const idle = !CFG.spyOn ? 'switched off' : halt.spy ? halt.spy : G.block ? 'paused by the market check' : userPause ? 'paused from Telegram' : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.spyMaxTrades ? `${tradesToday} SPY trades today \u2014 daily maximum reached` : open.length || pending ? 'in a trade' : sig && sig.idle ? sig.idle : !sig ? 'waiting for SPY bars' : null;
   const r0 = x => Math.round(x);
-  const openRows = open.map(({ p, d, e }) => ({ s: p.symbol, id: e ? cid(e) : '', entry: d ? d.entry : +p.avg_entry_price, pending: false, kind: d ? d.kind : 'call', qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
+  const openRows = open.map(({ p, d, e }) => ({ s: p.symbol, id: e ? cid(e) : '', entry: +p.avg_entry_price || (d ? d.entry : 0), pending: false, kind: d ? d.kind : 'call', qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
   const keepPending = lastSpy && lastSpy.open ? lastSpy.open.filter(o => o.pending && live.some(l => l.symbol === o.s && l.side === 'buy')) : [];
   lastSpy = { at: new Date().toISOString(), on: !!CFG.spyOn, budget: G.budget || 1, money: r0(SIDE.spy.money), used: r0(SL_used(positions, live)), today: SIDE.spy.today ?? null, halted: halt.spy, idle, tradesToday, max: CFG.spyMaxTrades, market: sig && sig.market || null, vwap: sig && sig.vwap || null, level: sig && sig.level || null, spyPx: px || null,
     window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by 3:45 PM`, open: openRows.concat(keepPending), closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte, tradePct: CFG.spyTradePct } };
@@ -276,7 +278,7 @@ async function spyPlaceInner(kind, px, why, budget) {
   const placedOrder = await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: id },
     `SPY ${kind.toUpperCase()} quick trade: ${why} \u00b7 out at +${CFG.spyTp}% / \u2212${CFG.spyStop}% or after ${CFG.spyHoldMin} min`);
   if (!placedOrder) return null;                                                                   // suppressed as a duplicate: nothing went out, so nothing to remember
-  spyPendingUntil = Date.now() + 3 * 60000;                                                     // no second entry until this one has filled or been cancelled
+  spyPendingUntil = Date.now() + 3 * 60000; spyPlacedAt = Date.now();                                                     // no second entry until this one has filled or been cancelled
   if (lastSpy) { lastSpy.idle = 'in a trade'; lastSpy.tradesToday = (lastSpy.tradesToday || 0) + 1; lastSpy.open = [{ s: c.symbol, id, entry: lim, kind, qty, opened: MINS, avg: r2d(lim * 100), cur: r2d(lim * 100), pl: 0, plpc: 0, tp: r2d(lim * (1 + CFG.spyTp / 100) * 100), stop: r2d(lim * (1 - CFG.spyStop / 100) * 100), pending: true }]; }
   return c.symbol;
 }
@@ -302,6 +304,9 @@ export async function spyOnQuote(sym, bp, ap) {
   if (!x || x.kind === 'tp') return;
   spySelling.add(sym); setTimeout(() => spySelling.delete(sym), 60000);
   try {
+    const pos = await T('/v2/positions/' + encodeURIComponent(sym)).catch(() => null);            // already sold (e.g. the take-profit filled)? then there is nothing to sell
+    if (!pos || !(Math.abs(+pos.qty) > 0)) { lastSpy.open = lastSpy.open.filter(o => o.s !== sym); return; }
+    row.qty = Math.abs(+pos.qty);
     const openOrders = await T('/v2/orders?status=open&limit=200');
     for (const o of openOrders) if (o.symbol === sym && o.side === 'sell' && !DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
     await send({ symbol: sym, qty: String(row.qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + sym + '-' + rid() }, `${sym} SPY ${row.kind.toUpperCase()} ${x.why} (live quote)`);
@@ -403,7 +408,7 @@ function alertDetail(body) {
   const unit = opt ? '/contract' : '';
   return ` \u00b7 bought $${(avg * mult).toFixed(2)}${unit}, selling \u2248$${(cur * mult).toFixed(2)}${unit} \u2192 ${pl >= 0 ? '+' : ''}${money(pl)} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(1)}%)`;
 }
-const send = async (body, why) => { why = why + alertDetail(body); const dk = /^sd-y/.test(body.client_order_id || '') && body.side === 'buy' ? body.client_order_id : body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); alerts.push((body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why); act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }); return { dry: true }; };
+const send = async (body, why) => { why = why + alertDetail(body); const dk = /^sd-y/.test(body.client_order_id || '') && body.side === 'buy' ? body.client_order_id : body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); alerts.push((body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why); act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }).catch(e => { placed.delete(dk); throw e; }); return { dry: true }; };   // a rejected order must not block its own retry
 
 // ---- time in New York ----
 const etParts = d => Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map(p => [p.type, p.value]));
@@ -429,7 +434,7 @@ const act = m => {                                          // same message with
 let lastWatch = null, lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
 let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
 const NM = { stock: { one: 'stock', many: 'stocks', Cap: 'Stocks' }, call: { one: 'CALL', many: 'CALLs', Cap: 'CALLs' }, put: { one: 'PUT', many: 'PUTs', Cap: 'PUTs' }, spy: { one: 'SPY option', many: 'SPY options', Cap: 'SPY options' } };
-let lastSpy = null, memRestored = false, flooredSyms = new Set();
+let lastSpy = null, memRestored = false, flooredSyms = new Set(), prevHeld = new Set(), spyPlacedAt = 0;
 let stopMoved = new Set();
 let lastSplit = null, lastDayPx = {}, haltSaid = new Set();      // money split panel, yesterday's closes, halt messages already sent today
 const alerts = [];
@@ -566,14 +571,7 @@ export async function tgCommand(cmd) {
 export async function tgPollCycle() { try { return await tgPoll(tgCommand); } catch (e) { console.log('telegram poll failed', e.message); return 0; } }
 
 async function run() {
-  await ensureUniverse();
-  if (!lastClock || Date.now() - (lastClock._at || 0) > 30000) { lastClock = await T('/v2/clock'); lastClock._at = Date.now(); }
-  if (!memRestored) {                                                      // first cycle of this process: pick up today's day-state from the previous run's journal
-    memRestored = true;
-    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
-  }
-  const clock = lastClock;
-  // ---- kill switch: checked before anything else can fail, every delete on its own, the SPY sleeve disarmed ----
+  // ---- kill switch: the very first thing, before any other broker call; every delete on its own; the SPY sleeve disarmed ----
   if (fs.existsSync('bot/STOP')) {
     act('STOP file found — cancelling all orders and closing everything.');
     lastSpy = null; spyPendingUntil = Date.now() + 10 * 60000;
@@ -583,6 +581,13 @@ async function run() {
     }
     return;
   }
+  await ensureUniverse();
+  if (!lastClock || Date.now() - (lastClock._at || 0) > 30000) { lastClock = await T('/v2/clock'); lastClock._at = Date.now(); }
+  if (!memRestored) {                                                      // first cycle of this process: pick up today's day-state from the previous run's journal
+    memRestored = true;
+    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
+  }
+  const clock = lastClock;
   if (!clock.is_open) { console.log('Market closed.'); return; }
   // the four account questions are independent: ask them at once instead of one after another (cycle time roughly halves)
   const [acct, positions, openOrders, hist] = await Promise.all([
@@ -632,9 +637,11 @@ async function run() {
   // circuit breakers: losing streak today, weekly drawdown
   const sideStreak = { stock: null, call: null, put: null, spy: null };
   try {
-    if (Date.now() - fillsCache.at > 60000) {
-      const f = await T('/v2/account/activities/FILL?date=' + ymdDash(Date.now()) + '&direction=asc&page_size=100');
-      fillsCache = { at: Date.now(), closed: buildJournal(f || [], []).closed, fills: f || [] };
+    const posSig = positions.map(p => p.symbol + ':' + p.qty).sort().join(',');
+    if (Date.now() - fillsCache.at > 60000 || fillsCache.posSig !== posSig) {         // a position changed: today's fills must be re-read before any day P/L is trusted
+      let f = [], token = '';
+      for (let k = 0; k < 10; k++) { const pg = await T('/v2/account/activities/FILL?date=' + ymdDash(Date.now()) + '&direction=asc&page_size=100' + (token ? '&page_token=' + token : '')); if (!Array.isArray(pg) || !pg.length) break; f = f.concat(pg); if (pg.length < 100) break; token = pg[pg.length - 1].id; }
+      fillsCache = { at: Date.now(), closed: buildJournal(f, []).closed, fills: f, posSig };
     }
     if (CFG.split) {                                                     // with the money split, a losing streak stops only its own side
       for (const [k, kind] of [['stock', 'Stock'], ['call', 'Call'], ['put', 'Put']]) {
@@ -685,15 +692,18 @@ async function run() {
   const capHit = dayPct <= -LOSS_CAP;
   for (const p of positions) if (+p.lastday_price > 0) lastDayPx[p.symbol] = +p.lastday_price;
   const sideDay = sideDayPl({ positions, fills: fillsCache.fills || [], lastDay: lastDayPx, spy: isSpyOption });
+  // a position that disappeared since the last check must have its sell fill listed, or its whole cost would count as a loss
+  const heldNow = new Set(positions.map(p => p.symbol)), fillsLag = [...prevHeld].some(sym => !heldNow.has(sym) && !(fillsCache.fills || []).some(f => f.symbol === sym && !/^buy/.test(f.side)));
+  prevHeld = heldNow;
   const halt = { stock: null, call: null, put: null, spy: null };
   { const n = lossStreak(fillsCache.closed.filter(c => isSpyOption(c.sym))); if (n >= CFG.spyStreak) sideStreak.spy = `${n} losing SPY option trades in a row today`; }
   if (SPLIT) for (const k of KINDS) {
     const S = SIDE[k]; S.today = sideDay[k]; S.limit = S.money * S.capPct / 100;
-    if (S.money > 0 && S.today <= -S.limit) halt[k] = `${NM[k].many} down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`;
+    if (S.money > 0 && S.today <= -S.limit && !fillsLag) halt[k] = `${NM[k].many} down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`;
     else if (sideStreak[k]) halt[k] = sideStreak[k];
   } else { if (capHit) halt.stock = halt.call = halt.put = `daily loss cap ${LOSS_CAP}% hit`;
     const S = SIDE.spy; S.today = sideDay.spy; S.limit = S.money * S.capPct / 100;                        // the SPY sleeve keeps its own brakes either way
-    if (S.money > 0 && S.today <= -S.limit) halt.spy = `SPY options down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`; else if (sideStreak.spy) halt.spy = sideStreak.spy; }
+    if (S.money > 0 && S.today <= -S.limit && !fillsLag) halt.spy = `SPY options down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`; else if (sideStreak.spy) halt.spy = sideStreak.spy; }
   for (const k of KINDS) if (halt[k] && !haltSaid.has(TODAY + k)) {
     haltSaid.add(TODAY + k);
     if (!SPLIT && k !== 'spy') { if (k === 'stock') alerts.push(`\u26d4 ${halt[k]} \u2014 no new trades today`); continue; }
@@ -820,7 +830,7 @@ async function run() {
   }
 
   // ---- day trading (own windows and limits; manages its open trades every beat, even when the switch is off) ----
-  try { await dayTradeCycle({ equity, acct, positions, hist, liveOrders, G, capHit: !!(halt.stock && halt.call && halt.put), halt, slBudget, sellsFor, cid }); }
+  try { await dayTradeCycle({ equity, acct, positions, hist, liveOrders, G, capHit: !!(halt.stock && halt.call && halt.put), halt, slBudget, useSL: (k, amt) => { SL[k].used += amt; }, sellsFor, cid }); }
   catch (e) { act('Day-trade engine error: ' + (e.message || e).slice(0, 120)); }
 
   // ---- what the bot is looking at (always, even when it cannot enter: the Bot trades tab shows it) ----
@@ -998,7 +1008,7 @@ async function writeJournal() {
   const allActs = journalActs;
   const env = lastGuard ? { at: new Date().toISOString(), block: lastGuard.block, regime: lastGuard.regime, reasons: lastGuard.reasons, today: lastGuard.today, upcoming: lastGuard.upcoming, flagged: lastGuard.flagged, spyPct: lastGuard.spyPct, newsOk: lastGuard.newsOk } : (prev.env || null);
   const lastAct = allActs[allActs.length - 1];
-  const sig = JSON.stringify([closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), allActs.length, lastAct && lastAct.t, env && env.reasons, env && env.flagged && env.flagged.length]);
+  const sig = JSON.stringify([userPause, haltSaid.size, closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), allActs.length, lastAct && lastAct.t, env && env.reasons, env && env.flagged && env.flagged.length]);
   const sigCmp = PRIVATE ? (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16) : sig;
   if (prev.sig === sigCmp && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
   const j = { at: new Date().toISOString(), sig, paper: /paper/.test(BASE),

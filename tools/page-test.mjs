@@ -100,6 +100,17 @@ async function session(label, prep) {
   check('money shares over 100% (CALLs 90 + PUTs 10 + SPY 5): an error shows in sections 3 and 4c and on the save bar, and Save is disabled', overErr.n >= 3 && overErr.dis && /= 105% — 5% more than the whole stake/.test(overErr.txt), JSON.stringify(overErr));
   await page.fill('#st-callSharePct', '25'); await page.evaluate(() => document.querySelector('#st-callSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(300);
   check('money shares back under 100%: the error clears and Save is enabled again', await page.evaluate(() => document.querySelectorAll('[role="status"]').length === 0 && !document.querySelector('[data-st="save"]').disabled));
+  // a stock list with a ticker the bot would drop is refused
+  await page.evaluate(() => { const r = document.querySelector('input[name="st-universe"][value="list"]'); if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } }); await page.waitForTimeout(300);
+  const symEl = await page.$('#st-symbols');
+  if (symEl) {
+    const before = await page.$eval('#st-symbols', e => e.value);
+    await page.fill('#st-symbols', 'AAPL, BRK-B'); await page.evaluate(() => document.querySelector('[data-st="save"]').click()); await page.waitForTimeout(500);
+    const m = await page.evaluate(() => (document.querySelector('[data-st="save"]').parentElement.textContent || '').replace(/\s+/g, ' '));
+    check('settings: a ticker the bot would drop (BRK-B) is refused with a hint (use BRK.B), and nothing is saved', /BRK-B/.test(m) && /BRK\.B/.test(m) && puts.length === 0, m.slice(0, 200));
+    await page.fill('#st-symbols', before);
+  }
+  await page.evaluate(() => { const r = document.querySelector('input[name="st-universe"][value="scan"]'); if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } }); await page.waitForTimeout(300);
   // out-of-range values are refused, not silently changed by the bot
   await page.fill('#st-spyEnd', '15:45'); await page.evaluate(() => document.querySelector('#st-spyEnd').dispatchEvent(new Event('change', { bubbles: true })));
   await page.fill('#st-stockPct', '50'); await page.evaluate(() => document.querySelector('#st-stockPct').dispatchEvent(new Event('change', { bubbles: true })));

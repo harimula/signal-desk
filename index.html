@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-YW2v2R8bXfyA8RtWt4+xaqtWkIOLQIX0KvTVMlWGFwI=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-3YlhOeDhMqKzzVza3zuyLaizs+htoQQ0xpIgWnEzdVg=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -932,7 +932,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792938910';
+const BUILD_V = '1792940052';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2433,8 +2433,8 @@ function h5AfterTax(pts, kind, key, st, lt) {
     return out;
   }
   const yld = H5_YIELD[key] || 0, perStep = yld * lt * ((Date.parse(pts[pts.length - 1][0]) - Date.parse(pts[0][0])) / (365.25 * 864e5)) / (pts.length - 1);
-  let A = pts[0][1];
-  for (let i = 1; i < pts.length; i++) { A *= pts[i][1] / pts[i - 1][1]; A *= 1 - perStep; out.push([pts[i][0], A - Math.max(0, A - pts[0][1]) * lt]); }
+  let A = pts[0][1], basis = pts[0][1];                                     // reinvested dividends, already taxed, add to the cost basis
+  for (let i = 1; i < pts.length; i++) { A *= pts[i][1] / pts[i - 1][1]; const div = lt > 0 ? A * perStep / lt : 0; A -= A * perStep; basis += div * (1 - lt); out.push([pts[i][0], A - Math.max(0, A - basis) * lt]); }
   return out;
 }
 function h5Card(H, cur) {
@@ -2816,6 +2816,7 @@ function stOutOfRange(c) {
   const win = (k, lab, lo, hi) => { const m = tm(c[k]); if (m == null || m < lo || m > hi) bad.push(`${lab} must be between ${mins2hhmm(lo)} and ${mins2hhmm(hi)} ET`); };
   win('dayStart', 'Day trades from', 575, 720); win('dayEnd', 'Day trades until', 600, 945); win('spyStart', 'SPY trades from', 575, 720); win('spyEnd', 'SPY trades until', 600, 930);
   if (c.liveSizePct != null && (c.liveSizePct < 5 || c.liveSizePct > 100)) bad.push('Live size must be between 5 and 100%');
+  if (c.universe !== 'scan') { const syms = c.symbols || [], badSym = syms.filter(x => !/^[A-Z.]{1,6}$/.test(x)); if (badSym.length) bad.push(`these tickers are not valid US symbols and would be dropped: ${badSym.slice(0, 5).join(', ')} (use a dot, e.g. BRK.B)`); if (!syms.length) bad.push('your stock list is empty (the bot would fall back to its default 30)'); if (syms.length > 60) bad.push(`your stock list has ${syms.length} tickers; the bot uses at most 60`); }
   return bad;
 }
 async function stSave() {

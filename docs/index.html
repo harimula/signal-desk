@@ -470,6 +470,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-25</td><td><b>Second audit.</b> Fixed a false “daily loss” stop right after a sale (it could close other open options), a failed order that blocked its own retry, day trades that could overspend a share, STOP waiting on the broker clock, the SPY fast lanes touching hand-bought options or exceeding the daily SPY maximum, a late quote selling an option already sold, a /resume lost on restart; India research tax set-off; fund tax basis on the 5-year card; ticker check before saving.</td></tr>
 <tr><td>2026-10-25</td><td>Bot settings: “SPY money per trade” — how much of the SPY share one trade may use (default 100%)</td></tr>
 <tr><td>2026-10-24</td><td>Research (India): breakout on midcaps and two momentum bots tested after Indian tax, year by year, against the Nifty 50, Midcap 150 and Momentum 30 funds</td></tr>
 <tr><td>2026-10-24</td><td>5-year card: Conservative / Balanced / Aggressive / My settings buttons and a before-tax / after-tax switch (short-term tax for the bot, long-term for the funds; your rates, editable). Documentation opens inside the app with a “Back to Signal Desk” button and fits a phone.</td></tr>

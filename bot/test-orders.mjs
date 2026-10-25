@@ -36,7 +36,8 @@ if (process.argv[2] === 'child') {
     FALL: series(80, 120, [0.001, 0.001]),       // uptrend, quiet at yesterday's close; the live price below drops it 10%
     SPY: series(400, 520, [0.001, 0.001]),
     QUIET: series(200, 210, [0.001, 0.001]),      // ordinary liquid stock, no signal
-    ORB: series(95, 100.5, [0.001, 0.001]),        // day-trade stock: flat daily picture, action is intraday
+    ORB: series(95, 100.5, [0.001, 0.001]),
+    ORB2: series(95, 100.5, [0.001, 0.001]),        // day-trade stock: flat daily picture, action is intraday
     BRK: series(105, 100.5, [-0.001, -0.001]),
     JUNK: series(2, 3, [-0.04, -0.04]),           // penny stock that also dipped: the scan must drop it (price < $5)
   };
@@ -48,8 +49,8 @@ if (process.argv[2] === 'child') {
   const BRK5 = ORB5.map(b => ({ ...b, o: 201 - b.o, h: 201 - b.l, l: 201 - b.h, c: 201 - b.c }));
   const SPY5 = (FAKE.spy || 'up') === 'up' ? [m5('13:30', 500, 501, 499.5, 500.6, 2e6), m5('13:35', 500.6, 501.2, 500.4, 501, 2e6), m5('13:40', 501, 501.8, 500.9, 501.6, 2e6), m5('13:45', 501.6, 502, 501.4, 501.9, 2e6), m5('13:50', 501.9, 502.5, 501.8, 502.3, 2e6)]
     : [m5('13:30', 500, 500.5, 499, 499.4, 2e6), m5('13:35', 499.4, 499.6, 498.8, 499, 2e6), m5('13:40', 499, 499.1, 498.2, 498.4, 2e6), m5('13:45', 498.4, 498.6, 498, 498.1, 2e6), m5('13:50', 498.1, 498.2, 497.2, 497.5, 2e6)];
-  const BARS5 = { ORB: ORB5, BRK: BRK5, SPY: SPY5, ...(FAKE.bars5 || {}) };
-  const LIVE = { ORB: 101.55, BRK: 99.45, SPY: (FAKE.spy || 'up') === 'up' ? 502.4 : 497.4, ...(FAKE.live || {}) };
+  const BARS5 = { ORB: ORB5, ORB2: ORB5, BRK: BRK5, SPY: SPY5, ...(FAKE.bars5 || {}) };
+  const LIVE = { ORB: 101.55, ORB2: 101.55, BRK: 99.45, SPY: (FAKE.spy || 'up') === 'up' ? 502.4 : 497.4, ...(FAKE.live || {}) };
   const orders = [], unknown = [], deletes = [], patches = [], tgSent = [];
   const tgMsg = (id, chat, text) => ({ update_id: id, message: { chat: { id: chat }, date: Math.floor(FIXED / 1000), text } });
   const tgQueue = [(FAKE.tgBefore || []).map((t, i) => tgMsg(100 + i, t[0], t[1])), (FAKE.tgAfter || []).map((t, i) => tgMsg(200 + i, t[0], t[1]))];
@@ -65,6 +66,8 @@ if (process.argv[2] === 'child') {
       const send = o => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)); };
       if (p === '/bottest-token/getUpdates') return send({ ok: true, result: tgQueue.shift() || [] });
       if (p === '/bottest-token/sendMessage') { tgSent.push(JSON.parse(body)); return send({ ok: true, result: { message_id: tgSent.length } }); }
+      if (p === '/v2/clock' && FAKE.clockFail) { res.statusCode = 500; return send({ message: 'down' }); }
+      if (p.startsWith('/v2/positions/') && req.method === 'GET') { const one = (FAKE.positions || []).find(x => x.symbol === decodeURIComponent(p.split('/').pop())); if (!one) { res.statusCode = 404; return send({ message: 'position does not exist' }); } return send(one); }
       if (p === '/v2/clock') return send({ is_open: !FAKE.closed, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
       if (p === '/v2/account') return send({ equity: '100000', last_equity: '100000', cash: '100000', buying_power: '400000', pattern_day_trader: false, daytrade_count: 0, status: 'ACTIVE', multiplier: '4' });
       if (p === '/v2/positions' && req.method === 'GET') return send(FAKE.positions || []);
@@ -105,6 +108,7 @@ if (process.argv[2] === 'child') {
   if (FAKE.tg) await bot.tgPollCycle();
   const tc0 = REAL.now(); await bot.botCycle({ journal: !!FAKE.closed }); const cycleMs = REAL.now() - tc0;
   if (FAKE.tg) await bot.tgPollCycle();
+  if (FAKE.positionsAfter) { FAKE.positions = FAKE.positionsAfter; if (FAKE.fillsAfter) FAKE.fills = FAKE.fillsAfter; }
   if (FAKE.cycles > 1) for (let k = 1; k < FAKE.cycles; k++) await bot.botCycle({ journal: true });   // a longer session: the journal is rewritten several times
   let fast = null;
   if (FAKE.fast) { const before = orders.length; FAKE.positions = FAKE.fast.positions; await bot.spyFast(); fast = { placed: orders.slice(before), hasOpen: bot.spyHasOpen() }; }
@@ -112,7 +116,7 @@ if (process.argv[2] === 'child') {
   if (FAKE.tick2) { const before = orders.length; const ok = await bot.spyEnter(FAKE.tick2); tickEntry = { ok, placed: orders.slice(before) }; }
   if (FAKE.tick) { const before = orders.length; const ok = await bot.spyEnter(FAKE.tick); const again = await bot.spyEnter(FAKE.tick); tickEntry = { ok, again, placed: orders.slice(before), open: bot.spyOpenSymbols() }; }
   let quoteExit = null;
-  if (FAKE.quote2) { const before = orders.length; await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); quoteExit = { placed: orders.slice(before), deletes: [...deletes] }; }
+  if (FAKE.quote2) { if (FAKE.quoteGone) FAKE.positions = []; const before = orders.length; await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); quoteExit = { placed: orders.slice(before), deletes: [...deletes] }; }
   const spyW = bot.spyWatch();
   server.closeAllConnections && server.closeAllConnections(); server.close(); dataServer.closeAllConnections && dataServer.closeAllConnections(); dataServer.close();
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
@@ -422,5 +426,25 @@ const PT = run({ ...SO, spyTradePct: 50 }, { bars5: { SPY: spyUp }, live: { SPY:
 check('SPY money per trade 50% on the instant tick path too: at most $2,500', () => { const sp = PT.tickEntry.placed.filter(o => o.side === 'buy').reduce((t, o) => t + +o.qty * +o.limit_price * 100, 0); assert.ok(PT.tickEntry.ok && sp <= 2500 && sp > 2000, 'spent ' + sp + ' ' + JSON.stringify(PT.tickEntry)); });
 const PF = run({ ...SO, spyTradePct: 100 }, { positions: [{ ...spyPos(2.0), qty: '15', market_value: '3000' }], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
 check('SPY money per trade never exceeds what is free: with $3,000 already in a trade, the sleeve does not open a second one (one at a time)', () => assert.ok(!PF.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol)), JSON.stringify(PF.orders)));
+
+// ---- second audit: false halt after a sale, day-trade money, STOP before the clock, the fast lane and quote lane ----
+const callA = { symbol: 'DIP261113C00111000', qty: '20', avg_entry_price: '2.5', current_price: '2.5', lastday_price: '2.5', market_value: '5000', unrealized_pl: '0', unrealized_plpc: '0' };
+const callB = { ...callA, symbol: 'QUIET261113C00210000' };
+const callHist = [callA, callB].map(c => ({ symbol: c.symbol, side: 'buy', status: 'filled', client_order_id: 'sd-q-' + c.symbol + '-20261023-20-ab', qty: '20', limit_price: '2.5', filled_at: '2026-10-23T13:40:00Z' }));
+const boughtToday = [{ symbol: callA.symbol, side: 'buy', qty: '20', price: '2.5', order_id: 'b1', transaction_time: '2026-10-23T13:40:00Z' }];
+const FH = run({ stocks: true, options: true, symbols: ['DIP'], preset: 'custom', maxHeat: 15 }, { positions: [callA, callB], hist: callHist, fills: boughtToday, positionsAfter: [callB], cycles: 2 });
+check('false halt: a CALL sold at a profit whose sell fill is not listed yet does NOT stop the CALL part, and the other CALL is not sold', () => {
+  assert.ok(!(FH.split && FH.split.call && FH.split.call.halted), JSON.stringify(FH.split && FH.split.call));
+  assert.ok(!FH.orders.some(o => o.symbol === callB.symbol && o.side === 'sell' && o.type === 'market'), JSON.stringify(FH.orders.filter(o => o.side === 'sell')));
+});
+const DTM = run({ ...DT, symbols: ['ORB', 'ORB2'], preset: 'custom', callSharePct: 60, putSharePct: 30, spySharePct: 5, maxHeat: 15 });
+check('day trading: two setups in one check share the stock money — together they never exceed the $5,000 stock share', () => { const spent = DTM.orders.filter(o => o.side === 'buy' && /^ORB2?$/.test(o.symbol)).reduce((t, o) => t + +o.qty * +o.limit_price, 0); assert.ok(spent > 0 && spent <= 5000 + 1, 'spent ' + spent + ' ' + JSON.stringify(DTM.orders.map(o => o.symbol + ' ' + o.qty))); });
+const KS2 = run({ stocks: true, options: true, symbols: ['DIP'] }, { stop: true, clockFail: true, positions: [{ symbol: 'AAPL', qty: '5', avg_entry_price: '200', current_price: '198', market_value: '990', unrealized_pl: '-10', unrealized_plpc: '-0.01' }] });
+check('bot/STOP works even when the broker clock is down (it is checked before any other call)', () => assert.ok(KS2.deletes.includes('all-orders') && KS2.deletes.includes('all-positions'), JSON.stringify(KS2.deletes)));
+const manualSpy2 = { ...spyPos(1.5), symbol: 'SPY261024C00510000' };
+const FL = run(SO, { positions: [spyPos(2.1), manualSpy2], hist: spyBuy(596).concat([{ symbol: manualSpy2.symbol, side: 'buy', status: 'filled', client_order_id: 'hand-made', qty: '20', limit_price: '2.05' }]), bars5: { SPY: spyUp }, live: { SPY: 502.2 }, fast: { positions: [spyPos(2.1), manualSpy2] } });
+check('SPY fast lane: a SPY option bought by hand (down 27%) is left alone; only the sleeve\'s own trade is managed', () => assert.ok(!FL.orders.some(o => o.symbol === manualSpy2.symbol), JSON.stringify(FL.orders)));
+const QG = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 }, quote2: { sym: spySym, bp: 1.70, ap: 1.74 }, quoteGone: true });
+check('SPY quote exit: if the option is already gone (take-profit filled), a late stop quote sells nothing', () => assert.equal(QG.quoteExit.placed.length, 0, JSON.stringify(QG.quoteExit)));
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

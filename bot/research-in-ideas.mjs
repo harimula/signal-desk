@@ -43,17 +43,18 @@ function run(o) { const pre = runOnce({ ...o, noTax: true }), post = runOnce(o);
 function runOnce({ data, cal, from, kind, pos = 0.10, maxPos = 10, top = 20, safe = false, nifty, noTax = false }) {
   const days = cal.filter(d => d >= from);
   let cash = STAKE; const lots = {};                                      // sym -> [{ sh, cost (per share, incl. buying cost), d }]
-  const yr = {}, Y = d => d.slice(0, 4); let carry = 0, trades = 0, wins = 0;
+  const yr = {}, Y = d => d.slice(0, 4); let carrySt = 0, carryLt = 0, trades = 0, wins = 0;   // carried-forward losses, kept apart: an LT loss may only offset LT gains
   const book = (d, gain, held) => { const y = Y(d); const b = yr[y] = yr[y] || { st: 0, lt: 0, tax: 0 }; if (held > 365) b.lt += gain; else b.st += gain; trades++; if (gain > 0) wins++; };
   const sell = (sym, px, d) => { for (const l of lots[sym] || []) { const pr = l.sh * px * (1 - COST); cash += pr; book(d, pr - l.sh * l.cost, (Date.parse(d) - Date.parse(l.d)) / 864e5); } delete lots[sym]; };
   const buy = (sym, px, d, money) => { const sh = Math.floor(money / (px * (1 + COST))); if (sh < 1) return false; cash -= sh * px * (1 + COST); (lots[sym] = lots[sym] || []).push({ sh, cost: px * (1 + COST), d }); return true; };
   const value = (i, field = 'c') => cash + Object.entries(lots).reduce((t, [s, L]) => { const D = data[s], j = D.idx[days[i]] ?? D.lastIdx(days[i]); return t + L.reduce((u, l) => u + l.sh * (j != null ? D.B[j][field] : l.cost), 0); }, 0);
   const taxYear = y => {                                                   // Indian set-off: ST loss vs ST then LT; LT loss vs LT only; carry the rest
     const b = yr[y] || { st: 0, lt: 0 }; let st = b.st, lt = b.lt;
-    if (carry < 0) { const use = Math.min(-carry, Math.max(0, st)); st -= use; carry += use; const use2 = Math.min(-carry, Math.max(0, lt)); lt -= use2; carry += use2; }
-    if (st < 0) { const use = Math.min(-st, Math.max(0, lt)); lt -= use; st += use; }
+    if (carrySt < 0) { const u = Math.min(-carrySt, Math.max(0, st)); st -= u; carrySt += u; const u2 = Math.min(-carrySt, Math.max(0, lt)); lt -= u2; carrySt += u2; }   // ST losses: against ST, then LT
+    if (carryLt < 0) { const u = Math.min(-carryLt, Math.max(0, lt)); lt -= u; carryLt += u; }                                                                  // LT losses: against LT only
+    if (st < 0) { const u = Math.min(-st, Math.max(0, lt)); lt -= u; st += u; }                                                                                  // this year's ST loss vs this year's LT gain
     const tax = noTax ? 0 : ST * Math.max(0, st) + LT * Math.max(0, lt - LT_FREE);
-    carry += Math.min(0, st) + Math.min(0, lt);
+    carrySt += Math.min(0, st); carryLt += Math.min(0, lt);
     (yr[y] = yr[y] || { st: 0, lt: 0 }).tax = tax; cash -= tax; return tax;
   };
   const curve = [], yearEnd = {}; let peak = STAKE, maxDD = 0;
@@ -86,13 +87,13 @@ function runOnce({ data, cal, from, kind, pos = 0.10, maxPos = 10, top = 20, saf
 }
 function report({ curve, yearEnd, yr, preTaxEnd, afterEnd, maxDD, trades, wins, from, to }) {
   // per calendar year: before tax (mark-to-market) and after tax (what the account kept, tax paid at year end)
-  const years = {}; let prevAfter = STAKE, prevPre = STAKE;
+  const years = {}; let prevAfter = STAKE;
   const preAtYearEnd = {}; for (const [d, v] of curve) preAtYearEnd[d.slice(0, 4)] = v;
   const ys = Object.keys(yearEnd).sort();
   for (const y of ys) {
     const b = yr[y] || { tax: 0 }, endAfter = yearEnd[y], endPre = endAfter + (b.tax || 0);
     years[y] = { pre: Math.round((endPre / prevAfter - 1) * 1000) / 10, after: Math.round((endAfter / prevAfter - 1) * 1000) / 10, tax: Math.round(b.tax || 0) };
-    prevAfter = endAfter; prevPre = endPre;
+    prevAfter = endAfter;
   }
   return { from, to, preTaxEnd: Math.round(preTaxEnd), afterEnd: Math.round(afterEnd), maxDD: Math.round(maxDD * 1000) / 10, trades, winRate: trades ? Math.round(wins / trades * 1000) / 10 : 0, years, taxPaid: Math.round(Object.values(yr).reduce((t, b) => t + (b.tax || 0), 0)) };
 }

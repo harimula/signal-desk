@@ -94,7 +94,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <main>
 <h1>What every bot setting does — with a worked example</h1>
 <p class="lede">One entry per control on the <b>Bot settings</b> tab: what it changes, the default, your current value, the allowed range, and a concrete example in dollars so you can see what the number actually does. Defaults marked <span class="tag tested">tested</span> are the values the 33-year research used. <span class="tag exp">experimental</span> parts were never tested on history.</p>
-<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · <b>last updated 2026-10-25</b> (SPY money per trade; earlier: full audit, worked examples for every setting)</p>
+<p class="stamp">Every field in Bot settings also explains itself: hover a label (tap it on a phone). · Kept in step with the settings tab on every change · <b>last updated 2026-10-25</b> (second audit; SPY money per trade; tickers checked before saving)</p>
 
 <section id="how">
 <h2>How settings work<small>where they live and when they take effect</small></h2>
@@ -137,7 +137,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 
 <section id="s2">
 <h2>2 · Risk profile<small>how much the bot may lose, per trade and in total</small></h2>
-<div class="s"><h3>Preset: Conservative / Balanced / Aggressive</h3><div class="meta">Default <b>Balanced</b> <span class="tag tested">tested</span> · <b>yours: Aggressive (now “custom”, because you changed values after picking it)</b></div><p>A preset fills in the seven risk numbers and the two sizing numbers below at once. Change any one of them and the preset shows “custom”.</p>
+<div class="s"><h3>Preset: Conservative / Balanced / Aggressive</h3><div class="meta">Default <b>Balanced</b> <span class="tag tested">tested</span> · <b>yours: Aggressive</b></div><p>A preset fills in the seven risk numbers and the two sizing numbers below at once. Change any one of them and the preset shows “custom”.</p>
 <table style="font-size:13px;border-collapse:collapse;margin-top:6px"><tr><th style="text-align:left;padding:2px 10px 2px 0">Setting</th><th>Conservative</th><th>Balanced</th><th>Aggressive</th></tr>
 <tr><td>Risk per stock / option trade</td><td>0.25% / 0.25%</td><td>0.5% / 0.5%</td><td><b>1% / 1%</b></td></tr>
 <tr><td>Total risk cap</td><td>1.5%</td><td>3%</td><td><b>6%</b></td></tr>
@@ -282,7 +282,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--surface2);padding:
 <div class="s"><h3>Scan the whole market / Use my list</h3><div class="meta">Default <b>my list</b> (30 large stocks) · <b>yours: scan</b></div><p><b>Scan:</b> every morning the bot ranks every tradable US stock by trading volume and watches the most-traded ones (below). <b>List:</b> only the tickers you type. The research used a fixed list of 39 large stocks; the scan was not tested but finds the same kind of liquid names plus more of them.</p><p class="ex"><b>Example.</b> With the scan at 200, ACME is watched only if it is among the 200 busiest stocks that morning; a thinly traded small company never is, however sharp its dip.</p></div>
 <div class="s"><h3>How many stocks to watch</h3><div class="meta">Default <b>200</b> · range 50–400</div><p>More stocks = more dips to choose from (leaders first then matters more) and a longer check each beat.</p></div>
 <div class="s"><h3>Minimum share price</h3><div class="meta">Default <b>$5</b> · range $1–500</div><p>Skips penny stocks, which dip for reasons the strategy cannot read.</p></div>
-<div class="s"><h3>My list</h3><div class="meta">Up to 60 tickers · used when “Use my list” is chosen</div></div>
+<div class="s"><h3>My list</h3><div class="meta">Up to 60 tickers · used when “Use my list” is chosen</div><p>US symbols in capitals; a class letter uses a dot (BRK.B, not BRK-B). The page refuses a list with a ticker the bot could not use, an empty list, or more than 60.</p></div>
 </section>
 
 <section id="s7">
