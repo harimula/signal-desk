@@ -11,10 +11,15 @@ last 30% of years (2016–2026), which were never used to choose anything:
 
 | Strategy | Out-of-sample yearly return | Sharpe | Max drawdown |
 |---|---|---|---|
-| **RSI-2 dip buying (what the bot runs)** | **+16.4%** | **1.45** | **−11.9%** |
-| Old intraday pullback rules (retired) | −4.1% | −0.86 | −35.0% |
-| Trend breakout | +7.2% | 0.70 | −13.6% |
-| SPY buy & hold | +13.3% | 0.79 | −34.1% |
+| **RSI-2 dip buying (what the bot runs)** | **+3.3%** | **0.41** | **−14.5%** |
+| Old intraday pullback rules (retired) | −6.6% | −2.36 | −50.0% |
+| Trend breakout | +9.2% | 0.90 | −11.9% |
+| SPY buy & hold | +13.1% | 0.78 | −34.1% |
+
+**Corrected 2026-10-25.** Earlier versions of this table showed RSI-2 at +16.4% a year. The
+simulator let money from a 4 PM sale pay for a 9:30 AM buy on the same day (look-ahead); fixed,
+RSI-2 makes +8.7% a year over all 33 years (SPY +8.8%, with a −56% worst fall against −15%) but
+only +3.3% a year in the out-of-sample decade, well behind simply holding SPY.
 
 Full table: `bot/research_report.md` (re-run: Actions → strategy-research → Run workflow).
 Survivorship bias (today's big companies, looking back) flatters every result — treat them
@@ -23,8 +28,8 @@ as an upper bound. Past results do not predict future results.
 ## The strategy
 - **Buy:** a stock whose last close is above its 200-day average with RSI-2 below 10 (a
   sharp dip inside an uptrend). Bought in the first trading hour (from 9:45, after 10:15 on
-  CPI/jobs days), deepest dip first. Skipped if it already bounced 1%+ since yesterday's close.
-- **Sell:** in the last 10 minutes of the session once the price is above its 5-day average,
+  CPI/jobs days), market leaders first (or deepest dip first — a setting). Skipped if it already bounced 1%+ since yesterday's close.
+- **Sell:** at +10% (take-profit, changeable), otherwise in the last 10 minutes of the session once the price is above its 5-day average,
   or after 10 sessions. No stop order — the version with a stop did worse in testing — but a
   25% hard floor stays on as a disaster brake.
 - **CALLs** on the same dips: strike nearest the price, expiry 14–35 days. Sold with the
