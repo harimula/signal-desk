@@ -23,6 +23,9 @@ jobs:
       - run: |
           git config user.name "signal-desk-bot"
           git config user.email "bot@users.noreply.github.com"
+          # a run that waited in the queue was checked out when it was queued: bring in the journal, settings and Pause
+          # the previous session pushed since, or it would resume from a stale day-state (a Telegram /pause, alerts sent)
+          git pull -q --ff-only origin main || git pull -q --rebase origin main || true
           node bot/live.mjs
         env:
           RUN_MINUTES: '345'
@@ -33,21 +36,8 @@ jobs:
           ALPACA_LIVE_KEY: ${{ secrets.ALPACA_LIVE_KEY }}
           ALPACA_LIVE_SECRET: ${{ secrets.ALPACA_LIVE_SECRET }}
           JOURNAL_KEY: ${{ secrets.JOURNAL_KEY }}
+          JOURNAL_RESET: ${{ vars.JOURNAL_RESET }}   # set the repository variable to 1 for one session to start a new journal after a passphrase change
           GITHUB_TOKEN: ${{ github.token }}   # lets a running session see the page's Pause (bot/STOP) within seconds
-          BOT_RISK_PCT: ${{ vars.BOT_RISK_PCT }}
-          BOT_MAX_HEAT: ${{ vars.BOT_MAX_HEAT }}
-          BOT_MAX_PER_SECTOR: ${{ vars.BOT_MAX_PER_SECTOR }}
-          BOT_PER_TRADE: ${{ vars.BOT_PER_TRADE }}
-          BOT_OPT_BUDGET: ${{ vars.BOT_OPT_BUDGET }}
-          BOT_MAX_POSITIONS: ${{ vars.BOT_MAX_POSITIONS }}
-          BOT_MAX_OPTIONS: ${{ vars.BOT_MAX_OPTIONS }}
-          BOT_HOLD_LOSS: ${{ vars.BOT_HOLD_LOSS }}
-          BOT_HOLD_FLOOR: ${{ vars.BOT_HOLD_FLOOR }}
-          BOT_TAKE_PROFIT: ${{ vars.BOT_TAKE_PROFIT }}
-          BOT_OPT_TAKE_PROFIT: ${{ vars.BOT_OPT_TAKE_PROFIT }}
-          BOT_MAX_ENTRIES_PER_SYM: ${{ vars.BOT_MAX_ENTRIES_PER_SYM }}
-          BOT_STOCKS: ${{ vars.BOT_STOCKS }}
-          BOT_OPTIONS: ${{ vars.BOT_OPTIONS }}
       - run: |
           [ -f bot/journal.json ] || exit 0
           git config user.name "signal-desk-bot"
@@ -56,6 +46,7 @@ jobs:
           git add bot/scan.json 2>/dev/null || true
           git diff --cached --quiet && exit 0
           git commit -m "Bot journal"
+          git ls-files --error-unmatch bot/STOP >/dev/null 2>&1 || rm -f bot/STOP   # the untracked Pause mirror would block the pull
           for i in 1 2 3; do
             git push && exit 0
             git pull --rebase -X theirs origin main || git rebase --abort

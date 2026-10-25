@@ -5,9 +5,9 @@
 //  - A decision cycle also runs on a steady beat (every 2s; every 1s in the last 10 minutes) as a safety net,
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
-import { execSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols } from './bot.mjs';
+import { HAVE_KEYS, closeMins, loadCalendar, setPublishing, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols } from './bot.mjs';
 import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { summary } from './config.mjs';
 
@@ -49,25 +49,31 @@ async function pollStop() {
     else if (r.status === 404 && fs.existsSync('bot/STOP')) { fs.unlinkSync('bot/STOP'); console.log('\u25b6 STOP removed on the page \u2014 trading resumes'); wake('resume'); }
   } catch (e) { console.log('stop poll failed', e.message); }
 }
+// Publishing the journal runs git in a child process, so a slow or unreachable GitHub never stalls the trading loop
+// (stops, SPY exits and quotes keep running). While it runs, the bot does not rewrite the journal file.
+let committing = false;
+const COMMIT_SH = `git add bot/journal.json; git add bot/scan.json live.json news.json 2>/dev/null || true
+git diff --cached --quiet && exit 0
+git commit -q -m "Bot journal" || exit 0
+timeout 30 git push -q && exit 0
+git ls-files --error-unmatch bot/STOP >/dev/null 2>&1 || rm -f bot/STOP   # the untracked Pause mirror would block the pull
+if timeout 45 git pull -q --rebase --autostash -X theirs origin main; then timeout 30 git push -q && exit 0; else git rebase --abort 2>/dev/null; fi
+exit 1`;
 function commit() {
-  if (process.env.BOT_NO_COMMIT === '1') return;
-  const sh = (cmd, ms = 60000) => execSync(cmd, { stdio: 'pipe', timeout: ms });          // never let git block the trading loop for long
+  if (process.env.BOT_NO_COMMIT === '1' || committing) return Promise.resolve();
+  committing = true; setPublishing(true);
   let saved = null; try { saved = fs.readFileSync('bot/journal.json'); } catch (e) {}
-  try {
-    sh('git add bot/journal.json && (git add bot/scan.json live.json news.json 2>/dev/null || true)');
-    if (execSync('git diff --cached --quiet || echo changed', { stdio: 'pipe', timeout: 30000 }).toString().trim() !== 'changed') return;
-    sh('git commit -q -m "Bot journal"');
-    try { sh('git push -q'); }
-    catch (e) {
-      try {
-        // the local bot/STOP mirror (see pollStop) is untracked; if the page's STOP commit arrives it would block the pull
-        try { execSync('git ls-files --error-unmatch bot/STOP', { stdio: 'pipe' }); } catch (e3) { try { fs.unlinkSync('bot/STOP'); } catch (e4) {} }
-        sh('git pull -q --rebase --autostash -X theirs origin main'); sh('git push -q');
-      }
-      catch (e2) { try { sh('git rebase --abort', 20000); } catch (e3) {} console.log('commit skipped: ' + String(e2.message).split('\n')[0]); }
-    }
-  } catch (e) { console.log('commit skipped:', String(e.message).split('\n')[0]); }
-  finally { if (saved) { try { const now = fs.readFileSync('bot/journal.json'); if (!now.length) fs.writeFileSync('bot/journal.json', saved); } catch (e) { fs.writeFileSync('bot/journal.json', saved); } } }   // a reset must never lose the journal
+  return new Promise(resolve => {
+    let err = '';
+    const c = spawn('bash', ['-c', COMMIT_SH], { stdio: ['ignore', 'ignore', 'pipe'], timeout: 150000 });
+    c.stderr.on('data', d => { err += d; });
+    const done = code => {
+      if (code) console.log('commit skipped:', (err.split('\n').find(Boolean) || 'exit ' + code).slice(0, 160));
+      if (saved) { try { const now = fs.readFileSync('bot/journal.json'); if (!now.length) fs.writeFileSync('bot/journal.json', saved); } catch (e) { fs.writeFileSync('bot/journal.json', saved); } }   // a reset must never lose the journal
+      committing = false; setPublishing(false); resolve();
+    };
+    c.on('error', () => done(1)); c.on('exit', code => done(code));
+  });
 }
 
 // ---- site prices: GitHub's scheduler often skips the 10-minute refresh-prices runs during market hours, so the
@@ -164,44 +170,47 @@ process.on('unhandledRejection', e => console.log('unhandled rejection', redact(
 
 // ---- main loop ----
 const m0 = setNow();
-// GitHub's scheduler often starts runs 10-20 minutes late, so the workflow also fires from 8:45 ET and the run waits here
+// GitHub's scheduler often starts runs late, so the workflow also fires from 8:45 ET (7:45 in winter) and the run waits here
 // until 9:20 instead of exiting: the session is up before the open even when the 9:20 start is delayed.
-if (m0 >= 8 * 60 + 45 && m0 < 9 * 60 + 20) { console.log(`Early start (${Math.floor(m0 / 60)}:${String(m0 % 60).padStart(2, '0')} ET) - waiting until 9:20 ET.`); while (setNow() < 9 * 60 + 20) await sleep(15000); }
+if (m0 >= 7 * 60 + 30 && m0 < 9 * 60 + 20) {   // 7:30: in winter (EST) the 12:45 UTC schedule fires at 7:45 ET
+  console.log(`Early start (${Math.floor(m0 / 60)}:${String(m0 % 60).padStart(2, '0')} ET) - waiting until 9:20 ET.`); while (setNow() < 9 * 60 + 20) await sleep(15000); }   // the session's life counts from the process start: GitHub kills a job after 358 minutes, early wait included
 const m1 = setNow();
-if (m1 < 9 * 60 + 20 || m1 >= 16 * 60 + 5) { console.log('Outside 9:20-16:05 ET - next scheduled run will take over.'); process.exit(0); }
+await loadCalendar();                                                   // today's real close (13:00 on early-close days)
+if (m1 < 9 * 60 + 20 || m1 >= closeMins() + 5) { console.log('Outside 9:20-16:05 ET - next scheduled run will take over.'); process.exit(0); }
 // Started after the close (the run that was queued behind the day's session): if that session reached the close and wrote
 // its journal, there is nothing left to do — rewriting the journal from an empty memory or sending a second day summary
 // would only do harm. If it died early (journal older than 3:55 PM), fall through: one cycle, journal, summary, exit.
-if (m1 >= 16 * 60) {
+if (m1 >= closeMins()) {
   const js = journalStamp(), todayET = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((o, p) => (o[p.type] = p.value, o), {});
-  if (js && js.day === todayET.year + todayET.month + todayET.day && js.mins >= 15 * 60 + 55) { console.log(`Market closed and today's session already finished its journal at ${js.at} - nothing to do.`); process.exit(0); }
+  if (js && js.day === todayET.year + todayET.month + todayET.day && (js.done || js.mins >= closeMins())) { console.log(`Market closed and today's session already finished its journal at ${js.at} - nothing to do.`); process.exit(0); }
   console.log('Market closed and today\'s journal is incomplete - running one closing cycle.');
 }
 // first run of the day (no journal from today yet, market hours): send the good-morning alert once the first cycle is done
 const firstToday = (() => { const js = journalStamp(); const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).replace(/-/g, ''); return !js || js.day !== d; })();
-let helloSent = !firstToday || m1 >= 16 * 60;
+let helloSent = !firstToday || m1 >= closeMins();
 connectStreams();
 await pollConfig();
 while (Date.now() - born < LIFE && !stopping) {
   const mins = setNow();
-  if (mins >= 16 * 60 + 5) break;
+  if (mins >= closeMins() + 5) break;
   await pollConfig(); await pollStop();
-  const beat = mins >= 15 * 60 + 50 ? BEAT_CLOSE : BEAT;
+  const beat = mins >= closeMins() - 10 ? BEAT_CLOSE : BEAT;
   let why = queue.shift() || (Date.now() - lastFull >= beat ? 'beat' : null);
   if (!why && !(tradeOk && dataOk) && Date.now() - lastFastCheck >= 1000) { lastFastCheck = Date.now(); try { why = await fastCheck(); errors = 0; } catch (e) { errors++; if (errors > 20) await sleep(5000); } }   // streams down: poll instead, at most once a second
   if (why && !cycling && !spyBusy && Date.now() - lastFull >= MIN_GAP) {
     cycling = true;
     if (why !== 'beat') console.log('▶', why);
     try {
-      const r = await botCycle({ journal: Date.now() - lastJournal >= JOURNAL_EVERY, floors: setFloor, held: heldUnds });
-      if (Date.now() - lastJournal >= JOURNAL_EVERY) lastJournal = Date.now();
+      const jNow = !committing && Date.now() - lastJournal >= JOURNAL_EVERY;   // never rewrite the journal while git is publishing it
+      const r = await botCycle({ journal: jNow, floors: setFloor, held: heldUnds });
+      if (jNow) lastJournal = Date.now();
       if (!helloSent && r.open) { helloSent = true; await morningHello(); }
       const ck = clockInfo();
       if (!r.open && ck && !ck.is_open) {
         // closed: leave only when the day is over or the next open is not today; before the bell, wait for it (the 9:20 start must not exit)
         const todayET = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
         const openDay = ck.next_open ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(ck.next_open)) : '';
-        if (setNow() >= 16 * 60 || openDay !== todayET) { console.log('Market is closed - stopping.'); break; }
+        if (setNow() >= closeMins() || openDay !== todayET) { console.log('Market is closed - stopping.'); break; }
         const waitMs = Math.max(5000, Math.min(60000, Date.parse(ck.next_open) - Date.now()));
         console.log(`Market opens at ${ck.next_open} - waiting.`); await sleep(waitMs);
       }
@@ -212,13 +221,14 @@ while (Date.now() - born < LIFE && !stopping) {
   if (Date.now() - lastSpyFast >= 1000 && !cycling && !spyBusy && spyHasOpen()) { spyBusy = true; lastSpyFast = Date.now(); spyFast().catch(e => console.log('spy fast lane', e.message)).finally(() => { spyBusy = false; resubscribeOptions(); }); }   // 1-second exits while a SPY trade is open (fallback to the quote stream)
   if (Date.now() - lastPrices >= PRICES_EVERY && !pricesBusy) refreshPrices();
   if (Date.now() - lastTg >= 3000 && !tgBusy) { tgBusy = true; lastTg = Date.now(); tgPollCycle().finally(() => { tgBusy = false; }); }   // Telegram commands, off the decision path
-  if (Date.now() - lastCommit >= COMMIT_EVERY) { commit(); lastCommit = Date.now(); }
+  if (Date.now() - lastCommit >= COMMIT_EVERY && !committing) { lastCommit = Date.now(); commit(); }
   if (Date.now() - lastBeat >= 60000) { lastBeat = Date.now(); heartbeat(); }
   await sleep(queue.length ? 50 : 200);
 }
+while (committing) await sleep(500);                                    // let a publish in progress finish before the final journal write
 try { await botCycle({ journal: true }); } catch (e) { console.log('final cycle error', e.message); }
-if (setNow() >= 16 * 60 && !stopping) await eodReport();   // the session that reaches the close sends the day's summary
-commit();
+if (setNow() >= closeMins() && !stopping) await eodReport();   // the session that reaches the close sends the day's summary
+await commit();
 try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); optWs && optWs.close(); } catch (e) {}
 console.log('Session runner finished.');
 process.exit(0);

@@ -17,8 +17,9 @@ const ageMin = j && j.at ? (Date.now() - Date.parse(j.at)) / 60000 : Infinity;
 console.log(`journal age ${isFinite(ageMin) ? Math.round(ageMin) + ' min' : 'unknown'}`);
 // a holiday: the bot exits at once ("Market closed") and never writes — tolerate a journal from before today's open
 if (ageMin <= MAX_MIN) process.exit(0);
-if (isFinite(ageMin) && (ageMin - MAX_MIN) % 60 >= 15) { console.log('already alerted this hour'); process.exit(0); }   // one alert per hour while it stays down
-const msg = isFinite(ageMin) ? `⚠️ Bot has not checked in for ${Math.round(ageMin)} minutes during market hours. Open the Actions tab on GitHub: paper-trade-bot may have stopped. Protective stops are at the broker.` : '⚠️ Bot journal unreadable — check the site and the Actions tab.';
+// no 'once an hour' de-duplication: GitHub fires this schedule only every ~15-45 minutes, and a modulo window can miss
+// every run while the bot stays down. One message per watchdog run while it is down is the safer side.
+const msg = isFinite(ageMin) ? `⚠️ Bot has not checked in for ${Math.round(ageMin)} minutes during market hours. Open the Actions tab on GitHub: paper-trade-bot may have stopped. Stock stops are at the broker; option exits are not — check open options in the Alpaca dashboard.` : '⚠️ Bot journal unreadable — check the site and the Actions tab.';
 console.log(msg);
   if (process.env.TELEGRAM_TOKEN && process.env.TELEGRAM_CHAT) await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN.trim()}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT.trim(), text: '\ud83d\udea8 Signal Desk watchdog\n' + msg }) }).catch(() => {});
 process.exit(0);

@@ -109,16 +109,16 @@ async function load5m(syms) {
 }
 async function dayTradeCycle(ctx) {
   const { equity, acct, positions, hist, liveOrders, G, capHit, slBudget, sellsFor, cid } = ctx, halt = ctx.halt || { stock: capHit, call: capHit, put: capHit };
-  const dayC = { start: hhmm(CFG.dayStart), end: hhmm(CFG.dayEnd), rvol: CFG.dayRvol, target: CFG.dayTarget, timeStop: CFG.dayTimeStop, orMin: CFG.dayOrMin };
+  const dayC = { start: hhmm(CFG.dayStart), end: Math.min(hhmm(CFG.dayEnd), CLOSE - 30), rvol: CFG.dayRvol, target: CFG.dayTarget, timeStop: CFG.dayTimeStop, orMin: CFG.dayOrMin };
   // open day trades: entry order id tells us side, stop, target and when it opened
   const dayPos = [];
   for (const p of positions) {
-    const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && /^sd-d[cp]?-/.test(cid(o)) && o.symbol === p.symbol && cid(o).includes('-' + TODAY + '-'));   // today's day trade only: an old day-trade id must never capture a later swing position
+    const e = hist.find(o => o.side === 'buy' && bought(o) && /^sd-d[cp]?-/.test(cid(o)) && o.symbol === p.symbol && cid(o).includes('-' + TODAY + '-'));   // today's day trade only: an old day-trade id must never capture a later swing position
     const d = e && decodeDayId(cid(e)); if (!d) continue;
     dayPos.push({ p, e, d, und: isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol, opt: isOpt(p.symbol) });
   }
   if (!CFG.dayTrade && !dayPos.length) { lastDay = null; return; }
-  const todayIds = hist.filter(o => o.side === 'buy' && /^sd-d[cp]?-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
+  const todayIds = hist.filter(o => o.side === 'buy' && /^sd-d[cp]?-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && (bought(o) || !['canceled', 'expired', 'rejected'].includes(o.status)));   // a cancelled buy that filled in part still counts
   const tradesToday = todayIds.length, tradedSyms = new Set(todayIds.map(o => isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol));
   // cancel day entries that did not fill within 10 minutes (a day trade that is not filling has missed its moment)
   for (const o of liveOrders) if (o.side === 'buy' && /^sd-d[cp]?-/.test(cid(o)) && Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 10 * 60000) {
@@ -141,14 +141,14 @@ async function dayTradeCycle(ctx) {
       st.stop = tr.stop; pos.stop = tr.stop; act(`${p.symbol} ${tr.why} (${tr.stop})`);
       if (stopLeg && !DRY) await T('/v2/orders/' + stopLeg.id, { method: 'PATCH', body: JSON.stringify({ stop_price: String(tick(tr.stop)) }) }).then(() => act(`${p.symbol} broker stop moved to ${tick(tr.stop)}`)).catch(e => act(`${p.symbol} could not move the broker stop (${(e.message || e).slice(0, 60)}) \u2014 the bot watches it instead`));
     }
-    const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); delete dayState[p.symbol]; };
+    const out = async why => { const r = await closeOut(p.symbol, Math.abs(+p.qty), sells, why); if (r !== 'refused') delete dayState[p.symbol]; };   // keep the trail state if the sale was refused
     const plpc = +p.unrealized_plpc * 100;
     if (opt) {
       if (plpc >= CFG.dayOptTp) { await out(`${p.symbol} day trade +${plpc.toFixed(0)}% — option take-profit`); continue; }
       if (plpc <= -CFG.dayOptStop) { await out(`${p.symbol} day trade ${plpc.toFixed(0)}% — option stop`); continue; }
-      if (MINS >= 945) { await out(`${p.symbol} day trade — options flat by 3:45 PM`); continue; }
+      if (MINS >= CLOSE - 15) { await out(`${p.symbol} day trade — options flat 15 minutes before the close`); continue; }
     }
-    const x = dayExit({ pos, px, mins: MINS, cfg: dayC });
+    const x = dayExit({ pos, px, mins: MINS, cfg: { ...dayC, flat: (dayC.flat || 950) - EARLY() } });
     if (x && (x.kind === 'stop' || x.kind === 'target') && !opt && stopLeg) continue;      // the broker's own legs handle these; the bot only steps in where no leg exists
     if (x) { await out(`${p.symbol} day trade ${x.kind === 'flat' ? 'closed' : 'exit'} — ${x.why} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(1)}%)`); continue; }
     if (!opt && !sells.length) await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'limit', limit_price: String(tick(d.target)), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} day trade — take-profit order at ${d.target}`);
@@ -197,7 +197,7 @@ async function dayTradeCycle(ctx) {
     }
   }
   lastDay = { at: new Date().toISOString(), on: CFG.dayTrade, market, spyVwap: bars5.SPY && bars5.SPY.length ? r2d(vwapOf(bars5.SPY)) : null, tradesToday: tradesToday + placed, max: CFG.dayMaxTrades, streak, idle,
-    window: `${CFG.dayStart}–${CFG.dayEnd} ET, flat by 3:50 PM`,
+    window: `${CFG.dayStart}–${CFG.dayEnd} ET, flat by ${EARLY() ? mmhh(CLOSE - 10) + ' (early close today)' : '3:50 PM'}`,
     setups: setups.slice(0, 12).map(x => ({ sym: x.sym, setup: x.setup, side: x.side, entry: x.entry, stop: x.stop, target: x.target, rvol: x.rvol, why: x.why, held: x.held })),
     open: dayPos.map(({ p, d, und, opt }) => ({ s: p.symbol, und, kind: opt ? (d.kind === 'dp' ? 'put' : 'call') : 'stock', side: d.side, qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * (opt ? 100 : 1)), cur: r2d(+p.current_price * (opt ? 100 : 1)), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, undPx: last[und] && last[und].p, stop: (dayState[p.symbol] || {}).stop || d.stop, target: d.target, opened: d.openMins })) };
 }
@@ -212,14 +212,15 @@ async function spyManage({ open, sellsFor, halt }) {
     const sells = sellsFor(p.symbol); if (sells.some(o => o.type === 'market')) continue;
     const qty = Math.abs(+p.qty), avg = +p.avg_entry_price, cur = +p.current_price, entry = avg > 0 ? avg : (d ? d.entry : avg);   // the fill price is the truth; the id's limit is the fallback
     const openedMins = d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null);
-    const out = async why => { spySelling.add(p.symbol); setTimeout(() => spySelling.delete(p.symbol), 60000); for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} SPY ${d ? d.kind.toUpperCase() : 'option'} ${why}`); delete spyState[p.symbol]; };
-    const x = spyExit({ entryPx: entry, optPx: cur, openedMins, mins: MINS, cfg: CFG });
+    const out = async why => { spySelling.add(p.symbol); setTimeout(() => spySelling.delete(p.symbol), 60000); const r = await closeOut(p.symbol, qty, sells, `${p.symbol} SPY ${d ? d.kind.toUpperCase() : 'option'} ${why}`); if (r === 'refused') { spySelling.delete(p.symbol); return; } delete spyState[p.symbol]; };   // refused: let the next check try again at once
+    const x = spyExit({ entryPx: entry, optPx: cur, openedMins, mins: MINS, cfg: { ...CFG, spyFlat: CFG.spyFlat - EARLY() } });
     if (x && x.kind === 'tp' && sells.some(o => o.type === 'limit')) continue;           // the resting take-profit order at the broker handles it
     if (x) { await out(x.why); continue; }
     if (halt.spy && spyCapHit) { await out(`\u2014 ${halt.spy}; closing`); continue; }   // the daily money limit closes what is open; a losing streak only stops new trades
     if (!sells.length && !(spyState[p.symbol] || {}).tpPlaced) {                            // resting take-profit, placed once
       spyState[p.symbol] = { tpPlaced: true };
-      await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(entry * (1 + CFG.spyTp / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} SPY option \u2014 take-profit order at +${CFG.spyTp}%`);
+      const tpOk = await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(entry * (1 + CFG.spyTp / 100), p.symbol)), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} SPY option \u2014 take-profit order at +${CFG.spyTp}%`);
+      if (!tpOk) delete spyState[p.symbol];                                                   // refused: try again next check
     }
   }
 }
@@ -246,8 +247,8 @@ let spyHeld = new Set();                                                 // ever
 const spyLvl = k => spyLevels.day === TODAY ? spyLevels[k] || 0 : 0;
 async function spyCycle(ctx) {
   const { equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid, snapAt = 0 } = ctx;
-  const open = positions.filter(p => isSpyOption(p.symbol)).map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && o.symbol === p.symbol && /^sd-y[cp]-/.test(cid(o))), d: null })).map(x => ({ ...x, d: x.e ? decodeSpyId(cid(x.e)) : null })).filter(x => x.d);   // the sleeve's own trades only — never touch a SPY option bought by hand
-  const todayIds = hist.filter(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
+  const open = positions.filter(p => isSpyOption(p.symbol)).map(p => ({ p, e: hist.find(o => o.side === 'buy' && bought(o) && o.symbol === p.symbol && /^sd-y[cp]-/.test(cid(o))), d: null })).map(x => ({ ...x, d: x.e ? decodeSpyId(cid(x.e)) : null })).filter(x => x.d);   // the sleeve's own trades only — never touch a SPY option bought by hand
+  const todayIds = hist.filter(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && (bought(o) || !['canceled', 'expired', 'rejected'].includes(o.status)));   // a cancelled buy that filled in part still counts
   const tradesToday = todayIds.length;
   if (!CFG.spyOn && !open.length) { lastSpy = { at: new Date().toISOString(), on: false, money: 0, used: 0, today: null, halted: null, idle: 'switched off', tradesToday, max: CFG.spyMaxTrades, open: [] }; return; }
   // unfilled entries older than 3 minutes have missed their moment
@@ -259,7 +260,7 @@ async function spyCycle(ctx) {
   // A SPY buy placed after this cycle's account picture was taken (by the live tick) is not in that picture: rebuilding
   // the sleeve's state from it would forget that order and its money. Keep the live state and decide again next cycle.
   const bars5 = await load5m([]), spyBars = bars5.SPY || [], px = ((await latestPrices(['SPY'])).SPY || {}).p;
-  const sig = CFG.spyOn ? spySignal({ bars: spyBars, px, mins: MINS, cfg: CFG }) : null;
+  const sig = CFG.spyOn ? spySignal({ bars: spyBars, px, mins: MINS, cfg: { ...CFG, spyEnd: EARLY() ? mmhh(Math.min(hhmmMin(CFG.spyEnd), CLOSE - 30)) : CFG.spyEnd } }) : null;   // no new SPY trades in the last 30 minutes of an early-close day
   const dayClosed = (fillsCache.closed || []).filter(c => isSpyOption(c.sym) && c.outT && c.outT.slice(0, 10) === ymdDash(Date.now()));
   const pdtBlock = equity < 25000 && +acct.daytrade_count >= 3 && !acct.pattern_day_trader;
   const pending = live.some(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)));
@@ -273,7 +274,7 @@ async function spyCycle(ctx) {
   const openRows = open.map(({ p, d, e }) => ({ s: p.symbol, id: e ? cid(e) : '', entry: +p.avg_entry_price || (d ? d.entry : 0), pending: false, kind: d ? d.kind : 'call', qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
   const keepPending = lastSpy && lastSpy.open ? lastSpy.open.filter(o => o.pending && live.some(l => l.symbol === o.s && l.side === 'buy')) : [];
   lastSpy = { at: new Date().toISOString(), on: !!CFG.spyOn, budget: G.budget || 1, money: r0(SIDE.spy.money), used: r0(SL_used(positions, live)), today: SIDE.spy.today ?? null, halted: halt.spy, idle, blocked: !!(pending || open.length >= maxOpen || (open.length && free < tradeMoney * 0.5)), maxOpen, tradesToday, max: CFG.spyMaxTrades, market: sig && sig.market || null, vwap: sig && sig.vwap || null, level: sig && sig.level || null, spyPx: px || null,
-    window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by 3:45 PM`, open: openRows.concat(keepPending), closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte, tradePct: CFG.spyTradePct, maxOpen } };
+    window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by ${EARLY() ? mmhh(CLOSE - 15) + ' (early close today)' : '3:45 PM'}`, open: openRows.concat(keepPending), closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte, tradePct: CFG.spyTradePct, maxOpen } };
   if (idle || !sig || !sig.side || Date.now() < spyPendingUntil || spyEntering || spyPlacedAt >= snapAt) return;   // a tick bought while this cycle was working: decide again next cycle
   await spyPlace(sig.side, px, sig.why, Math.min(tradeMoney, free) * (G.budget || 1), sig.level);   // one trade: its % of the SPY money, never more than is free
 }
@@ -296,7 +297,7 @@ async function spyPlaceInner(kind, px, why, budget, level) {
   const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[c.symbol];
   if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); return null; }
   if ((q.ap - q.bp) / q.ap > 0.05) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over 5%) \u2014 skipped`); return null; }
-  const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02)), qty = Math.floor(Math.max(0, budget) / (lim * 100));
+  const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02), c.symbol), qty = Math.floor(Math.max(0, budget) / (lim * 100));
   if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's SPY money ($${Math.round(budget)}, ${CFG.spyTradePct}% of the SPY share) \u2014 skipped`); return null; }
   const id = encodeSpyId(kind, c.symbol, lim, TODAY, MINS, rid());
   const placedOrder = await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: id },
@@ -312,12 +313,13 @@ async function spyPlaceInner(kind, px, why, budget, level) {
 export async function spyEnter(px) {
   const w = spyWatch(); if (!w || spyEntering || !HAVE_KEYS || Date.now() < spyPendingUntil || !lastSpy || Date.now() - Date.parse(lastSpy.at) > 90000) return false;
   if (!((w.market === 'up' && px > w.level) || (w.market === 'down' && px < w.level))) return false;
-  setNow(); const start = hhmmMin(CFG.spyStart), end = hhmmMin(CFG.spyEnd); if (MINS < start || MINS >= end) return false;
+  setNow(); const start = hhmmMin(CFG.spyStart), end = Math.min(hhmmMin(CFG.spyEnd), CLOSE - 30); if (MINS < start || MINS >= end) return false;
   const kind = w.market === 'up' ? 'call' : 'put';
   const sym = await spyPlace(kind, px, `SPY ${px} ${kind === 'call' ? 'broke above' : 'broke below'} ${w.level} (live tick)`, Math.min(lastSpy.money * (CFG.spyTradePct ?? 100) / 100, lastSpy.money - (lastSpy.used || 0)) * (lastSpy.budget || 1), w.level);
   return !!sym;
 }
 const hhmmMin = s => { const [h, m] = String(s).split(':').map(Number); return h * 60 + m; };
+const mmhh = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 // Quote-driven exit (live.mjs → options stream): the open option's own bid/ask just changed. Stop, time stop and flat are
 // decided here from the mid price; the take-profit is the resting limit order at the broker. One sell per position.
 export async function spyOnQuote(sym, bp, ap) {
@@ -325,16 +327,16 @@ export async function spyOnQuote(sym, bp, ap) {
   const row = lastSpy.open.find(o => o.s === sym); if (!row || row.pending || spySelling.has(sym)) return;
   const mid = (bp + ap) / 2; setNow();
   row.cur = r2d(mid * 100); row.pl = r2d((mid - row.entry) * 100 * (row.qty || 0)); row.plpc = Math.round((mid / row.entry - 1) * 1000) / 10;
-  const x = spyExit({ entryPx: row.entry, optPx: mid, openedMins: row.opened, mins: MINS, cfg: CFG });
+  const x = spyExit({ entryPx: row.entry, optPx: mid, openedMins: row.opened, mins: MINS, cfg: { ...CFG, spyFlat: CFG.spyFlat - EARLY() } });
   if (!x || x.kind === 'tp') return;
   spySelling.add(sym); setTimeout(() => spySelling.delete(sym), 60000);
   try {
-    const pos = await T('/v2/positions/' + encodeURIComponent(sym)).catch(() => null);            // already sold (e.g. the take-profit filled)? then there is nothing to sell
-    if (!pos || !(Math.abs(+pos.qty) > 0)) { lastSpy.open = lastSpy.open.filter(o => o.s !== sym); return; }
-    row.qty = Math.abs(+pos.qty);
+    const pos = await T('/v2/positions/' + encodeURIComponent(sym), QUICK).catch(e => (e && e.status === 404 ? null : undefined));   // already sold (e.g. the take-profit filled)? then there is nothing to sell
+    if (pos === null || (pos && !(Math.abs(+pos.qty) > 0))) { lastSpy.open = lastSpy.open.filter(o => o.s !== sym); return; }
+    if (pos) row.qty = Math.abs(+pos.qty);                                                         // a timeout keeps the known quantity; closeOut re-checks
     const openOrders = await T('/v2/orders?status=open&limit=200');
-    for (const o of openOrders) if (o.symbol === sym && o.side === 'sell' && !DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
-    await send({ symbol: sym, qty: String(row.qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + sym + '-' + rid() }, `${sym} SPY ${row.kind.toUpperCase()} ${x.why} (live quote)`);
+    const r = await closeOut(sym, row.qty, openOrders.filter(o => o.symbol === sym && o.side === 'sell'), `${sym} SPY ${row.kind.toUpperCase()} ${x.why} (live quote)`);
+    if (r === 'refused') { spySelling.delete(sym); return; }
     delete spyState[sym];
   } catch (e) { act('SPY quote exit failed: ' + (e.message || e).slice(0, 80)); }
 }
@@ -350,7 +352,7 @@ async function pickDayContract(und, kind, px) {
   const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - px) - Math.abs(+b.strike_price - px))[0];
   const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[c.symbol];
   if (!q || !(q.ap > 0) || !(q.bp > 0) || (q.ap - q.bp) / q.ap > 0.1) return null;                 // day trades need a spread under 10%
-  return { symbol: c.symbol, lim: tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02)), exp: ex, strike: +c.strike_price };
+  return { symbol: c.symbol, lim: tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02), c.symbol), exp: ex, strike: +c.strike_price };
 }
 export const scanInfo = () => scanCache.info;
 // End-of-day summary to the phone: what happened today, what is still open, where the account stands.
@@ -393,19 +395,19 @@ const sleepMs = ms => new Promise(z => setTimeout(z, ms));
 async function call(base, path, opt = {}) {
   const method = (opt.method || 'GET').toUpperCase(), retriable = method !== 'POST';
   let lastErr = null;
-  for (let attempt = 0; attempt <= (retriable ? HTTP_RETRIES : 0); attempt++) {
+  for (let attempt = 0; attempt <= (retriable ? (opt.retries ?? HTTP_RETRIES) : 0); attempt++) {
     if (attempt) await sleepMs(Math.min(8000, 1000 * 2 ** (attempt - 1)) + Math.random() * 300);
     const lim = opt.timeoutMs || HTTP_TIMEOUT_MS, ac = new AbortController(), timer = setTimeout(() => ac.abort(), lim), tCall = Date.now();
     let again = false;
     engine.calls++;
     try {
-      const { timeoutMs, ...fo } = opt; void timeoutMs;
+      const { timeoutMs, retries, ...fo } = opt; void timeoutMs; void retries;
       const r = await fetch(base + path, { headers: H, ...fo, signal: ac.signal });
       engine.callMs += Date.now() - tCall;
       if (r.status === 204) return null;
       const tx = await r.text();
       if (r.ok) return tx ? JSON.parse(tx) : null;
-      lastErr = new Error(path.split('?')[0] + ' HTTP ' + r.status + ' ' + tx.slice(0, 200));
+      lastErr = new Error(path.split('?')[0] + ' HTTP ' + r.status + ' ' + tx.slice(0, 200)); lastErr.status = r.status;
       again = r.status === 429 || r.status >= 500;                                 // other 4xx: our mistake, retrying will not help
     } catch (e) {
       lastErr = new Error(path.split('?')[0] + ' ' + (e.name === 'AbortError' ? `timed out after ${lim / 1000}s` : e.message));
@@ -433,23 +435,84 @@ function alertDetail(body) {
   const unit = opt ? '/contract' : '';
   return ` \u00b7 bought $${(avg * mult).toFixed(2)}${unit}, selling \u2248$${(cur * mult).toFixed(2)}${unit} \u2192 ${pl >= 0 ? '+' : ''}${money(pl)} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(1)}%)`;
 }
-const send = async (body, why) => { why = why + alertDetail(body); const dk = /^sd-y/.test(body.client_order_id || '') && body.side === 'buy' ? body.client_order_id : body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); alerts.push((body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why); act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (!DRY) return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }).catch(e => { placed.delete(dk); throw e; }); return { dry: true }; };   // a rejected order must not block its own retry
+const send = async (body, why) => { why = why + alertDetail(body); const dk = /^sd-y/.test(body.client_order_id || '') && body.side === 'buy' ? body.client_order_id : body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); const line = (body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why; act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (DRY) { alerts.push(line); return { dry: true }; }
+  return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }).then(r => { alerts.push(line); return r; }).catch(e => { const sure = e && e.status >= 400 && e.status < 500; if (sure) placed.delete(dk); act(`Order ${sure ? 'NOT accepted' : 'may not have arrived (no answer)'}: ${body.side} ${body.qty} ${body.symbol} — ${String(e.message || e).slice(0, 90)}`); if (body.side === 'sell') return 'refused'; throw e; }); };   // only a clear 4xx refusal frees the order for a retry: a timed-out POST may have reached the broker   // a refused sell must not stop the rest of the cycle (other positions still need managing); it is retried next check   // the phone alert goes out only for an accepted order; a rejected one must not block its own retry
 
+// Closing a position at market, safely: cancel its resting sell orders and wait until the broker confirms each one is
+// gone (a leg that filled meanwhile has already sold part of it), then re-read the position so the sale never exceeds
+// what is held — selling more than is held would open a short. Returns the order, or null when nothing was left to sell.
+const sleepShort = ms => new Promise(r => setTimeout(r, ms)), QUICK = { timeoutMs: 1500, retries: 0 };
+async function closeOut(symbol, qty, sells, why) {
+  if (!DRY) for (const o of sells) {
+    try { await T('/v2/orders/' + o.id, { method: 'DELETE' }); } catch (e) { /* already gone or filled: the check below sees it */ }
+    let id = o.id;
+    for (let k = 0; k < 4; k++) {                                                        // confirm within ~2 s (quick calls, no retries); after that, the position re-read decides
+      const st = await T('/v2/orders/' + id, QUICK).catch(() => null);
+      if (st && st.status === 'replaced' && st.replaced_by) { id = st.replaced_by; await T('/v2/orders/' + id, { method: 'DELETE', ...QUICK }).catch(() => {}); continue; }   // a trailed stop lives on under a new id
+      if (!st || !['new', 'accepted', 'pending_new', 'pending_cancel', 'pending_replace', 'partially_filled', 'held', 'accepted_for_bidding'].includes(st.status)) break;
+      await sleepShort(500);
+    }
+  }
+  let have = qty;
+  if (!DRY) { const pos = await T('/v2/positions/' + encodeURIComponent(symbol), QUICK).catch(e => (e && e.status === 404 ? null : undefined)); if (pos === null) have = 0; else if (pos && Math.abs(+pos.qty) > 0) have = Math.abs(+pos.qty); }   // only a real 404 means flat; a timeout keeps the known quantity
+  if (have <= 0) { act(`${symbol}: already flat — nothing to sell (${why})`); return null; }
+  return send({ symbol, qty: String(Math.min(qty, have)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + symbol + '-' + rid() }, why);
+}
 // ---- time in New York ----
+// Every order of the last N days, oldest pages too: one call returns at most 500, and a busy account (day trades, SPY,
+// daily take-profit orders) passes that in a couple of weeks — a trade older than the cap would look like a manual one.
+let olderOrders = { at: 0, list: [] };
+async function orderHistory(days) {
+  const after = new Date(Date.now() - days * 864e5).toISOString();
+  const first = await T('/v2/orders?status=all&limit=500&direction=desc&after=' + after);
+  if (!Array.isArray(first) || first.length < 500) return first || [];
+  if (Date.now() - olderOrders.at > 5 * 60000) {                                    // older pages change rarely: re-read them at most every 5 minutes
+    let out = [], until = first[first.length - 1].submitted_at || first[first.length - 1].created_at;
+    for (let k = 0; k < 8 && until; k++) {
+      const pg = await T('/v2/orders?status=all&limit=500&direction=desc&after=' + after + '&until=' + encodeURIComponent(until));
+      if (!Array.isArray(pg) || !pg.length) break;
+      out = out.concat(pg); if (pg.length < 500) break;
+      const oldest = pg[pg.length - 1].submitted_at || pg[pg.length - 1].created_at; if (!oldest || oldest === until) break; until = oldest;
+    }
+    olderOrders = { at: Date.now(), list: out };
+  }
+  const seen = new Set(); return first.concat(olderOrders.list).filter(o => { const k = o.id || o.client_order_id; if (!k) return true; if (seen.has(k)) return false; seen.add(k); return true; });   // pages can overlap at the boundary
+}
 const etParts = d => Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map(p => [p.type, p.value]));
 let TODAY = '', MINS = 0;                                   // yyyymmdd, minutes past midnight ET
+let CLOSE = 960;                                            // today's close in minutes ET (4:00 PM; 1:00 PM on early-close days such as the day after Thanksgiving and Dec 24)
+export const closeMins = () => CLOSE;
+let calDay = '';
+// Today's session from the broker's calendar (once a day): the close time, 13:00 on early-close days. Works before the open
+// and after the close too, unlike the clock's next_close.
+export async function loadCalendar() {
+  setNow(); if (calDay === TODAY) return CLOSE;
+  try { const d = ymdDash(Date.now()), cal = await T(`/v2/calendar?start=${d}&end=${d}`, QUICK); calDay = TODAY;
+    if (Array.isArray(cal) && cal[0] && cal[0].date === d && /^\d{1,2}:\d{2}$/.test(cal[0].close || '')) { const [h, m] = cal[0].close.split(':').map(Number); CLOSE = h * 60 + m; } else CLOSE = 960; } catch (e) {}
+  return CLOSE;
+}
+const EARLY = () => 960 - CLOSE;                            // how many minutes earlier than usual the market closes today (0 normally)
 export function setNow() { const ep = etParts(new Date()); TODAY = ep.year + ep.month + ep.day; MINS = (+ep.hour % 24) * 60 + +ep.minute; return MINS; }
 // When was the journal on disk written, in Eastern time? { day: 'yyyymmdd', mins } or null. Readable in both plain and encrypted journals.
 export function journalStamp() {
-  try { const at = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')).at; if (!at) return null; const ep = etParts(new Date(at)); return { day: ep.year + ep.month + ep.day, mins: (+ep.hour % 24) * 60 + +ep.minute, at }; }
+  try { const jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')), at = jj.at; if (!at) return null; const ep = etParts(new Date(at)); return { day: ep.year + ep.month + ep.day, mins: (+ep.hour % 24) * 60 + +ep.minute, at, done: !!jj.done }; }
   catch (e) { return null; }
 }
 setNow();
 const ymdDash = ms => { const e = etParts(new Date(ms)); return e.year + '-' + e.month + '-' + e.day; };
 const rid = () => Math.random().toString(36).slice(2, 7);
 const OPT_RE = /^([A-Z.]+)(\d{6})([CP])(\d{8})$/;
+// An order that put shares or contracts in the account: filled, or filled in part and then cancelled or still working.
+export const bought = o => !!o && (o.status === 'filled' || ((o.status === 'partially_filled' || o.status === 'canceled' || o.status === 'expired' || o.status === 'done_for_day') && +o.filled_qty > 0));
 const isOpt = s => OPT_RE.test(s);
-const tick = p => p >= 3 ? Math.round(p * 20) / 20 : Math.round(p * 100) / 100;
+// Price increments the exchanges accept. Stocks: $0.01. Options: SPY, QQQ and IWM trade in pennies at every price;
+// other penny-pilot names in pennies below $3 and nickels from $3; everything else in nickels below $3 and dimes from $3.
+const PENNY_ALL = /^(SPY|QQQ|IWM)\d{6}[CP]\d{8}$/;
+const PILOT = /^(DIA|XLF|XLE|GLD|SLV|EEM|AAPL|AMZN|MSFT|NVDA|TSLA|META|GOOGL|GOOG|AMD|BAC|F|INTC|C|GE|T|XOM|PFE|WFC|JPM|NFLX|BABA|UBER|COIN|PLTR|SOFI|DIS|KO|WMT|CSCO|ORCL|MU|SNAP|HOOD)\d{6}[CP]\d{8}$/;
+export const tick = (p, sym = '') => {
+  const step = !OPT_RE.test(sym) || PENNY_ALL.test(sym) ? 0.01 : PILOT.test(sym) ? (p < 3 ? 0.01 : 0.05) : (p < 3 ? 0.05 : 0.10);
+  return Math.round(Math.round(p / step) * step * 100) / 100;
+};
 const acts = [], seen = new Map();
 const act = m => {                                          // same message within 10 min is logged once
   const k = m.replace(/[-+]?\d+(\.\d+)?%/g, '#');
@@ -460,6 +523,7 @@ let lastWatch = null, lastSignals = null, lastClock = null, barsCache = { at: 0,
 let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
 const NM = { stock: { one: 'stock', many: 'stocks', Cap: 'Stocks' }, call: { one: 'CALL', many: 'CALLs', Cap: 'CALLs' }, put: { one: 'PUT', many: 'PUTs', Cap: 'PUTs' }, spy: { one: 'SPY option', many: 'SPY options', Cap: 'SPY options' } };
 let lastSpy = null, memRestored = false, flooredSyms = new Set(), prevHeld = new Set(), spyPlacedAt = 0;
+const missingFill = new Map();                                            // symbol → when it vanished without a listed sell fill: no day-loss halt until it shows (at most 10 minutes)
 let stopMoved = new Set();
 let lastSplit = null, lastDayPx = {}, haltSaid = new Set();      // money split panel, yesterday's closes, halt messages already sent today
 const alerts = [];
@@ -474,7 +538,7 @@ export async function botCycle({ journal = false, floors = null, held = null } =
   engine.hourErrors = engine.hourErrors.filter(t => Date.now() - t < 3600e3);
   await flushAlerts();
   pendingActs += acts.length - before;
-  if (journal || pendingActs) { await writeJournal().catch(e => console.log('journal error', e.message)); pendingActs = 0; }
+  if ((journal || pendingActs) && !publishing) { await writeJournal().catch(e => console.log('journal error', e.message)); pendingActs = 0; }   // never while git is publishing the file (live.mjs)
   return { open: !!(lastClock && lastClock.is_open), nextOpen: lastClock && lastClock.next_open };
 }
 
@@ -502,6 +566,7 @@ export async function fastCheck() {
   return false;
 }
 export const clockInfo = () => lastClock;
+let publishing = false; export const setPublishing = v => { publishing = !!v; };
 // Live prices pushed by the market-data stream (live.mjs). Fresh = under 5 seconds old.
 export const livePx = {};
 export const streamStats = { ticks: 0, fills: 0, lastTick: 0 };
@@ -607,7 +672,10 @@ async function run() {
     return;
   }
   await ensureUniverse();
-  if (!lastClock || Date.now() - (lastClock._at || 0) > 30000) { lastClock = await T('/v2/clock'); lastClock._at = Date.now(); }
+  await loadCalendar();
+  if (!lastClock || Date.now() - (lastClock._at || 0) > 30000) { lastClock = await T('/v2/clock'); lastClock._at = Date.now();
+    try { const nc = lastClock.next_close, ep = nc ? etParts(new Date(nc)) : null; if (ep && ep.year + ep.month + ep.day === TODAY) CLOSE = (+ep.hour % 24) * 60 + +ep.minute; } catch (e) {}   // the broker's clock knows early-close days
+  }
   if (!memRestored) {                                                      // first cycle of this process: pick up today's day-state from the previous run's journal
     memRestored = true;
     try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.spyLevels && pv.mem.spyLevels.day === TODAY) spyLevels = pv.mem.spyLevels; if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
@@ -618,7 +686,7 @@ async function run() {
   const snapAt = Date.now();                                               // when this cycle's picture of the account was taken (the SPY lane may act after it)
   const [acct, positions, openOrders, hist] = await Promise.all([
     T('/v2/account'), T('/v2/positions'), T('/v2/orders?status=open&limit=500'),
-    T('/v2/orders?status=all&limit=500&direction=desc&after=' + new Date(Date.now() - 45 * 864e5).toISOString()),
+    orderHistory(45),
   ]);
   // The stake: with stakeUsd set, the bot behaves as if the account held only that much — every size, loss limit and the
   // pattern-day-trader rule are computed on it — so a $100k practice account trades exactly like the money you mean to use.
@@ -666,7 +734,7 @@ async function run() {
   const sideStreak = { stock: null, call: null, put: null, spy: null };
   try {
     const posSig = positions.map(p => p.symbol + ':' + p.qty).sort().join(',');
-    if (Date.now() - fillsCache.at > 60000 || fillsCache.posSig !== posSig) {         // a position changed: today's fills must be re-read before any day P/L is trusted
+    if (Date.now() - fillsCache.at > 60000 || fillsCache.posSig !== posSig || missingFill.size) {   // a position changed (or a sell fill is still missing): re-read today's fills before any day P/L is trusted
       let f = [], token = '';
       for (let k = 0; k < 10; k++) { const pg = await T('/v2/account/activities/FILL?date=' + ymdDash(Date.now()) + '&direction=asc&page_size=100' + (token ? '&page_token=' + token : '')); if (!Array.isArray(pg) || !pg.length) break; f = f.concat(pg); if (pg.length < 100) break; token = pg[pg.length - 1].id; }
       fillsCache = { at: Date.now(), closed: buildJournal(f, []).closed, fills: f, posSig };
@@ -721,7 +789,10 @@ async function run() {
   for (const p of positions) if (+p.lastday_price > 0) lastDayPx[p.symbol] = +p.lastday_price;
   const sideDay = sideDayPl({ positions, fills: fillsCache.fills || [], lastDay: lastDayPx, spy: isSpyOption });
   // a position that disappeared since the last check must have its sell fill listed, or its whole cost would count as a loss
-  const heldNow = new Set(positions.map(p => p.symbol)), fillsLag = [...prevHeld].some(sym => !heldNow.has(sym) && !(fillsCache.fills || []).some(f => f.symbol === sym && !/^buy/.test(f.side)));
+  const heldNow = new Set(positions.map(p => p.symbol)), soldListed = sym => (fillsCache.fills || []).some(f => f.symbol === sym && !/^buy/.test(f.side));
+  for (const sym of prevHeld) if (!heldNow.has(sym) && !soldListed(sym) && !missingFill.has(sym)) missingFill.set(sym, Date.now());   // sticky: stays until the broker lists the sale (not just for one cycle)
+  for (const [sym, t0] of [...missingFill]) if (heldNow.has(sym) || soldListed(sym) || Date.now() - t0 > 10 * 60000) missingFill.delete(sym);   // 10 min: an exercise or symbol change never lists a sale
+  const fillsLag = missingFill.size > 0;
   prevHeld = heldNow;
   const halt = { stock: null, call: null, put: null, spy: null }; spyCapHit = false;
   { const n = lossStreak(fillsCache.closed.filter(c => isSpyOption(c.sym))); if (n >= CFG.spyStreak) sideStreak.spy = `${n} losing SPY option trades in a row today`; }
@@ -740,15 +811,24 @@ async function run() {
     act(msg); alerts.push('\u26d4 ' + msg);
   }
 
-  // ---- cancel stale entries ----
+  // ---- cancel stale entries; at the end of the day, every resting entry (a GTC buy left overnight would fill on a gap-down open) ----
+  const eod = MINS >= CLOSE - 5;
   for (const o of openOrders) {
     if (o.side !== 'buy' || !/^sd-[sorq]-/.test(cid(o))) continue;
-    if (Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > STALE_MIN * 60000) {
-      act(`${o.symbol} buy at ${o.limit_price} unfilled for ${STALE_MIN} min \u2014 cancelled (setup is stale)`);
+    const stale = Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > STALE_MIN * 60000;
+    if (stale || eod) {
+      act(`${o.symbol} buy at ${o.limit_price} ${eod ? 'still unfilled at the close' : 'unfilled for ' + STALE_MIN + ' min'} \u2014 cancelled (${eod ? 'no entry orders are left overnight' : 'setup is stale'})`);
       if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
       o._cancelled = true;
     }
   }
+  // ---- resting sell orders for something no longer held (a leg whose cancel failed, a stop left after a take-profit) ----
+  { const heldSyms = new Set(positions.map(p => p.symbol));
+    const buying = new Set(openOrders.filter(o => o.side === 'buy').map(o => o.symbol));
+    for (const o of openOrders) if (o.side === 'sell' && !o._cancelled && !heldSyms.has(o.symbol) && !buying.has(o.symbol) && o.status !== 'held' && (/^sd-/.test(cid(o)) || /stop/.test(o.type)) && Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 90000) {
+      act(`${o.symbol}: a ${o.type} sell order is resting for a position no longer held \u2014 cancelled (it could have opened a short)`);
+      if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
+    } }
   const liveOrders = openOrders.filter(o => !o._cancelled);
   for (const o of liveOrders) if (o.side === 'buy') SL[kindOf(o.symbol)].used += (+o.qty || 0) * (+o.limit_price || 0) * (isOpt(o.symbol) ? 100 : 1);
   // ---- SPY quick options: its own engine, every beat (manages its open trade even when switched off) ----
@@ -759,8 +839,8 @@ async function run() {
     ...Object.fromEntries(KINDS.map(k => [k, { money: r0(SIDE[k].money), used: r0(sideUsed(k)), today: SPLIT ? sideDay[k] : null, limitPct: SIDE[k].capPct, halted: halt[k] }])) };
 
   // ---- RSI-2 swing positions: sell at the close once above the 5-day average (or after 10 sessions) ----
-  const swingStk = stockPos.map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-r-' + p.symbol + '-')) })).filter(x => x.e);
-  const swingOpt = optPos.map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && (cid(o).startsWith('sd-q-' + p.symbol + '-') || cid(o).startsWith('sd-p-' + p.symbol + '-'))) })).filter(x => x.e);
+  const swingStk = stockPos.map(p => ({ p, e: hist.find(o => o.side === 'buy' && bought(o) && cid(o).startsWith('sd-r-' + p.symbol + '-')) })).filter(x => x.e);
+  const swingOpt = optPos.map(p => ({ p, e: hist.find(o => o.side === 'buy' && bought(o) && (cid(o).startsWith('sd-q-' + p.symbol + '-') || cid(o).startsWith('sd-p-' + p.symbol + '-'))) })).filter(x => x.e);
   if (swingStk.length || swingOpt.length) {
     const unds = [...new Set(swingStk.map(x => x.p.symbol).concat(swingOpt.map(x => OPT_RE.exec(x.p.symbol)[1])))];
     const bars0 = await loadBars(unds);
@@ -770,10 +850,10 @@ async function run() {
       if (sellsFor(p.symbol).some(o => o.type === 'market')) continue;
       const day8 = cid(e).split('-')[4], plpc = +p.unrealized_plpc * 100, px = lastU[p.symbol] && lastU[p.symbol].p;
       const legs = sellsFor(p.symbol), brokerStop = legs.some(o => /stop/.test(o.type));
-      const out = async why => { for (const o of legs) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
+      const out = async why => closeOut(p.symbol, Math.abs(+p.qty), legs, why);
       const livePl = px ? (px / +p.avg_entry_price - 1) * 100 : plpc;
       if (HOLD_FLOOR > 0 && !brokerStop && Math.min(plpc, livePl) <= -HOLD_FLOOR) { await out(`${p.symbol} down ${Math.min(plpc, livePl).toFixed(1)}% \u2014 hit the ${HOLD_FLOOR}% hard floor`); continue; }
-      if (HOLD_FLOOR > 0 && !brokerStop && !legs.length && px && MINS < 955) {           // a position without a broker stop (older entry, or the leg was rejected): put one on
+      if (HOLD_FLOOR > 0 && !brokerStop && !legs.length && px && MINS < CLOSE - 5) {           // a position without a broker stop (older entry, or the leg was rejected): put one on
         const fp = tick(+p.avg_entry_price * (1 - HOLD_FLOOR / 100));
         await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'stop', stop_price: String(fp), time_in_force: 'gtc', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} \u2014 protective stop placed at the broker (${fp})`);
       }
@@ -788,7 +868,7 @@ async function run() {
       }
       // quick take-profit: sell as soon as the gain reaches the target, at any time of day (same day only when the day-trade rule allows)
       if (CFG.stockTp > 0 && px && livePl >= CFG.stockTp && (day8 !== TODAY || !pdtNear)) { await out(`${p.symbol} +${livePl.toFixed(1)}% \u2014 take profit (target ${CFG.stockTp}%)`); continue; }
-      if (MINS < 950 || !px) continue;                                  // exits happen in the last 10 minutes, like a closing order
+      if (MINS < CLOSE - 10 || !px) continue;                           // exits happen in the last 10 minutes, like a closing order
       const h = held(p.symbol, day8); if (h === 0) continue;             // never sell on the day it was bought
       const x = rsi2Exit(completed(bars0, p.symbol).map(b => b.c), px, h, CFG.maxHold);
       if (x.exit) await out(`${p.symbol} RSI-2 exit \u2014 ${x.why} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(2)}%)`);
@@ -797,36 +877,36 @@ async function run() {
       const sells = sellsFor(p.symbol); if (sells.some(o => o.type === 'market')) continue;
       const parts = cid(e).split('-'), day8 = parts[3], und = OPT_RE.exec(p.symbol)[1], exp = '20' + OPT_RE.exec(p.symbol)[2];
       const qty = Math.abs(+p.qty), plpc = +p.unrealized_plpc * 100, avg = +p.avg_entry_price, px = lastU[und] && lastU[und].p;
-      const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
+      const out = async why => closeOut(p.symbol, qty, sells, why);
       const daysToExp = (Date.parse(dash8(exp)) - Date.parse(ymdDash(Date.now()))) / 864e5;
       if (plpc >= OPT_TP) await out(`${p.symbol} +${plpc.toFixed(0)}% \u2014 take profit`);
       else if (plpc <= -CFG.optStop) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
       else if (halt[kindOf(p.symbol)]) await out(`${p.symbol} ${SPLIT ? NM[kindOf(p.symbol)].one + ' daily loss limit' : 'daily loss cap'} hit \u2014 closing options`);
       else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options`);
       else if (daysToExp <= 3) await out(`${p.symbol} ${daysToExp} days to expiry \u2014 out before time decay accelerates`);
-      else if (MINS >= 950 && px && held(und, day8) > 0) { const isPut = cid(e).startsWith('sd-p-'); const x = (isPut ? rsi2ShortExit : rsi2Exit)(completed(bars0, und).map(b => b.c), px, held(und, day8), CFG.maxHold); if (x.exit) await out(`${p.symbol} stock ${x.why} \u2014 selling the ${isPut ? 'PUT' : 'CALL'}`); }
-      else if (!sells.length && !(pdtNear && day8 === TODAY)) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
+      else if (MINS >= CLOSE - 10 && px && held(und, day8) > 0) { const isPut = cid(e).startsWith('sd-p-'); const x = (isPut ? rsi2ShortExit : rsi2Exit)(completed(bars0, und).map(b => b.c), px, held(und, day8), CFG.maxHold); if (x.exit) await out(`${p.symbol} stock ${x.why} \u2014 selling the ${isPut ? 'PUT' : 'CALL'}`); }
+      else if (!sells.length && !(pdtNear && day8 === TODAY)) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100), p.symbol)), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
     }
   }
 
   // ---- manage stock positions (legacy intraday trades, if any remain) ----
   for (const p of stockPos) {
-    const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-s-' + p.symbol + '-'));
+    const e = hist.find(o => o.side === 'buy' && bought(o) && cid(o).startsWith('sd-s-' + p.symbol + '-'));
     if (!e) continue;                                   // not ours — never touch manual positions
     if (sellsFor(p.symbol).some(o => o.type === 'market')) continue;
     const [, , , tgtC, , day] = cid(e).split('-');
     const tgt = +tgtC / 100, avg = +p.avg_entry_price, plpc = +p.unrealized_plpc * 100;
     const held = day < TODAY;
     const sells = sellsFor(p.symbol);
-    const sellAll = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(Math.abs(+p.qty)), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
+    const sellAll = async why => closeOut(p.symbol, Math.abs(+p.qty), sells, why);
     if (HOLD_FLOOR > 0 && plpc <= -HOLD_FLOOR) { await sellAll(`${p.symbol} down ${plpc.toFixed(1)}% — hit the ${HOLD_FLOOR}% hard floor`); continue; }
     const ageDays = (Date.parse(e.filled_at || e.submitted_at) ? (Date.now() - Date.parse(e.filled_at || e.submitted_at)) / 864e5 : 0);
     if (held && ageDays > MAX_HOLD_DAYS) { await sellAll(`${p.symbol} held ${Math.round(ageDays)} days — max hold reached`); continue; }
-    if (!held && MINS >= 945) {
+    if (!held && MINS >= CLOSE - 15) {
       if (plpc > -HOLD_LOSS) { await sellAll(`${p.symbol} day trade closed at the bell (${plpc >= 0 ? '+' : ''}${plpc.toFixed(2)}%)`); continue; }
       act(`${p.symbol} is down ${plpc.toFixed(2)}% — holding instead of selling at a loss; will exit at breakeven`);
     }
-    const goingHeld = held || (MINS >= 945 && plpc <= -HOLD_LOSS);
+    const goingHeld = held || (MINS >= CLOSE - 15 && plpc <= -HOLD_LOSS);
     const want = goingHeld ? tick(avg * 1.003) : tick(Math.max(avg * 1.002, Math.min(tgt, avg * (1 + TP / 100))));
     const qty = String(Math.abs(+p.qty));
     if (!sells.length) await send({ symbol: p.symbol, qty, side: 'sell', type: 'limit', limit_price: String(want), time_in_force: 'gtc', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, goingHeld ? `${p.symbol} recovery exit` : `${p.symbol} take-profit (first of +${TP}% or target)`);
@@ -840,21 +920,21 @@ async function run() {
   // A resting limit sells everything at +OPT_TP% the instant it trades there.
   // The bot cancels it and sells at market for the stop, time stop, expiry and loss cap.
   for (const p of optPos) {
-    const e = hist.find(o => o.side === 'buy' && o.status === 'filled' && cid(o).startsWith('sd-o-' + p.symbol + '-'));
+    const e = hist.find(o => o.side === 'buy' && bought(o) && cid(o).startsWith('sd-o-' + p.symbol + '-'));
     if (!e) continue;
     if (sellsFor(p.symbol).some(o => o.type === 'market')) continue;
     const day = cid(e).split('-')[3];
     const qty = Math.abs(+p.qty), plpc = +p.unrealized_plpc * 100, avg = +p.avg_entry_price;
     const m = OPT_RE.exec(p.symbol), exp = '20' + m[2];
     const sells = sellsFor(p.symbol);
-    const out = async why => { for (const o of sells) if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'market', time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, why); };
+    const out = async why => closeOut(p.symbol, qty, sells, why);
     if (plpc >= OPT_TP) await out(`${p.symbol} +${plpc.toFixed(0)}% \u2014 take profit`);
     else if (plpc <= -CFG.optStop) await out(`${p.symbol} ${plpc.toFixed(0)}% \u2014 option stop`);
     else if (halt[kindOf(p.symbol)]) await out(`${p.symbol} ${SPLIT ? NM[kindOf(p.symbol)].one + ' daily loss limit' : 'daily loss cap'} hit \u2014 closing options`);
     else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options before the volatility`);
     else if (exp <= TODAY) await out(`${p.symbol} expires today \u2014 out`);
-    else if (day < TODAY && MINS >= 940) await out(`${p.symbol} time stop \u2014 options are held one night at most`);
-    else if (!sells.length) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
+    else if (day < TODAY && MINS >= CLOSE - 20) await out(`${p.symbol} time stop \u2014 options are held one night at most`);
+    else if (!sells.length) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100), p.symbol)), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
   }
 
   // ---- day trading (own windows and limits; manages its open trades every beat, even when the switch is off) ----
@@ -863,7 +943,7 @@ async function run() {
 
   // ---- what the bot is looking at (always, even when it cannot enter: the Bot trades tab shows it) ----
   const bothHalted = !!(halt.stock && halt.call && halt.put);
-  const gated = bothHalted || MINS < G.minStart || MINS >= ENTRY_END || G.block;
+  const gated = bothHalted || MINS < G.minStart || MINS >= Math.min(ENTRY_END, CLOSE - 15) || G.block;
   if (gated && lastWatch && Date.now() - Date.parse(lastWatch.at) < 20000) return;   // nothing to enter: refresh the watch list every 20 s, not every beat
   const bars = await loadBars();
   const last = await latestPrices(UNIVERSE);
@@ -907,13 +987,13 @@ async function run() {
       else { row.tp = r2d(avg * mult * (1 + OPT_TP / 100)); row.stop = r2d(avg * mult * (1 - CFG.optStop / 100)); const m2 = OPT_RE.exec(p.symbol); row.exp = '20' + m2[2].slice(0, 2) + '-' + m2[2].slice(2, 4) + '-' + m2[2].slice(4, 6); }
       heldRows.push(row);
     }
-    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= ENTRY_END ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
       buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
   }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
   // ---- new entries ----
   if (bothHalted) { if (!SPLIT) act(`Daily loss cap ${LOSS_CAP}% hit (${dayPct.toFixed(2)}%) — no new trades today`); return; }
-  if (MINS < G.minStart || MINS >= ENTRY_END) { console.log('Outside the RSI-2 entry window.'); return; }
+  if (MINS < G.minStart || MINS >= Math.min(ENTRY_END, CLOSE - 15)) { console.log('Outside the RSI-2 entry window.'); return; }
   if (G.block) { console.log('Paused by market check.'); return; }
 
   // ---- portfolio risk: heat (money at risk to the stops) and sector concentration ----
@@ -934,7 +1014,7 @@ async function run() {
   // ---- RSI-2 entries (selected by the 33-year out-of-sample research) ----
   lastSignals = { longs: [], shorts: [], rsi2: sigs, at: Date.now() };
   if (sigs.length) act(`RSI-2 dips ${CFG.intraday ? 'right now (intraday)' : 'today'}${CFG.pickBy === 'leaders' ? ', leaders first' : ''}: ${sigs.map(s => s.sym + ' (RSI-2 ' + s.r2 + (s.lead != null ? ', ' + (s.lead >= 0 ? '+' : '') + s.lead + '% vs market' : '') + ')').join(', ')}`);
-  const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
+  const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && (bought(o) || !['canceled', 'expired', 'rejected'].includes(o.status)));   // a cancelled buy that filled in part still counts
 
   if (STK_ON && !halt.stock) {
     let slots = MAX_POS - stockPos.length - liveOrders.filter(o => o.side === 'buy' && !isOpt(o.symbol)).length;
@@ -981,7 +1061,7 @@ async function run() {
       if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); continue; }
       const maxSpr = Math.min(0.2, CFG.optStop / 200);                   // the spread must be under half the stop, or the stop fires on the spread alone
       if ((q.ap - q.bp) / q.ap > maxSpr) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over ${+(maxSpr * 100).toFixed(1)}% for a ${CFG.optStop}% stop) \u2014 skipped`); continue; }
-      const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.03));
+      const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.03), c.symbol);
       const qty = optionQty({ equity, riskPct: OPT_RISK_PCT * G.budget, price: lim, budget: slBudget(kind) });
       if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's money budget \u2014 skipped${capNote(kind)}`); continue; }
       const addO = qty * lim * 100 * 0.5;
@@ -1021,8 +1101,9 @@ async function writeJournal() {
   const acct = await T('/v2/account');
   const positions = await T('/v2/positions');
   let fills = [], token = '';
+  const since = ymdDash(Date.now() - 60 * 864e5);                                                // 60 days of fills is all the journal needs (older trades are already closed in it)
   for (let k = 0; k < 30; k++) {
-    const j = await T('/v2/account/activities/FILL?direction=asc&page_size=100' + (token ? '&page_token=' + token : ''));
+    const j = await T('/v2/account/activities/FILL?direction=asc&page_size=100&after=' + since + 'T00:00:00Z' + (token ? '&page_token=' + token : ''));
     if (!j || !j.length) break;
     fills = fills.concat(j);
     if (j.length < 100) break;
@@ -1040,7 +1121,7 @@ async function writeJournal() {
   const sig = JSON.stringify([userPause, haltSaid.size, closed.length, closed[0] && closed[0].outT, open.map(o => o.sym + o.qty), allActs.length, lastAct && lastAct.t, env && env.reasons, env && env.flagged && env.flagged.length]);
   const sigCmp = PRIVATE ? (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16) : sig;
   if (prev.sig === sigCmp && prev.at && Date.now() - Date.parse(prev.at) < 10 * 60000) { console.log('journal unchanged'); return; }
-  const j = { at: new Date().toISOString(), sig, paper: /paper/.test(BASE),
+  const j = { at: new Date().toISOString(), sig, paper: /paper/.test(BASE), done: !!(lastClock && !lastClock.is_open && MINS >= CLOSE),   // the closing cycle ran: the queued run after the bell has nothing to do
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
     settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, engine: { cycleMs: engine.cycleMs, cycleMax: engine.cycleMax, cycles: engine.cycles, avgCallMs: engine.calls ? Math.round(engine.callMs / engine.calls) : 0, calls: engine.calls, errorsHour: engine.hourErrors.length, lastError: engine.lastError, symbols: UNIVERSE.length, beatMs: +process.env.BEAT_MS || 2000, scan: CFG.universe === 'scan' ? { ...scanStatus } : null },
     // panels the bot only computes while the market is open: a process that has not computed them yet keeps the previous ones
@@ -1053,7 +1134,7 @@ async function writeJournal() {
     const blob = await encryptJournal(j, process.env.JOURNAL_KEY);
     const sigH = (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16);   // change-detector only, reveals nothing
     const pubEngine = { ...j.engine, lastError: redactText(j.engine.lastError || ''), scan: j.engine.scan ? { ...j.engine.scan, err: redactText(j.engine.scan.err || '') } : null };   // the readable part never names a symbol
-    fs.writeFileSync('bot/journal.json', JSON.stringify({ ...blob, at: j.at, sig: sigH, paper: j.paper, stream: j.stream, engine: pubEngine }));
+    fs.writeFileSync('bot/journal.json', JSON.stringify({ ...blob, at: j.at, sig: sigH, paper: j.paper, done: j.done, stream: j.stream, engine: pubEngine }));
     prevJournal = { ...j, sig: sigH };
     console.log('journal written (encrypted)');
   } else {

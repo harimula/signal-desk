@@ -67,9 +67,10 @@ if (process.argv[2] === 'child') {
       const send = o => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)); };
       if (p === '/bottest-token/getUpdates') { let q = {}; try { q = JSON.parse(body || '{}'); } catch (e) {} if (q.limit === 1) { tgConfirms.push(q.offset); return send({ ok: true, result: [] }); } return send({ ok: true, result: tgQueue.shift() || [] }); }   // limit 1 = the bot confirming what it handled
       if (p === '/bottest-token/sendMessage') { tgSent.push(JSON.parse(body)); return send({ ok: true, result: { message_id: tgSent.length } }); }
+      if (p === '/v2/calendar') { const d = u.searchParams.get('start'); return send([{ date: d, open: '09:30', close: FAKE.calClose || '16:00' }]); }
       if (p === '/v2/clock' && FAKE.clockFail) { res.statusCode = 500; return send({ message: 'down' }); }
       if (p.startsWith('/v2/positions/') && req.method === 'GET') { const one = (FAKE.positions || []).find(x => x.symbol === decodeURIComponent(p.split('/').pop())); if (!one) { res.statusCode = 404; return send({ message: 'position does not exist' }); } return send(one); }
-      if (p === '/v2/clock') return send({ is_open: !FAKE.closed, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: '2026-10-23T16:00:00-04:00' });
+      if (p === '/v2/clock') return send({ is_open: !FAKE.closed, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: FAKE.nextClose || '2026-10-23T16:00:00-04:00' });
       if (p === '/v2/account') return send({ equity: '100000', last_equity: '100000', cash: '100000', buying_power: '400000', pattern_day_trader: false, daytrade_count: 0, status: 'ACTIVE', multiplier: '4' });
       if (p === '/v2/positions' && req.method === 'GET') return send(FAKE.positions || []);
       if (p === '/v2/assets' && FAKE.slowAssets) return setTimeout(() => send([]), FAKE.slowAssets);
@@ -79,6 +80,7 @@ if (process.argv[2] === 'child') {
       if (p === '/v2/orders' && req.method === 'DELETE') { deletes.push('all-orders'); return send([]); }
       if (p.startsWith('/v2/positions') && req.method === 'DELETE') { deletes.push('all-positions'); return send([]); }
       if (p.startsWith('/v2/orders/') && req.method === 'DELETE') { deletes.push(p.split('/').pop()); return send(null); }
+      if (p.startsWith('/v2/orders/') && req.method === 'GET') { const id = p.split('/').pop(); return send({ id, status: deletes.includes(id) ? 'canceled' : 'new' }); }   // single order: the bot confirms a cancel went through
       if (p.startsWith('/v2/orders/') && req.method === 'PATCH') { patches.push({ id: p.split('/').pop(), ...JSON.parse(body || '{}') }); return send({ id: 'r' + patches.length, status: 'replaced' }); }
       if (p === '/v2/orders' && req.method === 'POST') { const o = JSON.parse(body); orders.push(o); return send({ id: 'o' + orders.length, status: 'accepted', ...o }); }
       if (p === '/v2/orders') return send(u.searchParams.get('status') === 'open' ? (FAKE.open || []) : (FAKE.hist || []));
@@ -241,7 +243,8 @@ check('journal: a journal written under another passphrase is never overwritten 
 const J4 = run({ stocks: true, options: true }, { time: '2026-10-23T20:01:00Z', closed: true, journalKey: 'test-pass', prevKey: 'old-pass', prevJournal: prevJ, reset: true });
 check('journal: JOURNAL_RESET=1 starts a fresh encrypted journal under the new passphrase', () => { assert.ok(!J4.keptOld); assert.ok(J4.enc); assert.ok(Array.isArray(J4.acts)); });
 
-{ const { redactText } = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
+{ const { redactText, bought } = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
+  check('orders: a buy counts as ours when filled, or filled in part (still working, cancelled or expired) — never when nothing filled', () => { assert.ok(bought({ status: 'filled' })); assert.ok(bought({ status: 'canceled', filled_qty: '3' })); assert.ok(bought({ status: 'partially_filled', filled_qty: '1' })); assert.ok(!bought({ status: 'canceled', filled_qty: '0' })); assert.ok(!bought({ status: 'new' })); });
   check('privacy mode: log lines hide tickers, option symbols and amounts but keep plain words', () => {
     const t = redactText('bought 12 AAPL @ $187.20, STOP set; quotes for SPY261026C00580000; BRK.B sold; Market closed');
     for (const bad of ['AAPL', '187', 'SPY26', 'BRK', '12 ']) assert.ok(!t.includes(bad), bad + ' leaked: ' + t);
@@ -400,6 +403,22 @@ const sixToday = Array.from({ length: 6 }, (_, i) => ({ symbol: spySym, side: 'b
 const Y8 = run(SO, { hist: sixToday, bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
 check('SPY sleeve: after 6 trades today the daily maximum stops new ones', () => { assert.ok(!Y8.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol)), JSON.stringify(Y8.orders)); assert.match(Y8.spy.idle || '', /daily maximum/); });
 const spyLoss = [['buy', 2.05, '13:35'], ['sell', 1.7, '13:40'], ['buy', 2.05, '13:45'], ['sell', 1.7, '13:50']].map(([side, price, hm], i) => ({ symbol: spySym, side, qty: '20', price: String(price), order_id: 'y' + i, transaction_time: '2026-10-23T' + hm + ':00Z' }));
+const YP = run(SO, { positions: [spyPos(1.7)], hist: [{ ...spyBuy(595)[0], status: 'canceled', qty: '40', filled_qty: '20' }], bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
+check('partial fill: a SPY buy filled in part then cancelled is still the bot\'s trade — the position gets its stop (sold at −17%)', () => assert.ok(YP.orders.some(o => o.symbol === spySym && o.side === 'sell' && o.type === 'market'), JSON.stringify(YP.orders) + JSON.stringify(YP.acts)));
+// early-close day (1:00 PM): every end-of-day exit moves up three hours
+const YE = run(SO, { time: '2026-10-23T16:46:00Z', nextClose: '2026-10-23T13:00:00-04:00', positions: [spyPos(2.1)], hist: spyBuy(760), bars5: { SPY: spyUp }, live: { SPY: 502.2 } });   // 12:46 PM, close at 1:00
+check('early close: a SPY option is flattened 15 minutes before a 1:00 PM close (not held to 3:45)', () => assert.ok(YE.orders.some(o => o.symbol === spySym && o.side === 'sell' && o.type === 'market') && (YE.acts || []).some(m => /flat before the close/.test(m)), JSON.stringify(YE.orders) + JSON.stringify(YE.acts)));
+const YE3 = run(SO, { time: '2026-10-23T16:46:00Z', nextClose: '2026-10-26T16:00:00-04:00', calClose: '13:00', positions: [spyPos(2.1)], hist: spyBuy(760), bars5: { SPY: spyUp }, live: { SPY: 502.2 } });   // the clock says nothing about today's close: the calendar does
+check('early close: the broker calendar alone (13:00 close) is enough to flatten SPY options before the bell', () => assert.ok(YE3.orders.some(o => o.symbol === spySym && o.side === 'sell' && o.type === 'market'), JSON.stringify(YE3.orders) + JSON.stringify(YE3.acts)));
+const YE2 = run(SO, { time: '2026-10-23T16:35:00Z', nextClose: '2026-10-23T13:00:00-04:00', bars5: { SPY: spyUp }, live: { SPY: 502.7 } });   // 12:35 PM on an early-close day: inside the usual window, but 25 min from the bell
+check('early close: no new SPY trade in the last 30 minutes before a 1:00 PM close', () => { assert.ok(!YE2.orders.some(o => o.side === 'buy'), JSON.stringify(YE2.orders)); assert.match(YE2.spy.idle || '', /window closed/); });
+// resting orders that must not outlive their position / the day
+const OR = run({ stocks: true, options: false, symbols: ['QUIET'] }, { positions: [], open: [{ id: 'leg9', symbol: 'GONE', side: 'sell', type: 'stop', stop_price: '90', qty: '10', client_order_id: 'auto-uuid', submitted_at: '2026-10-23T13:00:00Z' }] });
+check('orphans: a stop sell order for a stock no longer held is cancelled (it would have opened a short)', () => assert.ok(OR.deletes.includes('leg9'), JSON.stringify(OR.deletes) + JSON.stringify(OR.acts)));
+const OL = run({ stocks: true, options: false, symbols: ['QUIET'] }, { positions: [], open: [{ id: 'p1', symbol: 'DIP', side: 'buy', type: 'limit', limit_price: '100', qty: '10', client_order_id: 'sd-r-DIP-20261023-10-aa', order_class: 'oto', submitted_at: '2026-10-23T13:58:00Z' }, { id: 'leg1', symbol: 'DIP', side: 'sell', type: 'stop', status: 'held', stop_price: '75', qty: '10', client_order_id: 'auto-leg', order_class: 'oto', submitted_at: '2026-10-23T13:00:00Z' }] });
+check('orphans: the protective stop leg of a dip-buy that has not filled yet is NOT cancelled', () => assert.ok(!OL.deletes.includes('leg1'), JSON.stringify(OL.deletes) + JSON.stringify(OL.acts)));
+const EOD = run({ stocks: true, options: false, symbols: ['QUIET'] }, { time: '2026-10-23T19:56:00Z', open: [{ id: 'b7', symbol: 'DIP', side: 'buy', type: 'limit', limit_price: '100', qty: '10', client_order_id: 'sd-r-DIP-20261023-10-zz', submitted_at: '2026-10-23T19:40:00Z' }] });   // 3:56 PM
+check('end of day: a resting dip-buy still unfilled at 3:55 is cancelled, never left to fill on tomorrow\'s open', () => assert.ok(EOD.deletes.includes('b7'), JSON.stringify(EOD.deletes) + JSON.stringify(EOD.acts)));
 const spyLossSmall = spyLoss.map(f => ({ ...f, symbol: 'SPY261024C00501000', qty: '2' }));
 const YK = run({ ...SO, spyTradePct: 20 }, { fills: spyLossSmall, positions: [spyPos2(spySym, 2.2)], hist: [spyBuy2(spySym, 596)], bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
 check('SPY sleeve: a losing streak stops new SPY trades but does not dump an open winning trade (the money limit would)', () => {
@@ -475,6 +494,13 @@ const callB = { ...callA, symbol: 'QUIET261113C00210000' };
 const callHist = [callA, callB].map(c => ({ symbol: c.symbol, side: 'buy', status: 'filled', client_order_id: 'sd-q-' + c.symbol + '-20261023-20-ab', qty: '20', limit_price: '2.5', filled_at: '2026-10-23T13:40:00Z' }));
 const boughtToday = [{ symbol: callA.symbol, side: 'buy', qty: '20', price: '2.5', order_id: 'b1', transaction_time: '2026-10-23T13:40:00Z' }];
 const FH = run({ stocks: true, options: true, symbols: ['DIP'], preset: 'custom', maxHeat: 15 }, { positions: [callA, callB], hist: callHist, fills: boughtToday, positionsAfter: [callB], cycles: 2 });
+const PFX = run({ stocks: true, options: true, symbols: ['DIP'], preset: 'custom', maxHeat: 15 }, { positions: [{ ...callA, current_price: '1.0', market_value: '2000', unrealized_pl: '-3000', unrealized_plpc: '-0.6' }], hist: [{ ...callHist[0], status: 'partially_filled', qty: '40', filled_qty: '20' }], fills: boughtToday });
+check('partial fill: a swing CALL whose buy is still partly working is managed — down 60% it is sold (option stop)', () => assert.ok(PFX.orders.some(o => o.symbol === callA.symbol && o.side === 'sell' && o.type === 'market'), JSON.stringify(PFX.orders) + JSON.stringify(PFX.acts)));
+const FH3 = run({ stocks: true, options: true, symbols: ['DIP'], preset: 'custom', maxHeat: 15 }, { positions: [callA, callB], hist: callHist, fills: boughtToday, positionsAfter: [callB], cycles: 4 });
+check('false halt: … and still not two or three checks later while the sell fill is missing (the guard is sticky, not one-cycle)', () => {
+  assert.ok(!(FH3.split && FH3.split.call && FH3.split.call.halted), JSON.stringify(FH3.split && FH3.split.call));
+  assert.ok(!FH3.orders.some(o => o.symbol === callB.symbol && o.side === 'sell' && o.type === 'market'), JSON.stringify(FH3.orders.filter(o => o.side === 'sell')));
+});
 check('false halt: a CALL sold at a profit whose sell fill is not listed yet does NOT stop the CALL part, and the other CALL is not sold', () => {
   assert.ok(!(FH.split && FH.split.call && FH.split.call.halted), JSON.stringify(FH.split && FH.split.call));
   assert.ok(!FH.orders.some(o => o.symbol === callB.symbol && o.side === 'sell' && o.type === 'market'), JSON.stringify(FH.orders.filter(o => o.side === 'sell')));

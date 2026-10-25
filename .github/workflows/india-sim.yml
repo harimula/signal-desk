@@ -24,6 +24,7 @@ jobs:
       - run: node bot/india.mjs
         env:
           JOURNAL_KEY: ${{ secrets.JOURNAL_KEY }}
+          JOURNAL_RESET: ${{ vars.JOURNAL_RESET }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
       - run: |

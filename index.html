@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-QDRA7wxnbPMS63jcO+EcU6579mKihpY2WaOGd1F7XYY=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-NCjxsHXXkbdSn0l8uqR+A09Zczl7yq5SO8KjkrVw9pw=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -939,7 +939,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792950868';
+const BUILD_V = '1792954034';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1042,7 +1042,7 @@ if (slB) slB.addEventListener('click', async () => {
 
 // ---------- accounts (optional — Firebase; see ACCOUNTS.md in the repo) ----------
 const FB_CONFIG = null; /* ACCOUNTS: replace null with your Firebase web config object to switch accounts on */
-const SYNC_SKIP = ['sd-fh', 'sd-fmp', 'sd-proxy', 'sd-syncat'];
+const SYNC_SKIP = ['sd-fh', 'sd-fmp', 'sd-proxy', 'sd-syncat', 'sd-ghtok', 'sd-jkey', 'sd-ghrepo'];   // credentials never go to the optional accounts service in plain text
 const syncable = k => k && k.startsWith('sd-') && !SYNC_SKIP.includes(k);
 let fbAuth = null, fbDb = null, fbUser = null, acPushT = null;
 function syncTouch(k) { try { if (syncable(k) && fbUser && fbDb) schedPush(); } catch (e) {} }
@@ -1092,7 +1092,7 @@ function acctUi() {
 }
 // ---------- device sync: your settings roam through your own repo, encrypted with your passphrase ----------
 // What syncs: every sd-* key except the two that identify this device (GitHub token, passphrase) and view state,
-// plus the calculators' inputs. Stored at user/settings.enc.json (AES-256-GCM, PBKDF2-SHA256 x200k). Last write wins.
+// plus the calculators' inputs. Stored at user/settings.enc.json (AES-256-GCM, PBKDF2-SHA256 x600k; older files carry their own count). Last write wins.
 // Never synced: device identity, view state, and anything DERIVED that is rewritten on every
 // render (logs, cached recommendations) — those would push a commit on every price tick.
 const SYNC_LOCAL = ['sd-ghtok', 'sd-jkey', 'sd-ghrepo', 'sd-syncat', 'sd-tab', 'sd-app', 'sd-reqs', 'sd-dtlog', 'sd-oplog', 'sd-recs'];
@@ -1101,7 +1101,9 @@ const SYNC_PATH = '/contents/user/settings.enc.json';
 const syncKey = k => !!k && ((k.startsWith('sd-') && !SYNC_LOCAL.includes(k)) || SYNC_EXTRA.includes(k) || /^(rent|emi|retire|corpus)/i.test(k));
 const syncOn = () => !!(ghTok() && load('sd-jkey', ''));
 let syPushT = null, syBusy = false, sySha = null, syMsg = '', syPulledAt = 0, syDirty = false;
-let syLastSnap = null, syLastPush = 0;
+let syLastSnap = null, syLastPush = 0, syMismatch = false;
+// shown only after a pull could not open the saved file with this device's passphrase
+function renderSyncBtn() { const st = document.getElementById('syStat'); if (!st || !syMismatch || document.getElementById('syReenc')) return; const b = document.createElement('button'); b.id = 'syReenc'; b.className = 'btn'; b.type = 'button'; b.dataset.sy = 'reenc'; b.textContent = 'Re-encrypt with this passphrase'; b.style.marginTop = '6px'; st.after(b); }
 const SY_DEBOUNCE = 8000, SY_MIN_GAP = 60000;   // settle 8s after a change; never push more than once a minute
 function syncTouch(k) {
   try { if (typeof fbUser !== 'undefined' && fbUser && fbDb && syncable(k)) schedPush(); } catch (e) {}
@@ -1154,7 +1156,8 @@ async function syncPull(announce) {
     if (!f) { syBusy = false; syMsg = 'First device — saving its settings to your repo.'; syncUi(); return syncPush(); }
     sySha = f.sha;
     const j = JSON.parse(decodeURIComponent(escape(atob((f.content || '').replace(/\s/g, '')))));
-    let d; try { d = await jDecrypt(j, load('sd-jkey', '')); } catch (e) { syMsg = 'The passphrase on this device differs from the one the settings were saved with.'; syncUi(); syBusy = false; return; }
+    let d; try { d = await jDecrypt(j, load('sd-jkey', '')); } catch (e) { syMismatch = true; syMsg = 'The passphrase on this device differs from the one the settings were saved with. If you just changed it on purpose, press “Re-encrypt with this passphrase” — the old passphrase then stops opening your saved settings. Otherwise type the right passphrase.'; syncUi(); syBusy = false; renderSyncBtn(); return; }
+    syMismatch = false;
     const localAt = +(localStorage.getItem('sd-syncat') || 0);
     if ((d.at || 0) > localAt) {
       let diff = false;
@@ -1174,6 +1177,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && Da
 document.addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('[data-sy]'); if (!b) return;
   const a = b.dataset.sy;
+  if (a === 'reenc') { if (!confirm('Replace the saved settings file with this device’s settings, encrypted with the passphrase on this device?\n\nDo this only if you changed the passphrase on purpose. Any other device must then sign in again with the new passphrase.')) return; syMismatch = false; syLastSnap = ''; syLastPush = 0; syMsg = 'Re-encrypting…'; syncUi(); b.remove(); syncPush(); return; }
   if (a === 'now') { syMsg = 'Syncing…'; syncUi(); syncPull(true).then(() => { if (!syBusy && syncOn()) syncPush(); }); }
   if (a === 'pass') { const v = (document.getElementById('sy-pass') || {}).value || ''; if (!v) return; save('sd-jkey', v); syMsg = 'Passphrase saved on this device. Syncing…'; renderAll(); }
   if (a === 'qr') { const box = document.getElementById('syQr'); if (!box) return; if (box.innerHTML) { box.innerHTML = ''; b.textContent = '📱 Link a phone — show QR code'; return; } linkQr(box).then(() => { b.textContent = 'Hide the QR code'; }, e => { box.innerHTML = '<div class="neg" style="font-size:12px">Could not make the code: ' + esc(e.message || e) + '</div>'; }); return; }
@@ -1214,7 +1218,7 @@ function syncCard(sec, dot) {
 <div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
 <div style="margin-top:8px"><button class="btn ghost" type="button" data-sy="now">Sync now</button> <span class="mut" style="font-size:11.5px">${what} Encrypted with your passphrase before it leaves this device (the GitHub token travels inside that encrypted file, so any device can sign in with the passphrase alone).</span></div>`
     : `<div style="margin-top:8px;font-size:13px">${dot(false)}Off on this ${syDev()}. <b>Quickest:</b> press <b>👤 Sign in</b> at the top of the page and enter your passphrase — nothing else is needed. Or: ${tok ? '' : 'connect GitHub above, then '}${pass ? '' : 'enter your passphrase'}${!tok && !pass ? '' : ''}${tok && !pass ? ' — the same one you chose for the journal' : ''}.</div>
-${tok && !pass ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px;max-width:520px"><input id="sy-pass" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="passphrase" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" data-sy="pass">Turn on sync</button></div>` : ''}
+${tok && !pass ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:8px;max-width:520px"><input id="sy-pass" aria-label="Your passphrase" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="passphrase" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" type="button" data-sy="pass">Turn on sync</button></div>` : ''}
 <div id="syStat" class="mut" style="font-size:12.5px;margin-top:6px;min-height:16px">${esc(syMsg)}</div>
 <div class="mut" style="font-size:11.5px;margin-top:6px">${what} Everything is encrypted with your passphrase before it is saved to your repo, so a new laptop or phone needs only the token and the passphrase — the rest arrives by itself.</div>`;
   // (2026-10-23) the QR link and the show-passphrase button were removed: 👤 Sign in with the passphrase does the same job
@@ -2735,7 +2739,7 @@ function stWait(on) {
 }
 // Fallback when the GitHub API cannot be reached from this network: copy the settings and paste them on github.com
 function stCopyJson() {
-  const c = stRead(); c.updatedAt = new Date().toISOString(); c.updatedBy = 'pasted on GitHub';
+  const c = stRead(); delete c._empty; delete c._stakeBad; c.updatedAt = new Date().toISOString(); c.updatedBy = 'pasted on GitHub';
   const txt = JSON.stringify(c, null, 1);
   const done = ok => { stMsg = ok ? 'Settings copied. Now open bot/config.json on GitHub (link below), click the pencil, select all, paste, and Commit changes. The bot picks it up within a minute.' : 'Could not copy automatically — select the text in the box below and copy it yourself.'; stJsonBox = ok ? '' : txt; renderAll(); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(() => done(true), () => done(false)); else done(false);
@@ -2775,7 +2779,8 @@ function stRead() {
   const c = {...stCfg};
   const v = id => { const el = document.getElementById('st-' + id); return el ? el.value : null; };
   c.preset = v('preset') || 'balanced';
-  for (const g of Object.values(ST_FIELDS)) for (const [k] of g) { const x = parseFloat(v(k)); if (isFinite(x)) c[k] = x; }
+  c._empty = [];
+  for (const g of Object.values(ST_FIELDS)) for (const [k, lab] of g) { const raw = v(k); if (raw == null) continue; const x = parseFloat(String(raw).replace(/[,\s$%]/g, '')); if (isFinite(x)) c[k] = x; else if (String(raw).trim() === '') c._empty.push(lab || ST_LABEL[k] || k); }
   for (const k of ['spyOn', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts']) { const el = document.getElementById('st-' + k); if (el) c[k] = el.checked; }
   { const r = document.querySelector('input[name="st-universe"]:checked'); c.universe = r && r.value === 'scan' ? 'scan' : 'list'; }
   { const r = document.querySelector('input[name="st-pickBy"]:checked'); c.pickBy = r && r.value === 'dip' ? 'dip' : 'leaders'; }
@@ -2784,7 +2789,7 @@ function stRead() {
   c.dayStart = v('dayStart') || '09:45'; c.dayEnd = v('dayEnd') || '15:30';
   c.spyStart = v('spyStart') || '09:50'; c.spyEnd = v('spyEnd') || '15:30';
   { const x = parseFloat(v('liveSizePct')); if (isFinite(x)) c.liveSizePct = x; }
-  { const x = parseFloat(v('stakeUsd')); c.stakeUsd = isFinite(x) && x > 0 ? x : 0; }
+  { const raw = v('stakeUsd'), x = parseFloat(String(raw || '').replace(/[,\s$]/g, '')); c._stakeBad = raw != null && String(raw).trim() !== '' && !(isFinite(x) && x >= 0 && x <= 1e8); c.stakeUsd = isFinite(x) && x > 0 ? Math.min(x, 1e8) : 0; }
   c.symbols = (v('symbols') || '').split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
   c.mode = document.getElementById('st-live') && document.getElementById('st-live').checked ? 'live' : 'paper';
   c.liveConfirm = c.mode === 'live' ? (v('liveConfirm') || '') : '';
@@ -2817,11 +2822,18 @@ async function inSave(reset) {
 function stShares(c) { const call = +(c.callSharePct ?? 30), put = +(c.putSharePct ?? 10), spy = c.spyOn === false ? 0 : +(c.spySharePct ?? 5), sum = call + put + spy; return { call, put, spy, stock: 100 - sum, over: Math.max(0, sum - 100) }; }
 const shareErr = c => { const S = stShares(c); return S.over ? `CALLs ${S.call}% + PUTs ${S.put}%${S.spy ? ' + SPY ' + S.spy + '%' : ''} = ${S.call + S.put + S.spy}% — ${S.over}% more than the whole stake. Lower one of them so the total is 100% or less (stocks get the rest).` : ''; };
 // Values the bot would clamp or drop (bot/config.mjs RANGES and the time windows) are refused here, so what you see is what runs.
+// names for the money-table boxes (the table shows them as column headers, so their field rows carry no label)
+const ST_LABEL = {stockPct: 'Stocks % per trade', optPct: 'CALLs % per trade', putPct: 'PUTs % per trade', stockUsd: 'Stocks $ per trade', callUsd: 'CALLs $ per trade', putUsd: 'PUTs $ per trade', stockCapPct: 'Stocks ceiling %', callCapPct: 'CALLs ceiling %', putCapPct: 'PUTs ceiling %', stockCapUsd: 'Stocks ceiling $', callCapUsd: 'CALLs ceiling $', putCapUsd: 'PUTs ceiling $'};
 function stOutOfRange(c) {
   const bad = [], tm = v => /^\d{1,2}:\d{2}$/.test(v || '') ? v.split(':').map(Number).reduce((h, m) => h * 60 + m) : null;
-  for (const g of Object.values(ST_FIELDS)) for (const [k, lab, , lo, hi] of g) { const x = c[k]; if (x != null && isFinite(x) && (x < lo || x > hi)) bad.push(`${lab || k} must be between ${lo} and ${hi} (you typed ${x})`); }
+  for (const g of Object.values(ST_FIELDS)) for (const [k, lab, , lo, hi] of g) { const x = c[k]; if (x != null && isFinite(x) && (x < lo || x > hi)) bad.push(`${lab || ST_LABEL[k] || k} must be between ${lo} and ${hi} (you typed ${x})`); }
   const win = (k, lab, lo, hi) => { const m = tm(c[k]); if (m == null || m < lo || m > hi) bad.push(`${lab} must be between ${mins2hhmm(lo)} and ${mins2hhmm(hi)} ET`); };
   win('dayStart', 'Day trades from', 575, 720); win('dayEnd', 'Day trades until', 600, 945); win('spyStart', 'SPY trades from', 575, 720); win('spyEnd', 'SPY trades until', 600, 930);
+  // a window that ends before it starts (or too short for one SPY trade) is accepted by the bot but never trades
+  if (c.dayTrade && tm(c.dayStart) != null && tm(c.dayEnd) != null && tm(c.dayStart) >= tm(c.dayEnd)) bad.push(`Day trades from (${c.dayStart}) must be before Day trades until (${c.dayEnd}) — otherwise it never trades`);
+  if (c.spyOn !== false && tm(c.spyStart) != null && tm(c.spyEnd) != null && tm(c.spyEnd) - tm(c.spyStart) < (c.spyHoldMin || 10)) bad.push(`SPY trades from (${c.spyStart}) must be at least ${c.spyHoldMin || 10} minutes before SPY trades until (${c.spyEnd}) — otherwise it never trades`);
+  if (c._stakeBad) bad.push('Money the bot works with must be a number between $0 (whole account) and $100,000,000');
+  if ((c._empty || []).length) bad.push(`these boxes are empty: ${c._empty.slice(0, 4).join(', ')} — type a number (the default is shown in the hint)`);
   if (c.liveSizePct != null && (c.liveSizePct < 5 || c.liveSizePct > 100)) bad.push('Live size must be between 5 and 100%');
   if (c.universe !== 'scan') { const syms = c.symbols || [], badSym = syms.filter(x => !/^[A-Z.]{1,6}$/.test(x)); if (badSym.length) bad.push(`these tickers are not valid US symbols and would be dropped: ${badSym.slice(0, 5).join(', ')} (use a dot, e.g. BRK.B)`); if (!syms.length) bad.push('your stock list is empty (the bot would fall back to its default 30)'); if (syms.length > 60) bad.push(`your stock list has ${syms.length} tickers; the bot uses at most 60`); }
   return bad;
@@ -2833,6 +2845,7 @@ async function stSave() {
   if (c.mode === 'live' && c.liveConfirm !== 'I UNDERSTAND THE RISK') { stMsg = 'To switch to LIVE you must type exactly: I UNDERSTAND THE RISK'; renderAll(); return; }
   if (shareErr(c)) { stMsg = 'Not saved — ' + shareErr(c); renderAll(); return; }
   { const bad = stOutOfRange(c); if (bad.length) { stMsg = 'Not saved — the bot would ignore these values: ' + bad.join('; ') + '.'; renderAll(); return; } }
+  delete c._empty; delete c._stakeBad;                                     // checks only, never written to the bot's file
   c.updatedAt = new Date().toISOString(); c.updatedBy = 'settings page';
   const draw = () => { try { renderAll(); } catch (e) { pageErr('redraw during save: ' + (e.message || e)); } };
   stFailed = false; stJsonBox = ''; stBusy = true; stMsg = 'Saving…'; stWait(true); draw(); stStep('form read, ' + Object.keys(c).length + ' settings'); stStep('sending to GitHub (api.github.com)…');
@@ -3036,7 +3049,7 @@ function settingsView() {
   const yIn = (id, val, lab) => `<input id="st-${id}" aria-label="${lab}" type="time" value="${esc(val)}" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;color:var(--text)">`;
   const ySh = c.spyOn === false ? 0 : +(c.spySharePct ?? 5);
   const spyS = sec('4c. SPY quick options', `${chk('spyOn', 'SPY quick options', `experimental: CALLs and PUTs on SPY alone, held minutes, on <b>${ySh}%</b> of the stake${splitBase ? ' ($' + fmt(splitBase * ySh / 100, 0) + ')' : ''} — set in <b>3 · Capital allocation</b>. Its own money, its own brakes. <b>Not backtested</b> (no minute-level options history); judge it on the practice account.`)}
-${shareErr(c) ? `<div class="neg" role="status" style="font-size:12px;margin-top:8px"><b>Error:</b> ${esc(shareErr(c))}</div>` : ''}
+${shareErr(c) ? `<div class="neg" role="status" style="font-size:12px;margin-top:8px"><b>Error:</b> ${esc(shareErr(c))}</div>` : ''}${!shareErr(c) && c.split !== false && c.stocks !== false && stShares(c).stock === 0 ? `<div class="mut" role="status" style="font-size:12px;margin-top:8px"><b>Note:</b> stocks get 0% while “Trade stocks” is on, so no stock will be bought. Lower a share above, or turn stocks off in section 2.</div>` : ''}
 <div class="mut" style="font-size:12px;margin-top:8px;line-height:1.5"><b>How it trades:</b> SPY above its day's VWAP → CALLs only; below → PUTs only. It buys when SPY breaks the high (or low) of the last 15 minutes on at least average volume, a contract expiring 1 day out (never same-day), nearest the money, spread under 5%. Up to the “trades open at once” setting together, each from its own fresh break (never added to a losing one); each out at the take-profit, the stop, the time stop, or 3:45 PM — whichever comes first.</div>
 ${grid(ST_FIELDS.spy)}
 <div style="margin-top:10px;font-size:12px;display:flex;gap:14px;flex-wrap:wrap;align-items:center"><span><b data-tipkey="spy trades from">Trades from</b> ${yIn('spyStart', c.spyStart || '09:50', 'SPY trades from')}</span><span><b data-tipkey="spy trades until">until</b> ${yIn('spyEnd', c.spyEnd || '15:30', 'SPY trades until')}</span><span class="mut">ET · 9:35–12:00 / 10:00–3:30; open trades are flat by 3:45</span></div>`, 'SPY CALLs and PUTs, minutes at a time');

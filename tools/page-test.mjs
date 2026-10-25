@@ -1,3 +1,4 @@
+/* global syncPull, renderSyncBtn, jDecrypt */   // page functions called inside page.evaluate()
 // Page tests in headless Chromium (runs in CI):
 //   node tools/page-test.mjs
 // Serves the site locally, stands in for the GitHub API, and checks: every tab renders without a script error or a
@@ -119,6 +120,13 @@ async function session(label, prep) {
   check('settings: a value the bot would clamp (per-trade 50%, SPY until 15:45) is refused with a message naming both, and nothing is saved', /Not saved/.test(badMsg) && /50/.test(badMsg) && /SPY trades until/.test(badMsg) && puts.length === 0, badMsg.slice(0, 200) + ' puts=' + puts.length);
   await page.fill('#st-spyEnd', '14:00'); await page.evaluate(() => document.querySelector('#st-spyEnd').dispatchEvent(new Event('change', { bubbles: true })));
   await page.fill('#st-stockPct', '12'); await page.evaluate(() => document.querySelector('#st-stockPct').dispatchEvent(new Event('change', { bubbles: true })));
+  // a window that ends before it starts, an empty box and a nonsense stake are refused too (the bot would silently never trade / keep the old value)
+  { const setv = async (id, v) => { await page.fill(id, v); await page.evaluate(i => document.querySelector(i).dispatchEvent(new Event('change', { bubbles: true })), id); };
+    await setv('#st-spyStart', '11:30'); await setv('#st-spyEnd', '10:30'); await setv('#st-maxHold', ''); if (await page.$('#st-stakeUsd')) await setv('#st-stakeUsd', '-5');
+    await page.evaluate(() => document.querySelector('[data-st="save"]').click()); await page.waitForTimeout(600);
+    const m2 = await page.evaluate(() => (document.querySelector('[data-st="save"]').parentElement.textContent || '').replace(/\s+/g, ' '));
+    check('settings: an inverted SPY window, an empty box and a negative stake are refused with plain messages, nothing saved', /Not saved/.test(m2) && /must be at least/.test(m2) && /empty/.test(m2) && puts.length === 0, m2.slice(0, 300));
+    await setv('#st-spyStart', '09:50'); await setv('#st-spyEnd', '14:00'); await setv('#st-maxHold', '10'); if (await page.$('#st-stakeUsd')) await setv('#st-stakeUsd', ''); }
   check('SPY money per trade: the field sits in 3 · Capital allocation beside the SPY share and shows the saved value (default 100)', await page.evaluate(want => { const el = document.getElementById('st-spyTradePct'); return !!el && el.value === want && !!el.closest('#sec-3-capital-allocation') && !!document.getElementById('st-spySharePct').closest('#sec-3-capital-allocation'); }, String((JSON.parse(fs.readFileSync(path.join(ROOT, 'bot/config.json'), 'utf8')).spyTradePct) ?? 100)));   // never assume the owner's saved value
   await page.fill('#st-spyTradePct', '50'); await page.evaluate(() => document.querySelector('#st-spyTradePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(200);
   check('SPY money per trade: the allocation note shows the per-trade amount (dollars when the account size is known, otherwise %)', /up to (\$2,500|50% of it) per trade/.test(await page.evaluate(() => (document.querySelector('#stSplitNote') || {}).textContent || '')), await page.evaluate(() => (document.querySelector('#stSplitNote') || {}).textContent || ''));
@@ -205,6 +213,14 @@ async function session(label, prep) {
   check('sign-in: the passphrase alone installs the token and the holdings on a new device', (await b.evaluate(() => localStorage.getItem('sd-ghtok'))) === JSON.stringify('github_pat_TEST') && /AAPL/.test(await b.evaluate(() => localStorage.getItem('sd-pf') || '')));
   await b.click('#acctBtn'); await b.waitForTimeout(200); await b.click('#signLeave'); await b.click('#signLeave'); await b.waitForTimeout(1200);
   check('sign-in: sign out wipes the device', (await b.evaluate(() => localStorage.getItem('sd-ghtok'))) === null && (await b.evaluate(() => localStorage.getItem('sd-pf'))) === null);
+  // passphrase changed on purpose: the saved file is re-encrypted only after an explicit, confirmed press — then the new passphrase opens it and the old one does not
+  { const before = blob; a.on('dialog', d => d.accept());
+    await a.evaluate(async () => { localStorage.setItem('sd-jkey', JSON.stringify('a brand new passphrase')); if (!document.getElementById('syStat')) { const d = document.createElement('div'); d.id = 'syStat'; document.body.appendChild(d); } await syncPull(true); renderSyncBtn(); });
+    const hasBtn = !!(await a.$('#syReenc'));
+    check('sync: after a passphrase change the page offers “Re-encrypt with this passphrase” (it does not overwrite silently)', hasBtn && blob === before);
+    if (hasBtn) { await a.click('#syReenc'); for (let i = 0; i < 40 && blob === before; i++) await a.waitForTimeout(250); }
+    const opens = await a.evaluate(async b => { const j = JSON.parse(b); let n = false, o = false; try { await jDecrypt(j, 'a brand new passphrase'); n = true; } catch (e) {} try { await jDecrypt(j, 'correct horse battery'); o = true; } catch (e) {} return { n, o }; }, blob);
+    check('sync: re-encrypted — the new passphrase opens the saved file, the old one no longer does', blob !== before && opens.n && !opens.o, JSON.stringify(opens)); }
   check('sign-in: no script errors on either device', errA.length + errB.length === 0, errA.concat(errB).join(' | '));
   await A.close(); await B.close();
 }

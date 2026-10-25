@@ -1,7 +1,8 @@
 # Signal Desk trading bot
 
-Paper money first: the bot trades an **Alpaca paper account** (fake money, real prices).
-It runs on GitHub Actions and watches every second during market hours. No computer of
+Paper money first: the bot trades an **Alpaca paper account** (practice account, real prices).
+It runs on GitHub Actions during market hours: a full check every 2 seconds (every second
+in the last 10 minutes), live price and fill streams in between, SPY exits on every option quote. No computer of
 yours needs to stay on.
 
 ## Why it trades what it trades
@@ -57,7 +58,7 @@ as an upper bound. Past results do not predict future results.
   by Stock/Call), the 33-year scorecard, and every trade with entry and exit times.
 - **Phone alerts (free):** Telegram — create your bot with @BotFather, then Bot settings → 1 →
   Connect Telegram. You get every buy/sell, halt and error, and commands like /status and /money.
-- **Tests:** `node bot/test.mjs` (29 checks) runs automatically on every change.
+- **Tests:** `npm test` — unit, fake-broker and India checks — runs automatically on every change, plus page checks in a real browser.
 
 ## Control panel (Bot settings tab on your site)
 Everything below is set from the **Bot settings** tab, not by editing files:
@@ -76,10 +77,10 @@ read & write, scoped to this repo only). The token stays in that browser.
    (Telegram is connected from the site's Bot settings). Never paste keys into chat or code.
 3. Actions tab → enable **paper-trade-bot**.
 
-## Tuning (Settings → Secrets and variables → Actions → Variables)
-`BOT_RISK_PCT` (0.5) · `BOT_MAX_HEAT` (3) · `BOT_MAX_PER_SECTOR` (2) · `BOT_PER_TRADE` (0 = 10% of
-equity) · `BOT_OPT_BUDGET` (0 = 2% of equity) · `BOT_OPT_TAKE_PROFIT` (50) · `BOT_MAX_POSITIONS` (6)
-· `BOT_MAX_OPTIONS` (4) · `BOT_HOLD_FLOOR` (25) · `BOT_STOCKS` / `BOT_OPTIONS` (0 = off) · `BOT_SYMBOLS`.
+## Tuning
+Every setting lives in the **Bot settings** tab (saved to `bot/config.json`); the guide with an
+example for each is `docs/settings.html`. The old repository variables (`BOT_RISK_PCT` …) are no
+longer read — delete them if you still have them.
 
 ## Real money
 Run paper for at least 2–3 months and compare live results with the research first.
