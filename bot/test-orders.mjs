@@ -116,7 +116,8 @@ if (process.argv[2] === 'child') {
   if (FAKE.fast) { const before = orders.length; FAKE.positions = FAKE.fast.positions; await bot.spyFast(); fast = { placed: orders.slice(before), hasOpen: bot.spyHasOpen() }; }
   let tickEntry = null;
   if (FAKE.tick2) { const before = orders.length; const ok = await bot.spyEnter(FAKE.tick2); tickEntry = { ok, placed: orders.slice(before) }; }
-  if (FAKE.tick) { const before = orders.length; const ok = await bot.spyEnter(FAKE.tick); const again = await bot.spyEnter(FAKE.tick); tickEntry = { ok, again, placed: orders.slice(before), open: bot.spyOpenSymbols() }; }
+  if (FAKE.tick) { const before = orders.length; const ok = await bot.spyEnter(FAKE.tick); const again = await bot.spyEnter(FAKE.tick); tickEntry = { ok, again, placed: orders.slice(before), open: bot.spyOpenSymbols() };
+    if (FAKE.cycleAfterTick) { LIVE.SPY = FAKE.tick + 0.6; const b2 = orders.length; await bot.botCycle({ journal: false }); tickEntry.after = { placed: orders.slice(b2), hasOpen: bot.spyHasOpen() }; } }   // a full cycle right after a tick entry
   let quoteExit = null;
   if (FAKE.quote2) { if (FAKE.quoteGone) FAKE.positions = []; const before = orders.length; await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); await bot.spyOnQuote(FAKE.quote2.sym, FAKE.quote2.bp, FAKE.quote2.ap); quoteExit = { placed: orders.slice(before), deletes: [...deletes] }; }
   const spyW = bot.spyWatch();
@@ -385,6 +386,11 @@ check('SPY sleeve, several at once: with one CALL open and 20% per trade, a new 
   const b = YM.orders.filter(o => o.side === 'buy' && /^SPY\d{6}C/.test(o.symbol)); assert.equal(b.length, 1, JSON.stringify(YM.orders) + JSON.stringify(YM.spy && YM.spy.idle));
   assert.ok(+b[0].qty * +b[0].limit_price * 100 <= 1000 + 1, JSON.stringify(b[0]));
 });
+{ const sameSym = (YM.orders.find(o => o.side === 'buy' && /^SPY\d{6}C/.test(o.symbol)) || {}).symbol;
+  const YS = run({ ...SO, spyTradePct: 20 }, { positions: [spyPos2(sameSym, 2.1)], hist: [spyBuy2(sameSym, 596)], bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+  const YH = run({ ...SO, spyTradePct: 20 }, { positions: [spyPos2(sameSym, 2.1)], hist: [], bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+  check('SPY sleeve: never buys a SPY contract you hold by hand (it would merge with yours and later be sold with it)', () => { assert.ok(!YH.orders.some(o => o.side === 'buy'), JSON.stringify(YH.orders)); assert.ok(!YH.orders.some(o => o.symbol === sameSym), JSON.stringify(YH.orders)); });
+  check('SPY sleeve, several at once: a new trade never buys the contract an open trade already holds (that would add to it)', () => { assert.ok(sameSym); assert.ok(!YS.orders.some(o => o.side === 'buy'), JSON.stringify(YS.orders)); assert.ok((YS.acts || []).some(m => /already one of its open trades/.test(m)), JSON.stringify(YS.acts)); }); }
 const s2 = 'SPY261024C00503000', s3 = 'SPY261024P00500000';
 const YX = run({ ...SO, spyTradePct: 20 }, { positions: [spyPos2(spySym, 2.1), spyPos2(s2, 2.1), spyPos2(s3, 2.1)], hist: [spyBuy2(spySym, 596), spyBuy2(s2, 597), spyBuy2(s3, 598, 'p')], bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
 check('SPY sleeve, several at once: with 3 open (the most at once) nothing more is bought', () => { assert.ok(!YX.orders.some(o => o.side === 'buy'), JSON.stringify(YX.orders)); assert.match(YX.spy.idle || '', /3 SPY trades open/); });
@@ -394,6 +400,12 @@ const sixToday = Array.from({ length: 6 }, (_, i) => ({ symbol: spySym, side: 'b
 const Y8 = run(SO, { hist: sixToday, bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
 check('SPY sleeve: after 6 trades today the daily maximum stops new ones', () => { assert.ok(!Y8.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol)), JSON.stringify(Y8.orders)); assert.match(Y8.spy.idle || '', /daily maximum/); });
 const spyLoss = [['buy', 2.05, '13:35'], ['sell', 1.7, '13:40'], ['buy', 2.05, '13:45'], ['sell', 1.7, '13:50']].map(([side, price, hm], i) => ({ symbol: spySym, side, qty: '20', price: String(price), order_id: 'y' + i, transaction_time: '2026-10-23T' + hm + ':00Z' }));
+const spyLossSmall = spyLoss.map(f => ({ ...f, symbol: 'SPY261024C00501000', qty: '2' }));
+const YK = run({ ...SO, spyTradePct: 20 }, { fills: spyLossSmall, positions: [spyPos2(spySym, 2.2)], hist: [spyBuy2(spySym, 596)], bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+check('SPY sleeve: a losing streak stops new SPY trades but does not dump an open winning trade (the money limit would)', () => {
+  assert.ok(YK.spy.halted && !/past the/.test(YK.spy.halted), JSON.stringify(YK.spy.halted)); assert.ok(!YK.orders.some(o => o.side === 'buy'), JSON.stringify(YK.orders));
+  assert.ok(!YK.orders.some(o => o.symbol === spySym && o.type === 'market'), JSON.stringify(YK.orders));
+});
 const Y9 = run(SO, { fills: spyLoss, bars5: { SPY: spyUp }, live: { SPY: 502.7 }, tg: true });
 check('SPY sleeve: two losses in a row ($1,400 = 28% of its $5,000) end its day; one Telegram alert; stocks are untouched', () => {
   assert.ok(!Y9.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol)), JSON.stringify(Y9.orders)); assert.ok(Y9.spy.halted, JSON.stringify(Y9.spy));
@@ -415,6 +427,11 @@ const Y12 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7 }
 check('SPY tick entry: the cycle leaves the sleeve watching 502.5; a streamed tick at 502.7 places the CALL at once, and a second tick does not place another', () => {
   assert.ok(Y12.tickEntry && Y12.tickEntry.ok, JSON.stringify(Y12.tickEntry)); assert.equal(Y12.tickEntry.again, false);
   assert.equal(Y12.tickEntry.placed.filter(o => o.side === 'buy').length, 1); assert.match(Y12.tickEntry.placed[0].client_order_id, /^sd-yc-SPY/); assert.match((Y12.acts || []).join(' | ') + ' ' + JSON.stringify(Y12.tickEntry), /live tick|sd-yc/);
+});
+const YT = run({ ...SO, spyTradePct: 20 }, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7, cycleAfterTick: true });
+check('SPY sleeve: a full cycle right after a tick entry never buys again on its older account picture, and keeps watching the new trade', () => {
+  assert.equal(YT.tickEntry.placed.filter(o => o.side === 'buy').length, 1, JSON.stringify(YT.tickEntry.placed));
+  assert.ok(!YT.tickEntry.after.placed.some(o => o.side === 'buy'), JSON.stringify(YT.tickEntry.after.placed)); assert.ok(YT.tickEntry.after.hasOpen);
 });
 const Y13 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.4 });
 check('SPY tick entry: a tick that does not cross the level places nothing', () => assert.ok(Y13.tickEntry && !Y13.tickEntry.ok && Y13.tickEntry.placed.length === 0, JSON.stringify(Y13.tickEntry)));

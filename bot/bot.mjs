@@ -202,7 +202,7 @@ async function dayTradeCycle(ctx) {
     open: dayPos.map(({ p, d, und, opt }) => ({ s: p.symbol, und, kind: opt ? (d.kind === 'dp' ? 'put' : 'call') : 'stock', side: d.side, qty: Math.abs(+p.qty), avg: r2d(+p.avg_entry_price * (opt ? 100 : 1)), cur: r2d(+p.current_price * (opt ? 100 : 1)), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, undPx: last[und] && last[und].p, stop: (dayState[p.symbol] || {}).stop || d.stop, target: d.target, opened: d.openMins })) };
 }
 // ---- SPY quick options sleeve (rules in bot/spyopt.mjs) ----
-let spyState = {};                                                       // per open symbol: { tpPlaced }
+let spyState = {}, spyCapHit = false;                                   // spyCapHit: today's SPY money limit was passed (closes what is open)                                                       // per open symbol: { tpPlaced }
 const spySelling = new Set();                                            // symbols a lane is selling right now (60 s): the other lanes keep their hands off
 // Exits on the open SPY option: take-profit (resting at the broker), stop, time stop, 3:45 flat, or the sleeve's halt.
 // Called from the full cycle and, while a trade is open, from the 1-second fast lane (spyFast) so a stop reacts within ~1 s.
@@ -216,7 +216,7 @@ async function spyManage({ open, sellsFor, halt }) {
     const x = spyExit({ entryPx: entry, optPx: cur, openedMins, mins: MINS, cfg: CFG });
     if (x && x.kind === 'tp' && sells.some(o => o.type === 'limit')) continue;           // the resting take-profit order at the broker handles it
     if (x) { await out(x.why); continue; }
-    if (halt.spy) { await out(`\u2014 ${halt.spy}; closing`); continue; }
+    if (halt.spy && spyCapHit) { await out(`\u2014 ${halt.spy}; closing`); continue; }   // the daily money limit closes what is open; a losing streak only stops new trades
     if (!sells.length && !(spyState[p.symbol] || {}).tpPlaced) {                            // resting take-profit, placed once
       spyState[p.symbol] = { tpPlaced: true };
       await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(entry * (1 + CFG.spyTp / 100))), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} SPY option \u2014 take-profit order at +${CFG.spyTp}%`);
@@ -234,6 +234,7 @@ export async function spyFast() {
   const sellsFor = sym => openOrders.filter(o => o.symbol === sym && o.side === 'sell');
   await spyManage({ open, sellsFor, halt: { spy: lastSpy.halted } });
   const pendingBuy = openOrders.some(o => o.side === 'buy' && isSpyOption(o.symbol));
+  spyHeld = new Set(positions.filter(p => isSpyOption(p.symbol)).map(p => p.symbol).concat(openOrders.filter(o => o.side === 'buy' && isSpyOption(o.symbol)).map(o => o.symbol)));
   for (const x of open) { const row = lastSpy.open.find(o => o.s === x.p.symbol); if (row) { row.pending = false; row.qty = Math.abs(+x.p.qty); row.entry = +x.p.avg_entry_price || row.entry; } }
   if (!pendingBuy && Date.now() - spyPlacedAt > 10000) { lastSpy.open = lastSpy.open.filter(o => o.pending ? false : open.some(x => x.p.symbol === o.s)); spyPendingUntil = 0; }   // sold ones drop out; a filled buy frees the next entry (a just-placed order may not be listed yet)
 }
@@ -241,9 +242,10 @@ export async function spyFast() {
 export const spyWatch = () => lastSpy && lastSpy.on && !lastSpy.halted && !lastSpy.blocked && (lastSpy.open || []).length < (lastSpy.maxOpen || 1) && !(lastSpy.open || []).some(o => o.pending) && (lastSpy.tradesToday || 0) < (lastSpy.max || 0) && lastSpy.level && lastSpy.market && lastSpy.market !== 'flat' && spyFresh(lastSpy.market === 'up' ? 'call' : 'put', lastSpy.level, spyLvl(lastSpy.market === 'up' ? 'call' : 'put')) && !/maximum|paused|limit|off|closed|before/.test(lastSpy.idle || '') ? { level: lastSpy.level, market: lastSpy.market } : null;
 // the level each direction's last trade today was taken at (a new trade in that direction needs a fresh break beyond it)
 let spyLevels = { day: '', call: 0, put: 0 };
+let spyHeld = new Set();                                                 // every SPY option held or being bought (the sleeve's and any bought by hand), from the latest account picture
 const spyLvl = k => spyLevels.day === TODAY ? spyLevels[k] || 0 : 0;
 async function spyCycle(ctx) {
-  const { equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid } = ctx;
+  const { equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid, snapAt = 0 } = ctx;
   const open = positions.filter(p => isSpyOption(p.symbol)).map(p => ({ p, e: hist.find(o => o.side === 'buy' && o.status === 'filled' && o.symbol === p.symbol && /^sd-y[cp]-/.test(cid(o))), d: null })).map(x => ({ ...x, d: x.e ? decodeSpyId(cid(x.e)) : null })).filter(x => x.d);   // the sleeve's own trades only — never touch a SPY option bought by hand
   const todayIds = hist.filter(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && !['canceled', 'expired', 'rejected'].includes(o.status));
   const tradesToday = todayIds.length;
@@ -254,13 +256,16 @@ async function spyCycle(ctx) {
   }
   const live = liveOrders.filter(o => !o._cancelled);
   await spyManage({ open, sellsFor, halt });
-  // new entry: one position at a time
+  // A SPY buy placed after this cycle's account picture was taken (by the live tick) is not in that picture: rebuilding
+  // the sleeve's state from it would forget that order and its money. Keep the live state and decide again next cycle.
   const bars5 = await load5m([]), spyBars = bars5.SPY || [], px = ((await latestPrices(['SPY'])).SPY || {}).p;
   const sig = CFG.spyOn ? spySignal({ bars: spyBars, px, mins: MINS, cfg: CFG }) : null;
   const dayClosed = (fillsCache.closed || []).filter(c => isSpyOption(c.sym) && c.outT && c.outT.slice(0, 10) === ymdDash(Date.now()));
   const pdtBlock = equity < 25000 && +acct.daytrade_count >= 3 && !acct.pattern_day_trader;
   const pending = live.some(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)));
-  if (!pending && Date.now() - spyPlacedAt > 10000) spyPendingUntil = 0;                       // the last buy has filled (or was cancelled): the next entry may go
+  spyHeld = new Set(positions.filter(p => isSpyOption(p.symbol)).map(p => p.symbol).concat(live.filter(o => o.side === 'buy' && isSpyOption(o.symbol)).map(o => o.symbol)));
+  if (spyPlacedAt && spyPlacedAt >= snapAt - 10000 && lastSpy) { lastSpy.at = new Date().toISOString(); return; }
+  if (!pending) spyPendingUntil = 0;                                                             // the last buy (placed well before this picture) has filled or was cancelled: the next entry may go
   const maxOpen = CFG.spyMaxOpen || 1, tradeMoney = SIDE.spy.money * CFG.spyTradePct / 100, free = SIDE.spy.money - SL_used(positions, live);
   const stale = sig && sig.side && !spyFresh(sig.side, sig.level, spyLvl(sig.side));
   const idle = !CFG.spyOn ? 'switched off' : halt.spy ? halt.spy : G.block ? 'paused by the market check' : userPause ? 'paused from Telegram' : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.spyMaxTrades ? `${tradesToday} SPY trades today \u2014 daily maximum reached` : pending ? 'buy order working' : open.length >= maxOpen ? (maxOpen > 1 ? `${open.length} SPY trades open \u2014 the most at once` : 'in a trade') : open.length && free < tradeMoney * 0.5 ? 'all of the SPY money is in trades' : sig && sig.idle ? sig.idle : !sig ? 'waiting for SPY bars' : stale ? `waiting for a new break (last ${sig.side.toUpperCase()} at ${spyLvl(sig.side)})` : null;
@@ -269,7 +274,7 @@ async function spyCycle(ctx) {
   const keepPending = lastSpy && lastSpy.open ? lastSpy.open.filter(o => o.pending && live.some(l => l.symbol === o.s && l.side === 'buy')) : [];
   lastSpy = { at: new Date().toISOString(), on: !!CFG.spyOn, budget: G.budget || 1, money: r0(SIDE.spy.money), used: r0(SL_used(positions, live)), today: SIDE.spy.today ?? null, halted: halt.spy, idle, blocked: !!(pending || open.length >= maxOpen || (open.length && free < tradeMoney * 0.5)), maxOpen, tradesToday, max: CFG.spyMaxTrades, market: sig && sig.market || null, vwap: sig && sig.vwap || null, level: sig && sig.level || null, spyPx: px || null,
     window: `${CFG.spyStart}\u2013${CFG.spyEnd} ET, flat by 3:45 PM`, open: openRows.concat(keepPending), closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte, tradePct: CFG.spyTradePct, maxOpen } };
-  if (idle || !sig || !sig.side || Date.now() < spyPendingUntil || spyEntering) return;
+  if (idle || !sig || !sig.side || Date.now() < spyPendingUntil || spyEntering || spyPlacedAt >= snapAt) return;   // a tick bought while this cycle was working: decide again next cycle
   await spyPlace(sig.side, px, sig.why, Math.min(tradeMoney, free) * (G.budget || 1), sig.level);   // one trade: its % of the SPY money, never more than is free
 }
 // Places the SPY option order (contract → quote → limit buy). Shared by the full cycle and the tick-driven spyEnter.
@@ -285,7 +290,9 @@ async function spyPlaceInner(kind, px, why, budget, level) {
   const cj = await T(`/v2/options/contracts?underlying_symbols=SPY&type=${kind}&status=active&expiration_date_gte=${ymdDash(+from)}&expiration_date_lte=${ymdDash(+to)}&strike_price_gte=${r2d(px * 0.99)}&strike_price_lte=${r2d(px * 1.01)}&limit=200`).catch(() => ({}));
   const cs = (cj.option_contracts || []).filter(c => c.tradable !== false); if (!cs.length) { act(`SPY ${kind.toUpperCase()}: no contract 1\u2013${CFG.spyDte} day${CFG.spyDte > 1 ? 's' : ''} out near ${px} \u2014 skipped`); return null; }
   const ex = [...new Set(cs.map(c => c.expiration_date))].sort()[0];
-  const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - px) - Math.abs(+b.strike_price - px))[0];
+  const mine = new Set([...(lastSpy && lastSpy.open || []).map(o => o.s), ...spyHeld]);       // a new trade is its own contract: never one already held (by the bot or by hand) or being bought
+  const c = cs.filter(x => x.expiration_date === ex && !mine.has(x.symbol)).sort((a, b) => Math.abs(+a.strike_price - px) - Math.abs(+b.strike_price - px))[0];
+  if (!c) { act(`SPY ${kind.toUpperCase()}: every nearby contract is already one of its open trades \u2014 skipped`); return null; }
   const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[c.symbol];
   if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); return null; }
   if ((q.ap - q.bp) / q.ap > 0.05) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over 5%) \u2014 skipped`); return null; }
@@ -608,6 +615,7 @@ async function run() {
   const clock = lastClock;
   if (!clock.is_open) { console.log('Market closed.'); return; }
   // the four account questions are independent: ask them at once instead of one after another (cycle time roughly halves)
+  const snapAt = Date.now();                                               // when this cycle's picture of the account was taken (the SPY lane may act after it)
   const [acct, positions, openOrders, hist] = await Promise.all([
     T('/v2/account'), T('/v2/positions'), T('/v2/orders?status=open&limit=500'),
     T('/v2/orders?status=all&limit=500&direction=desc&after=' + new Date(Date.now() - 45 * 864e5).toISOString()),
@@ -715,15 +723,15 @@ async function run() {
   // a position that disappeared since the last check must have its sell fill listed, or its whole cost would count as a loss
   const heldNow = new Set(positions.map(p => p.symbol)), fillsLag = [...prevHeld].some(sym => !heldNow.has(sym) && !(fillsCache.fills || []).some(f => f.symbol === sym && !/^buy/.test(f.side)));
   prevHeld = heldNow;
-  const halt = { stock: null, call: null, put: null, spy: null };
+  const halt = { stock: null, call: null, put: null, spy: null }; spyCapHit = false;
   { const n = lossStreak(fillsCache.closed.filter(c => isSpyOption(c.sym))); if (n >= CFG.spyStreak) sideStreak.spy = `${n} losing SPY option trades in a row today`; }
   if (SPLIT) for (const k of KINDS) {
     const S = SIDE[k]; S.today = sideDay[k]; S.limit = S.money * S.capPct / 100;
-    if (S.money > 0 && S.today <= -S.limit && !fillsLag) halt[k] = `${NM[k].many} down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`;
+    if (S.money > 0 && S.today <= -S.limit && !fillsLag) { halt[k] = `${NM[k].many} down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`; if (k === 'spy') spyCapHit = true; }
     else if (sideStreak[k]) halt[k] = sideStreak[k];
   } else { if (capHit) halt.stock = halt.call = halt.put = `daily loss cap ${LOSS_CAP}% hit`;
     const S = SIDE.spy; S.today = sideDay.spy; S.limit = S.money * S.capPct / 100;                        // the SPY sleeve keeps its own brakes either way
-    if (S.money > 0 && S.today <= -S.limit && !fillsLag) halt.spy = `SPY options down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`; else if (sideStreak.spy) halt.spy = sideStreak.spy; }
+    if (S.money > 0 && S.today <= -S.limit && !fillsLag) { halt.spy = `SPY options down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`; spyCapHit = true; } else if (sideStreak.spy) halt.spy = sideStreak.spy; }
   for (const k of KINDS) if (halt[k] && !haltSaid.has(TODAY + k)) {
     haltSaid.add(TODAY + k);
     if (!SPLIT && k !== 'spy') { if (k === 'stock') alerts.push(`\u26d4 ${halt[k]} \u2014 no new trades today`); continue; }
@@ -744,7 +752,7 @@ async function run() {
   const liveOrders = openOrders.filter(o => !o._cancelled);
   for (const o of liveOrders) if (o.side === 'buy') SL[kindOf(o.symbol)].used += (+o.qty || 0) * (+o.limit_price || 0) * (isOpt(o.symbol) ? 100 : 1);
   // ---- SPY quick options: its own engine, every beat (manages its open trade even when switched off) ----
-  try { await spyCycle({ equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid }); }
+  try { await spyCycle({ equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid, snapAt }); }
   catch (e) { act('SPY options engine error: ' + (e.message || e).slice(0, 120)); }
   const r0 = x => Math.round(x);
   lastSplit = { at: new Date().toISOString(), on: SPLIT, shares: share, stake: r0(equity),
