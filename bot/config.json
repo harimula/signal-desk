@@ -39,6 +39,7 @@
  "pickBy": "leaders",
  "spyOn": true,
  "spySharePct": 5,
+ "spyTradePct": 20,
  "spyTp": 15,
  "spyStop": 15,
  "spyHoldMin": 10,
@@ -110,7 +111,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-24T13:59:47.372Z",
+ "updatedAt": "2026-10-25T17:13:37.251Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
