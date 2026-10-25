@@ -1,4 +1,4 @@
-/* global syncPull, renderSyncBtn, jDecrypt, renderAll, h5Open:writable */   // page functions called inside page.evaluate()
+/* global syncPull, renderSyncBtn, jDecrypt */   // page functions called inside page.evaluate()
 // Page tests in headless Chromium (runs in CI):
 //   node tools/page-test.mjs
 // Serves the site locally, stands in for the GitHub API, and checks: every tab renders without a script error or a
@@ -240,19 +240,13 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
     // real results since the first trade: the whole account (all four parts) scaled to $100k vs $100k in each fund
     { const sc = await page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /Since the bot started trading/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
       check('since-start card: the real account (+0.60% → $100,600) against SPY, IJH, IWM, VGT and QQQ, each from $100,000, with a per-part breakdown', /\$100,600/.test(sc) && /SPY/.test(sc) && /VGT/.test(sc) && /QQQ/.test(sc) && /\$101,000/.test(sc) && /stocks/.test(sc) && /SPY quick options/.test(sc) && /far too short to judge/.test(sc), sc.slice(0, 400)); }
-    // 5-year card: mode buttons and the tax switch (served research.json carries the modes)
-    const h5 = async () => page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /The last 5 years/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
-    const folded = await page.evaluate(() => { localStorage.removeItem('sd-h5open'); h5Open = {us: false, in: false}; renderAll(); const d = document.querySelector('details.h5det'); return d ? !d.open : null; });   // the walk above opened every section
-    check('5-year card: folded by default, with the bot vs S&P 500 summary on its one line', folded === true && /bot \$[\d,]+ vs S&P 500 \$[\d,]+/.test(await page.evaluate(() => (document.querySelector('details.h5det summary') || {}).textContent || '')), String(folded));
-    await page.evaluate(() => document.querySelector('details.h5det summary').click()); await page.waitForTimeout(400);
-    check('5-year card: one tap opens it and it stays open across redraws', await page.evaluate(() => { renderAll(); const d = document.querySelector('details.h5det'); return !!(d && d.open); }));
-    const hasModes = await page.$('[data-h5mode="aggressive"]');
-    if (hasModes) {
-      await page.click('[data-h5tax="after"]'); await page.waitForTimeout(300); const a1 = await h5();
-      await page.click('[data-h5mode="conservative"]'); await page.waitForTimeout(300); const a2 = await h5();
-      await page.click('[data-h5tax="before"]'); await page.waitForTimeout(300); const a3 = await h5();
-      check('5-year card: the mode buttons change the bot line, the tax switch changes the view, both before and after amounts show', /USA bot — My settings|USA bot — /.test(a1) && /USA bot — Conservative/.test(a2) && /after tax/.test(a1) && !/· after tax/.test(a3) && /short-term/.test(a1) && /long-term/.test(a1), [a1.slice(0, 160), a2.slice(0, 120)].join(' || '));
-    } else check('5-year card: research.json has no modes yet (skipped)', true);
+    // the US 5-year replay card was removed at the owner's request (2026-10-25); the real-results card carries the tax switch and rates
+    { const gone = await page.evaluate(() => ![...document.querySelectorAll('.card')].some(x => /The last 5 years/.test(x.textContent)));
+      await page.click('[data-h5tax="before"]'); await page.waitForTimeout(300);
+      const b = await page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /Since the bot started trading/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
+      await page.click('[data-h5tax="after"]'); await page.waitForTimeout(300);
+      const a = await page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /Since the bot started trading/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
+      check('bot trades: the 5-year card is gone; the real-results card switches before/after tax and has its own tax-rate boxes', gone && !/after tax \(if cashed out today\)/.test(b) && /after tax \(if cashed out today\)/.test(a) && !!(await page.$('#h5st')) && !!(await page.$('#h5lt')), a.slice(0, 200)); }
   } else {
     check('bot trades: an older journal without watch rows / split / spy renders without a blank page', /Bot trades|Your bot/.test(txt) && txt.length > 500, txt.slice(0, 200));
   }
