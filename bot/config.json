@@ -38,7 +38,7 @@
  "liveSizePct": 25,
  "pickBy": "leaders",
  "spyOn": true,
- "spySharePct": 0,
+ "spySharePct": 5,
  "spyTradePct": 20,
  "spyTp": 15,
  "spyStop": 15,
@@ -51,8 +51,8 @@
  "spyStart": "09:50",
  "spyEnd": "14:00",
  "split": true,
- "callSharePct": 0,
- "putSharePct": 0,
+ "callSharePct": 20,
+ "putSharePct": 5,
  "optDayCap": 10,
  "stockUnit": "pct",
  "callUnit": "pct",
@@ -112,7 +112,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-25T18:48:06.280Z",
+ "updatedAt": "2026-10-25T18:48:55.187Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
