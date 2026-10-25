@@ -4,25 +4,25 @@ Costs 0.15%/side · 10% of equity per position · max 6 positions · out-of-samp
 
 | Strategy | Regime filter | CAGR (all) | Sharpe (all) | Max DD | **OOS CAGR** | **OOS Sharpe** | OOS Max DD | Trades | Win % | Exp./trade | PF |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Current bot rules (intraday pullback, S3 → R1, stop S4) | off | -27.39% | -2.66 | −99.9% | **-42.20%** | **-5.28** | −95.6% | 40021 | 33.0% | -0.15% | 0.75 |
-| Current bot rules (intraday pullback, S3 → R1, stop S4) | on | -26.40% | -2.71 | −99.8% | **-39.82%** | **-5.29** | −94.5% | 36262 | 32.8% | -0.16% | 0.74 |
-| RSI-2 mean reversion (Connors): above 200-day, RSI-2 < 10, buy at next open, sell when close > 5-day avg (max 10 days) | off | +13.69% | 1.05 | −22.1% | **+3.75%** | **0.38** | −22.1% | 9483 | 63.6% | +0.28% | 1.28 |
-| RSI-2 mean reversion (Connors): above 200-day, RSI-2 < 10, buy at next open, sell when close > 5-day avg (max 10 days) | on | +11.41% | 0.95 | −23.4% | **+4.72%** | **0.49** | −19.2% | 8527 | 63.4% | +0.26% | 1.26 |
-| RSI-2 mean reversion + 3× range stop | off | +5.58% | 0.46 | −39.0% | **-0.31%** | **0.03** | −32.1% | 10228 | 62.4% | +0.12% | 1.10 |
-| RSI-2 mean reversion + 3× range stop | on | +4.61% | 0.41 | −33.4% | **+1.15%** | **0.16** | −29.5% | 9165 | 62.3% | +0.11% | 1.10 |
-| RSI-2 with quick exits (owner's choice): same entries; sell at +10% or −5% during the day, otherwise when close > 5-day avg (max 10 days) | off | -8.78% | -0.50 | −84.3% | **-4.34%** | **-0.32** | −31.9% | 12093 | 58.4% | -0.13% | 0.91 |
-| RSI-2 with quick exits (owner's choice): same entries; sell at +10% or −5% during the day, otherwise when close > 5-day avg (max 10 days) | on | -7.47% | -0.45 | −80.2% | **-2.24%** | **-0.15** | −30.0% | 10763 | 58.4% | -0.12% | 0.91 |
-| RSI-2 with only the +10% take-profit (25% disaster stop) | off | +15.54% | 1.16 | −21.7% | **+3.58%** | **0.37** | −21.7% | 9540 | 63.7% | +0.31% | 1.30 |
-| RSI-2 with only the +10% take-profit (25% disaster stop) | on | +13.14% | 1.07 | −20.1% | **+4.48%** | **0.47** | −19.0% | 8580 | 63.5% | +0.29% | 1.29 |
-| RSI-2 with only the −5% stop | off | -10.18% | -0.59 | −88.0% | **-4.67%** | **-0.35** | −32.6% | 12036 | 58.4% | -0.15% | 0.89 |
-| RSI-2 with only the −5% stop | on | -8.89% | -0.55 | −84.9% | **-2.52%** | **-0.18** | −30.6% | 10713 | 58.4% | -0.15% | 0.89 |
-| RSI-2 with the owner's settings: buy below 25, sell at +10% or on the bounce, 25% stop | off | +17.51% | 1.27 | −19.5% | **+5.85%** | **0.56** | −19.5% | 9833 | 64.0% | +0.33% | 1.33 |
-| RSI-2 with the owner's settings: buy below 25, sell at +10% or on the bounce, 25% stop | on | +14.21% | 1.14 | −18.3% | **+5.86%** | **0.59** | −18.3% | 8783 | 63.6% | +0.31% | 1.31 |
-| RSI-2 (buy below 10) with +10% take-profit, 25% stop | off | +15.54% | 1.16 | −21.7% | **+3.58%** | **0.37** | −21.7% | 9540 | 63.7% | +0.31% | 1.30 |
-| RSI-2 (buy below 10) with +10% take-profit, 25% stop | on | +13.14% | 1.07 | −20.1% | **+4.48%** | **0.47** | −19.0% | 8580 | 63.5% | +0.29% | 1.29 |
-| RSI-2 short (mirror of the bot): below 200-day, RSI-2 > 90, short at next open, cover when close < 5-day avg (max 10 days) | off | +2.52% | 0.25 | −44.5% | **-1.70%** | **-0.11** | −26.5% | 7228 | 63.6% | +0.09% | 1.07 |
-| Trend breakout: close at a 50-day high above the 200-day, exit on a 20-day low | off | +11.19% | 0.86 | −41.6% | **+12.29%** | **0.92** | −16.6% | 488 | 39.5% | +5.02% | 2.05 |
-| Trend breakout: close at a 50-day high above the 200-day, exit on a 20-day low | on | +11.70% | 0.90 | −37.1% | **+10.89%** | **0.85** | −24.4% | 456 | 41.0% | +5.91% | 2.19 |
+| Current bot rules (intraday pullback, S3 → R1, stop S4) | off | -41.16% | -4.45 | −100.0% | **-51.09%** | **-6.78** | −98.3% | 40021 | 30.6% | -0.25% | 0.59 |
+| Current bot rules (intraday pullback, S3 → R1, stop S4) | on | -39.11% | -4.42 | −100.0% | **-48.14%** | **-6.69** | −97.6% | 36262 | 30.4% | -0.26% | 0.58 |
+| RSI-2 mean reversion (Connors): above 200-day, RSI-2 < 10, buy at next open, sell when close > 5-day avg (max 10 days) | off | -5.95% | -0.53 | −71.2% | **-10.63%** | **-1.20** | −48.6% | 6633 | 57.7% | -0.15% | 0.87 |
+| RSI-2 mean reversion (Connors): above 200-day, RSI-2 < 10, buy at next open, sell when close > 5-day avg (max 10 days) | on | -5.66% | -0.55 | −71.5% | **-8.63%** | **-1.05** | −42.6% | 5984 | 57.8% | -0.17% | 0.86 |
+| RSI-2 mean reversion + 3× range stop | off | -8.69% | -0.82 | −83.1% | **-11.55%** | **-1.34** | −50.8% | 7157 | 57.5% | -0.22% | 0.83 |
+| RSI-2 mean reversion + 3× range stop | on | -7.99% | -0.82 | −80.8% | **-9.61%** | **-1.20** | −45.2% | 6436 | 57.3% | -0.23% | 0.82 |
+| RSI-2 with quick exits (owner's choice): same entries; sell at +10% or −5% during the day, otherwise when close > 5-day avg (max 10 days) | off | -14.43% | -1.38 | −95.1% | **-11.56%** | **-1.39** | −50.8% | 8261 | 55.1% | -0.34% | 0.76 |
+| RSI-2 with quick exits (owner's choice): same entries; sell at +10% or −5% during the day, otherwise when close > 5-day avg (max 10 days) | on | -12.94% | -1.31 | −93.3% | **-9.67%** | **-1.26** | −45.1% | 7359 | 55.0% | -0.34% | 0.76 |
+| RSI-2 with only the +10% take-profit (25% disaster stop) | off | -4.49% | -0.39 | −62.5% | **-10.66%** | **-1.21** | −48.7% | 6670 | 57.8% | -0.11% | 0.91 |
+| RSI-2 with only the +10% take-profit (25% disaster stop) | on | -4.27% | -0.40 | −63.6% | **-8.71%** | **-1.06** | −42.8% | 6021 | 57.8% | -0.12% | 0.90 |
+| RSI-2 with only the −5% stop | off | -14.90% | -1.41 | −95.6% | **-11.64%** | **-1.40** | −51.0% | 8228 | 55.0% | -0.36% | 0.75 |
+| RSI-2 with only the −5% stop | on | -13.46% | -1.34 | −94.0% | **-9.71%** | **-1.27** | −45.3% | 7326 | 54.9% | -0.36% | 0.75 |
+| RSI-2 with the owner's settings: buy below 25, sell at +10% or on the bounce, 25% stop | off | -3.59% | -0.29 | −57.0% | **-9.26%** | **-1.03** | −44.3% | 6803 | 57.8% | -0.08% | 0.93 |
+| RSI-2 with the owner's settings: buy below 25, sell at +10% or on the bounce, 25% stop | on | -3.44% | -0.30 | −59.0% | **-7.67%** | **-0.92** | −39.4% | 6120 | 57.7% | -0.09% | 0.92 |
+| RSI-2 (buy below 10) with +10% take-profit, 25% stop | off | -4.49% | -0.39 | −62.5% | **-10.66%** | **-1.21** | −48.7% | 6670 | 57.8% | -0.11% | 0.91 |
+| RSI-2 (buy below 10) with +10% take-profit, 25% stop | on | -4.27% | -0.40 | −63.6% | **-8.71%** | **-1.06** | −42.8% | 6021 | 57.8% | -0.12% | 0.90 |
+| RSI-2 short (mirror of the bot): below 200-day, RSI-2 > 90, short at next open, cover when close < 5-day avg (max 10 days) | off | -8.57% | -0.76 | −86.3% | **-8.19%** | **-1.02** | −41.2% | 5323 | 58.9% | -0.29% | 0.82 |
+| Trend breakout: close at a 50-day high above the 200-day, exit on a 20-day low | off | +13.25% | 1.02 | −39.6% | **+16.14%** | **1.15** | −16.5% | 471 | 41.4% | +6.22% | 2.32 |
+| Trend breakout: close at a 50-day high above the 200-day, exit on a 20-day low | on | +13.34% | 1.03 | −37.9% | **+11.54%** | **0.89** | −25.6% | 449 | 42.1% | +6.66% | 2.41 |
 | Nifty 50 buy & hold | – | +8.82% | 0.53 | −59.9% | **+7.26%** | **0.58** | −17.2% | – | – | – | – |
 
 | Nifty Midcap 50 buy & hold (from 2007-09-24) | – | +15.67% | 0.46 | −75.1% | **+16.49%** | **0.94** | −22.6% | – | – | – | – |
@@ -34,9 +34,9 @@ Benchmarks include dividends (index-fund NAVs, after the funds’ fees). The bot
 
 | | Total | Per year | Worst fall | Sharpe | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **India bot — trend breakout + RSI-2, 50/50** | +28.10% | +5.10% | −18.9% | 0.52 | -0.40% | +8.10% | +22.30% | +11.70% | +0.30% | -13.20% |
-| Trend breakout | +50.80% | +8.60% | −16.6% | 0.73 | +1.00% | +20.20% | +17.90% | +17.30% | -1.60% | -8.60% |
-| RSI-2 mean reversion | +5.30% | +1.00% | −22.1% | 0.15 | -1.70% | -4.40% | +28.10% | +5.00% | +2.80% | -19.00% |
+| **India bot — trend breakout + RSI-2, 50/50** | +11.80% | +2.30% | −21.6% | 0.27 | -2.20% | -3.20% | +27.30% | +4.80% | -2.70% | -9.00% |
+| Trend breakout | +70.50% | +11.30% | −16.5% | 0.92 | -1.30% | +12.00% | +41.00% | +15.70% | -0.60% | -5.00% |
+| RSI-2 mean reversion | -47.20% | -12.00% | −47.6% | -1.38 | -3.10% | -18.90% | +7.90% | -15.40% | -8.20% | -20.00% |
 | Large caps — Nifty 50 index fund | +31.30% | +5.60% | −15.7% | 0.47 | -4.20% | +5.80% | +21.10% | +9.70% | +11.70% | -12.80% |
 | Next 50 — Nifty Next 50 index fund | +59.50% | +9.80% | −26.5% | 0.62 | -0.20% | +0.60% | +26.80% | +27.90% | +2.60% | -4.50% |
 | Mid caps — Nifty Midcap 150 index fund | +82.00% | +12.70% | −21.0% | 0.81 | -0.20% | +3.60% | +44.30% | +24.20% | +5.80% | -7.20% |
