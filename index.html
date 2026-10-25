@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-NCjxsHXXkbdSn0l8uqR+A09Zczl7yq5SO8KjkrVw9pw=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-Kb1esBQI69/GE+kxz7Ue5v28pNl0sVpXdc86saOUSOo=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -54,6 +54,7 @@ h1{font-size:18px;margin:0;letter-spacing:-.01em;font-weight:700}
 .mksw button{border:0;background:transparent;color:var(--text);border-radius:8px;padding:6px 12px;min-height:34px;font:500 13.5px var(--font,inherit);display:inline-flex;align-items:center;gap:7px;cursor:pointer}
 .mksw button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
 .h5seg{flex-wrap:wrap;max-width:100%}.h5seg button{padding:6px 10px;font-size:12.5px}
+@media (max-width:560px){.h5seg[data-n="4"]{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:4px}.h5seg[data-n="4"] button{width:100%}}   /* the four mode buttons as a tidy 2×2 on phones, not 3 + 1 */
 @media (min-width:700px){.h5sum{display:none}}
 .mksw .flag{border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.18);flex:none}.mksw .cc{font:600 10.5px var(--font-mono,monospace);padding:2px 5px;border-radius:4px;background:var(--line);color:var(--text)}
 .mksw button[aria-pressed="true"] .cc{background:rgba(255,255,255,.22);color:inherit}
@@ -939,7 +940,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792954034';
+const BUILD_V = '1792954894';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2453,7 +2454,8 @@ function h5Card(H, cur) {
   const US = cur.sym === '$', M = US && H.modes && H.modes[h5Mode] ? H.modes[h5Mode] : null;
   const st = h5ST / 100, lt = h5LT / 100, taxed = US && h5Tax === 'after';
   const MNAME = { conservative: 'Conservative', balanced: 'Balanced', aggressive: 'Aggressive', mine: 'My settings' };
-  let S0 = H.series.map(x => x.kind === 'bot' && M ? { ...x, ...M, key: 'bot', kind: 'bot', label: 'USA bot — ' + MNAME[h5Mode] } : x);
+  const norm = x => x && x.pts && x.pts.length && x.pts[0][1] > 0 && x.pts[0][1] !== 1 ? { ...x, pts: x.pts.map(p => [p[0], p[1] / x.pts[0][1]]) } : x;   // start every line at exactly $100,000
+  let S0 = H.series.map(x => norm(x.kind === 'bot' && M ? { ...x, ...M, key: 'bot', kind: 'bot', label: 'USA bot — ' + MNAME[h5Mode] } : x));
   // the table always shows both; the chart and the per-year columns follow the switch
   const S = S0.filter(x => !x.missing && x.pts && x.pts.length > 1).map(x => { if (!US) return x; const at = h5AfterTax(x.pts, x.kind, x.key, st, lt); return { ...x, ptsPre: x.pts, ptsAfter: at, afterEnd: at[at.length - 1][1], pts: taxed ? at : x.pts }; }), miss = H.series.filter(x => x.missing);
   if (!S.length) return '';
@@ -2474,7 +2476,7 @@ function h5Card(H, cur) {
   const rows = S.map(s => `<tr${s.kind === 'bot' ? ' style="background:var(--surface2)"' : ''}><td class="lt">${s.kind === 'bot' ? '<b>' + esc(s.label) + '</b>' : s.kind === 'part' ? '<span class="mut">↳ ' + esc(s.label) + '</span>' : esc(s.label)}</td><td>${taxed ? '' : '<b>'}${money(cur.base * (1 + s.total / 100))}${taxed ? '' : '</b>'}</td>${US ? `<td>${taxed ? '<b>' : ''}${money(cur.base * s.afterEnd)}${taxed ? '</b>' : ''} <span class="mut" style="font-size:11px">${s.kind === 'bot' ? 'short-term' : 'long-term'}</span></td>` : ''}<td>${pcs(s.cagr)}</td><td class="neg">−${fmt(s.maxDD, 1)}%</td><td>${fmt(s.sharpe, 2)}</td>${years.map(yy => `<td>${pcs((s.years || {})[yy])}</td>`).join('')}</tr>`).join('');
   const fd = d => new Intl.DateTimeFormat('en-GB', {month: 'short', year: 'numeric', timeZone: 'UTC'}).format(new Date(d + 'T12:00:00Z'));
   const MODES = [['conservative', 'Conservative'], ['balanced', 'Balanced'], ['aggressive', 'Aggressive'], ['mine', 'My settings']].filter(([k]) => H.modes && H.modes[k]);
-  const seg = (attr, cur2, opts) => `<div class="mksw h5seg" role="group" style="margin:0" aria-label="${attr === 'h5mode' ? 'Bot mode' : 'Tax'}">${opts.map(([k, lab]) => `<button type="button" data-${attr}="${k}" aria-pressed="${cur2 === k}">${lab}</button>`).join('')}</div>`;
+  const seg = (attr, cur2, opts) => `<div class="mksw h5seg" data-n="${opts.length}" role="group" style="margin:0" aria-label="${attr === 'h5mode' ? 'Bot mode' : 'Tax'}">${opts.map(([k, lab]) => `<button type="button" data-${attr}="${k}" aria-pressed="${cur2 === k}">${lab}</button>`).join('')}</div>`;
   const controls = US ? `<div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px">${MODES.length ? seg('h5mode', h5Mode, MODES) : ''}${seg('h5tax', h5Tax, [['before', 'Before tax'], ['after', 'After tax']])}<span class="mut" style="font-size:11.5px;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap"><label style="display:inline-flex;gap:4px;align-items:center">Short-term tax <input id="h5st" type="number" min="0" max="60" step="0.1" value="${h5ST}" style="width:64px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px;color:var(--text)">%</label><label style="display:inline-flex;gap:4px;align-items:center">Long-term <input id="h5lt" type="number" min="0" max="40" step="0.1" value="${h5LT}" style="width:64px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px;color:var(--text)">%</label></span></div>
 <div class="mut" style="font-size:11.5px;margin-top:4px">${M ? '<b>' + esc(M.label) + '.</b> ' : ''}${M && h5Mode === 'mine' && M.settings ? `My settings = what is saved in Bot settings at the last research run${M.settings.stockShare < 1 ? `; only the stock part (${Math.round(M.settings.stockShare * 100)}% of the money) is replayed — CALLs, PUTs and SPY have no price history, so their share is shown as cash` : ''}.` : M ? 'Preset sizing with the bot’s default strategy settings (buy below 10, +10% take-profit, leaders first).' : ''} ${taxed ? `After tax: the bot’s profit is short-term (taxed every year at ${h5ST}%); the funds are held, so only dividends are taxed yearly and the gain at ${h5LT}% when sold. Federal only.` : ''}</div>` : '';
   return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">📜 The last 5 years — the bot’s rules vs the market</b> <span class="mut" style="font-size:11.5px">· ${fd(H.from)} → ${fd(H.to)} · ${money(cur.base)} at the start, fresh start, costs included${taxed ? ' · <b>after tax</b>' : ''}</span>${controls}
