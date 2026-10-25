@@ -38,7 +38,7 @@ function tradesOf(bars) {
     const nb = bars[i + 1];
     const fill = nb.o < sig.entry ? nb.o : (nb.l <= sig.entry ? sig.entry : null); if (fill == null) continue;
     let exit;
-    if (fill <= sig.stop) exit = nb.c; else if (nb.l <= sig.stop) exit = sig.stop; else if (nb.h >= sig.target) exit = Math.max(sig.target, fill); else exit = nb.c;
+    if (fill <= sig.stop) exit = nb.c; else if (nb.l <= sig.stop) exit = sig.stop; else if (nb.h >= sig.target && (nb.o < sig.entry || nb.c >= sig.target)) exit = Math.max(sig.target, fill); else exit = nb.c;   // a limit fill later in the day: the high may have come before it, so the target counts only if the close confirms it
     out.push({ d: nb.d, sigD: bars[i].d, pl: (exit - fill) / fill - 2 * COST, r2: sig.r2 });
   }
   return out;

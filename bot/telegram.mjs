@@ -50,6 +50,7 @@ export async function tgPoll(handle) {
     try { reply = await handle(c.cmd, c.args); } catch (e) { reply = 'Sorry, that failed: ' + String(e.message || e).slice(0, 160); }
     await tgSend(reply || 'Unknown command. Type /help.'); n++;
   }
+  if ((ups || []).length) try { await tg('getUpdates', { offset, limit: 1, timeout: 0, allowed_updates: ['message'] }); } catch (e) {}   // confirm them now, so a restart never answers the same command twice
   return n;
 }
 export const _resetTg = () => { offset = 0; };          // tests only

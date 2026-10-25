@@ -139,7 +139,13 @@ async function session(label, prep) {
   await page.fill('#st-tgtok', '123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'); await page.evaluate(() => document.querySelector('[data-st="tgconnect"]').click());
   let tm = ''; for (let i = 0; i < 20 && !/Almost there/.test(tm); i++) { await page.waitForTimeout(150); tm = await page.textContent('#tgMsg'); }
   check('telegram: Connect asks the owner to press Start in the bot when no message has arrived yet', /Almost there/.test(tm) && /lithvik_sd_bot/.test(tm), tm);
-  tgUpd = [{ update_id: 1, message: { chat: { id: 4242, type: 'private', first_name: 'Hari' }, text: '/start', date: 1 } }];
+  const code = (/code (\d{6})/.exec(tm) || [])[1];
+  check('telegram: Connect shows a one-time code (only the chat that sends it is connected)', !!code, tm);
+  tgUpd = [{ update_id: 1, message: { chat: { id: 9999, type: 'private', first_name: 'Stranger' }, text: '/start', date: 1 } }];   // someone else messaging the public bot first
+  await page.evaluate(() => document.querySelector('[data-st="tgconnect"]').click());
+  tm = ''; for (let i = 0; i < 20 && !/Almost there/.test(tm); i++) { await page.waitForTimeout(150); tm = await page.textContent('#tgMsg'); }
+  check('telegram: a stranger\'s message without the code is not connected', /Almost there/.test(tm) && !tgSent.some(x => x.chat_id === 9999), tm);
+  tgUpd = [tgUpd[0], { update_id: 2, message: { chat: { id: 4242, type: 'private', first_name: 'Hari' }, text: '/start ' + code, date: 1 } }];
   await page.evaluate(() => document.querySelector('[data-st="tgconnect"]').click());
   for (let i = 0; i < 60 && !(secretPuts.some(x => x.name === 'TELEGRAM_CHAT')); i++) await page.waitForTimeout(250);
   check('telegram: Connect sends a test message to the chat and stores TELEGRAM_TOKEN + TELEGRAM_CHAT as sealed secrets', tgSent.some(x => x.chat_id === 4242 && /Connected to Signal Desk/.test(x.text)) && ['TELEGRAM_TOKEN', 'TELEGRAM_CHAT'].every(n => secretPuts.some(x => x.name === n && x.encrypted_value)), JSON.stringify(secretPuts.map(x => x.name)) + ' ' + (await page.textContent('#tgMsg').catch(() => '')) + ' ' + errors.join(' | '));
@@ -231,6 +237,20 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
   await page.close();
 }
 journalFixture = null;
+// a #setup= link must not silently replace a saved GitHub connection (a crafted link could re-point the device)
+{
+  const C = await browser.newContext(), c = await C.newPage();
+  await c.goto(base, { waitUntil: 'domcontentloaded' }); await c.evaluate(() => localStorage.setItem('sd-ghtok', JSON.stringify('OLD')));
+  const link = base + '#setup=' + encodeURIComponent(Buffer.from(JSON.stringify({ tok: 'NEW', fh: 'k' })).toString('base64'));
+  let asked = 0; c.on('dialog', d => { asked++; d.dismiss(); });
+  await c.goto('about:blank'); await c.goto(link, { waitUntil: 'domcontentloaded' }); await c.waitForTimeout(300);
+  const t1 = await c.evaluate(() => JSON.parse(localStorage.getItem('sd-ghtok')));
+  check('setup link: replacing a saved GitHub token asks first; saying no keeps the old one', asked === 1 && t1 === 'OLD', asked + ' ' + t1);
+  c.removeAllListeners('dialog'); c.on('dialog', d => d.accept());
+  await c.goto('about:blank'); await c.goto(link, { waitUntil: 'domcontentloaded' }); await c.waitForTimeout(300);
+  check('setup link: saying yes installs the new token', (await c.evaluate(() => JSON.parse(localStorage.getItem('sd-ghtok')))) === 'NEW');
+  await C.close();
+}
 await browser.close(); srv.close();
 // 5. documentation pages: a way back to the app, opened in the same window (the site runs as a home-screen app)
 {

@@ -69,23 +69,9 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
   const days = [], trades = [];
   for (let t = 1; t < calendar.length; t++) {
     const d = calendar[t], prevD = calendar[t - 1];
-    // 1) manage open swing positions at today's bar
-    for (const p of open) {
-      const D = data[p.sym], j = D.idx[d]; if (j == null) continue;
-      const b = D.B[j];
-      let exitPx = null;
-      if (p.stop && b.l <= p.stop) exitPx = Math.min(b.o, p.stop);              // the stop is checked first: a day that touches both counts as a loss
-      else if (p.tp && b.h >= p.tp) exitPx = Math.max(b.o, p.tp);
-      else { p.held++; if (S.exit(D.B, D.C, j, p.held)) exitPx = b.c; }
-      if (exitPx != null) {
-        if (S.short) { const r = (p.entryPx - exitPx) / p.entryPx - 2 * COST; cash += p.alloc * (1 + r); trades.push(r); }
-        else { cash += p.sh * exitPx * (1 - COST); trades.push((exitPx * (1 - COST)) / (p.entryPx * (1 + COST)) - 1); }
-        p.done = true;
-      }
-      else p.px = S.short ? 2 * p.entryPx - b.c : b.c;          // a short is marked as margin plus the gain or loss
-    }
-    open = open.filter(p => !p.done);
-    // 2) new entries from plans made at yesterday's close
+    // 1) new entries at today's open from plans made at yesterday's close. Cash and free slots are what was there at the
+    //    open: positions that will be sold later today still hold their money and their slot (no look-ahead).
+    const startOpen = open.slice();
     const equityPrev = cash + open.reduce((s, p) => s + p.sh * p.px, 0);
     if (!useRegime || regimeOn[prevD] !== 'bear') {
       const cands = [];
@@ -105,7 +91,7 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
         invested += alloc;
         if (S.kind === 'intraday') {
           const fill = b.o < c.pl.entry ? b.o : (b.l <= c.pl.entry ? c.pl.entry : null); if (fill == null) continue;
-          let ex; if (fill <= c.pl.stop) ex = b.c; else if (b.l <= c.pl.stop) ex = c.pl.stop; else if (b.h >= c.pl.target) ex = Math.max(c.pl.target, fill); else ex = b.c;
+          let ex; if (fill <= c.pl.stop) ex = b.c; else if (b.l <= c.pl.stop) ex = c.pl.stop; else if (b.h >= c.pl.target && (b.o < c.pl.entry || b.c >= c.pl.target)) ex = Math.max(c.pl.target, fill); else ex = b.c;   // limit fill later in the day: target only if the close confirms it
           const r = (ex * (1 - COST)) / (fill * (1 + COST)) - 1; cash += alloc * r; trades.push(r);
         } else {
           const fill = b.o, sh = alloc / (fill * (1 + COST));
@@ -117,6 +103,22 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
         }
       }
     }
+    // 2) manage the positions held from before today (stops/targets during the day, rule exits at the close)
+    for (const p of startOpen) {
+      const D = data[p.sym], j = D.idx[d]; if (j == null) continue;
+      const b = D.B[j];
+      let exitPx = null;
+      if (p.stop && b.l <= p.stop) exitPx = Math.min(b.o, p.stop);              // the stop is checked first: a day that touches both counts as a loss
+      else if (p.tp && b.h >= p.tp) exitPx = Math.max(b.o, p.tp);
+      else { p.held++; if (S.exit(D.B, D.C, j, p.held)) exitPx = b.c; }
+      if (exitPx != null) {
+        if (S.short) { const r = (p.entryPx - exitPx) / p.entryPx - 2 * COST; cash += p.alloc * (1 + r); trades.push(r); }
+        else { cash += p.sh * exitPx * (1 - COST); trades.push((exitPx * (1 - COST)) / (p.entryPx * (1 + COST)) - 1); }
+        p.done = true;
+      }
+      else p.px = S.short ? 2 * p.entryPx - b.c : b.c;          // a short is marked as margin plus the gain or loss
+    }
+    open = open.filter(p => !p.done);
     const eq = cash + open.reduce((s, p) => s + p.sh * p.px, 0);
     days.push({ d, eq });
   }

@@ -1,6 +1,6 @@
 # Signal Desk — System Documentation
 
-**Version:** 1.7 · **Last updated:** 2026-10-23 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
+**Version:** 1.9 · **Last updated:** 2026-10-25 · **Status:** living document, updated with every change (see [§9](#9-change-log-and-maintenance))
 
 Signal Desk is a personal stock-signal website with an attached rules-based trading bot.
 This document is the single place that explains **what it does** (functional), **how it is
@@ -175,7 +175,7 @@ signal-desk/
 ├── tips.js               hover help for every page: label → explanation dictionary + one tooltip engine
 ├── vendor/qrcode.js       QR code generator (MIT), still used by the old #setup= link receiver only
 ├── tools/stamp.mjs         bumps the build stamp and rewrites the CSP script hashes (run after every index.html edit)
-├── package.json  .nvmrc  eslint.config.js   npm scripts (test / lint / check / verify), Node 20, lint rules — no dependencies
+├── package.json  .nvmrc  eslint.config.js   npm scripts (test / lint / check / verify), Node 22 (needed for WebSocket), lint rules — no dependencies
 ├── favicon.ico  manifest.webmanifest   browser-tab icon; installable-app manifest
 ├── icons/                  logo.svg / logo.png, icon.svg, favicon, apple-touch, 192/512 and maskable PNGs
 ├── fetch.mjs               price fetcher (Yahoo) used by refresh-prices
@@ -201,8 +201,16 @@ signal-desk/
 │   ├── research.mjs        4-strategy portfolio simulator, out-of-sample split
 │   ├── research.json / research_report.md   research results (shown on Bot tab)
 │   ├── backtest.json / backtest_report.md   backtest results
-│   ├── test.mjs            39 unit tests (run in CI)
-│   └── test-orders.mjs     end-to-end check against a fake broker: which orders one cycle places (CI)
+│   ├── spyopt.mjs          SPY quick options: signal, exits, order ids
+│   ├── daytrade.mjs        day-trading signals (opening range, VWAP)
+│   ├── scan.mjs            market scan: the most-traded stocks on NYSE/Nasdaq (ETFs and funds left out)
+│   ├── msgpack.mjs         MessagePack codec for Alpaca's options stream (in-house, no dependency)
+│   ├── telegram.mjs        Telegram alerts and read-only commands
+│   ├── research-in-ideas.mjs  India 5-year research with tax (breakout, momentum, momentum + safety switch)
+│   ├── research-day.mjs    day-trading research on 5-minute bars
+│   ├── test.mjs            77 unit tests (run in CI)
+│   ├── test-orders.mjs     113 end-to-end checks against a fake broker: which orders the bot places (CI)
+│   └── test-india.mjs      15 India simulation checks (CI)
 ├── .github/workflows/
 │   ├── refresh.yml         refresh-prices
 │   ├── trade.yml           paper-trade-bot
@@ -210,6 +218,8 @@ signal-desk/
 │   ├── backtest.yml        backtest
 │   ├── research-day.yml    day-trading-research
 │   ├── watchdog.yml        watchdog (dead-man's switch)
+│   ├── research-in.yml     india-research
+│   ├── india-sim.yml       india-bot (simulation, after the NSE close)
 │   └── test.yml            bot-tests
 ├── MIGRATION.md            moving to another account or repo name
 ├── docs/
@@ -301,7 +311,7 @@ All actions are pinned to exact commit SHAs (`actions/checkout@11bd719… # v4.2
 | `telegram.mjs` | Alerts to the owner's Telegram chat; polls `getUpdates` every 3 s (off the decision path) and answers `/status /money /positions /watch /pause /resume /help` from `TELEGRAM_CHAT` only; never trades on a command | `tgOn`, `tgSend`, `tgPoll`, `parseCommand` |
 | `journal.mjs` | Pair fills into round trips (FIFO) | `parseSym`, `buildJournal` |
 
-Zero npm dependencies; Node 20+ (uses built-in `fetch`, `WebSocket`, `crypto.webcrypto`).
+Zero npm dependencies; Node 22+ (uses built-in `fetch`, `WebSocket` with headers, `crypto.webcrypto`; Node 20 has no WebSocket).
 
 ---
 
@@ -330,7 +340,7 @@ flowchart TD
   G -->|news crisis / FOMC window / breakers tripped| W[No new trades]
   G -->|clear| E[Entry window 9:45 → 11:00]
   E --> C{close > 200-day SMA<br/>and RSI-2 < 10<br/>and not bounced 1 %+}
-  C -->|yes, deepest dips first| SZ[Size: risk 0.5 % of equity<br/>≤ 10 % per position<br/>heat ≤ 3 %, ≤ 2 per sector]
+  C -->|yes, market leaders first (or deepest dips)| SZ[Size: risk % of equity<br/>≤ stock % per position<br/>heat cap, ≤ 2 per sector]
   SZ --> O[Resting limit BUY<br/>+ optional CALL 14–35 DTE]
   C -->|no| H[Hold / wait]
   O --> M[Monitor every tick]
@@ -511,7 +521,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 ## 8. Testing and quality
 
 - `bot/test-orders.mjs`: serves a just-dipped stock and a just-popped stock from a fake broker and checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked), money limits, market scan, journal continuity (a run that starts with the market closed keeps the previous encrypted entry's panels; rewrites never duplicate the action log; a foreign-passphrase entry is skipped), and — with synthetic 5-minute bars — the day-trading engine: ORB long → stock buy with levels in the id, market-down breakdown → PUT, daily maximum, flat at 15:50, stop at market, resting take-profit. Runs in CI.
-- `bot/test.mjs`: 55 unit tests (indicators, journal encryption round trip, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing, broker HTTP wrapper: retry, timeout, never-retry-an-order). Runs in CI on every push.
+- `bot/test.mjs`: 77 unit tests (indicators, journal encryption round trip, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing, broker HTTP wrapper: retry, timeout, never-retry-an-order). Runs in CI on every push.
 - `npm run verify` = `tools/stamp.mjs --check` (build number matches `ver.txt`, CSP hashes current, inline scripts parse) + ESLint on the bot and tools + both test files. CI (`bot-tests`) runs the same four steps on every push that touches the bot, the page or the tooling.
 - `tools/page-test.mjs` (CI job `page`): headless Chromium walks every tab as a fresh visitor and as a connected owner with the Screener sub-view remembered, asserting no script errors and no CSP violations, then types into Bot settings and saves against a stand-in GitHub API.
 - Accessibility: audited with the **full** axe-core rule set (2026-10-23; earlier passes ran a subset) in headless Chromium across every tab, both themes, and both calculators — zero violations; landmarks (`header`, `nav`, `main`), proper `tablist`/`tab` roles, labelled inputs, and all text colours at WCAG AA contrast (≥ 4.5 : 1) in both themes.
@@ -527,6 +537,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-25 | **Third audit** (two independent reviews: security/infrastructure and code/docs; 26 findings, 25 fixed, 1 left for the owner). **Kill switch:** Pause on the page writes `bot/STOP` to GitHub, but a running session only read its own checkout, so it kept trading until the next run → `live.mjs` `pollStop()` asks the GitHub API every 15 s (`GITHUB_TOKEN` added to trade.yml) and mirrors the file; the journal commit removes the untracked mirror before `pull --rebase --autostash` so it can never block a push. **Research look-ahead:** `research.mjs`, `research-in-ideas.mjs` sold at today's close *before* buying at today's open, so a close sale's cash and slot paid for the morning buy → entries now come first with the cash and slots held at the open; intraday limit fills count the target only if the close confirms it (`backtest.mjs`, `research.mjs`); research-day iterates days in date order. US and India research re-run. **Privacy mode:** every console line is redacted (tickers, option symbols, amounts; `redactText`), the public journal header's `engine.lastError` / `scan.err` too; refreshers get no Telegram/GitHub/journal secrets. **Journals fail closed:** an encrypted journal that cannot be decrypted (missing or changed `JOURNAL_KEY`) is never overwritten (US and India); `JOURNAL_RESET=1` starts over deliberately. **Commits:** git calls time out (60 s) and a failed rebase is aborted. **Setup link:** `#setup=` must name this site's repo and asks before replacing a saved token, passphrase or proxy. **Telegram connect** requires a one-time code (`t.me/<bot>?start=<code>`); handled commands are confirmed at once (no double answers after a restart). **Settings saved on two devices:** a save never overwrites settings another device saved meanwhile. **CSP** script sources narrowed to the exact libsodium and Firebase folders. **Scan:** NYSE Arca/Cboe listings and fund names (ETF, ETN, leveraged, inverse) left out; sector map widened to ~340 names. **India:** a position bought during a catch-up is not split-adjusted twice; the catch-up Telegram message shows that day's value; settings that need a restart say so. **Calendar:** BLS 2027 CPI/jobs/PPI dates and expected 2027 Fed minutes added; the bot warns when fewer than 45 days remain. **Other:** news matching needs `$AI`/`(AI)` for short or word-like tickers and whole words for names, undated items count as old; watchdog reads the checked-out journal (no Pages lag) and runs to 16:00 ET in winter time; refresh-prices has a timeout and no overlap; PBKDF2 iteration counts clamped on decrypt; retirement calculator rounds ages; rent-vs-EMI grid greys “about even” cells like the verdict; Node ≥ 22 everywhere. **Left for the owner:** the GitHub token travels inside the passphrase-encrypted sign-in blob (strength = the passphrase). Tests: unit 77, broker 113, India 15, page checks +5. |
 | 2026-10-25 | **Second audit** (independent review of everything since the first audit + the money/order paths; 13 findings, all fixed). **False daily halt after a sale (most important):** the fills used for each part's day P/L were refreshed only every 60 s, so right after a sale the position was gone but its sell fill was not listed and the whole cost counted as a loss — a profitable CALL sale read as “CALLs down $5,000”, halted CALLs and market-sold the *other* open CALL (reproduced; a test now fails without the fix). Fills are now re-read whenever positions change (and paged beyond 100), and halts are skipped while a vanished position has no sell fill (`fillsLag`). Also: `send()` clears its duplicate key when the broker rejects an order (a failed stop could not retry for 90 s / 6 h); day-trade entries book their money (`useSL`) so two setups cannot overspend a share; STOP moved to the very top of `run()` (before the clock call); `spyFast` manages only the sleeve's own rows; `spyWatch` respects the daily SPY maximum and the pending lock is kept for 10 s after placing; `spyOnQuote` re-reads the position before selling (no sale of an option the take-profit already sold); SPY rows use the fill price as entry in every lane; the journal signature includes the day-state memory (a /resume is not lost on restart). India research: carried LT losses no longer offset ST gains (separate carries). 5-year card: reinvested, already-taxed dividends raise the funds' cost basis. Page: tickers the bot would drop (e.g. BRK-B), an empty list or > 60 are refused. Tests: 5 broker + 1 page; tooltip scan clean; accessibility clean in both markets. |
 | 2026-10-25 | **SPY money per trade** (owner's request): new `spyTradePct` (10–100 %, default 100 = previous behaviour) in 3 · Capital allocation beside the SPY share. One SPY trade's budget = min(share × `spyTradePct`, free SPY money) × the live-size/FOMC budget factor, on both the cycle path (`spyCycle` → `spyPlace`) and the tick path (`spyEnter`); still one trade at a time. Journal `spy.rules.tradePct`; the allocation note shows the dollars per trade; the SPY card shows the %. Tests: 5 broker (100 / 50 / 20 % caps, tick path, no second trade while one is open), 1 unit, 2 page. |
 | 2026-10-24 | **Research (India): three bot ideas after Indian tax, year by year** — new `bot/research-in-ideas.mjs` (run by research-in.yml; writes `research-in-ideas.json` / `research_in_ideas.md`): A breakout on Midcap 150 (10 %×10), B monthly 12-1 momentum top 20 of Nifty 200, C = B with cash when Nifty < 200-day. Lot-level tax (≤ 12 months 20 %, > 12 months 12.5 % above ₹1.25 L; ST losses offset both, LT only LT; carry forward; paid at calendar year end; cashed out at the end); before-tax figures from an identical untaxed run. ₹10 L, Oct 2021–Oct 2026, after tax: A ₹16.0 L, B ₹43.8 L, C ₹37.1 L, current India bot ≈ ₹11.9 L, Nifty 50 fund ₹12.9 L, Midcap 150 fund ₹17.3 L, Nifty 200 Momentum 30 fund ₹13.3 L. **B and C are not credible**: they use today's Nifty 200 members, and momentum buys exactly the stocks that rose into the index (look-ahead); the real point-in-time momentum fund made ₹13.3 L. A, though also flattered, still trails the Midcap fund. Stock lists from NSE archives (2026-10-24). |

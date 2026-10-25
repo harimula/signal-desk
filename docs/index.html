@@ -86,7 +86,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
-  <div class="stamp">System documentation · v1.8<br>Updated 2026-10-25</div>
+  <div class="stamp">System documentation · v1.9<br>Updated 2026-10-25</div>
   <ol>
     <li><a href="#what"><span class="k">01</span>What it is</a></li>
     <li><a href="#functional"><span class="k">02</span>Functional</a></li>
@@ -229,9 +229,20 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 │   ├── journal.mjs / .json <span class="c">FIFO trade pairing; trade journal (encrypted when JOURNAL_KEY set)</span>
 │   ├── research.mjs        <span class="c">4-strategy simulator, out-of-sample split</span>
 │   ├── backtest.mjs        <span class="c">single-strategy backtest</span>
-│   ├── test.mjs            <span class="c">53 unit tests (CI)</span>
-│   └── test-orders.mjs     <span class="c">fake-broker check of the orders one cycle places (CI)</span>
-├── .github/workflows/      <span class="c">refresh, trade, research, backtest, test</span>
+│   ├── spyopt.mjs          <span class="c">SPY quick options: signal, exits, order ids</span>
+│   ├── daytrade.mjs        <span class="c">day-trading signals (opening range, VWAP)</span>
+│   ├── scan.mjs            <span class="c">market scan: most-traded stocks (no ETFs)</span>
+│   ├── msgpack.mjs         <span class="c">MessagePack codec for the options price stream</span>
+│   ├── telegram.mjs        <span class="c">Telegram alerts and read-only commands</span>
+│   ├── jcrypt.mjs          <span class="c">journal encryption (AES-256-GCM)</span>
+│   ├── watchdog.mjs        <span class="c">dead-man's switch</span>
+│   ├── india.mjs           <span class="c">India bot (simulation)</span>
+│   ├── research-in-ideas.mjs <span class="c">India 5-year research with tax</span>
+│   ├── research-day.mjs    <span class="c">day-trading research</span>
+│   ├── test.mjs            <span class="c">77 unit tests (CI)</span>
+│   ├── test-orders.mjs     <span class="c">113 fake-broker checks of the orders the bot places (CI)</span>
+│   └── test-india.mjs      <span class="c">15 India simulation checks (CI)</span>
+├── .github/workflows/      <span class="c">refresh, trade, research (US, India, day), backtest, india-sim, watchdog, test</span>
 ├── docs/                   <span class="c">ARCHITECTURE.md · index.html (this page) · architecture.pptx</span>
 └── BOT.md  SECURITY.md  ACCOUNTS.md  FAMILY.md  MIGRATION.md  README.md</pre>
 
@@ -262,7 +273,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="tw"><table>
 <tr><th>Workflow</th><th>Trigger</th><th>What it does</th><th>Limit</th></tr>
 <tr><td><code>refresh-prices</code></td><td class="mono">*/10 13-21 * * 1-5 (US)<br>*/15 3-10 * * 1-5 (India)</td><td><code>fetch.mjs</code> → live.json; <code>news.mjs</code> → news.json; commit</td><td>~1 min</td></tr>
-<tr><td><code>paper-trade-bot</code></td><td class="mono">*/5 13-21 * * 1-5, manual; one session at a time</td><td><code>bot/live.mjs</code> for up to 345 min; exits if <code>bot/STOP</code> exists</td><td>358 min</td></tr>
+<tr><td><code>paper-trade-bot</code></td><td class="mono">*/5 13-21 * * 1-5, manual; one session at a time</td><td><code>bot/live.mjs</code> for up to 345 min; checks <code>bot/STOP</code> on GitHub every 15 s and sells everything when it appears</td><td>358 min</td></tr>
 <tr><td><code>strategy-research</code></td><td>manual</td><td><code>bot/research.mjs</code> → research.json + report</td><td>40 min</td></tr>
 <tr><td><code>backtest</code></td><td>manual</td><td><code>bot/backtest.mjs</code> → backtest.json + report</td><td>30 min</td></tr>
 <tr><td><code>bot-tests</code></td><td>push / PR</td><td><code>bot/test.mjs</code> + <code>bot/test-orders.mjs</code></td><td>8 min</td></tr>
@@ -302,7 +313,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <tr><td><code>config.mjs</code></td><td>Settings schema</td><td><code>PRESETS</code>, <code>DEFAULTS</code>, <code>RANGES</code>, <code>normalize</code>, <code>summary</code></td></tr>
 <tr><td><code>journal.mjs</code></td><td>Pair fills into round trips (FIFO)</td><td><code>parseSym</code>, <code>buildJournal</code></td></tr>
 </table></div>
-<p>Zero npm dependencies; Node 20 or newer (built-in <code>fetch</code>, <code>WebSocket</code>, <code>crypto.webcrypto</code>).</p>
+<p>Zero npm dependencies; Node 22 or newer (built-in <code>fetch</code>, <code>WebSocket</code> with headers, <code>crypto.webcrypto</code>). Node 20 has no WebSocket, so the live streams would never connect.</p>
 </section>
 
 <section id="bot">
@@ -324,7 +335,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   G -->|news crisis / FOMC window / breaker tripped| W[No new trades]
   G -->|clear| E[Entry window 9:45 → 11:00]
   E --> C{close above 200-day SMA&lt;br/&gt;and RSI-2 below 10&lt;br/&gt;and not bounced 1 %+}
-  C -->|yes, deepest dips first| SZ[Size: risk 0.5 % of equity&lt;br/&gt;max 10 % per position&lt;br/&gt;heat ≤ 3 %, ≤ 2 per sector]
+  C -->|yes, market leaders first (or deepest dips)| SZ[Size: risk % of equity&lt;br/&gt;max stock % per position&lt;br/&gt;heat cap, ≤ 2 per sector]
   SZ --> O[Resting limit BUY&lt;br/&gt;+ optional CALL 14–35 DTE]
   C -->|no| H[Wait]
   O --> M[Monitor every tick]
@@ -337,7 +348,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   L -->|no| N([Carry overnight])</pre></figure>
 <ul>
   <li><b>Entries:</b> 9:45–11:00 ET (after 10:15 on CPI/jobs days); resting limit orders at the broker.</li>
-  <li><b>Exits:</b> last 10 minutes once the close is above the 5-day average, or after 10 sessions. A 25 % hard floor is a disaster brake and fires within a second off the stream.</li>
+  <li><b>Exits:</b> take-profit +10 % (resting limit order, changeable); otherwise the last 10 minutes once the close is above the 5-day average, or after 10 sessions. A 25 % hard floor is a disaster brake and fires within a second off the stream.</li>
   <li><b>Options:</b> CALL at the nearest strike, 14–35 days to expiry, on the same dips; take-profit +50 % as a resting order, stop −50 %, closed 3 days before expiry. Skipped under the pattern-day-trader guard when equity is under $25 000.</li>
   <li><b>Puts (experimental, off by default):</b> with <b>Trade PUT options</b> ticked, a PUT is bought on a stock <i>below</i> its 200-day average whose RSI-2 is above 90 (a sharp pop in a downtrend), skipped if it has already fallen 1 %+ today. Same option rules and caps as the CALLs; exits when the stock closes below its 5-day average, after 10 sessions, or on the option take-profit / stop / expiry rules. Never backtested on options; the research workflow tests a stock-short proxy.</li>
   <li><b>Guards:</b> FOMC/CPI/jobs windows, live headline scan (war, White House, Fed, crisis — whole-word matching; a single company halting skips only that ticker), SPY tone; daily −3 % and weekly −6 % loss caps; 3-loss streak pause; stale orders cancelled after 45 min.</li>
@@ -458,7 +469,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <h2><span class="k">08</span>Testing and quality</h2>
 <ul>
   <li><code>bot/test-orders.mjs</code>: a fake broker serves a just-dipped and a just-popped stock and the test checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked), money limits, market scan, journal continuity across restarts, and the day-trading engine — 43 checks. Runs in CI.</li>
-  <li><code>bot/test.mjs</code>: 55 unit tests (indicators, journal encryption round trip, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
+  <li><code>bot/test.mjs</code>: 77 unit tests (indicators, journal encryption round trip, signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing). Runs in CI on every push.</li>
   <li>Integration tests against mock brokers (REST + websocket) with a fake clock: duplicate-order prevention, take-profit timing, floor exits off streamed ticks, config hot-reload, paper↔live reconnect, PDT guard, encrypted journal and log redaction.</li>
   <li>Page checks in headless Chromium at desktop and phone widths for every tab, including scroll preservation during live ticks.</li>
   <li>Research and backtest workflows produce reproducible reports committed to the repo.</li>
@@ -470,6 +481,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-25</td><td><b>Third audit.</b> Pause now reaches a running bot within about 15 seconds (before, it waited for the next run). The research no longer lets a stock sold at the close pay for a buy that morning — results re-run. Logs in privacy mode hide tickers and amounts; an unreadable journal is never overwritten; Telegram connects only the chat that sends a one-time code; a setup link asks before replacing your saved connection; settings saved on two devices never overwrite each other; ETFs left out of the market scan; 2027 economic calendar added</td></tr>
 <tr><td>2026-10-25</td><td><b>Second audit.</b> Fixed a false “daily loss” stop right after a sale (it could close other open options), a failed order that blocked its own retry, day trades that could overspend a share, STOP waiting on the broker clock, the SPY fast lanes touching hand-bought options or exceeding the daily SPY maximum, a late quote selling an option already sold, a /resume lost on restart; India research tax set-off; fund tax basis on the 5-year card; ticker check before saving.</td></tr>
 <tr><td>2026-10-25</td><td>Bot settings: “SPY money per trade” — how much of the SPY share one trade may use (default 100%)</td></tr>
 <tr><td>2026-10-24</td><td>Research (India): breakout on midcaps and two momentum bots tested after Indian tax, year by year, against the Nifty 50, Midcap 150 and Momentum 30 funds</td></tr>

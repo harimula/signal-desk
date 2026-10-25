@@ -5,7 +5,7 @@
   "description": "Stock signals site and RSI-2 paper-trading bot. No runtime dependencies (MessagePack codec is in-house).",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "test": "node bot/test.mjs && node bot/test-orders.mjs && node bot/test-india.mjs",

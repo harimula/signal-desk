@@ -6,6 +6,7 @@
 //    and REST polling takes over automatically if a stream ever drops.
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { execSync, spawn } from 'node:child_process';
+import fs from 'node:fs';
 import { HAVE_KEYS, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols } from './bot.mjs';
 import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { summary } from './config.mjs';
@@ -36,10 +37,37 @@ async function pollConfig() {
     }
   } catch (e) { console.log('config poll failed', e.message); }
 }
+// ---- kill switch from the page: Pause writes bot/STOP to GitHub; a running session must see it within seconds, not at the next
+// run. Polled every 15 s through the GitHub API with the workflow's own token; mirrored to the local file bot.mjs checks.
+let lastStopPoll = 0;
+async function pollStop() {
+  const repo = process.env.GITHUB_REPOSITORY, tok = process.env.GITHUB_TOKEN; if (!repo || !tok) return;
+  if (Date.now() - lastStopPoll < 15000) return; lastStopPoll = Date.now();
+  try {
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/bot/STOP?ref=main&t=${Date.now()}`, { headers: { authorization: 'Bearer ' + tok, accept: 'application/vnd.github+json', 'cache-control': 'no-cache' } });
+    if (r.status === 200 && !fs.existsSync('bot/STOP')) { fs.writeFileSync('bot/STOP', 'stop (from the page)'); console.log('\u26d4 STOP set on the page \u2014 acting now'); wake('STOP'); }
+    else if (r.status === 404 && fs.existsSync('bot/STOP')) { fs.unlinkSync('bot/STOP'); console.log('\u25b6 STOP removed on the page \u2014 trading resumes'); wake('resume'); }
+  } catch (e) { console.log('stop poll failed', e.message); }
+}
 function commit() {
   if (process.env.BOT_NO_COMMIT === '1') return;
-  try { execSync('git add bot/journal.json && (git add bot/scan.json live.json news.json 2>/dev/null || true) && (git diff --cached --quiet || (git commit -q -m "Bot journal" && (git push -q || (git pull -q --rebase -X theirs origin main && git push -q))))', { stdio: 'inherit', shell: '/bin/bash' }); }
-  catch (e) { console.log('commit skipped:', e.message.split('\n')[0]); }
+  const sh = (cmd, ms = 60000) => execSync(cmd, { stdio: 'pipe', timeout: ms });          // never let git block the trading loop for long
+  let saved = null; try { saved = fs.readFileSync('bot/journal.json'); } catch (e) {}
+  try {
+    sh('git add bot/journal.json && (git add bot/scan.json live.json news.json 2>/dev/null || true)');
+    if (execSync('git diff --cached --quiet || echo changed', { stdio: 'pipe', timeout: 30000 }).toString().trim() !== 'changed') return;
+    sh('git commit -q -m "Bot journal"');
+    try { sh('git push -q'); }
+    catch (e) {
+      try {
+        // the local bot/STOP mirror (see pollStop) is untracked; if the page's STOP commit arrives it would block the pull
+        try { execSync('git ls-files --error-unmatch bot/STOP', { stdio: 'pipe' }); } catch (e3) { try { fs.unlinkSync('bot/STOP'); } catch (e4) {} }
+        sh('git pull -q --rebase --autostash -X theirs origin main'); sh('git push -q');
+      }
+      catch (e2) { try { sh('git rebase --abort', 20000); } catch (e3) {} console.log('commit skipped: ' + String(e2.message).split('\n')[0]); }
+    }
+  } catch (e) { console.log('commit skipped:', String(e.message).split('\n')[0]); }
+  finally { if (saved) { try { const now = fs.readFileSync('bot/journal.json'); if (!now.length) fs.writeFileSync('bot/journal.json', saved); } catch (e) { fs.writeFileSync('bot/journal.json', saved); } } }   // a reset must never lose the journal
 }
 
 // ---- site prices: GitHub's scheduler often skips the 10-minute refresh-prices runs during market hours, so the
@@ -49,7 +77,8 @@ const PRICES_EVERY = 10 * 60000; let lastPrices = 0, pricesBusy = false, lastTg 
 function refreshPrices() {
   if (process.env.BOT_NO_PRICES === '1' || process.env.BOT_NO_COMMIT === '1') return;
   pricesBusy = true; lastPrices = Date.now();
-  const run = (file, next) => { const c = spawn(process.execPath, [file], { stdio: 'ignore', env: process.env }); const t = setTimeout(() => c.kill(), 4 * 60000); c.on('exit', code => { clearTimeout(t); if (file === 'fetch.mjs') console.log('site prices refreshed' + (code ? ' (exit ' + code + ')' : '')); next(); }); c.on('error', () => { clearTimeout(t); next(); }); };
+  const run = (file, next) => { const env = { PATH: process.env.PATH, HOME: process.env.HOME, TZ: process.env.TZ || '', ...(file === 'news.mjs' ? { ALPACA_KEY: process.env.ALPACA_KEY || '', ALPACA_SECRET: process.env.ALPACA_SECRET || '' } : {}) };   // refreshers get no Telegram, GitHub or journal secrets; only the news reader gets the (read-only) market-data keys
+    const c = spawn(process.execPath, [file], { stdio: 'ignore', env }); const t = setTimeout(() => c.kill(), 4 * 60000); c.on('exit', code => { clearTimeout(t); if (file === 'fetch.mjs') console.log('site prices refreshed' + (code ? ' (exit ' + code + ')' : '')); next(); }); c.on('error', () => { clearTimeout(t); next(); }); };
   run('fetch.mjs', () => run('news.mjs', () => { pricesBusy = false; lastCommit = 0; }));    // commit right after, so the page sees them now
 }
 
@@ -156,7 +185,7 @@ await pollConfig();
 while (Date.now() - born < LIFE && !stopping) {
   const mins = setNow();
   if (mins >= 16 * 60 + 5) break;
-  await pollConfig();
+  await pollConfig(); await pollStop();
   const beat = mins >= 15 * 60 + 50 ? BEAT_CLOSE : BEAT;
   let why = queue.shift() || (Date.now() - lastFull >= beat ? 'beat' : null);
   if (!why && !(tradeOk && dataOk) && Date.now() - lastFastCheck >= 1000) { lastFastCheck = Date.now(); try { why = await fastCheck(); errors = 0; } catch (e) { errors++; if (errors > 20) await sleep(5000); } }   // streams down: poll instead, at most once a second

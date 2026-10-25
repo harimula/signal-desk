@@ -136,6 +136,10 @@ export function applySplits(J, splits) {
   return out;
 }
 
+export function markKnownSplits(J, splits) {
+  for (const k of KEYS) for (const p of J.sleeves[k].open) for (const s of (splits[p.sym] || [])) if (!(p.splits || []).includes(s.d)) (p.splits = p.splits || []).push(s.d);
+}
+
 // Process every completed trading day after J.lastDate. `days` = benchmark (^NSEI) dates, oldest first.
 export function processDays(J, days, data, cfg, symbols, bench) {
   const events = [];
@@ -157,7 +161,7 @@ export function processDays(J, days, data, cfg, symbols, bench) {
 
 // The Telegram summary for one processed day.
 export function dayMessage(J, ev, cfg) {
-  const inr = v => '₹' + Math.round(v).toLocaleString('en-IN'), last = J.equity[J.equity.length - 1];
+  const inr = v => '₹' + Math.round(v).toLocaleString('en-IN'), last = J.equity.find(e => e.d === ev.d) || J.equity[J.equity.length - 1];   // that day's value, also when several days are caught up at once
   const ret = (last.total / J.stake - 1) * 100, nret = J.niftyStart && last.nifty ? (last.nifty / J.niftyStart - 1) * 100 : null;
   const lines = [`🇮🇳 India bot (simulation) — ${ev.d}`];
   for (const k of KEYS) { const e = ev.evs[k]; if (!e) continue; const L = STRATS[k].label;
@@ -188,8 +192,9 @@ const istNow = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-
 async function loadJournal(file, pass) {
   let raw = null; try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return null; }
   if (!raw || !raw.enc) return raw;
-  if (!pass) { console.log('journal is encrypted but JOURNAL_KEY is missing — starting fresh'); return null; }
-  try { return await decryptJournal(raw, pass); } catch (e) { console.log('previous India journal could not be decrypted — starting fresh'); return null; }
+  const reset = process.env.JOURNAL_RESET === '1';                                    // never silently replace a record we cannot read
+  if (!pass) { if (reset) return null; return { locked: 'the India journal is encrypted but JOURNAL_KEY is missing' }; }
+  try { return await decryptJournal(raw, pass); } catch (e) { if (reset) return null; return { locked: 'the India journal could not be decrypted with this JOURNAL_KEY (passphrase changed?)' }; }
 }
 async function saveJournal(file, J, pass) {
   const body = { ...J, at: new Date().toISOString() };
@@ -213,6 +218,7 @@ export async function runIndia({ file = 'bot/india-journal.json', cfgFile = 'bot
     await new Promise(r => setTimeout(r, +(process.env.YAHOO_PAUSE_MS ?? 200)));
   }
   let J = await loadJournal(file, pass);
+  if (J && J.locked) { log('India journal NOT updated: ' + J.locked + '. Fix the JOURNAL_KEY secret, or set JOURNAL_RESET=1 once to start a new simulation.'); return null; }
   const latest = days[days.length - 1];
   if (!J || (cfg.resetAt && Date.parse(cfg.resetAt) > Date.parse(J.startedAt))) {
     J = newJournal(cfg, latest, benchD.C[benchD.idx[latest]]);
@@ -222,7 +228,10 @@ export async function runIndia({ file = 'bot/india-journal.json', cfgFile = 'bot
     log('India simulation started on', latest);
   }
   const sp = applySplits(J, splits); sp.forEach(m => J.acts.push({ t: latest, m: 'Adjusted for ' + m }));
+  const want = { breakout: !!cfg.breakout, rsi2: !!cfg.rsi2 }, cfgKey = KEYS.map(k => k + (want[k] ? 1 : 0)).join(',') + ',' + cfg.stakeInr + ',' + cfg.breakoutShare;
+  if (KEYS.some(k => want[k] !== J.sleeves[k].on) || cfg.stakeInr !== J.stake) { if (J.cfgNote !== cfgKey) { J.cfgNote = cfgKey; J.acts.push({ t: latest, m: 'Settings changed: turning a strategy on/off or a new stake applies when the simulation is restarted (India settings → Restart the simulation)' }); } }
   const events = processDays(J, days, data, cfg, symbols.filter(s => data[s]), benchD);
+  markKnownSplits(J, splits);                                                          // prices are split-adjusted: a position bought during this catch-up already reflects every split known now
   J.watch = { d: latest, ...watchList(data, latest, cfg, symbols.filter(s => data[s])) };
   J.cfg = cfg; J.universe = { listed: symbols.length, loaded: Object.keys(data).length };
   await saveJournal(file, J, pass);

@@ -8,6 +8,7 @@ import { buildJournal, parseSym } from './journal.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
 import { normalize } from './config.mjs';
+import { isStockAsset } from './scan.mjs';
 import http from 'node:http';
 import { rankByLiquidity } from './scan.mjs';
 import { collectSignals, evaluate } from './research-day.mjs';
@@ -352,5 +353,16 @@ test('msgpack: every type round-trips (ints of all sizes, negatives, floats, lon
 });
 
 test('SPY money per trade: defaults to 100% and is kept between 10% and 100%', () => { assert.equal(normalize({}).spyTradePct, 100); assert.equal(normalize({ preset: 'custom', spyTradePct: 50 }).spyTradePct, 50); assert.equal(normalize({ preset: 'custom', spyTradePct: 5 }).spyTradePct, 10); assert.equal(normalize({ preset: 'custom', spyTradePct: 150 }).spyTradePct, 100); });
+test('news: short or word-like tickers need $AI or (AI); company words match whole words only', () => {
+  const ai = keysFor('AI', 'C3.ai, Inc.'), f = keysFor('F', 'Ford Motor Company');
+  assert.equal(relevant({ h: 'AI stocks rally on chip news' }, ai), false); assert.equal(relevant({ h: 'C3.ai jumps after earnings' }, ai), true);
+  assert.equal(relevant({ h: 'How to afford a home in 2026' }, f), false); assert.equal(relevant({ h: 'Ford recalls trucks' }, f), true);
+});
+test('scan: ETFs, leveraged funds and Arca listings are not stocks', () => {
+  const a = (name, exchange = 'NYSE', symbol = 'ABC') => isStockAsset({ tradable: true, exchange, symbol, name });
+  assert.equal(a('Apple Inc. Common Stock', 'NASDAQ', 'AAPL'), true); assert.equal(a('Northern Trust Corporation', 'NASDAQ', 'NTRS'), true);
+  assert.equal(a('SPDR S&P 500 ETF Trust', 'ARCA', 'SPY'), false); assert.equal(a('ProShares UltraPro QQQ', 'NASDAQ', 'TQQQ'), false); assert.equal(a('Direxion Daily Semiconductor Bull 3X Shares', 'NYSE', 'SOXL'), false);
+});
+test('sectors: the large scanned names have a sector (the per-sector limit covers them)', () => { for (const x of ['MU', 'AVGO', 'LLY', 'CAT', 'NEE', 'GS']) assert.notEqual(sectorOf(x), 'Other', x); });
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

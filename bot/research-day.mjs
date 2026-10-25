@@ -123,7 +123,7 @@ export function evaluate(signals, sessionsBySym, P) {
   const byDay = new Map();
   for (const s of bySymDay.values()) { if (!byDay.has(s.d)) byDay.set(s.d, []); byDay.get(s.d).push(s); }
   const trades = [];
-  for (const [d, list] of byDay) {
+  for (const [d, list] of [...byDay].sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)) {   // days in date order: the equity curve and drawdown depend on it
     list.sort((a, b) => a.m - b.m);
     const done = [];                                                  // trades closed so far today, in exit order
     let taken = 0;

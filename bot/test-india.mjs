@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import { normalizeIn, newJournal, stepSleeve, processDays, applySplits, watchList, dayMessage, STRATS } from './india.mjs';
+import { normalizeIn, newJournal, stepSleeve, processDays, applySplits, markKnownSplits, watchList, dayMessage, STRATS } from './india.mjs';
 import { decryptJournal } from './jcrypt.mjs';
 
 let passed = 0, failed = 0;
@@ -103,6 +103,16 @@ await test('splits: a 1:2 split after buying doubles the shares and halves the e
   const p = J.sleeves.rsi2.open[0]; assert.equal(p.qty, 20); assert.equal(p.entryPx, 100);
   applySplits(J, { 'X.NS': [{ d: D[8], num: 2, den: 1 }] }); assert.equal(p.qty, 20, 'same split applied twice');
 });
+await test('splits: a position bought during a catch-up (already split-adjusted prices) is not adjusted again next run', () => {
+  const J = newJournal(cfg, D[0], 1); J.sleeves.rsi2.open.push({ sym: 'X.NS', qty: 20, entryPx: 100, entryDate: D[5], held: 1, paid: 2003 });
+  const sp = { 'X.NS': [{ d: D[8], num: 2, den: 1 }] };
+  markKnownSplits(J, sp); applySplits(J, sp);
+  const p = J.sleeves.rsi2.open[0]; assert.equal(p.qty, 20, 'double split'); assert.equal(p.entryPx, 100);
+});
+await test('day message during a catch-up shows that day\'s value, not the latest', () => {
+  const J = newJournal(cfg, D[0], 20000); J.equity.push({ d: D[1], total: 1010000, nifty: 20000 }, { d: D[2], total: 1050000, nifty: 20000 });
+  const m = dayMessage(J, { d: D[1], evs: {} }, cfg); assert.match(m, /₹10,10,000/); assert.doesNotMatch(m, /10,50,000/);
+});
 await test('watch list and the day message', () => {
   const closes = upTrend(260); const data = { 'AAA.NS': mk(closes) };
   const W = watchList(data, D[259], cfg, ['AAA.NS']); assert.equal(W.breakout[0].s, 'AAA.NS'); assert.ok(W.rsi2[0].r2 >= 0);
@@ -149,6 +159,21 @@ await test('full run: fetches bars, starts the simulation, writes an encrypted j
   assert.ok(J.acts.some(a => /will buy at the next open: RELIANCE/.test(a.m)), 'dip not planned: ' + JSON.stringify(J.acts));
   assert.equal(r1.events.length, 0, 'first run only plans');
   assert.ok(J.watch && J.watch.rsi2.length);
+});
+
+await test('a journal that cannot be decrypted is never overwritten (JOURNAL_RESET=1 starts over)', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sd-india-lock-')); fs.mkdirSync(path.join(tmp, 'bot'));
+  const { encryptJournal } = await import('./jcrypt.mjs');
+  const file = path.join(tmp, 'bot/india-journal.json'), cfgFile = path.join(tmp, 'bot/config-in.json');
+  const before = JSON.stringify({ ...(await encryptJournal({ v: 1, stake: 5 }, 'other-pass', 1000)), at: 'x' });
+  fs.writeFileSync(file, before); fs.writeFileSync(cfgFile, '{}');
+  const srv = http.createServer((req, res) => { const n = 30, d0 = Date.parse('2026-01-01T03:45:00Z') / 1000; res.end(JSON.stringify({ chart: { result: [{ timestamp: Array.from({ length: n }, (_, i) => d0 + i * 86400), indicators: { quote: [{ open: Array(n).fill(10), high: Array(n).fill(10), low: Array(n).fill(10), close: Array(n).fill(10) }] }, events: {} }] } })); });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r)); process.env.YAHOO_BASE = 'http://127.0.0.1:' + srv.address().port; process.env.JOURNAL_KEY = 'india-test-pass';
+  const { runIndia } = await import('./india.mjs'); const logs = [];
+  const r = await runIndia({ file, cfgFile, log: (...a) => logs.push(a.join(' ')) });
+  assert.equal(r, null); assert.equal(fs.readFileSync(file, 'utf8'), before, 'journal was overwritten'); assert.ok(logs.some(l => /NOT updated/.test(l)));
+  process.env.JOURNAL_RESET = '1'; const r2 = await runIndia({ file, cfgFile, log: () => {} }); delete process.env.JOURNAL_RESET; srv.close();
+  assert.ok(r2 && r2.J, 'reset did not start over'); assert.notEqual(fs.readFileSync(file, 'utf8'), before);
 });
 
 console.log(`\n${passed} India checks passed, ${failed} failed`);

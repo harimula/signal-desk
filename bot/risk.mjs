@@ -1,12 +1,20 @@
 // Risk engine — pure functions (unit-tested in bot/test.mjs).
 
-// Sector map for the default universe; anything else counts as "Other".
+// Sector map: the default list plus the large, liquid names the market scan usually picks. Anything else counts as
+// "Other", which the per-sector limit does not cover (no free sector data source), so this list is kept wide.
+const S = (sector, list) => Object.fromEntries(list.split(' ').map(x => [x, sector]));
 export const SECTOR = {
-  AAPL: 'Tech', MSFT: 'Tech', NVDA: 'Tech', AMD: 'Tech', INTC: 'Tech', CSCO: 'Tech', QCOM: 'Tech', ORCL: 'Tech', CRM: 'Tech', ADBE: 'Tech', PLTR: 'Tech', SHOP: 'Tech',
-  META: 'Comms', GOOGL: 'Comms', NFLX: 'Comms', DIS: 'Comms',
-  AMZN: 'Consumer', TSLA: 'Consumer', HD: 'Consumer', UBER: 'Consumer', F: 'Consumer',
-  JPM: 'Financials', BAC: 'Financials', COIN: 'Financials', SOFI: 'Financials',
-  XOM: 'Energy', CVX: 'Energy', KO: 'Staples', PEP: 'Staples', WMT: 'Staples',
+  ...S('Tech', 'AAPL MSFT NVDA AMD INTC CSCO QCOM ORCL CRM ADBE PLTR SHOP AVGO TSM ASML AMAT LRCX KLAC MU MRVL TXN ADI NXPI ON MCHP ARM SMCI DELL HPQ HPE IBM ACN NOW INTU PANW CRWD FTNT ZS NET DDOG SNOW MDB TEAM WDAY ANET STX WDC SNDK LITE COHR CIEN APP SNPS CDNS ADSK GLW TER ENTG MPWR FSLR ENPH APH TEL JBL CSGP DOCU OKTA TWLO U RBLX PATH AI IONQ RGTI QBTS SOUN NBIS CRWV ALAB CRDO VRT'),
+  ...S('Comms', 'META GOOGL GOOG NFLX DIS CMCSA T VZ TMUS CHTR WBD PARA SPOT PINS SNAP RDDT TTD EA TTWO ROKU'),
+  ...S('Consumer', 'AMZN TSLA HD UBER F GM LOW NKE SBUX MCD CMG BKNG ABNB DASH LULU TGT TJX ROST RIVN LCID NIO XPEV LI DKNG MAR HLT RCL CCL NCLH YUM DPZ ORLY AZO EBAY ETSY CVNA CPNG BABA PDD JD MELI DECK ONON CROX'),
+  ...S('Financials', 'JPM BAC COIN SOFI WFC C GS MS SCHW BLK AXP V MA PYPL COF USB PNC TFC BK SPGI MCO ICE CME CB PGR AIG MET PRU HOOD AFRM UPST NU KKR BX APO ARES IBKR MSTR'),
+  ...S('Energy', 'XOM CVX COP OXY EOG SLB HAL DVN MPC PSX VLO KMI WMB OKE FANG APA BKR CEG VST NRG GEV OKLO SMR BE'),
+  ...S('Staples', 'KO PEP WMT COST PG CL KMB MO PM MDLZ KHC GIS KDP STZ TSN HSY KR DG DLTR EL CELH MNST'),
+  ...S('Health', 'LLY UNH JNJ PFE MRK ABBV ABT TMO DHR MDT BMY AMGN GILD VRTX REGN ISRG SYK BSX ZTS CVS CI ELV HUM MRNA BIIB HCA DXCM IDXX NVO HIMS'),
+  ...S('Industrials', 'BA CAT DE GE HON LMT RTX NOC GD UPS FDX UNP CSX NSC MMM ETN EMR ITW PH WM RSG DAL UAL AAL LUV JBLU CARR OTIS PWR URI FAST CTAS ROK AXON RKLB JOBY ACHR'),
+  ...S('Materials', 'LIN APD SHW ECL FCX NEM DOW DD NUE STLD CLF AA MP ALB MOS CF X SCCO GOLD'),
+  ...S('Utilities', 'NEE DUK SO D AEP EXC SRE XEL PCG ED PEG EIX'),
+  ...S('RealEstate', 'PLD AMT CCI EQIX PSA O SPG WELL DLR VICI AVB EQR'),
 };
 export const sectorOf = sym => SECTOR[sym] || 'Other';
 

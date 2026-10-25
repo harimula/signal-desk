@@ -53,6 +53,7 @@ if (process.argv[2] === 'child') {
   const LIVE = { ORB: 101.55, ORB2: 101.55, BRK: 99.45, SPY: (FAKE.spy || 'up') === 'up' ? 502.4 : 497.4, ...(FAKE.live || {}) };
   const orders = [], unknown = [], deletes = [], patches = [], tgSent = [];
   const tgMsg = (id, chat, text) => ({ update_id: id, message: { chat: { id: chat }, date: Math.floor(FIXED / 1000), text } });
+  const tgConfirms = [];
   const tgQueue = [(FAKE.tgBefore || []).map((t, i) => tgMsg(100 + i, t[0], t[1])), (FAKE.tgAfter || []).map((t, i) => tgMsg(200 + i, t[0], t[1]))];
   const occ = (und, type, px) => und + '261113' + type[0].toUpperCase() + String(Math.round(px) * 1000).padStart(8, '0');
 
@@ -64,7 +65,7 @@ if (process.argv[2] === 'child') {
     req.on('data', c => body += c);
     req.on('end', () => {
       const send = o => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)); };
-      if (p === '/bottest-token/getUpdates') return send({ ok: true, result: tgQueue.shift() || [] });
+      if (p === '/bottest-token/getUpdates') { let q = {}; try { q = JSON.parse(body || '{}'); } catch (e) {} if (q.limit === 1) { tgConfirms.push(q.offset); return send({ ok: true, result: [] }); } return send({ ok: true, result: tgQueue.shift() || [] }); }   // limit 1 = the bot confirming what it handled
       if (p === '/bottest-token/sendMessage') { tgSent.push(JSON.parse(body)); return send({ ok: true, result: { message_id: tgSent.length } }); }
       if (p === '/v2/clock' && FAKE.clockFail) { res.statusCode = 500; return send({ message: 'down' }); }
       if (p.startsWith('/v2/positions/') && req.method === 'GET') { const one = (FAKE.positions || []).find(x => x.symbol === decodeURIComponent(p.split('/').pop())); if (!one) { res.statusCode = 404; return send({ message: 'position does not exist' }); } return send(one); }
@@ -99,6 +100,7 @@ if (process.argv[2] === 'child') {
   process.env.ALPACA_URL = url; process.env.ALPACA_DATA_URL = dataUrl;
   process.env.ALPACA_KEY = 'test'; process.env.ALPACA_SECRET = 'test';
   if (FAKE.journalKey) process.env.JOURNAL_KEY = FAKE.journalKey;
+  if (FAKE.reset) process.env.JOURNAL_RESET = '1';
   if (FAKE.tg) { process.env.TELEGRAM_API = url; process.env.TELEGRAM_TOKEN = 'test-token'; process.env.TELEGRAM_CHAT = '42'; }                        // privacy mode: encrypted journal (must be set before the import)
   fs.mkdirSync('bot', { recursive: true });
   const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
@@ -120,8 +122,9 @@ if (process.argv[2] === 'child') {
   const spyW = bot.spyWatch();
   server.closeAllConnections && server.closeAllConnections(); server.close(); dataServer.closeAllConnections && dataServer.closeAllConnections(); dataServer.close();
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
+  let keptOld = false; if (FAKE.prevKey) try { await bot.decryptJournal(JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')), FAKE.prevKey); keptOld = true; } catch (e) {}
   const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
-  console.log('RESULT ' + JSON.stringify({ tickEntry, quoteExit, fast, spyWatch: spyW, spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }));
+  process.stdout.write('RESULT ' + JSON.stringify({ keptOld, tgConfirms, tickEntry, quoteExit, fast, spyWatch: spyW, spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }) + '\n');   // not console.log: privacy mode redacts that
   process.exit(0);
 }
 
@@ -233,8 +236,16 @@ const J2 = run({ stocks: true, options: true }, { journalKey: 'test-pass', prevJ
 check('journal: an open-market cycle replaces the carried-over watch list with a fresh one', () => { assert.ok(J2.watch && J2.watch.at !== '2026-10-23T19:58:00Z', JSON.stringify(J2.watch && J2.watch.at)); assert.ok(J2.watch.rows.length >= 3); });
 check('journal: rewriting the journal several times never duplicates the action log', () => { const a = J2.acts || []; assert.ok(a.length > 1, JSON.stringify(a)); assert.equal(new Set(a).size, a.length, 'duplicates: ' + JSON.stringify(a)); assert.equal(a[0], 'Earlier today: DIP RSI-2 dip buy'); });
 const J3 = run({ stocks: true, options: true }, { time: '2026-10-23T20:01:00Z', closed: true, journalKey: 'test-pass', prevKey: 'old-pass', prevJournal: prevJ });
-check('journal: a previous entry written under another passphrase is skipped, not a crash (fresh journal, still encrypted)', () => { assert.ok(J3.enc); assert.equal(J3.watch, null); assert.ok(Array.isArray(J3.acts)); });
+check('journal: a journal written under another passphrase is never overwritten (no crash, old journal kept)', () => { assert.ok(J3.keptOld, 'the old journal was replaced'); });
+const J4 = run({ stocks: true, options: true }, { time: '2026-10-23T20:01:00Z', closed: true, journalKey: 'test-pass', prevKey: 'old-pass', prevJournal: prevJ, reset: true });
+check('journal: JOURNAL_RESET=1 starts a fresh encrypted journal under the new passphrase', () => { assert.ok(!J4.keptOld); assert.ok(J4.enc); assert.ok(Array.isArray(J4.acts)); });
 
+{ const { redactText } = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
+  check('privacy mode: log lines hide tickers, option symbols and amounts but keep plain words', () => {
+    const t = redactText('bought 12 AAPL @ $187.20, STOP set; quotes for SPY261026C00580000; BRK.B sold; Market closed');
+    for (const bad of ['AAPL', '187', 'SPY26', 'BRK', '12 ']) assert.ok(!t.includes(bad), bad + ' leaked: ' + t);
+    assert.match(t, /STOP set/); assert.match(t, /Market closed/);
+  }); }
 const SL = run({ stocks: true, options: false, universe: 'scan', symbols: ['DIP', 'POP', 'FALL'] }, { slowAssets: 20000 });
 check('market scan: a scan that takes minutes does not hold up the cycle; the bot trades its list meanwhile', () => { assert.ok(SL.cycleMs < 12000, 'cycle took ' + SL.cycleMs + ' ms'); assert.ok(SL.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(SL.acts)); assert.ok((SL.acts || []).some(m => /market scan started/.test(m))); });
 
@@ -245,6 +256,7 @@ check('telegram: the buy alert arrives in the owner\'s chat with size and price'
 check('telegram: /money, /status, /watch and /help answer in the owner\'s chat', () => { assert.ok(tgTxt.some(t => /In trades now/.test(t) && /Free to trade/.test(t))); assert.ok(tgTxt.some(t => /Watching \d+ stocks/.test(t) && /Market check/.test(t))); assert.ok(tgTxt.some(t => /Buy: DIP/.test(t))); assert.ok(tgTxt.some(t => /\/pause/.test(t) && /never buy or sell/.test(t))); });
 check('telegram: a message from any other chat is ignored and never answered', () => { assert.ok(TG.tgSent.every(m => m.chat_id === '42')); assert.equal(tgTxt.filter(t => /In trades now/.test(t)).length, 1); });
 const TP = run({ stocks: true, options: true, symbols: ['DIP'] }, { tg: true, tgBefore: [[42, '/pause']], positions: [{ symbol: 'AAPL', qty: '5', avg_entry_price: '200', current_price: '198', market_value: '990', unrealized_pl: '-10', unrealized_plpc: '-0.01' }] });
+check('telegram: handled commands are confirmed at once (a restart never answers them twice)', () => { assert.ok((TP.tgConfirms || []).includes(101), JSON.stringify(TP.tgConfirms)); });
 check('telegram: /pause stops new entries (no buy on the dip stock) and confirms', () => { assert.ok(!TP.orders.some(o => o.side === 'buy'), JSON.stringify(TP.orders)); assert.ok(TP.tgSent.some(m => /Paused: no new entries/.test(m.text))); });
 check('telegram: /pause never sells what is open (only protective stop orders may be placed)', () => assert.ok(TP.orders.filter(o => o.side === 'sell').every(o => o.type === 'stop'), JSON.stringify(TP.orders)));
 

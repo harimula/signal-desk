@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-3YlhOeDhMqKzzVza3zuyLaizs+htoQQ0xpIgWnEzdVg=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-wbFuU48COzrrKp2LwuZwat3lYVc6lyLBCmoMaXT6i4U=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -630,6 +630,13 @@ try {
   if (location.hash.indexOf('#setup=') === 0) {
     const st9 = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(location.hash.slice(7))))));
     if (st9 && typeof st9 === 'object') {
+      // A setup link must never quietly re-point this device at someone else's repository or proxy:
+      // the repository has to be this site's own, and replacing anything already saved needs a yes.
+      const here9 = (() => { const m = /^([a-z0-9-]+)\.github\.io$/i.exec(location.hostname), seg = location.pathname.split('/').filter(Boolean)[0]; return m && seg ? (m[1] + '/' + seg).toLowerCase() : ''; })();
+      const old9 = k => { try { return JSON.parse(localStorage.getItem(k) || '""'); } catch (e) { return ''; } };
+      if (st9.repo && here9 && String(st9.repo).toLowerCase() !== here9) { delete st9.repo; delete st9.tok; delete st9.jk; }
+      const swaps9 = [['tok', 'sd-ghtok', 'GitHub connection'], ['jk', 'sd-jkey', 'journal passphrase'], ['px', 'sd-proxy', 'price proxy']].filter(([f, k]) => st9[f] && old9(k) && old9(k) !== String(st9[f]));
+      if (swaps9.length && !confirm('This setup link would REPLACE the ' + swaps9.map(x => x[2]).join(', ') + ' saved on this device.\n\nOnly press OK if you made this link yourself.')) swaps9.forEach(([f]) => delete st9[f]);
       if (st9.fh) localStorage.setItem('sd-fh', JSON.stringify(String(st9.fh)));
       if (st9.fmp) localStorage.setItem('sd-fmp', JSON.stringify(String(st9.fmp)));
       if (st9.px) localStorage.setItem('sd-proxy', JSON.stringify(String(st9.px)));
@@ -932,7 +939,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792940052';
+const BUILD_V = '1792946309';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2285,7 +2292,7 @@ ${nwItems == null ? '<div class="mut" style="padding:10px 0">Loading…</div>' :
 async function jDecrypt(j, pass) {
   const b = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)), enc = new TextEncoder();
   const km = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
-  const key = await crypto.subtle.deriveKey({name: 'PBKDF2', salt: b(j.salt), iterations: j.iter || 200000, hash: 'SHA-256'}, km, {name: 'AES-GCM', length: 256}, false, ['decrypt']);
+  const key = await crypto.subtle.deriveKey({name: 'PBKDF2', salt: b(j.salt), iterations: Math.min(5e6, Math.max(1000, j.iter || 200000)), hash: 'SHA-256'}, km, {name: 'AES-GCM', length: 256}, false, ['decrypt']);
   const pt = await crypto.subtle.decrypt({name: 'AES-GCM', iv: b(j.iv)}, key, b(j.ct));
   return JSON.parse(new TextDecoder().decode(pt));
 }
@@ -2802,7 +2809,7 @@ async function inSave(reset) {
       catch (e) { if (attempt >= 3 || !/409|does not match|sha|conflict/i.test(e.message || '')) throw e; sha = (await ghApi('/contents/bot/config-in.json?ref=main')).sha; }
     }
     inSha = r.content.sha; inCfg = c; inResetArm = false;
-    inMsg = reset ? 'Saved — the simulation restarts with ' + inr(c.stakeInr) + ' at the next run (after today’s NSE close).' : 'Saved — sizes and rules apply from the next run (after the NSE close). Stake and split apply when the simulation restarts.';
+    inMsg = reset ? 'Saved — the simulation restarts with ' + inr(c.stakeInr) + ' at the next run (after today’s NSE close).' : 'Saved — sizes and rules apply from the next run (after the NSE close). Stake, split and turning a strategy on or off apply only when you restart the simulation.';
   } catch (e) { inMsg = 'Save failed: ' + ghWhy(e); }
   inSaving = false; renderAll();
 }
@@ -2837,7 +2844,11 @@ async function stSave() {
       catch (e) {
         if (attempt >= 3 || !/409|does not match|expected|conflict|sha|reference/i.test(e.message || '')) throw e;
         stMsg = 'Saving… another change just landed, retrying'; draw();
-        try { sha = (await ghApi('/contents/bot/config.json?ref=main')).sha; } catch (e2) { throw e; }
+        let fr; try { fr = await ghApi('/contents/bot/config.json?ref=main'); } catch (e2) { throw e; }
+        let theirs = null; try { theirs = JSON.parse(decodeURIComponent(escape(atob(fr.content.replace(/\n/g, ''))))); } catch (e3) {}
+        // another device saved settings since this page loaded them: never overwrite that silently
+        if (theirs && stCfg && theirs.updatedAt && theirs.updatedAt !== stCfg.updatedAt) throw new Error('Settings were changed from another device or tab at ' + new Date(theirs.updatedAt).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + '. Reload this page to see them, then make your change again (nothing was overwritten).');
+        sha = fr.sha;
       }
     }
     stStep('GitHub accepted the file (' + ghLast.ms + ' ms)');
@@ -2847,6 +2858,7 @@ async function stSave() {
   stWait(false); stBusy = false; draw();
 }
 // Telegram: check the token, find the owner's chat from the message they sent the bot, send a test, store both as secrets.
+let tgCode = null;   // one-time code: only the chat that sends it gets connected (anyone can message a public bot)
 async function tgConnect() {
   const out = $('#tgMsg'), say = h => { if (out) out.innerHTML = h; };
   const tok = (($('#st-tgtok') || {}).value || '').trim();
@@ -2855,17 +2867,18 @@ async function tgConnect() {
   try {
     say('Checking the token…');
     const me = await api('getMe');
-    const link = 'https://t.me/' + encodeURIComponent(me.username);
+    if (!tgCode) tgCode = String(100000 + crypto.getRandomValues(new Uint32Array(1))[0] % 900000);
+    const link = 'https://t.me/' + encodeURIComponent(me.username) + '?start=' + tgCode;   // Start in Telegram sends "/start <code>" by itself
     say('Token works (bot @' + esc(me.username) + '). Looking for your message to it…');
     const ups = await api('getUpdates', {allowed_updates: ['message']});
-    const msgs = (ups || []).map(u => u.message).filter(m => m && m.chat && m.chat.type === 'private');
-    if (!msgs.length) { say(`Almost there: open <a href="${safeUrl(link)}" target="_blank" rel="noopener">@${esc(me.username)}</a> in Telegram, press <b>Start</b> (or send it any message), then press <b>Connect Telegram</b> again.`); return; }
+    const msgs = (ups || []).map(u => u.message).filter(m => m && m.chat && m.chat.type === 'private' && String(m.text || '').includes(tgCode));
+    if (!msgs.length) { say(`Almost there: open <a href="${safeUrl(link)}" target="_blank" rel="noopener">@${esc(me.username)}</a> in Telegram and press <b>Start</b> (or send it the code <b>${tgCode}</b>), then press <b>Connect Telegram</b> again. Only the chat that sends this code is connected.`); return; }
     const chat = msgs[msgs.length - 1].chat;
     await api('sendMessage', {chat_id: chat.id, text: '\u2705 Connected to Signal Desk. Buy and sell alerts, the morning hello and the day summary will arrive here. Type /help for commands (they answer while the bot runs, about 9:20 AM\u20134:05 PM ET on trading days).'});
     say('Test message sent to ' + esc(chat.first_name || 'you') + ' — saving to GitHub secrets…');
     await stSecret('TELEGRAM_TOKEN', tok, 'Telegram token'); await stSecret('TELEGRAM_CHAT', String(chat.id), 'Telegram chat');
     try { stSecrets = (await ghApi('/actions/secrets?per_page=100')).secrets.map(x => x.name); } catch (e) {}
-    if ($('#st-tgtok')) $('#st-tgtok').value = '';
+    if ($('#st-tgtok')) $('#st-tgtok').value = ''; tgCode = null;
     stMsg = 'Telegram connected: alerts go to your chat with @' + me.username + '. The bot picks it up at its next start (tomorrow morning, or now if you restart it).'; renderAll();
   } catch (e) { say('Telegram said: ' + esc(e.message || String(e)) + (/Unauthorized/i.test(e.message) ? ' — the token is wrong or was revoked; copy it again from @BotFather.' : /Conflict|webhook/i.test(e.message) ? ' — the bot is busy reading messages right now; wait a minute and try again.' : '')); }
 }
@@ -2909,7 +2922,7 @@ async function stControl(what) {
   if (!ghTok()) { stMsg = 'Connect GitHub first.'; renderAll(); return; }
   stBusy = true; stMsg = 'Working…'; renderAll(); stWait(true);
   try {
-    if (what === 'pause') { await ghApi('/contents/bot/STOP', {method: 'PUT', body: JSON.stringify({message: 'Pause bot', content: b64('stop'), branch: 'main'})}); stStop = true; stMsg = 'Paused. Within seconds the bot cancels every order and sells every position, then stays idle until you resume.'; }
+    if (what === 'pause') { await ghApi('/contents/bot/STOP', {method: 'PUT', body: JSON.stringify({message: 'Pause bot', content: b64('stop'), branch: 'main'})}); stStop = true; stMsg = 'Paused. Within about 15–30 seconds the running bot cancels every order and sells every position, then stays idle until you resume.'; }
     if (what === 'resume') { const f = await ghApi('/contents/bot/STOP?ref=main'); await ghApi('/contents/bot/STOP', {method: 'DELETE', body: JSON.stringify({message: 'Resume bot', sha: f.sha, branch: 'main'})}); stStop = false; stMsg = 'Resumed. Trading continues on the next cycle.'; }
     if (what === 'run') { await ghApi('/actions/workflows/trade.yml/dispatches', {method: 'POST', body: JSON.stringify({ref: 'main'})}); stMsg = 'Bot run requested — check the Actions tab on GitHub in a minute.'; }
     if (what === 'research') { await ghApi('/actions/workflows/research.yml/dispatches', {method: 'POST', body: JSON.stringify({ref: 'main'})}); stMsg = 'Strategy research started (about 15 minutes). Results appear on the Bot trades tab.'; }

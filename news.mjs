@@ -10,7 +10,7 @@ export function parseRss(xml, src) {
   for (const m of xml.matchAll(/<item\b[\s\S]*?<\/item>/g)) {
     const it = m[0], g = tag => { const r = new RegExp('<' + tag + '\\b[^>]*>([\\s\\S]*?)</' + tag + '>').exec(it); return r ? decode(r[1]) : ''; };
     const h = g('title'); if (!h) continue;
-    const t = Date.parse(g('pubDate') || g('dc:date')) || Date.now();
+    const t = Date.parse(g('pubDate') || g('dc:date')) || 0;            // undated items count as old (never as "just now")
     out.push({ t, h, u: g('link'), sum: g('description').slice(0, 400), s: src });
   }
   return out;
@@ -19,6 +19,7 @@ export function parseRss(xml, src) {
 const SUFFIX = /\b(incorporated|inc|corporation|corp|company|co|limited|ltd|plc|holdings?|group|class [a-c]|n\.?v|s\.?a|ag|the|trust|etf|fund|spdr|ishares|select sector)\b\.?/gi;
 const GENERIC = new Set(['bank', 'first', 'american', 'united', 'general', 'national', 'international', 'global', 'new', 'royal', 'state']);
 const ALIAS = { GOOGL: ['google', 'alphabet'], GOOG: ['google', 'alphabet'], META: ['meta', 'facebook', 'instagram'], BRK: ['berkshire'], 'BRK-B': ['berkshire'], JPM: ['jpmorgan', 'jp morgan'], GS: ['goldman'], MA: ['mastercard'], V: ['visa'], KO: ['coca-cola', 'coke'], PG: ['procter'], JNJ: ['johnson & johnson', 'j&j'], LLY: ['eli lilly', 'lilly'], UNH: ['unitedhealth'], XOM: ['exxon'], CVX: ['chevron'], HD: ['home depot'], WMT: ['walmart'], TSM: ['tsmc', 'taiwan semi'] };
+const TICKER_WORDS = new Set(['AI', 'ON', 'NOW', 'ALL', 'ARE', 'CAN', 'IT', 'FOR', 'OUT', 'SO', 'BIG', 'ONE', 'KEY', 'GO', 'BE', 'ARM', 'HAS', 'CAR', 'TWO', 'NEW', 'OPEN', 'LOW', 'HOOD', 'PATH', 'MAIN', 'RUN', 'PLAY', 'TECH', 'REAL', 'SAFE', 'TRUE', 'WELL', 'FAST', 'COST', 'CASH', 'LIFE', 'GOOD', 'BEST', 'FUN', 'EAT', 'WAY', 'NICE', 'LOVE', 'SNAP', 'COIN', 'BOX', 'DOCU', 'U', 'F', 'T', 'V', 'C', 'X', 'O', 'D', 'A', 'K', 'J', 'L', 'M', 'GE', 'GM', 'MA', 'MO', 'PG', 'MS', 'GS', 'BA', 'HD', 'KO', 'DE', 'UP']);
 export function keysFor(sym, name) {
   const base = sym.replace(/\.(NS|BO)$/, '').replace(/-.*$/, '');
   const clean = (name || '').replace(/[,()]/g, ' ').replace(SUFFIX, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -27,13 +28,17 @@ export function keysFor(sym, name) {
   const w = clean.split(' ');
   if (w[0] && w[0].length >= 4 && !GENERIC.has(w[0])) keys.add(w[0]);
   else if (w.length >= 2) keys.add(w.slice(0, 2).join(' '));
-  return { re: base.length >= 2 ? new RegExp('(^|[^A-Za-z0-9])\\$?' + base.replace(/[.^$]/g, '\\$&') + '([^A-Za-z0-9]|$)') : null, words: [...keys] };
+  const esc = base.replace(/[.^$]/g, '\\$&');
+  // short or word-like tickers (AI, ON, NOW, ALL…) only count as "$AI" or "(AI)" — otherwise every headline about AI would match
+  const strict = base.length <= 2 || TICKER_WORDS.has(base);
+  const re = base.length < 1 ? null : strict ? new RegExp('(\\$' + esc + '|\\(' + esc + '\\)|NYSE: ?' + esc + '|NASDAQ: ?' + esc + ')([^A-Za-z0-9]|$)') : new RegExp('(^|[^A-Za-z0-9])\\$?' + esc + '([^A-Za-z0-9]|$)');
+  return { re, words: [...keys] };
 }
 export function relevant(item, k) {
   const low = item.h.toLowerCase();                                  // the headline itself must be about the company
   if (/report 20\d\d|market report|market size|market share|forecast to 20/i.test(item.h)) return false;   // industry-report spam
   if (k.re && k.re.test(item.h)) return true;                         // ticker in the headline, case-sensitive
-  return k.words.some(w => low.includes(w));
+  return k.words.some(w => new RegExp('(^|[^a-z0-9])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)').test(low));   // whole words: "ford" must not match "afford"
 }
 async function get(url, headers = {}) {
   const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 signal-desk', ...headers } });
@@ -48,7 +53,7 @@ async function collect() {
   ];
   if (process.env.ALPACA_KEY && process.env.ALPACA_SECRET) jobs.push(['Benzinga', async () => {
     const j = await (await get('https://data.alpaca.markets/v1beta1/news?limit=50&sort=desc', { 'APCA-API-KEY-ID': process.env.ALPACA_KEY, 'APCA-API-SECRET-KEY': process.env.ALPACA_SECRET })).json();
-    return (j.news || []).map(a => ({ t: Date.parse(a.created_at), h: a.headline, u: a.url, sum: decode(a.summary || '').slice(0, 400), s: a.source ? a.source[0].toUpperCase() + a.source.slice(1) : 'Benzinga', sy: a.symbols || [] }));
+    return (j.news || []).map(a => ({ t: Date.parse(a.created_at) || 0, h: a.headline, u: a.url, sum: decode(a.summary || '').slice(0, 400), s: a.source ? a.source[0].toUpperCase() + a.source.slice(1) : 'Benzinga', sy: a.symbols || [] }));
   }]);
   for (const [name, fn] of jobs) {
     try { const r = await fn(); items.push(...r); status[name] = r.length; }
@@ -57,7 +62,7 @@ async function collect() {
   const seen = new Set(), clean = [];
   for (const it of items.sort((a, b) => b.t - a.t)) {
     const k = it.h.toLowerCase().replace(/[^a-z0-9]+/g, ' ').slice(0, 70);
-    if (seen.has(k) || Date.now() - it.t > 3 * 864e5) continue;
+    if (seen.has(k) || !(it.t > 0) || Date.now() - it.t > 3 * 864e5) continue;
     seen.add(k); clean.push(it);
   }
   // per-stock headlines for every tracked symbol (Yahoo RSS per ticker, India .NS included)

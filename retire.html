@@ -341,15 +341,15 @@ function readInputs() {
   const usd = id => num(id) * fx;
   const inf = num('inf') / 100;
   return {
-    method: 'rate', accAge: num('accAge'), swr: num('swr') / 100, rInd: num('rInd') / 100,
-    age: num('age'), retAge: num('retAge'), planAge: num('planAge'), fx,
+    method: 'rate', accAge: Math.round(num('accAge')), swr: num('swr') / 100, rInd: num('rInd') / 100,
+    age: Math.round(num('age')), retAge: Math.round(num('retAge')), planAge: Math.round(num('planAge')), fx,   // whole years: the model steps one year at a time (36.5 would break it)
     a401: usd('k401'), c401: 0, roth: usd('roth'), cRoth: 0,
     usp: usd('usp'), cUsp: usd('save'),
     india: num('ind') * 1e7, cInd: 0,
     p529: usd('p529'), c529: 0, cust: usd('cust'), cCust: 0,
     cats: CATS.map(c => ({ id: c.id, label: c.label, amt: num(c.id) * 1e5, inf })),
     fee: num('fee') * 1e5,
-    kids: [val('k1'), val('k2')].filter(k => k !== null && Number.isFinite(k) && k >= 0),
+    kids: [val('k1'), val('k2')].filter(k => k !== null && Number.isFinite(k) && k >= 0).map(Math.round),
     col: num('col'), colYrs: num('colYrs'), legacy: num('legacy'),
     rPre: num('rPre') / 100, rPost: num('rPost') / 100, rKid: num('rKid') / 100,
     inf, edu: num('edu') / 100, hc: Math.min(1, num('hc') / 100)

@@ -13,7 +13,7 @@ export async function encryptJournal(obj, pass, iter = JOURNAL_ITER) {
 export async function decryptJournal(blob, pass) {
   const cr = await import('node:crypto'), subtle = cr.webcrypto.subtle, enc = new TextEncoder();
   const km = await subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
-  const key = await subtle.deriveKey({ name: 'PBKDF2', salt: Buffer.from(blob.salt, 'base64'), iterations: blob.iter || 200000, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const key = await subtle.deriveKey({ name: 'PBKDF2', salt: Buffer.from(blob.salt, 'base64'), iterations: (() => { const n = blob.iter || 200000; if (!(n >= 1000 && n <= 5e6)) throw new Error('journal: unusual key-derivation setting'); return n; })(), hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
   const pt = await subtle.decrypt({ name: 'AES-GCM', iv: Buffer.from(blob.iv, 'base64') }, key, Buffer.from(blob.ct, 'base64'));
   return JSON.parse(new TextDecoder().decode(pt));
 }

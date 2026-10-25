@@ -1,7 +1,7 @@
 name: watchdog
 on:
   schedule:
-    - cron: '*/15 13-20 * * 1-5'     # every 15 min, 9:00–16:59 ET (UTC schedule; the script checks ET market hours itself)
+    - cron: '*/15 13-21 * * 1-5'     # every 15 min; 13-21 UTC covers 9:30–16:00 ET in both summer and winter time (the script checks ET hours itself)
   workflow_dispatch:
 permissions:
   contents: read

@@ -7,11 +7,12 @@ const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
 const et = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()).map(p => [p.type, p.value]));
 const mins = (+et.hour % 24) * 60 + +et.minute;
 if (['Sat', 'Sun'].includes(et.weekday) || mins < 9 * 60 + 40 || mins > 16 * 60) { console.log('outside market hours — nothing to check'); process.exit(0); }
-if (!SITE) { console.log('no site url'); process.exit(0); }
 // market holiday? ask the broker's clock (paper keys are enough); if that fails, assume open
 if (KEY && SECRET) { try { const c = await (await fetch('https://paper-api.alpaca.markets/v2/clock', { headers: { 'APCA-API-KEY-ID': KEY, 'APCA-API-SECRET-KEY': SECRET } })).json(); if (c && c.is_open === false) { console.log('market closed today — nothing to check'); process.exit(0); } } catch (e) {} }
-const r = await fetch(SITE + 'bot/journal.json?t=' + Date.now(), { cache: 'no-store' });
-const j = r.ok ? await r.json() : null;
+// the workflow checks out the latest commit, so the journal on disk is newer than the published site (Pages lags minutes)
+let j = null;
+try { j = JSON.parse((await import('node:fs')).readFileSync('bot/journal.json', 'utf8')); } catch (e) {}
+if (!j || !j.at) { const r = await fetch(SITE + 'bot/journal.json?t=' + Date.now(), { cache: 'no-store' }); j = r.ok ? await r.json() : null; }
 const ageMin = j && j.at ? (Date.now() - Date.parse(j.at)) / 60000 : Infinity;
 console.log(`journal age ${isFinite(ageMin) ? Math.round(ageMin) + ' min' : 'unknown'}`);
 // a holiday: the bot exits at once ("Market closed") and never writes — tolerate a journal from before today's open

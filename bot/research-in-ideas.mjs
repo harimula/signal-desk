@@ -63,11 +63,13 @@ function runOnce({ data, cal, from, kind, pos = 0.10, maxPos = 10, top = 20, saf
     if (Y(d) !== Y(prev)) { taxYear(Y(prev)); yearEnd[Y(prev)] = value(t - 1); }
     const month = d.slice(0, 7) !== prev.slice(0, 7);
     if (kind === 'breakout') {
-      for (const sym of Object.keys(lots)) { const D = data[sym], j = D.idx[d]; if (j == null || j < 21) continue; let lo = 1e18; for (let k = j - 20; k < j; k++) lo = Math.min(lo, D.B[k].l); if (D.B[j].c < lo) sell(sym, D.B[j].c, d); }
+      const heldAtOpen = Object.keys(lots);                                             // only positions held before today can exit at today's close
       const eq = value(t - 1), cands = [];
       for (const [sym, D] of Object.entries(data)) { if (lots[sym]) continue; const i = D.idx[prev], j = D.idx[d]; if (i == null || j == null || i < 210) continue; const C = D.C, s200 = sma(C, 200, i); let hi = -1; for (let k = i - 50; k < i; k++) hi = Math.max(hi, C[k]); if (s200 && C[i] > s200 && C[i] > hi) cands.push({ sym, j, rank: C[i] / s200 }); }
       cands.sort((a, b) => b.rank - a.rank);
       for (const c of cands) { if (Object.keys(lots).length >= maxPos) break; const money = Math.min(eq * pos, cash); if (money < eq * pos * 0.5) break; buy(c.sym, data[c.sym].B[c.j].o, d, money); }
+      // exits at today's close come after the morning's buys: a close sale's cash and slot are not available at the open (no look-ahead)
+      for (const sym of heldAtOpen) { const D = data[sym], j = D.idx[d]; if (j == null || j < 21) continue; let lo = 1e18; for (let k = j - 20; k < j; k++) lo = Math.min(lo, D.B[k].l); if (D.B[j].c < lo) sell(sym, D.B[j].c, d); }
     } else if (month) {
       // monthly momentum rebalance at the open, decided on the previous close
       const ni = nifty.idx[prev], off = safe && ni != null && ni >= 199 && nifty.C[ni] < sma(nifty.C, 200, ni);

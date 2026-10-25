@@ -27,7 +27,18 @@ const LIVE = { key: process.env.ALPACA_LIVE_KEY, secret: process.env.ALPACA_LIVE
 export const HAVE_KEYS = !!(PAPER.key && PAPER.secret) || !!(LIVE.key && LIVE.secret);
 let KEY, SECRET, H;
 const PRIVATE = !!process.env.JOURNAL_KEY;                  // privacy mode: encrypted journal, redacted logs
-export const redact = s => PRIVATE ? String(s).replace(/\$?\d[\d,]*(\.\d+)?/g, '\u2022') : String(s);
+// Privacy mode hides what is traded and how much from the public Actions logs: option symbols, amounts/prices/counts, and
+// ticker-like words (a short list of plain words such as STOP or VWAP stays readable).
+const KEEP = new Set(['STOP', 'VWAP', 'RSI', 'ET', 'AM', 'PM', 'UTC', 'OK', 'DRY', 'PAPER', 'LIVE', 'US', 'IN', 'TP', 'CALL', 'PUT', 'CALLS', 'PUTS', 'ETF', 'API', 'GET', 'POST', 'DELETE', 'HTTP', 'JSON', 'SL', 'EOD', 'P', 'L', 'A', 'I']);
+export const redactText = s => String(s)
+  .replace(/\b[A-Z]{1,6}\d{6}[CP]\d{8}\b/g, '\u2022')                       // option contract symbols
+  .replace(/\$?\d[\d,]*(\.\d+)?/g, '\u2022')                                  // amounts, prices, quantities
+  .replace(/\b[A-Z][A-Z.]{0,5}\b/g, w => KEEP.has(w) ? w : '\u2022');          // tickers
+export const redact = s => PRIVATE ? redactText(s) : String(s);
+if (PRIVATE && !globalThis.__sdLogWrapped) {                                   // every console line in privacy mode goes through the redactor,
+  globalThis.__sdLogWrapped = true; const out = console.log.bind(console);     // including error messages that quote a symbol
+  console.log = (...a) => out(redactText(a.map(x => typeof x === 'string' ? x : (x && x.message) || JSON.stringify(x)).join(' ')));
+}
 const DATA = process.env.ALPACA_DATA_URL || 'https://data.alpaca.markets';
 const DRY = process.env.BOT_DRY === '1';
 const HOLD_LOSS = 1.5, MAX_HOLD_DAYS = 30, TP = 1;
@@ -625,6 +636,8 @@ async function run() {
     const st = (await latestPrices(['SPY'])).SPY;
     if (spyPrev && st) spyPct = (st.p / spyPrev.c - 1) * 100;
   } catch (e) {}
+  if (CFG.eventGuard) { const ev = loadEvents(), lastEv = ev.length ? ev[ev.length - 1].date : '', td = ymdDash(Date.now());
+    if (!lastEv || Date.parse(lastEv) - Date.parse(td) < 45 * 864e5) { const k = 'cal:' + td; if (!haltSaid.has(k)) { haltSaid.add(k); act('Calendar warning: the economic calendar (events.json) ' + (lastEv ? 'ends ' + lastEv : 'is empty') + ' — add the next dates or the news/event guard stops seeing Fed days and CPI/jobs reports.'); } } }
   const G = lastGuard = guard({ events: CFG.eventGuard ? loadEvents() : [], todayDash: ymdDash(Date.now()), mins: MINS, headlines: CFG.newsGuard ? newsCache.market : [], spyPct });
   G.spyPct = spyPct; G.newsOk = newsCache.ok;
   const RG = regimeOf(spyPrev && spyPrev.closes);
@@ -974,18 +987,18 @@ export { encryptJournal, decryptJournal } from './jcrypt.mjs';
 import { encryptJournal, decryptJournal } from './jcrypt.mjs';
 
 // The previous journal, as this process knows it: read (and decrypted) once from disk, then kept in memory after each write.
-let prevJournal = null;
+let prevJournal = null, journalLocked = '';   // set when the saved journal must not be overwritten (see writeJournal)
 async function previousJournal() {
   if (prevJournal) return prevJournal;
   let raw = null;
   try { raw = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); } catch (e) { return (prevJournal = {}); }
   if (!raw || !raw.enc) return (prevJournal = raw || {});
-  if (!PRIVATE) return (prevJournal = { at: raw.at, sig: raw.sig });                       // encrypted by an earlier setup, no key now: start fresh
+  if (!PRIVATE) { journalLocked = 'the journal is encrypted but JOURNAL_KEY is missing'; return (prevJournal = { at: raw.at, sig: raw.sig }); }   // never replace it with a readable one
   try { prevJournal = { ...raw, ...(await decryptJournal(raw, process.env.JOURNAL_KEY)) }; }
-  catch (e) { console.log('previous journal could not be decrypted (passphrase changed?) — starting a fresh one'); prevJournal = { at: raw.at, sig: raw.sig }; }
+  catch (e) { journalLocked = 'the journal could not be decrypted with this JOURNAL_KEY (passphrase changed?)'; prevJournal = { at: raw.at, sig: raw.sig }; }
   return prevJournal;
 }
-export const _resetPrevJournal = () => { prevJournal = null; };                             // tests only
+export const _resetPrevJournal = () => { prevJournal = null; journalLocked = ''; };                             // tests only
 let actsFlushed = 0, journalActs = null;                                                     // the published action log; `acts` entries past actsFlushed are new
 const sameAct = (a, b) => a.t === b.t && a.m === b.m;
 
@@ -1002,6 +1015,7 @@ async function writeJournal() {
   }
   const { closed, open } = buildJournal(fills, positions);
   const prev = await previousJournal();
+  if (journalLocked && process.env.JOURNAL_RESET !== '1') { const k = 'jlock'; if (!haltSaid.has(k)) { haltSaid.add(k); act('Journal NOT saved: ' + journalLocked + '. Trading is unaffected. Fix the JOURNAL_KEY secret (or set JOURNAL_RESET=1 once to start a new journal).'); } console.log('journal not written:', journalLocked); return; }
   if (!journalActs) journalActs = (prev.acts || []).filter(a => a && a.t && a.m);
   for (const a of acts.slice(actsFlushed)) if (!journalActs.some(b => sameAct(a, b))) journalActs.push(a);   // append only what is new, once
   actsFlushed = acts.length; journalActs = journalActs.slice(-80);
@@ -1023,7 +1037,8 @@ async function writeJournal() {
     // Only the timestamp, paper/live flag, stream health and engine health stay readable; the page decrypts the rest with the same passphrase.
     const blob = await encryptJournal(j, process.env.JOURNAL_KEY);
     const sigH = (await import('node:crypto')).createHash('sha256').update(sig).digest('hex').slice(0, 16);   // change-detector only, reveals nothing
-    fs.writeFileSync('bot/journal.json', JSON.stringify({ ...blob, at: j.at, sig: sigH, paper: j.paper, stream: j.stream, engine: j.engine }));
+    const pubEngine = { ...j.engine, lastError: redactText(j.engine.lastError || ''), scan: j.engine.scan ? { ...j.engine.scan, err: redactText(j.engine.scan.err || '') } : null };   // the readable part never names a symbol
+    fs.writeFileSync('bot/journal.json', JSON.stringify({ ...blob, at: j.at, sig: sigH, paper: j.paper, stream: j.stream, engine: pubEngine }));
     prevJournal = { ...j, sig: sigH };
     console.log('journal written (encrypted)');
   } else {

@@ -1,10 +1,13 @@
 // Market scan: build the day's watch list from EVERY tradable US stock instead of a fixed list.
-//   1. ask the broker for all active, tradable US equities on the main exchanges (no OTC, no warrants/units);
+//   1. ask the broker for all active, tradable US stocks on NYSE/Nasdaq/NYSE American (no OTC, warrants/units, ETFs or funds);
 //   2. pull the last ~20 daily bars for all of them (a few paged requests);
 //   3. rank by average daily dollar volume, drop anything under the minimum price, keep the top N.
 // Volume comes from the free IEX feed, which is a slice of total market volume — the ranking is what matters,
 // and it is stable: the same large, liquid names come out on top every day.
-const EXCHANGES = new Set(['NYSE', 'NASDAQ', 'ARCA', 'AMEX', 'BATS']);
+const EXCHANGES = new Set(['NYSE', 'NASDAQ', 'AMEX']);        // NYSE Arca and Cboe (BATS) list almost only ETFs/ETNs: left out
+// Funds that list on NYSE/Nasdaq anyway (bond, sector, leveraged and inverse ETFs/ETNs) are recognised by name.
+export const FUND_NAME = /\b(ETF|ETN|ETFs|Fund|Index|iShares|SPDR|ProShares|Direxion|Vanguard|Invesco QQQ|Select Sector|Ultra(Pro|Short)?|Leveraged|Inverse|2X|3X|-1X|Bull|Bear)\b/i;
+export const isStockAsset = a => !!a && a.tradable && EXCHANGES.has(a.exchange) && SYM_OK.test(a.symbol) && !FUND_NAME.test(a.name || '');
 const SYM_OK = /^[A-Z]{1,5}$/;
 const chunk = (a, n) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
@@ -23,7 +26,7 @@ export function rankByLiquidity(bars, { size = 200, minPrice = 5, minDays = 10 }
 
 export async function scanUniverse({ T, D, size = 200, minPrice = 5, log = () => {} }) {
   const assets = await T('/v2/assets?status=active&asset_class=us_equity', { timeoutMs: 60000 });   // ~12,000 assets: a large answer
-  const syms = (assets || []).filter(a => a.tradable && EXCHANGES.has(a.exchange) && SYM_OK.test(a.symbol)).map(a => a.symbol).sort();
+  const syms = (assets || []).filter(isStockAsset).map(a => a.symbol).sort();     // stocks only: no ETFs, ETNs or funds
   log(`market scan: ${syms.length} tradable US stocks`);
   const start = new Date(Date.now() - 32 * 864e5).toISOString(), bars = {};
   // 100 symbols per request: bigger requests get "504 backend request timeout" from the data server. A chunk that still

@@ -560,7 +560,7 @@ function renderSens(p, r){
   if (rk === ck) { ck = Object.keys(SENS_VARS).find(k => k !== rk); $('sensCol').value = ck; }
   const R = SENS_VARS[rk], C = SENS_VARS[ck];
   const RV = sensAxis(rk, p), CV = sensAxis(ck, p);
-  const gaps = RV.map(ra => CV.map(ca => { const q = Object.assign({}, p); q[rk] = ra.v; q[ck] = ca.v; const x = simulate(q); return x.buyNW - x.rentNW; }));
+  const gaps = RV.map(ra => CV.map(ca => { const q = Object.assign({}, p); q[rk] = ra.v; q[ck] = ca.v; const x = simulate(q); const g = new Number(x.buyNW - x.rentNW); g.st = verdictOf(x); return g; }));   // same buy/rent/even rule as the verdict
   const mx = Math.max(1, ...gaps.flat().map(Math.abs));
   const same = (a, b) => Math.abs(a - b) < 1e-9;
   let h = '<thead><tr><th class="corner">' + R.short + ' ↓<br>' + C.short + ' →</th>' + CV.map(c => '<th scope="col">' + pc(c.v) + (c.tag ? '<span class="tag">' + c.tag + '</span>' : '') + '</th>').join('') +'</tr></thead><tbody>';
@@ -569,10 +569,10 @@ function renderSens(p, r){
     h += '<tr><th scope="row">' + pc(rv) + (ra.tag ? '<span class="tag">' + ra.tag + '</span>' : '') + '</th>';
     CV.forEach((ca, j) => {
       const cv = ca.v;
-      const d = gaps[i][j], a = Math.abs(d) / 1e7;
+      const d = +gaps[i][j], st = gaps[i][j].st, a = Math.abs(d) / 1e7;
       const txt = a < 0.005 ? '0.00' : (d > 0 ? '+' : MINUS) + (a >= 100 ? a.toFixed(1) : a.toFixed(2));
       const alpha = Math.round(10 + 32 * Math.abs(d) / mx);
-      const col = d >= 0 ? 'var(--buy)' : 'var(--rent)';
+      const col = st === 'even' ? 'var(--muted, #888)' : d >= 0 ? 'var(--buy)' : 'var(--rent)';   // "about even" cells are grey, matching the verdict
       const me = same(p[rk], rv) && same(p[ck], cv);
       h += '<td' + (me ? ' class="me"' : '') + ' style="background:color-mix(in srgb, ' + col + ' ' + alpha + '%, var(--surface))"><button type="button" data-r="' + rv + '" data-c="' + cv + '" aria-label="' + R.phrase + ' ' + pc(rv) + ' a year, ' + C.phrase + ' ' + pc(cv) + ' a year: ' + (d >= 0 ? 'buying' : 'renting') + ' ahead by ' + short(Math.abs(d)) + '">' + txt + '</button></td>';
     });
