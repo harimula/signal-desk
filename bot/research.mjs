@@ -81,19 +81,20 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
         const pl = S.plan(D.B, D.C, i); if (pl) cands.push({ sym, pl, j: D.idx[d] });
       }
       cands.sort((a, b) => a.pl.rank - b.pl.rank);
-      let invested = equityPrev - cash;
+      let invested = equityPrev - cash, dayTaken = 0, dayCash = 0;   // same-day trades hold a slot and their money until the close
       for (const c of cands) {
-        if (open.length >= MAXPOS) break;
+        if (open.length + dayTaken >= MAXPOS) break;
         const D = data[c.sym], b = D.B[c.j]; let alloc = equityPrev * POS * (c.pl.size || 1);
         if (CAP < 1 && invested + alloc > equityPrev * CAP) alloc = equityPrev * CAP - invested;      // the stock share is full: buy what fits, then stop
         if (alloc < equityPrev * POS * 0.25) break;
-        if (alloc > cash) break;
-        invested += alloc;
+        if (alloc > cash - dayCash) break;
         if (S.kind === 'intraday') {
           const fill = b.o < c.pl.entry ? b.o : (b.l <= c.pl.entry ? c.pl.entry : null); if (fill == null) continue;
+          invested += alloc; dayTaken++; dayCash += alloc;
           let ex; if (fill <= c.pl.stop) ex = b.c; else if (b.l <= c.pl.stop) ex = c.pl.stop; else if (b.h >= c.pl.target && (b.o < c.pl.entry || b.c >= c.pl.target)) ex = Math.max(c.pl.target, fill); else ex = b.c;   // limit fill later in the day: target only if the close confirms it
           const r = (ex * (1 - COST)) / (fill * (1 + COST)) - 1; cash += alloc * r; trades.push(r);
         } else {
+          invested += alloc;
           const fill = b.o, sh = alloc / (fill * (1 + COST));
           cash -= alloc;
           const p = { sym: c.sym, sh, px: S.short ? 2 * fill - b.c : b.c, entryPx: fill, held: 0, alloc, stop: c.pl.stopDist ? fill - c.pl.stopDist : c.pl.stopPct ? fill * (1 - c.pl.stopPct) : null, tp: c.pl.tpPct ? fill * (1 + c.pl.tpPct) : null };
