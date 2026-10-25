@@ -230,7 +230,7 @@ if (MKT === 'US') {
   runMode('conservative', 'Conservative — 8% × up to 4 stocks', mk(def), 0.08, 4, 1);
   runMode('balanced', 'Balanced — 10% × up to 6 stocks', mk(def), 0.10, 6, 1);
   runMode('aggressive', 'Aggressive — 12% × up to 8 stocks', mk(def), 0.12, 8, 1);
-  runMode('mine', `Your settings — ${Math.round(minePos * 100)}% × up to ${mineMax} stocks, buy below ${mine.thr}, ${mine.tp > 0 ? '+' + mine.tp + '% take-profit' : 'no take-profit'}, ${mine.leaders ? 'leaders first' : 'deepest dip first'}${stockShare < 1 ? ', stocks ' + Math.round(stockShare * 100) + '% of the money' : ''}`, mk(mine), minePos, mineMax, stockShare);
+  runMode('mine', `Your settings — ${Math.round(minePos * 100)}% × up to ${mineMax} stocks, buy below ${mine.thr}, ${mine.tp > 0 ? '+' + mine.tp + '% take-profit' : 'no take-profit'}, ${mine.leaders ? 'leaders first' : 'deepest dip first'}, all $100,000 on these rules`, mk(mine), minePos, mineMax, 1);   // owner (2026-10-25): compare $100K with $100K — the CALL/PUT/SPY shares (no price history) run the stock rules too instead of sitting in cash
   h5.modes.mine.settings = { ...mine, pos: minePos, maxPos: mineMax, stockShare, preset: cfg.preset || 'balanced', savedAt: cfg.updatedAt || null };
   for (const [k, m] of Object.entries(h5.modes)) console.log('mode', k, m.cagr, m.maxDD, m.trades);
 }
