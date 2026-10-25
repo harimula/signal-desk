@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-M7/Nz9yeBa4yuJb1ZrYJ/iEI6rX5LT2sW0ETkgubtcA=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-d/Nn45BqIwxBzfkdPA2nPGxZp73t0gVXXpBU3jVX1GY=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -56,6 +56,7 @@ h1{font-size:18px;margin:0;letter-spacing:-.01em;font-weight:700}
 .h5seg{flex-wrap:wrap;max-width:100%}.h5seg button{padding:6px 10px;font-size:12.5px}
 @media (max-width:560px){.h5seg[data-n="4"]{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:4px}.h5seg[data-n="4"] button{width:100%}}   /* the four mode buttons as a tidy 2×2 on phones, not 3 + 1 */
 @media (min-width:700px){.h5sum{display:none}}
+@media (max-width:699px){.sdwide{display:none}}   /* phones: the compact list replaces the wide table */
 .mksw .flag{border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.18);flex:none}.mksw .cc{font:600 10.5px var(--font-mono,monospace);padding:2px 5px;border-radius:4px;background:var(--line);color:var(--text)}
 .mksw button[aria-pressed="true"] .cc{background:rgba(255,255,255,.22);color:inherit}
 .tabsep{width:1px;height:20px;background:var(--line);margin:0 6px;align-self:center;flex:none}
@@ -940,7 +941,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1792955275';
+const BUILD_V = '1792965255';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2449,6 +2450,44 @@ function h5AfterTax(pts, kind, key, st, lt) {
   for (let i = 1; i < pts.length; i++) { A *= pts[i][1] / pts[i - 1][1]; const div = lt > 0 ? A * perStep / lt : 0; A -= A * perStep; basis += div * (1 - lt); out.push([pts[i][0], A - Math.max(0, A - basis) * lt]); }
   return out;
 }
+// Since the bot started trading: the real practice account (stocks + CALLs + PUTs + SPY quick options, all together),
+// scaled to $100,000, against $100,000 put into each fund at the same moment. Data: journal.since (bot.mjs sinceStart).
+function sinceCard(J) {
+  const S = J && J.since; if (!S || !S.start || !(S.base > 0) || !(S.pts || []).length) return '';
+  const st = h5ST / 100, lt = h5LT / 100, taxed = h5Tax === 'after', BASE = 100000;
+  const FUNDS = [['SPY', 'Large caps — S&P 500 (SPY)', 'var(--muted)', '5 4'], ['IJH', 'Mid caps — S&P MidCap 400 (IJH)', 'var(--line-mid)', ''], ['IWM', 'Small caps — Russell 2000 (IWM)', 'var(--tb)', ''], ['VGT', 'Tech — Vanguard Information Technology (VGT)', 'var(--ts)', ''], ['QQQ', 'Nasdaq-100 (QQQ)', 'var(--ts)', '3 3']];
+  const series = [{ key: 'bot', label: 'USA bot — real trades (stocks, CALLs, PUTs, SPY)', col: 'var(--accent)', dash: '', bot: true, pts: S.pts.map(p => [Date.parse(p[0]), BASE * p[1] / S.base]) }]
+    .concat(FUNDS.filter(([k]) => S.bench && S.bench[k] && S.bench[k].base > 0 && S.bench[k].pts.length).map(([k, label, col, dash]) => ({ key: k, label, col, dash, pts: [[Date.parse(S.start + 'T13:30:00Z'), BASE]].concat(S.bench[k].pts.map(p => [Date.parse(p[0]), BASE * p[1] / S.bench[k].base])) })))
+    .map(x => ({ ...x, pts: x.pts.filter(p => p[0] > 0 && p[1] > 0).sort((a, b) => a[0] - b[0]) })).filter(x => x.pts.length);
+  if (!series.length) return '';
+  const t0 = Date.parse(S.start + 'T13:30:00Z'), t1 = Math.max(...series.flatMap(x => x.pts.map(p => p[0]))), heldYrs = (t1 - t0) / (365.25 * 864e5);
+  // cashed out today: the bot's gains are short-term; a fund held under a year is short-term too, over a year long-term
+  const after = (end, isBot) => { const g = end - BASE; return g > 0 ? end - g * (isBot || heldYrs < 1 ? st : lt) : end; };
+  const vals = series.flatMap(x => x.pts.map(p => p[1])).concat([BASE]), lo = Math.min(...vals), hi = Math.max(...vals), pad = Math.max((hi - lo) * 0.08, 200);
+  const slots = [...new Set(series.flatMap(x => x.pts.map(p => p[0])))].sort((a, b) => a - b), slot = new Map(slots.map((t, i) => [t, i]));   // trading time only: nights and weekends take no room
+  const W = 640, Ht = 200, X = t => ((slot.get(t) || 0) / ((slots.length - 1) || 1) * (W - 4)).toFixed(1), Y = v => (Ht - 8 - (v - (lo - pad)) / ((hi - lo + 2 * pad) || 1) * (Ht - 16)).toFixed(1);
+  const lines = [...series].reverse().map(x => `<polyline points="${x.pts.map(p => X(p[0]) + ',' + Y(p[1])).join(' ')}" fill="none" stroke="${x.col}" stroke-width="${x.bot ? 2.6 : 1.6}" ${x.dash ? `stroke-dasharray="${x.dash}"` : ''} vector-effect="non-scaling-stroke"/>`).join('');
+  const base = `<line x1="0" x2="${W}" y1="${Y(BASE)}" y2="${Y(BASE)}" stroke="var(--line)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+  const key = series.map(x => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px"><svg width="22" height="8" aria-hidden="true"><line x1="0" x2="22" y1="4" y2="4" stroke="${x.col}" stroke-width="${x.bot ? 3 : 1.6}" ${x.dash ? `stroke-dasharray="${x.dash}"` : ''}/></svg>${esc(x.label)}</span>`).join('');
+  const usd = v => '$' + Math.round(v).toLocaleString('en-US'), pc = v => `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), 2)}%</span>`, sd = v => `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${usd(Math.abs(v))}</span>`;
+  const rows = series.map(x => { const end = x.pts[x.pts.length - 1][1], a = after(end, x.bot); return `<tr${x.bot ? ' style="background:var(--surface2)"' : ''}><td class="lt">${x.bot ? '<b>' + esc(x.label) + '</b>' : esc(x.label)}</td><td>${taxed ? '' : '<b>'}${usd(end)}${taxed ? '' : '</b>'}</td><td>${taxed ? '<b>' : ''}${usd(a)}${taxed ? '</b>' : ''}</td><td>${sd(end - BASE)}</td><td>${pc((end / BASE - 1) * 100)}</td></tr>`; }).join('');
+  // what each part of the bot has made so far (closed trades since the start + open positions now)
+  const kindOf = r => /^SPY\d{6}[CP]/.test(r.sym || '') ? 'spy' : r.kind === 'Call' ? 'call' : r.kind === 'Put' ? 'put' : 'stock';
+  const part = { stock: 0, call: 0, put: 0, spy: 0 };
+  for (const r of J.closed || []) if (r.outT && Date.parse(r.outT) >= t0 - 864e5) part[kindOf(r)] += +r.pl || 0;
+  for (const r of J.open || []) part[kindOf(r)] += +r.pl || 0;
+  const parts = `Of the bot’s ${sd(series[0].pts[series[0].pts.length - 1][1] - BASE)} (scaled to $100,000; trades closed since the start plus open positions now, in your account’s dollars): stocks ${sd(part.stock)} · CALLs ${sd(part.call)} · PUTs ${sd(part.put)} · SPY quick options ${sd(part.spy)}.`;
+  const fdt = t => new Intl.DateTimeFormat('en-US', {month: 'short', day: 'numeric', timeZone: 'America/New_York'}).format(new Date(t));
+  const tradingDays = new Set(series[0].pts.map(p => new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York'}).format(new Date(p[0])))).size;
+  return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">📒 Since the bot started trading — real results vs the market</b> <span class="mut" style="font-size:11.5px">· ${fdt(t0)} → ${fdt(t1)} · $100,000 at the start for each${taxed ? ' · <b>after tax</b> (if cashed out today)' : ''}</span>
+<div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px"><div class="mksw h5seg" data-n="2" role="group" style="margin:0" aria-label="Tax"><button type="button" data-h5tax="before" aria-pressed="${!taxed}">Before tax</button><button type="button" data-h5tax="after" aria-pressed="${taxed}">After tax</button></div><span class="mut" style="font-size:11.5px">Tax rates as set in the 5-year card below (short-term ${h5ST}%, long-term ${h5LT}%).</span></div>
+<div style="position:relative;margin-top:8px"><svg viewBox="0 0 ${W} ${Ht}" preserveAspectRatio="none" style="width:100%;height:210px;display:block" role="img" aria-label="The bot's real account against the index funds since its first trade">${base}${lines}</svg><span style="position:absolute;left:0;top:${(Y(BASE) / Ht * 100).toFixed(2)}%;transform:translateY(-115%);font-size:10.5px;color:var(--muted);background:var(--surface);padding:0 3px;border-radius:3px">$100k</span></div>
+<div class="mut" style="font-size:11.5px;margin-top:4px;line-height:1.9">${key}</div>
+<div class="h5sum" style="margin-top:10px">${series.map(x => { const end = x.pts[x.pts.length - 1][1]; return `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13px${x.bot ? ';font-weight:600' : ''}"><span style="min-width:0">${esc(x.bot ? 'USA bot (real trades)' : x.label.replace(/ — .*\((\w+)\)$/, ' ($1)'))}</span><span style="white-space:nowrap;text-align:right">${taxed ? `<span class="mut" style="font-weight:400">before ${usd(end)} · after </span><b>${usd(after(end, x.bot))}</b>` : `<b>${usd(end)}</b>`} ${pc((end / BASE - 1) * 100)}</span></div>`; }).join('')}</div>
+<div class="tw sdwide" style="margin-top:8px"><table style="min-width:560px"><thead><tr><th class="lt">Since ${fdt(t0)}</th><th>Before tax</th><th>After tax</th><th>Gain / loss</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table></div>
+<div class="mut" style="font-size:11.5px;margin-top:6px;line-height:1.5">${parts}</div>
+<div class="mut" style="font-size:11.5px;margin-top:4px;line-height:1.5">Real trades on the Alpaca practice account — every part of the bot together — scaled so it starts at $100,000, against $100,000 put into each fund at the open on ${fdt(t0)}. ${tradingDays < 20 ? `<b>Only ${tradingDays} trading day${tradingDays === 1 ? '' : 's'} so far — far too short to judge; give it a few months.</b> ` : ''}After tax assumes everything is sold today: the bot’s gains are short-term; a fund held under a year is short-term too. Fund lines are price only (no dividends yet). ${S.err ? 'Note: ' + esc(S.err) + '.' : ''}</div></div>`;
+}
 function h5Card(H, cur) {
   if (!H || !(H.series || []).length) return '';
   const US = cur.sym === '$', M = US && H.modes && H.modes[h5Mode] ? H.modes[h5Mode] : null;
@@ -2676,7 +2715,7 @@ ${Object.entries(rdJ.variants || {}).map(([k, S]) => row('<span class="mut">Best
 ${yrs.length ? `<div class="mut" style="font-size:12px;margin-top:8px"><b>Best found, year by year:</b> ${yrs.map(([y, x]) => `${y} <span class="${x.R >= 0 ? 'pos' : 'neg'}">${x.R >= 0 ? '+' : ''}${x.R}R</span> (${x.n})`).join(' · ')}</div>` : ''}
 <div class="mut" style="font-size:11.5px;margin-top:6px">Entry at the close of the signal bar plus 0.03% slippage; when one bar touches both the stop and the target the stop is assumed first; flat at 3:45 PM; one trade per stock per day, the daily maximum and the two-loss stop applied in order. The broker's intraday history for these stocks starts in ${esc(firstYear)}; nothing older exists in any public feed. Full report: <a href="bot/research_day_report.md" target="_blank" rel="noopener">research_day_report.md</a>. To use the best values: Bot settings → 4b → “Put these values in the form”.</div></div>`;
   })() : '';
-  return head + statusLine + engTxt + boxes + moneyLine + splitCard + spyCard(J) + envCard + watchCard + riskCard + perfCard + evCard() + h5Card(btJ && btJ.history5, {sym: '$', base: stake || 100000, loc: 'en-US'}) + btCard + rdCard + openTbl +
+  return head + statusLine + engTxt + boxes + moneyLine + splitCard + spyCard(J) + envCard + watchCard + riskCard + perfCard + evCard() + sinceCard(J) + h5Card(btJ && btJ.history5, {sym: '$', base: stake || 100000, loc: 'en-US'}) + btCard + rdCard + openTbl +
     `<h3 style="margin:18px 0 4px">Closed trades by day</h3>` + (dayBlocks || '<div class="card empty">No closed trades yet.</div>') + log +
     `<div class="mut" style="font-size:11.5px;margin-top:14px">Journal updated ${tET(J.at)} ET${J.paper === false ? ' · <b>real money</b>' : stake ? ` · practice account run as a <b>$${fmt(stake, 0)} stake</b>: every size, loss limit and the day-trade rule use that figure, so this is what real money would have done` : ' · practice account'}. Options P/L counts 100 shares per contract. Not financial advice.</div>`;
 }

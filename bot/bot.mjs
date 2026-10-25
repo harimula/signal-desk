@@ -1097,6 +1097,37 @@ export const _resetPrevJournal = () => { prevJournal = null; journalLocked = '';
 let actsFlushed = 0, journalActs = null;                                                     // the published action log; `acts` entries past actsFlushed are new
 const sameAct = (a, b) => a.t === b.t && a.m === b.m;
 
+// ---- "since the bot started": the real account (stocks + CALLs + PUTs + SPY) against $100k in each fund, same hours ----
+// Starts at the first trade the bot ever made (kept in the journal once found). Hourly for the first 30 days, daily after.
+// Lives inside the encrypted journal (it shows the account's value).
+const SINCE_FUNDS = ['SPY', 'IJH', 'IWM', 'VGT', 'QQQ'];
+let sinceCache = { at: 0, v: null };
+async function sinceStart(prevSince, fills, acct) {
+  const first = (fills || []).map(f => Date.parse(f.transaction_time)).filter(t => t > 0).sort((a, b) => a - b)[0];
+  const start = (prevSince && prevSince.start) || (first ? ymdDash(first) : null);
+  if (!start) return null;
+  const now = Date.now(), tNow = new Date(now).toISOString();
+  if (!sinceCache.v || sinceCache.v.start !== start || now - sinceCache.at > 10 * 60000) {
+    const days = (now - Date.parse(start + 'T12:00:00Z')) / 864e5, hourly = days <= 30;
+    const from = start + 'T12:00:00Z';                                                  // before the open in both summer and winter time
+    const v = { start, tf: hourly ? 'hour' : 'day', pts: [], bench: {} };
+    try {
+      const ph = await T(`/v2/account/portfolio/history?timeframe=${hourly ? '1H' : '1D'}&start=${from}&intraday_reporting=market_hours`);
+      (ph && ph.timestamp || []).forEach((t, i) => { const e = ph.equity && ph.equity[i]; if (e > 0 && t * 1000 >= Date.parse(from) - 864e5) v.pts.push([new Date(t * 1000).toISOString(), +e]); });
+    } catch (e) { v.err = 'account history unavailable'; }
+    try {
+      const b = (await D(`/v2/stocks/bars?symbols=${SINCE_FUNDS.join(',')}&timeframe=${hourly ? '1Hour' : '1Day'}&start=${from}&limit=10000&feed=iex&adjustment=all&sort=asc`)).bars || {};
+      for (const sym of SINCE_FUNDS) { const arr = (b[sym] || []).filter(x => x.o > 0 && x.c > 0); if (arr.length) v.bench[sym] = { base: arr[0].o, pts: arr.map(x => [x.t, x.c]) }; }
+    } catch (e) { v.err = (v.err ? v.err + '; ' : '') + 'fund prices unavailable'; }
+    sinceCache = { at: now, v };
+  }
+  const v = { ...sinceCache.v, at: tNow, bench: { ...sinceCache.v.bench } };
+  if (!v.pts.length && +acct.equity > 0) v.pts = [[tNow, +acct.equity]];
+  v.base = v.pts.length ? v.pts[0][1] : +acct.equity;                                  // the account's value before its first trade
+  v.pts = v.pts.concat([[tNow, +acct.equity]]);                                         // and right now
+  try { const lp = await latestPrices(SINCE_FUNDS); for (const sym of SINCE_FUNDS) if (v.bench[sym] && lp[sym] && lp[sym].p > 0) v.bench[sym] = { ...v.bench[sym], pts: v.bench[sym].pts.concat([[tNow, lp[sym].p]]) }; } catch (e) {}
+  return v;
+}
 async function writeJournal() {
   const acct = await T('/v2/account');
   const positions = await T('/v2/positions');
@@ -1127,7 +1158,8 @@ async function writeJournal() {
     // panels the bot only computes while the market is open: a process that has not computed them yet keeps the previous ones
     risk: lastRisk || prev.risk || null, split: lastSplit || prev.split || null, spy: lastSpy || prev.spy || null,
     watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
-    mem: { day: TODAY, lastDayPx, userPause, haltSaid: [...haltSaid], spyLevels },   // day-state a restart must not forget: yesterday's closes of sold-out symbols, a Telegram /pause, alerts already sent
+    mem: { day: TODAY, lastDayPx, userPause, haltSaid: [...haltSaid], spyLevels },
+    since: await sinceStart(prev.since, fills, acct).catch(() => prev.since || null),   // day-state a restart must not forget: yesterday's closes of sold-out symbols, a Telegram /pause, alerts already sent
     limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {
     // Only the timestamp, paper/live flag, stream health and engine health stay readable; the page decrypts the rest with the same passphrase.

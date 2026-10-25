@@ -237,6 +237,9 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
     check('bot trades: Open now describes each kind correctly (swing stock, CALL, PUT, SPY quick trade, day trade) from the settings', /RSI-2 swing — sells at \+10%/.test(txt) && /CALL — sells with the stock/.test(txt) && /PUT — sells with the stock/.test(txt) && /SPY quick trade — out at \+15%/.test(txt) && /day trade — stop and target at the broker/.test(txt), txt.match(/Open now.{0,900}/)?.[0]);
     check('bot trades: option prices are shown per contract (×100) in the held table and per share in Open now, both labelled', /\$440\.00/.test(txt) && /\$4\.40/.test(txt), '');
     check('bot trades: the rules line reads the cancel time from settings', /cancelled after 45 min/.test(txt));
+    // real results since the first trade: the whole account (all four parts) scaled to $100k vs $100k in each fund
+    { const sc = await page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /Since the bot started trading/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
+      check('since-start card: the real account (+0.60% → $100,600) against SPY, IJH, IWM, VGT and QQQ, each from $100,000, with a per-part breakdown', /\$100,600/.test(sc) && /SPY/.test(sc) && /VGT/.test(sc) && /QQQ/.test(sc) && /\$101,000/.test(sc) && /stocks/.test(sc) && /SPY quick options/.test(sc) && /far too short to judge/.test(sc), sc.slice(0, 400)); }
     // 5-year card: mode buttons and the tax switch (served research.json carries the modes)
     const h5 = async () => page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /The last 5 years/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
     const hasModes = await page.$('[data-h5mode="aggressive"]');

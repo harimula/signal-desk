@@ -127,7 +127,7 @@ if (process.argv[2] === 'child') {
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
   let keptOld = false; if (FAKE.prevKey) try { await bot.decryptJournal(JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')), FAKE.prevKey); keptOld = true; } catch (e) {}
   const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
-  process.stdout.write('RESULT ' + JSON.stringify({ keptOld, tgConfirms, tickEntry, quoteExit, fast, spyWatch: spyW, spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }) + '\n');   // not console.log: privacy mode redacts that
+  process.stdout.write('RESULT ' + JSON.stringify({ since: jj && jj.since, keptOld, tgConfirms, tickEntry, quoteExit, fast, spyWatch: spyW, spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }) + '\n');   // not console.log: privacy mode redacts that
   process.exit(0);
 }
 
@@ -497,6 +497,7 @@ const FH = run({ stocks: true, options: true, symbols: ['DIP'], preset: 'custom'
 const PFX = run({ stocks: true, options: true, symbols: ['DIP'], preset: 'custom', maxHeat: 15 }, { positions: [{ ...callA, current_price: '1.0', market_value: '2000', unrealized_pl: '-3000', unrealized_plpc: '-0.6' }], hist: [{ ...callHist[0], status: 'partially_filled', qty: '40', filled_qty: '20' }], fills: boughtToday });
 check('partial fill: a swing CALL whose buy is still partly working is managed — down 60% it is sold (option stop)', () => assert.ok(PFX.orders.some(o => o.symbol === callA.symbol && o.side === 'sell' && o.type === 'market'), JSON.stringify(PFX.orders) + JSON.stringify(PFX.acts)));
 const FH3 = run({ stocks: true, options: true, symbols: ['DIP'], preset: 'custom', maxHeat: 15 }, { positions: [callA, callB], hist: callHist, fills: boughtToday, positionsAfter: [callB], cycles: 4 });
+check('journal: carries the real account since the first trade (start = the first fill’s date, account points, the five funds) for the “since the bot started” card', () => { const S = FH3.since; assert.ok(S && S.start === '2026-10-23', JSON.stringify(S)); assert.ok(S.base > 0 && S.pts.length >= 1); assert.ok(S.bench && typeof S.bench === 'object'); });
 check('false halt: … and still not two or three checks later while the sell fill is missing (the guard is sticky, not one-cycle)', () => {
   assert.ok(!(FH3.split && FH3.split.call && FH3.split.call.halted), JSON.stringify(FH3.split && FH3.split.call));
   assert.ok(!FH3.orders.some(o => o.symbol === callB.symbol && o.side === 'sell' && o.type === 'market'), JSON.stringify(FH3.orders.filter(o => o.side === 'sell')));

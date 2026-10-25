@@ -1,1 +1,650 @@
-{"at":"2026-10-24T15:52:34.612Z","sig":"x","paper":true,"account":{"equity":100000,"last_equity":99500,"cash":60000},"closed":[{"sym":"KO","und":"KO","kind":"Stock","mult":1,"qty":50,"inPx":60,"inT":"2026-10-21T15:52:34.612Z","outPx":61.2,"outT":"2026-10-23T15:52:34.612Z","pl":60,"plPct":2},{"sym":"AAPL261113C00230000","und":"AAPL","kind":"Call","exp":"2026-11-13","strike":230,"mult":100,"qty":2,"inPx":3,"inT":"2026-10-22T15:52:34.612Z","outPx":2.5,"outT":"2026-10-23T15:52:34.612Z","pl":-100,"plPct":-16.7},{"sym":"SPY261024P00500000","und":"SPY","kind":"Put","exp":"2026-10-24","strike":500,"mult":100,"qty":10,"inPx":2,"inT":"2026-10-24T15:52:34.612Z","outPx":2.3,"outT":"2026-10-24T15:52:34.612Z","pl":300,"plPct":15}],"open":[{"sym":"MSFT","und":"MSFT","kind":"Stock","mult":1,"qty":30,"avg":410,"now":414,"pl":120,"plPct":0.98,"since":"2026-10-23T15:52:34.612Z"},{"sym":"NVDA261113C00180000","und":"NVDA","kind":"Call","exp":"2026-11-13","strike":180,"mult":100,"qty":3,"avg":4.1,"now":4.4,"pl":90,"plPct":7.3,"since":"2026-10-24T15:52:34.612Z"},{"sym":"XOM261113P00110000","und":"XOM","kind":"Put","exp":"2026-11-13","strike":110,"mult":100,"qty":2,"avg":1.5,"now":1.4,"pl":-20,"plPct":-6.7,"since":"2026-10-24T15:52:34.612Z"},{"sym":"SPY261024C00502000","und":"SPY","kind":"Call","exp":"2026-10-24","strike":502,"mult":100,"qty":20,"avg":2.05,"now":2.1,"pl":100,"plPct":2.4,"since":"2026-10-24T15:52:34.612Z"},{"sym":"ORB","und":"ORB","kind":"Stock","mult":1,"qty":98,"avg":101.6,"now":102.2,"pl":58.8,"plPct":0.59,"since":"2026-10-24T15:52:34.612Z"}],"acts":[{"t":"2026-10-24T15:52:34.612Z","m":"DIP RSI-2 dip buy (RSI-2 3, above 200-day 106.8) · 90 shares @ $110.81"}],"env":{"at":"2026-10-24T15:52:34.612Z","block":false,"regime":"bull","reasons":[],"today":[],"upcoming":[],"flagged":[],"spyPct":0.4,"newsOk":true},"settings":{"split":true,"callSharePct":30,"putSharePct":10,"spyOn":true,"spySharePct":5,"optDayCap":10,"dayCap":5,"stockTp":10,"holdFloor":25,"maxHold":10,"optTakeProfit":50,"optStop":50,"staleMin":45,"spyTp":15,"spyStop":15,"spyHoldMin":10,"rsiThreshold":25,"pickBy":"leaders","summary":"custom","base":"paper"},"stream":{"ticks":1200,"fills":2,"lastTick":1792857154612,"mode":"streaming"},"engine":{"cycleMs":2800,"cycleMax":4000,"cycles":300,"avgCallMs":190,"calls":3600,"errorsHour":0,"lastError":"","symbols":200,"beatMs":2000,"scan":{"state":"done","at":"2026-10-24T15:52:34.612Z","n":200,"err":""}},"risk":{"heatPct":1.8,"capPct":6,"sectors":{"Tech":2},"regime":"bull"},"split":{"at":"2026-10-24T15:52:34.612Z","on":true,"shares":{"call":30,"put":10,"spy":5,"stock":55},"stake":100000,"stock":{"money":55000,"used":22400,"today":180,"limitPct":5,"halted":null},"call":{"money":30000,"used":1320,"today":90,"limitPct":10,"halted":null},"put":{"money":10000,"used":280,"today":-20,"limitPct":10,"halted":null},"spy":{"money":5000,"used":4200,"today":400,"limitPct":25,"halted":null}},"spy":{"at":"2026-10-24T15:52:34.612Z","on":true,"budget":1,"money":5000,"used":4200,"today":400,"halted":null,"idle":"in a trade","tradesToday":2,"max":6,"market":"up","vwap":501.9,"level":502.5,"spyPx":502.7,"window":"09:50–14:00 ET, flat by 3:45 PM","open":[{"s":"SPY261024C00502000","id":"sd-yc-SPY261024C00502000-205-20261024-611-ab","entry":2.05,"pending":false,"kind":"call","qty":20,"avg":205,"cur":210,"pl":100,"plpc":2.4,"opened":611,"tp":235.75,"stop":174.25}],"closed":1,"closedPl":300,"rules":{"tp":15,"stop":15,"holdMin":10,"dte":1}},"watch":{"at":"2026-10-24T15:52:34.612Z","idle":null,"thr":25,"maxHold":10,"pickBy":"leaders","held":[{"s":"MSFT","und":"MSFT","kind":"stock","qty":30,"avg":410,"cur":414,"pl":120,"plpc":1,"undPx":414,"exitLevel":412.5,"exitSide":"above","floor":307.5},{"s":"NVDA261113C00180000","und":"NVDA","kind":"call","qty":3,"avg":410,"cur":440,"pl":90,"plpc":7.3,"undPx":181,"exitLevel":179,"exitSide":"above","tp":615,"stop":205,"exp":"2026-11-13"}],"intraday":true,"universe":"scan","scanned":200,"scanAt":"2026-10-24T15:52:34.612Z","on":{"stocks":true,"calls":true,"puts":true},"buy":["DIP"],"call":["DIP"],"put":["POP"],"total":200,"rows":[{"s":"DIP","px":110.6,"r2":3.1,"up":true,"s200":106.8,"lead":4.2,"prev":110.6,"buyAt":111.1,"putAt":null},{"s":"POP","px":87.1,"r2":97,"up":false,"s200":93.2,"lead":-9.5,"prev":87.1,"buyAt":null,"putAt":86.2},{"s":"QUIET","px":210,"r2":55,"up":true,"s200":200,"lead":1.1,"prev":210,"buyAt":204.3,"putAt":null}]},"day":{"at":"2026-10-24T15:52:34.612Z","on":true,"market":"up","spyVwap":501.9,"tradesToday":1,"max":3,"streak":0,"idle":null,"window":"09:45–15:30 ET, flat by 3:50 PM","setups":[{"sym":"ORB","setup":"ORB","side":"long","entry":101.5,"stop":100.4,"target":103.7,"rvol":1.6,"why":"opening-range breakout","held":true}],"open":[{"s":"ORB","und":"ORB","kind":"stock","side":"long","qty":98,"avg":101.6,"cur":102.2,"pl":58.8,"plpc":0.6,"undPx":102.2,"stop":100.4,"target":103.7,"opened":600}]},"mem":{"day":"20261024","lastDayPx":{},"userPause":false,"haltSaid":[]},"limits":{"riskPct":1,"optRiskPct":1,"maxHeat":6,"perSector":3,"streak":4,"weekCap":10,"dayCap":5}}
+{
+ "at": "2026-10-24T15:52:34.612Z",
+ "sig": "x",
+ "paper": true,
+ "account": {
+  "equity": 100000,
+  "last_equity": 99500,
+  "cash": 60000
+ },
+ "closed": [
+  {
+   "sym": "KO",
+   "und": "KO",
+   "kind": "Stock",
+   "mult": 1,
+   "qty": 50,
+   "inPx": 60,
+   "inT": "2026-10-21T15:52:34.612Z",
+   "outPx": 61.2,
+   "outT": "2026-10-23T15:52:34.612Z",
+   "pl": 60,
+   "plPct": 2
+  },
+  {
+   "sym": "AAPL261113C00230000",
+   "und": "AAPL",
+   "kind": "Call",
+   "exp": "2026-11-13",
+   "strike": 230,
+   "mult": 100,
+   "qty": 2,
+   "inPx": 3,
+   "inT": "2026-10-22T15:52:34.612Z",
+   "outPx": 2.5,
+   "outT": "2026-10-23T15:52:34.612Z",
+   "pl": -100,
+   "plPct": -16.7
+  },
+  {
+   "sym": "SPY261024P00500000",
+   "und": "SPY",
+   "kind": "Put",
+   "exp": "2026-10-24",
+   "strike": 500,
+   "mult": 100,
+   "qty": 10,
+   "inPx": 2,
+   "inT": "2026-10-24T15:52:34.612Z",
+   "outPx": 2.3,
+   "outT": "2026-10-24T15:52:34.612Z",
+   "pl": 300,
+   "plPct": 15
+  }
+ ],
+ "open": [
+  {
+   "sym": "MSFT",
+   "und": "MSFT",
+   "kind": "Stock",
+   "mult": 1,
+   "qty": 30,
+   "avg": 410,
+   "now": 414,
+   "pl": 120,
+   "plPct": 0.98,
+   "since": "2026-10-23T15:52:34.612Z"
+  },
+  {
+   "sym": "NVDA261113C00180000",
+   "und": "NVDA",
+   "kind": "Call",
+   "exp": "2026-11-13",
+   "strike": 180,
+   "mult": 100,
+   "qty": 3,
+   "avg": 4.1,
+   "now": 4.4,
+   "pl": 90,
+   "plPct": 7.3,
+   "since": "2026-10-24T15:52:34.612Z"
+  },
+  {
+   "sym": "XOM261113P00110000",
+   "und": "XOM",
+   "kind": "Put",
+   "exp": "2026-11-13",
+   "strike": 110,
+   "mult": 100,
+   "qty": 2,
+   "avg": 1.5,
+   "now": 1.4,
+   "pl": -20,
+   "plPct": -6.7,
+   "since": "2026-10-24T15:52:34.612Z"
+  },
+  {
+   "sym": "SPY261024C00502000",
+   "und": "SPY",
+   "kind": "Call",
+   "exp": "2026-10-24",
+   "strike": 502,
+   "mult": 100,
+   "qty": 20,
+   "avg": 2.05,
+   "now": 2.1,
+   "pl": 100,
+   "plPct": 2.4,
+   "since": "2026-10-24T15:52:34.612Z"
+  },
+  {
+   "sym": "ORB",
+   "und": "ORB",
+   "kind": "Stock",
+   "mult": 1,
+   "qty": 98,
+   "avg": 101.6,
+   "now": 102.2,
+   "pl": 58.8,
+   "plPct": 0.59,
+   "since": "2026-10-24T15:52:34.612Z"
+  }
+ ],
+ "acts": [
+  {
+   "t": "2026-10-24T15:52:34.612Z",
+   "m": "DIP RSI-2 dip buy (RSI-2 3, above 200-day 106.8) \u00b7 90 shares @ $110.81"
+  }
+ ],
+ "env": {
+  "at": "2026-10-24T15:52:34.612Z",
+  "block": false,
+  "regime": "bull",
+  "reasons": [],
+  "today": [],
+  "upcoming": [],
+  "flagged": [],
+  "spyPct": 0.4,
+  "newsOk": true
+ },
+ "settings": {
+  "split": true,
+  "callSharePct": 30,
+  "putSharePct": 10,
+  "spyOn": true,
+  "spySharePct": 5,
+  "optDayCap": 10,
+  "dayCap": 5,
+  "stockTp": 10,
+  "holdFloor": 25,
+  "maxHold": 10,
+  "optTakeProfit": 50,
+  "optStop": 50,
+  "staleMin": 45,
+  "spyTp": 15,
+  "spyStop": 15,
+  "spyHoldMin": 10,
+  "rsiThreshold": 25,
+  "pickBy": "leaders",
+  "summary": "custom",
+  "base": "paper"
+ },
+ "stream": {
+  "ticks": 1200,
+  "fills": 2,
+  "lastTick": 1792857154612,
+  "mode": "streaming"
+ },
+ "engine": {
+  "cycleMs": 2800,
+  "cycleMax": 4000,
+  "cycles": 300,
+  "avgCallMs": 190,
+  "calls": 3600,
+  "errorsHour": 0,
+  "lastError": "",
+  "symbols": 200,
+  "beatMs": 2000,
+  "scan": {
+   "state": "done",
+   "at": "2026-10-24T15:52:34.612Z",
+   "n": 200,
+   "err": ""
+  }
+ },
+ "risk": {
+  "heatPct": 1.8,
+  "capPct": 6,
+  "sectors": {
+   "Tech": 2
+  },
+  "regime": "bull"
+ },
+ "split": {
+  "at": "2026-10-24T15:52:34.612Z",
+  "on": true,
+  "shares": {
+   "call": 30,
+   "put": 10,
+   "spy": 5,
+   "stock": 55
+  },
+  "stake": 100000,
+  "stock": {
+   "money": 55000,
+   "used": 22400,
+   "today": 180,
+   "limitPct": 5,
+   "halted": null
+  },
+  "call": {
+   "money": 30000,
+   "used": 1320,
+   "today": 90,
+   "limitPct": 10,
+   "halted": null
+  },
+  "put": {
+   "money": 10000,
+   "used": 280,
+   "today": -20,
+   "limitPct": 10,
+   "halted": null
+  },
+  "spy": {
+   "money": 5000,
+   "used": 4200,
+   "today": 400,
+   "limitPct": 25,
+   "halted": null
+  }
+ },
+ "spy": {
+  "at": "2026-10-24T15:52:34.612Z",
+  "on": true,
+  "budget": 1,
+  "money": 5000,
+  "used": 4200,
+  "today": 400,
+  "halted": null,
+  "idle": "in a trade",
+  "tradesToday": 2,
+  "max": 6,
+  "market": "up",
+  "vwap": 501.9,
+  "level": 502.5,
+  "spyPx": 502.7,
+  "window": "09:50\u201314:00 ET, flat by 3:45 PM",
+  "open": [
+   {
+    "s": "SPY261024C00502000",
+    "id": "sd-yc-SPY261024C00502000-205-20261024-611-ab",
+    "entry": 2.05,
+    "pending": false,
+    "kind": "call",
+    "qty": 20,
+    "avg": 205,
+    "cur": 210,
+    "pl": 100,
+    "plpc": 2.4,
+    "opened": 611,
+    "tp": 235.75,
+    "stop": 174.25
+   }
+  ],
+  "closed": 1,
+  "closedPl": 300,
+  "rules": {
+   "tp": 15,
+   "stop": 15,
+   "holdMin": 10,
+   "dte": 1
+  }
+ },
+ "watch": {
+  "at": "2026-10-24T15:52:34.612Z",
+  "idle": null,
+  "thr": 25,
+  "maxHold": 10,
+  "pickBy": "leaders",
+  "held": [
+   {
+    "s": "MSFT",
+    "und": "MSFT",
+    "kind": "stock",
+    "qty": 30,
+    "avg": 410,
+    "cur": 414,
+    "pl": 120,
+    "plpc": 1,
+    "undPx": 414,
+    "exitLevel": 412.5,
+    "exitSide": "above",
+    "floor": 307.5
+   },
+   {
+    "s": "NVDA261113C00180000",
+    "und": "NVDA",
+    "kind": "call",
+    "qty": 3,
+    "avg": 410,
+    "cur": 440,
+    "pl": 90,
+    "plpc": 7.3,
+    "undPx": 181,
+    "exitLevel": 179,
+    "exitSide": "above",
+    "tp": 615,
+    "stop": 205,
+    "exp": "2026-11-13"
+   }
+  ],
+  "intraday": true,
+  "universe": "scan",
+  "scanned": 200,
+  "scanAt": "2026-10-24T15:52:34.612Z",
+  "on": {
+   "stocks": true,
+   "calls": true,
+   "puts": true
+  },
+  "buy": [
+   "DIP"
+  ],
+  "call": [
+   "DIP"
+  ],
+  "put": [
+   "POP"
+  ],
+  "total": 200,
+  "rows": [
+   {
+    "s": "DIP",
+    "px": 110.6,
+    "r2": 3.1,
+    "up": true,
+    "s200": 106.8,
+    "lead": 4.2,
+    "prev": 110.6,
+    "buyAt": 111.1,
+    "putAt": null
+   },
+   {
+    "s": "POP",
+    "px": 87.1,
+    "r2": 97,
+    "up": false,
+    "s200": 93.2,
+    "lead": -9.5,
+    "prev": 87.1,
+    "buyAt": null,
+    "putAt": 86.2
+   },
+   {
+    "s": "QUIET",
+    "px": 210,
+    "r2": 55,
+    "up": true,
+    "s200": 200,
+    "lead": 1.1,
+    "prev": 210,
+    "buyAt": 204.3,
+    "putAt": null
+   }
+  ]
+ },
+ "day": {
+  "at": "2026-10-24T15:52:34.612Z",
+  "on": true,
+  "market": "up",
+  "spyVwap": 501.9,
+  "tradesToday": 1,
+  "max": 3,
+  "streak": 0,
+  "idle": null,
+  "window": "09:45\u201315:30 ET, flat by 3:50 PM",
+  "setups": [
+   {
+    "sym": "ORB",
+    "setup": "ORB",
+    "side": "long",
+    "entry": 101.5,
+    "stop": 100.4,
+    "target": 103.7,
+    "rvol": 1.6,
+    "why": "opening-range breakout",
+    "held": true
+   }
+  ],
+  "open": [
+   {
+    "s": "ORB",
+    "und": "ORB",
+    "kind": "stock",
+    "side": "long",
+    "qty": 98,
+    "avg": 101.6,
+    "cur": 102.2,
+    "pl": 58.8,
+    "plpc": 0.6,
+    "undPx": 102.2,
+    "stop": 100.4,
+    "target": 103.7,
+    "opened": 600
+   }
+  ]
+ },
+ "mem": {
+  "day": "20261024",
+  "lastDayPx": {},
+  "userPause": false,
+  "haltSaid": []
+ },
+ "limits": {
+  "riskPct": 1,
+  "optRiskPct": 1,
+  "maxHeat": 6,
+  "perSector": 3,
+  "streak": 4,
+  "weekCap": 10,
+  "dayCap": 5
+ },
+ "since": {
+  "start": "2026-10-22",
+  "tf": "hour",
+  "base": 100000,
+  "pts": [
+   [
+    "2026-10-22T13:30:00Z",
+    100000
+   ],
+   [
+    "2026-10-22T15:00:00Z",
+    100120
+   ],
+   [
+    "2026-10-22T17:00:00Z",
+    99870
+   ],
+   [
+    "2026-10-22T19:00:00Z",
+    100210
+   ],
+   [
+    "2026-10-23T13:30:00Z",
+    100340
+   ],
+   [
+    "2026-10-23T15:00:00Z",
+    100050
+   ],
+   [
+    "2026-10-23T17:00:00Z",
+    100460
+   ],
+   [
+    "2026-10-23T19:30:00Z",
+    100600
+   ]
+  ],
+  "at": "2026-10-23T19:30:00Z",
+  "bench": {
+   "SPY": {
+    "base": 580,
+    "pts": [
+     [
+      "2026-10-22T13:30:00Z",
+      580
+     ],
+     [
+      "2026-10-22T15:00:00Z",
+      580.58
+     ],
+     [
+      "2026-10-22T17:00:00Z",
+      581.16
+     ],
+     [
+      "2026-10-22T19:00:00Z",
+      579.42
+     ],
+     [
+      "2026-10-23T13:30:00Z",
+      581.74
+     ],
+     [
+      "2026-10-23T15:00:00Z",
+      582.32
+     ],
+     [
+      "2026-10-23T17:00:00Z",
+      581.16
+     ],
+     [
+      "2026-10-23T19:30:00Z",
+      582.9
+     ]
+    ]
+   },
+   "IJH": {
+    "base": 62,
+    "pts": [
+     [
+      "2026-10-22T13:30:00Z",
+      62
+     ],
+     [
+      "2026-10-22T15:00:00Z",
+      61.94
+     ],
+     [
+      "2026-10-22T17:00:00Z",
+      62.06
+     ],
+     [
+      "2026-10-22T19:00:00Z",
+      62.0
+     ],
+     [
+      "2026-10-23T13:30:00Z",
+      62.12
+     ],
+     [
+      "2026-10-23T15:00:00Z",
+      62.06
+     ],
+     [
+      "2026-10-23T17:00:00Z",
+      62.0
+     ],
+     [
+      "2026-10-23T19:30:00Z",
+      62.06
+     ]
+    ]
+   },
+   "IWM": {
+    "base": 225,
+    "pts": [
+     [
+      "2026-10-22T13:30:00Z",
+      225
+     ],
+     [
+      "2026-10-22T15:00:00Z",
+      224.55
+     ],
+     [
+      "2026-10-22T17:00:00Z",
+      224.32
+     ],
+     [
+      "2026-10-22T19:00:00Z",
+      224.78
+     ],
+     [
+      "2026-10-23T13:30:00Z",
+      225.0
+     ],
+     [
+      "2026-10-23T15:00:00Z",
+      225.22
+     ],
+     [
+      "2026-10-23T17:00:00Z",
+      224.55
+     ],
+     [
+      "2026-10-23T19:30:00Z",
+      224.78
+     ]
+    ]
+   },
+   "VGT": {
+    "base": 700,
+    "pts": [
+     [
+      "2026-10-22T13:30:00Z",
+      700
+     ],
+     [
+      "2026-10-22T15:00:00Z",
+      702.1
+     ],
+     [
+      "2026-10-22T17:00:00Z",
+      703.5
+     ],
+     [
+      "2026-10-22T19:00:00Z",
+      701.4
+     ],
+     [
+      "2026-10-23T13:30:00Z",
+      704.2
+     ],
+     [
+      "2026-10-23T15:00:00Z",
+      705.6
+     ],
+     [
+      "2026-10-23T17:00:00Z",
+      704.9
+     ],
+     [
+      "2026-10-23T19:30:00Z",
+      707.0
+     ]
+    ]
+   },
+   "QQQ": {
+    "base": 510,
+    "pts": [
+     [
+      "2026-10-22T13:30:00Z",
+      510
+     ],
+     [
+      "2026-10-22T15:00:00Z",
+      511.02
+     ],
+     [
+      "2026-10-22T17:00:00Z",
+      512.04
+     ],
+     [
+      "2026-10-22T19:00:00Z",
+      510.51
+     ],
+     [
+      "2026-10-23T13:30:00Z",
+      512.55
+     ],
+     [
+      "2026-10-23T15:00:00Z",
+      513.06
+     ],
+     [
+      "2026-10-23T17:00:00Z",
+      512.04
+     ],
+     [
+      "2026-10-23T19:30:00Z",
+      514.08
+     ]
+    ]
+   }
+  }
+ }
+}
