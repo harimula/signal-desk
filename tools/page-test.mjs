@@ -1,4 +1,4 @@
-/* global syncPull, renderSyncBtn, jDecrypt */   // page functions called inside page.evaluate()
+/* global syncPull, renderSyncBtn, jDecrypt, renderAll, h5Open:writable */   // page functions called inside page.evaluate()
 // Page tests in headless Chromium (runs in CI):
 //   node tools/page-test.mjs
 // Serves the site locally, stands in for the GitHub API, and checks: every tab renders without a script error or a
@@ -242,6 +242,10 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
       check('since-start card: the real account (+0.60% → $100,600) against SPY, IJH, IWM, VGT and QQQ, each from $100,000, with a per-part breakdown', /\$100,600/.test(sc) && /SPY/.test(sc) && /VGT/.test(sc) && /QQQ/.test(sc) && /\$101,000/.test(sc) && /stocks/.test(sc) && /SPY quick options/.test(sc) && /far too short to judge/.test(sc), sc.slice(0, 400)); }
     // 5-year card: mode buttons and the tax switch (served research.json carries the modes)
     const h5 = async () => page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /The last 5 years/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
+    const folded = await page.evaluate(() => { localStorage.removeItem('sd-h5open'); h5Open = {us: false, in: false}; renderAll(); const d = document.querySelector('details.h5det'); return d ? !d.open : null; });   // the walk above opened every section
+    check('5-year card: folded by default, with the bot vs S&P 500 summary on its one line', folded === true && /bot \$[\d,]+ vs S&P 500 \$[\d,]+/.test(await page.evaluate(() => (document.querySelector('details.h5det summary') || {}).textContent || '')), String(folded));
+    await page.evaluate(() => document.querySelector('details.h5det summary').click()); await page.waitForTimeout(400);
+    check('5-year card: one tap opens it and it stays open across redraws', await page.evaluate(() => { renderAll(); const d = document.querySelector('details.h5det'); return !!(d && d.open); }));
     const hasModes = await page.$('[data-h5mode="aggressive"]');
     if (hasModes) {
       await page.click('[data-h5tax="after"]'); await page.waitForTimeout(300); const a1 = await h5();
