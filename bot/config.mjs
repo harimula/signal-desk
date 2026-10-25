@@ -37,7 +37,7 @@ export const RANGES = {
   riskPct: [0.05, 3], optRiskPct: [0.05, 3], maxHeat: [0.5, 15], perSector: [1, 10], maxPositions: [1, 20], maxOptions: [0, 10],
   dayCap: [0.5, 20], weekCap: [1, 30], streak: [1, 10], stockPct: [1, 30], optPct: [0.5, 10],
   putPct: [0.5, 10], stockUsd: [0, 1e7], callUsd: [0, 1e7], putUsd: [0, 1e7],
-  callSharePct: [0, 100], putSharePct: [0, 100], optDayCap: [1, 50], spySharePct: [0, 50], spyTradePct: [10, 100], spyTp: [5, 100], spyStop: [5, 60], spyHoldMin: [2, 120], spyMaxTrades: [1, 20], spyStreak: [1, 6], spyDayCap: [5, 100], spyDte: [1, 5], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
+  callSharePct: [0, 100], putSharePct: [0, 100], optDayCap: [1, 50], spySharePct: [0, 50], spyTradePct: [10, 100], spyTp: [5, 100], spyStop: [5, 60], spyHoldMin: [2, 120], spyMaxTrades: [1, 20], spyMaxOpen: [1, 5], spyStreak: [1, 6], spyDayCap: [5, 100], spyDte: [1, 5], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
   scanSize: [50, 400], scanMinPrice: [1, 500],
   liveSizePct: [5, 100], stakeUsd: [0, 1e8], dayOrMin: [5, 60], dayMaxTrades: [1, 10], dayStreak: [1, 5], dayRiskPct: [0.1, 2], dayTarget: [1, 4], dayRvol: [0.5, 3], dayTimeStop: [15, 180], dayOptTp: [10, 200], dayOptStop: [20, 80], dayOptDteMax: [1, 14],
   rsiThreshold: [2, 30], maxHold: [1, 30], optTakeProfit: [5, 300], optStop: [5, 90], holdFloor: [2, 60], stockTp: [0, 100], staleMin: [5, 240],

@@ -9,11 +9,13 @@
 //   Exits      — take-profit +spyTp% (resting limit order at the broker), stop −spyStop%, time stop after spyHoldMin minutes,
 //                flat by spyFlat (3:45 PM). Whichever comes first.
 //   Size       — one trade uses spyTradePct % of the sleeve's money (default 100 = all of it), never more than is free.
-//   Brakes     — one position at a time, spyMaxTrades a day, spyStreak losses in a row ends the day, spyDayCap % of the
+//   At once    — up to spyMaxOpen trades (default 3), each from its own fresh break: a second CALL needs a new, higher
+//                15-minute high than the last CALL's; a PUT may open beside a CALL when SPY turns. Never added to a losing trade.
+//   Brakes     — spyMaxTrades a day, spyStreak losses in a row ends the day, spyDayCap % of the
 //                sleeve lost today ends the day (bot.mjs applies it like the other money-split parts).
 import { vwap } from './daytrade.mjs';
 
-export const SPY_DEFAULTS = { spyOn: true, spySharePct: 5, spyTradePct: 100, spyTp: 15, spyStop: 15, spyHoldMin: 10, spyMaxTrades: 6, spyStreak: 2, spyDayCap: 25, spyDte: 1, spyStart: '09:50', spyEnd: '15:30', spyFlat: 945 };
+export const SPY_DEFAULTS = { spyOn: true, spySharePct: 5, spyTradePct: 100, spyTp: 15, spyStop: 15, spyHoldMin: 10, spyMaxTrades: 6, spyMaxOpen: 3, spyStreak: 2, spyDayCap: 25, spyDte: 1, spyStart: '09:50', spyEnd: '15:30', spyFlat: 945 };
 
 // Entry signal from completed 5-minute SPY bars (each {o,h,l,c,v,m}) and the live price. mins = minutes past midnight ET.
 export function spySignal({ bars, px, mins, cfg = {} }) {
@@ -35,6 +37,10 @@ export function spySignal({ bars, px, mins, cfg = {} }) {
 }
 
 // Exit decision on an open SPY option. optPx = the option's own price now, entryPx = its fill price.
+// A fresh break: the first trade of the day in a direction, or a level beyond the one the previous trade in that
+// direction was taken at (higher for CALLs, lower for PUTs). Stops the same break from opening several trades.
+export const spyFresh = (side, level, last) => !(last > 0) || (side === 'call' ? level > last : level < last);
+
 export function spyExit({ entryPx, optPx, openedMins, mins, cfg = {} }) {
   const C = { ...SPY_DEFAULTS, ...cfg };
   if (!(optPx > 0) || !(entryPx > 0)) return null;

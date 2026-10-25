@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit, rsi2Trigger, rsi2ExitLevel } from './strategy.mjs';
 import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
-import { spySignal, spyExit, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
+import { spySignal, spyExit, spyFresh, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
 import { buildJournal, parseSym } from './journal.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
@@ -364,5 +364,6 @@ test('scan: ETFs, leveraged funds and Arca listings are not stocks', () => {
   assert.equal(a('SPDR S&P 500 ETF Trust', 'ARCA', 'SPY'), false); assert.equal(a('ProShares UltraPro QQQ', 'NASDAQ', 'TQQQ'), false); assert.equal(a('Direxion Daily Semiconductor Bull 3X Shares', 'NYSE', 'SOXL'), false);
 });
 test('sectors: the large scanned names have a sector (the per-sector limit covers them)', () => { for (const x of ['MU', 'AVGO', 'LLY', 'CAT', 'NEE', 'GS']) assert.notEqual(sectorOf(x), 'Other', x); });
+test('SPY fresh break: first trade of the day goes; another in the same direction needs a level beyond the last', () => { assert.equal(spyFresh('call', 502.5, 0), true); assert.equal(spyFresh('call', 502.5, 502.5), false); assert.equal(spyFresh('call', 503.1, 502.5), true); assert.equal(spyFresh('put', 499, 499.5), true); assert.equal(spyFresh('put', 499.5, 499.5), false); assert.equal(normalize({}).spyMaxOpen, 3); assert.equal(normalize({ preset: 'custom', spyMaxOpen: 9 }).spyMaxOpen, 5); });
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

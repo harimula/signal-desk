@@ -357,7 +357,7 @@ check('SPY sleeve (default on): SPY breaks the 15-minute high above its VWAP →
   const o = Y1.orders.find(x => /^SPY\d{6}C/.test(x.symbol) && x.side === 'buy'); assert.ok(o, JSON.stringify(Y1.orders) + JSON.stringify(Y1.acts)); assert.match(o.client_order_id, /^sd-yc-SPY/);
   assert.ok(+o.qty * +o.limit_price * 100 <= 5000 && +o.qty >= 1, 'spent ' + (+o.qty * +o.limit_price * 100)); assert.equal(o.time_in_force, 'day');
 });
-check('SPY sleeve: the journal carries the sleeve\'s money, use, window and rules', () => { const S = Y1.spy; assert.ok(S && S.on, JSON.stringify(S)); assert.equal(S.money, 5000); assert.equal(S.max, 6); assert.deepEqual(S.rules, { tp: 15, stop: 15, holdMin: 10, dte: 1, tradePct: 100 }); assert.equal(S.market, 'up'); });
+check('SPY sleeve: the journal carries the sleeve\'s money, use, window and rules', () => { const S = Y1.spy; assert.ok(S && S.on, JSON.stringify(S)); assert.equal(S.money, 5000); assert.equal(S.max, 6); assert.deepEqual(S.rules, { tp: 15, stop: 15, holdMin: 10, dte: 1, tradePct: 100, maxOpen: 3 }); assert.equal(S.market, 'up'); });
 const Y2 = run(SO, { bars5: { SPY: spyDn }, live: { SPY: 497.3 }, spy: 'down' });
 check('SPY sleeve: SPY breaks the 15-minute low below its VWAP → a SPY PUT (sd-yp-)', () => assert.ok(Y2.orders.some(x => /^SPY\d{6}P/.test(x.symbol) && /^sd-yp-/.test(x.client_order_id)), JSON.stringify(Y2.orders) + JSON.stringify(Y2.acts)));
 const Y3 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
@@ -373,10 +373,23 @@ check('SPY sleeve: an open CALL down 17% is sold at market (stop −15%)', () =>
 const Y6 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(588), bars5: { SPY: spyUp }, live: { SPY: 502.2 } });   // opened 9:48, now 10:00 → 12 min
 check('SPY sleeve: a CALL held 12 minutes is sold (time stop 10 min) whatever the price', () => assert.ok(Y6.orders.some(o => o.symbol === spySym && o.side === 'sell' && o.type === 'market') && (Y6.acts || []).some(m => /10 minutes are up/.test(m)), JSON.stringify(Y6.acts)));
 const Y7 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.7 } });   // opened 9:56, now 10:00 → 4 min, +2%
-check('SPY sleeve: while a trade is open it rests a take-profit order at +15% ($2.36), buys nothing more, and reports "in a trade"', () => {
+check('SPY sleeve: while a trade holds all its money (100% per trade) it rests a take-profit order at +15% ($2.36) and buys nothing more', () => {
   const sells = Y7.orders.filter(o => o.symbol === spySym && o.side === 'sell'); assert.equal(sells.length, 1, JSON.stringify(Y7.orders)); assert.equal(sells[0].type, 'limit'); assert.ok(Math.abs(+sells[0].limit_price - 2.36) < 0.011, sells[0].limit_price);
-  assert.ok(!Y7.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol))); assert.equal(Y7.spy.idle, 'in a trade'); assert.equal(Y7.spy.open.length, 1);
+  assert.ok(!Y7.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol))); assert.match(Y7.spy.idle, /all of the SPY money is in trades/); assert.equal(Y7.spy.open.length, 1);
 });
+// several at once (owner, 2026-10-25): 20% per trade, up to 3 open, each from a fresh break
+const spyPos2 = (sym, cur) => ({ symbol: sym, qty: '2', avg_entry_price: '2.05', current_price: String(cur), lastday_price: '2.05', market_value: String(2 * cur * 100), unrealized_pl: String(2 * (cur - 2.05) * 100), unrealized_plpc: String(cur / 2.05 - 1) });
+const spyBuy2 = (sym, m, k = 'c') => ({ symbol: sym, side: 'buy', status: 'filled', client_order_id: `sd-y${k}-${sym}-205-20261023-${m}-q${m}`, qty: '2', limit_price: '2.05', filled_at: '2026-10-23T13:55:00Z' });
+const YM = run({ ...SO, spyTradePct: 20 }, { positions: [spyPos2(spySym, 2.1)], hist: [spyBuy2(spySym, 596)], bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+check('SPY sleeve, several at once: with one CALL open and 20% per trade, a new break buys a second CALL with 20% of the SPY money', () => {
+  const b = YM.orders.filter(o => o.side === 'buy' && /^SPY\d{6}C/.test(o.symbol)); assert.equal(b.length, 1, JSON.stringify(YM.orders) + JSON.stringify(YM.spy && YM.spy.idle));
+  assert.ok(+b[0].qty * +b[0].limit_price * 100 <= 1000 + 1, JSON.stringify(b[0]));
+});
+const s2 = 'SPY261024C00503000', s3 = 'SPY261024P00500000';
+const YX = run({ ...SO, spyTradePct: 20 }, { positions: [spyPos2(spySym, 2.1), spyPos2(s2, 2.1), spyPos2(s3, 2.1)], hist: [spyBuy2(spySym, 596), spyBuy2(s2, 597), spyBuy2(s3, 598, 'p')], bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+check('SPY sleeve, several at once: with 3 open (the most at once) nothing more is bought', () => { assert.ok(!YX.orders.some(o => o.side === 'buy'), JSON.stringify(YX.orders)); assert.match(YX.spy.idle || '', /3 SPY trades open/); });
+const YF = run({ ...SO, spyTradePct: 20 }, { positions: [spyPos2(spySym, 2.1)], hist: [spyBuy2(spySym, 596)], bars5: { SPY: spyUp }, live: { SPY: 502.7 }, prevJournal: { mem: { day: '20261023', spyLevels: { day: '20261023', call: 502.5, put: 0 } } } });
+check('SPY sleeve, several at once: the same break never opens a second trade (needs a new, higher 15-minute high)', () => { assert.ok(!YF.orders.some(o => o.side === 'buy'), JSON.stringify(YF.orders)); assert.match(YF.spy.idle || '', /waiting for a new break/); });
 const sixToday = Array.from({ length: 6 }, (_, i) => ({ symbol: spySym, side: 'buy', status: 'filled', client_order_id: `sd-yc-${spySym}-205-20261023-${580 + i}-z${i}`, qty: '1', limit_price: '2.05' }));
 const Y8 = run(SO, { hist: sixToday, bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
 check('SPY sleeve: after 6 trades today the daily maximum stops new ones', () => { assert.ok(!Y8.orders.some(o => o.side === 'buy' && /^SPY/.test(o.symbol)), JSON.stringify(Y8.orders)); assert.match(Y8.spy.idle || '', /daily maximum/); });
