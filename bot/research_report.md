@@ -4,8 +4,8 @@ Costs 0.05%/side · 10% of equity per position · max 6 positions · out-of-samp
 
 | Strategy | Regime filter | CAGR (all) | Sharpe (all) | Max DD | **OOS CAGR** | **OOS Sharpe** | OOS Max DD | Trades | Win % | Exp./trade | PF |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Current bot rules (intraday pullback, S3 → R1, stop S4) | off | -8.66% | -1.84 | −95.3% | **-8.42%** | **-1.86** | −59.1% | 29994 | 32.5% | -0.10% | 0.76 |
-| Current bot rules (intraday pullback, S3 → R1, stop S4) | on | -8.63% | -2.06 | −95.2% | **-8.72%** | **-2.01** | −60.4% | 27273 | 32.2% | -0.11% | 0.73 |
+| Current bot rules (intraday pullback, S3 → R1, stop S4) | off | -6.77% | -1.97 | −90.6% | **-6.58%** | **-2.36** | −50.0% | 24736 | 32.9% | -0.09% | 0.77 |
+| Current bot rules (intraday pullback, S3 → R1, stop S4) | on | -6.68% | -2.17 | −90.3% | **-6.66%** | **-2.49** | −50.4% | 22532 | 32.6% | -0.10% | 0.75 |
 | RSI-2 mean reversion (Connors): above 200-day, RSI-2 < 10, buy at next open, sell when close > 5-day avg (max 10 days) | off | +8.74% | 0.93 | −15.1% | **+3.35%** | **0.41** | −14.5% | 10723 | 65.0% | +0.27% | 1.32 |
 | RSI-2 mean reversion (Connors): above 200-day, RSI-2 < 10, buy at next open, sell when close > 5-day avg (max 10 days) | on | +8.11% | 0.93 | −14.5% | **+2.80%** | **0.37** | −14.5% | 9825 | 64.9% | +0.28% | 1.34 |
 | RSI-2 mean reversion + 3× range stop | off | +6.20% | 0.68 | −20.7% | **+2.61%** | **0.34** | −15.4% | 11684 | 65.0% | +0.19% | 1.19 |
