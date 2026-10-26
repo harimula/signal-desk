@@ -481,6 +481,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-26</td><td>Bot trades now about a minute behind the bot instead of ten (on devices connected to GitHub): the bot publishes a live copy every minute and the tab refreshes every 25 seconds</td></tr>
 <tr><td>2026-10-26</td><td>Live prices: the stream now asks for at most 30 symbols (the free data plan's limit) — this morning it asked for more after the market scan and stopped receiving prices; the bot carried on by polling</td></tr>
 <tr><td>2026-10-26</td><td>Bot trades drill-down: tap any label marked › (Today, Realized, In trades, each money part, SPY, market check, risk, performance, since-start, any symbol) for the detail behind it</td></tr>
 <tr><td>2026-10-26</td><td>Bot trades: the 33-year research card and the day-trading test card removed (reports stay on GitHub)</td></tr>

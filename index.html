@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-JKsG0B1SiVr8ezUW6fnXC06v4GZsYadboqTlEeyALYg=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-s/GlhnvApZQmPyODH08LwOna7cGVeaLSTgeXGf8BaMI=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -949,7 +949,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793025253';
+const BUILD_V = '1793042743';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2325,13 +2325,28 @@ document.addEventListener('click', async e => {
   const m = document.getElementById('jkeyMsg'); if (m) m.textContent = 'That passphrase does not open this journal. You typed ' + [...pass].length + ' characters' + (/[^\x20-\x7e]/.test(pass) ? ' (including a non-standard character)' : '') + ' \u2014 compare with the count in Bot settings on the device where it works. Tick \u201cShow what I type\u201d to check for a wrong capital letter or a stray space.';
 });
 let botJ = null, botErr = '', botBusy = false, botAt = 0, btJ = null;
+// The running bot also publishes its journal about once a minute to the one-commit branch `live` (bot/live.mjs
+// publishLive). Read through the GitHub API with this device's token — no waiting for the site to rebuild. An unchanged
+// file answers 304, which GitHub does not count against the hourly limit.
+let botLiveTag = '', botLiveJ = null;
+async function botLive() {
+  if (!ghTok()) return null;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${ghRepo()}/contents/bot/journal.json?ref=live`, {headers: {authorization: 'Bearer ' + ghTok(), accept: 'application/vnd.github.raw+json', ...(botLiveTag ? {'if-none-match': botLiveTag} : {})}, cache: 'no-store'});
+    if (r.status === 304) return botLiveJ;
+    if (!r.ok) return null;
+    botLiveTag = r.headers.get('etag') || ''; botLiveJ = await r.json(); return botLiveJ;
+  } catch (e) { return null; }
+}
 async function botLoad(force) {
-  if (botBusy || (!force && Date.now() - botAt < 55000)) return;
+  if (botBusy || (!force && Date.now() - botAt < (ghTok() ? 25000 : 55000))) return;
   botBusy = true; botAt = Date.now();
   try {
     const r = await fetch('bot/journal.json?t=' + Date.now(), {cache: 'no-store'});
-    if (!r.ok) throw new Error(r.status === 404 ? 'none' : 'HTTP ' + r.status);
-    const raw = await r.json(); botErr = ''; if (raw.enc) { const pass = load('sd-jkey', ''); let ok = false; if (pass) { try { botJ = {...raw, ...(await jDecrypt(raw, pass))}; ok = true; } catch (e2) {} } if (!ok) { botLocked = raw; botJ = null; } } else botJ = raw;
+    if (!r.ok && r.status !== 404) throw new Error('HTTP ' + r.status);
+    let raw = r.ok ? await r.json() : null;
+    const live = await botLive(); if (live && (!raw || Date.parse(live.at || 0) > Date.parse(raw.at || 0))) raw = live;   // the bot's minute-by-minute copy (needs the GitHub connection), when newer
+    if (!raw) throw new Error('none'); botErr = ''; if (raw.enc) { const pass = load('sd-jkey', ''); let ok = false; if (pass) { try { botJ = {...raw, ...(await jDecrypt(raw, pass))}; ok = true; } catch (e2) {} } if (!ok) { botLocked = raw; botJ = null; } } else botJ = raw;
     try { const b3 = await fetch('bot/research-day.json?t=' + Math.floor(Date.now() / 600000), {cache: 'no-store'}); if (b3.ok) rdJ = await b3.json(); } catch (e) {}
     try { const b2 = await fetch('bot/research.json?t=' + Math.floor(Date.now() / 600000), {cache: 'no-store'}); if (b2.ok) btJ = await b2.json(); } catch (e2) {}
   } catch (e) {
@@ -2343,7 +2358,7 @@ async function botLoad(force) {
   if (app === 'desk' && tab === 'BOT') renderAll(true);
   else if (app === 'desk' && tab === 'SET' && !stBusy) renderAll();     // the readiness checklist in section 7 uses the journal too
 }
-setInterval(() => { if (app === 'desk' && tab === 'BOT' && !document.hidden) botLoad(); }, 60000);
+setInterval(() => { if (app === 'desk' && tab === 'BOT' && !document.hidden) botLoad(); }, 20000);   // botLoad itself limits the pace: every 25 s with the GitHub connection, every 55 s without
 // ---------- India bot (simulation): journal bot/india-journal.json, research bot/research-in.json ----------
 let botMk = mkt, inJ = null, inLocked = null, inErr = '', inAt = 0, inBusy = false, inRes = null;
 async function inLoad(force) {

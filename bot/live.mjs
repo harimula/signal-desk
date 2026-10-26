@@ -14,7 +14,7 @@ import { summary } from './config.mjs';
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const LIFE = (+process.env.RUN_MINUTES || 350) * 60000, born = Date.now();
-const BEAT = +process.env.BEAT_MS || 2000, BEAT_CLOSE = 1000, MIN_GAP = 250, JOURNAL_EVERY = 120000, COMMIT_EVERY = 10 * 60000;
+const BEAT = +process.env.BEAT_MS || 2000, BEAT_CLOSE = 1000, MIN_GAP = 250, JOURNAL_EVERY = 60000, COMMIT_EVERY = 10 * 60000;
 let lastBeat = 0, lastFull = 0, lastJournal = 0, lastCommit = 0, errors = 0, lastCfg = 0, cfgSeen = JSON.stringify(CFG), cycling = false;
 const queue = [];                                             // reasons to run a cycle immediately
 const wake = why => { if (!queue.includes(why)) queue.push(why); };
@@ -49,6 +49,29 @@ async function pollStop() {
     else if (r.status === 404 && fs.existsSync('bot/STOP')) { fs.unlinkSync('bot/STOP'); console.log('\u25b6 STOP removed on the page \u2014 trading resumes'); wake('resume'); }
   } catch (e) { console.log('stop poll failed', e.message); }
 }
+// ---- live view: the journal also goes to a one-commit branch `live` every minute, without growing the repo's history ----
+// (the encrypted journal cannot be delta-compressed, so a commit a minute on main would add gigabytes a year). The page
+// reads it from there through the GitHub API when it has the owner's token, so Bot trades is about a minute behind
+// instead of ten. Each publish replaces the branch with a new parentless commit; old ones are garbage-collected by GitHub.
+let liveBusy = false, liveSent = 0, liveMtime = 0;
+async function publishLive() {
+  const repo = process.env.GITHUB_REPOSITORY, tok = process.env.GITHUB_TOKEN;
+  if (!repo || !tok || liveBusy || process.env.BOT_NO_COMMIT === '1') return;
+  let st; try { st = fs.statSync('bot/journal.json'); } catch (e) { return; }
+  if (st.mtimeMs === liveMtime || Date.now() - liveSent < 55000) return;
+  liveBusy = true; liveSent = Date.now();
+  const gh = async (path, method, body) => { const r = await fetch(`https://api.github.com/repos/${repo}${path}`, { method, headers: { authorization: 'Bearer ' + tok, accept: 'application/vnd.github+json', 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) }); if (!r.ok) { const e = new Error(path.split('?')[0] + ' HTTP ' + r.status); e.status = r.status; throw e; } return r.json(); };
+  try {
+    const blob = await gh('/git/blobs', 'POST', { content: fs.readFileSync('bot/journal.json').toString('base64'), encoding: 'base64' });
+    const tree = await gh('/git/trees', 'POST', { tree: [{ path: 'bot/journal.json', mode: '100644', type: 'blob', sha: blob.sha }] });
+    const commit = await gh('/git/commits', 'POST', { message: 'live journal', tree: tree.sha, parents: [] });
+    try { await gh('/git/refs/heads/live', 'PATCH', { sha: commit.sha, force: true }); }
+    catch (e) { if (e.status === 404 || e.status === 422) await gh('/git/refs', 'POST', { ref: 'refs/heads/live', sha: commit.sha }); else throw e; }
+    liveMtime = st.mtimeMs;
+  } catch (e) { console.log('live view publish skipped:', e.message); }
+  finally { liveBusy = false; }
+}
+
 // Publishing the journal runs git in a child process, so a slow or unreachable GitHub never stalls the trading loop
 // (stops, SPY exits and quotes keep running). While it runs, the bot does not rewrite the journal file.
 let committing = false;
@@ -224,6 +247,7 @@ while (Date.now() - born < LIFE && !stopping) {
   if (Date.now() - lastPrices >= PRICES_EVERY && !pricesBusy) refreshPrices();
   if (Date.now() - lastTg >= 3000 && !tgBusy) { tgBusy = true; lastTg = Date.now(); tgPollCycle().finally(() => { tgBusy = false; }); }   // Telegram commands, off the decision path
   if (Date.now() - lastCommit >= COMMIT_EVERY && !committing) { lastCommit = Date.now(); commit(); }
+  if (!committing) publishLive();                                          // the page's live view, about once a minute
   if (Date.now() - lastBeat >= 60000) { lastBeat = Date.now(); heartbeat(); }
   await sleep(queue.length ? 50 : 200);
 }
