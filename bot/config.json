@@ -49,7 +49,7 @@
  "spyDayCap": 25,
  "spyDte": 1,
  "spyStart": "09:50",
- "spyEnd": "14:00",
+ "spyEnd": "15:00",
  "split": true,
  "callSharePct": 20,
  "putSharePct": 5,
@@ -112,7 +112,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-25T18:48:57.690Z",
+ "updatedAt": "2026-10-26T18:04:36.072Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
