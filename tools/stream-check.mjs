@@ -46,6 +46,15 @@ function wsCheck(name, url, { msgpack = false } = {}) {
 }
 await wsCheck('trade-updates stream (fills arrive instantly)', TRADING.replace(/^http/, 'ws') + '/stream');
 await wsCheck('stock prices stream (IEX)', 'wss://stream.data.alpaca.markets/v2/iex');
+// how many symbols the plan's stock stream accepts (the bot asks for at most 30; more is refused outright)
+const syms = ['SPY','AAPL','MSFT','NVDA','AMZN','META','GOOGL','TSLA','AMD','INTC','KO','PEP','WMT','JPM','BAC','XOM','CVX','DIS','NFLX','ORCL','CSCO','QCOM','ADBE','CRM','PLTR','UBER','F','GM','T','VZ','PFE','MRK','ABBV','LLY','UNH','HD','LOW','COST','MCD','NKE'];
+const tryN = n => new Promise(res => { const ws = new WebSocket('wss://stream.data.alpaca.markets/v2/iex'); let out = 'no answer'; const t = setTimeout(() => { ws.close(); res(out); }, 8000);
+  ws.onopen = () => ws.send(JSON.stringify({ action: 'auth', key: KEY, secret: SECRET }));
+  ws.onmessage = ev => { for (const m of JSON.parse(ev.data)) { if (m.T === 'success' && m.msg === 'authenticated') ws.send(JSON.stringify({ action: 'subscribe', trades: syms.slice(0, n) })); else if (m.T === 'subscription') { out = 'accepted ' + (m.trades || []).length; clearTimeout(t); ws.close(); res(out); } else if (m.T === 'error') { out = `error ${m.code} ${m.msg}`; clearTimeout(t); ws.close(); res(out); } } }; });
+const r30 = await tryN(30); await new Promise(r => setTimeout(r, 1500)); const r40 = await tryN(40);
+console.log(`::notice title=stream-limit::30 symbols → ${r30} | 40 symbols → ${r40}`);
+report('stock prices stream accepts the 30 symbols the bot asks for', /^accepted/.test(r30), r30 + ' (40 → ' + r40 + ')');
+
 await wsCheck('options prices stream (SPY exits)', 'wss://stream.data.alpaca.markets/v1beta1/indicative', { msgpack: true });
 
 const repo = process.env.GITHUB_REPOSITORY, tok = process.env.GITHUB_TOKEN;
