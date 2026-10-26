@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write      # a session that reaches its time limit before the close starts its successor
 concurrency:
   group: paper-trade-bot
   cancel-in-progress: false

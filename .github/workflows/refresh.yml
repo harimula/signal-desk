@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write      # tools/kick-bot.mjs may start paper-trade-bot
 concurrency:
   group: refresh-prices      # a slow run never overlaps the next one
   cancel-in-progress: false
@@ -17,6 +18,12 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version-file: .nvmrc }
+      - name: Make sure a trading session is running (GitHub's own schedule can skip it)
+        run: node tools/kick-bot.mjs || true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+          ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
       - run: node fetch.mjs
       - run: node news.mjs || true
         env:

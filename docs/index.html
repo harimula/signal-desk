@@ -481,6 +481,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-26</td><td>The bot starts itself even when GitHub skips its schedule (this morning it skipped every run): the price refresh and the watchdog start a session if none is running, and a session that reaches GitHub's 6-hour limit starts the next one</td></tr>
 <tr><td>2026-10-25</td><td>Bot trades: the 5-year replay card removed at your request; the real-results card keeps the before/after-tax switch and the tax rates</td></tr>
 <tr><td>2026-10-25</td><td>Bot trades: the 5-year card is folded to one line (bot vs S&amp;P 500); tap to open</td></tr>
 <tr><td>2026-10-25</td><td>Manual “journal-refresh” run: refreshes the encrypted journal without trading (used to fill the new card on a weekend)</td></tr>

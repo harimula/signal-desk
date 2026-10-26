@@ -172,7 +172,7 @@ process.on('unhandledRejection', e => console.log('unhandled rejection', redact(
 const m0 = setNow();
 // GitHub's scheduler often starts runs late, so the workflow also fires from 8:45 ET (7:45 in winter) and the run waits here
 // until 9:20 instead of exiting: the session is up before the open even when the 9:20 start is delayed.
-if (m0 >= 7 * 60 + 30 && m0 < 9 * 60 + 20) {   // 7:30: in winter (EST) the 12:45 UTC schedule fires at 7:45 ET
+if (m0 >= 6 * 60 && m0 < 9 * 60 + 20) {   // from 6:00 ET: tools/kick-bot.mjs may start the session early (GitHub's schedule is unreliable)
   console.log(`Early start (${Math.floor(m0 / 60)}:${String(m0 % 60).padStart(2, '0')} ET) - waiting until 9:20 ET.`); while (setNow() < 9 * 60 + 20) await sleep(15000); }   // the session's life counts from the process start: GitHub kills a job after 358 minutes, early wait included
 const m1 = setNow();
 await loadCalendar();                                                   // today's real close (13:00 on early-close days)
@@ -229,6 +229,14 @@ while (committing) await sleep(500);                                    // let a
 try { await botCycle({ journal: true }); } catch (e) { console.log('final cycle error', e.message); }
 if (setNow() >= closeMins() && !stopping) await eodReport();   // the session that reaches the close sends the day's summary
 await commit();
+// Reached the time limit while the market is still open (GitHub ends a job after 6 hours): start the next session now
+// instead of hoping GitHub's schedule fires. It queues behind this one and starts the moment this job ends.
+if (!stopping && Date.now() - born >= LIFE && setNow() < closeMins() - 2 && process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
+  try {
+    const r = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/actions/workflows/trade.yml/dispatches`, { method: 'POST', headers: { authorization: 'Bearer ' + process.env.GITHUB_TOKEN, accept: 'application/vnd.github+json', 'content-type': 'application/json' }, body: JSON.stringify({ ref: 'main' }) });
+    console.log(r.status === 204 ? 'next session started (it takes over when this one ends)' : 'could not start the next session: HTTP ' + r.status);
+  } catch (e) { console.log('could not start the next session:', e.message); }
+}
 try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); optWs && optWs.close(); } catch (e) {}
 console.log('Session runner finished.');
 process.exit(0);

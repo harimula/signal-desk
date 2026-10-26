@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: write      # restarts paper-trade-bot when no session is running
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -17,5 +18,12 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
+          ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+          ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+      - name: Restart the trading session if none is running (GitHub's own schedule can skip it)
+        if: always()
+        run: node tools/kick-bot.mjs || true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
           ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
           ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
