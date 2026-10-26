@@ -123,7 +123,7 @@ function connectStreams(which = 'both') {
     for (const m of Array.isArray(arr) ? arr : [arr]) {
       if (m.T === 'success' && m.msg === 'authenticated') { dataOk = true; subscribed = []; resubscribe(); }
       else if (m.T === 't' && m.S && m.p > 0) { pushPrice(m.S, m.p, Date.parse(m.t) || Date.now()); onTick(m.S, m.p); }
-      else if (m.T === 'error') console.log('data-stream error', m.msg);
+      else if (m.T === 'error') { console.log('data-stream error', m.code, m.msg); if (m.code === 405 || /limit/i.test(m.msg || '')) { process.env.STREAM_MAX = String(Math.max(5, Math.floor((+(process.env.STREAM_MAX || 30)) / 2))); subscribed = []; setTimeout(resubscribe, 1000); } }   // over the plan's symbol limit: halve and retry
     }
   }, 'data-stream');
   // options quotes for the SPY sleeve's open trade: exits react to each quote instead of the 1-second poll (which stays as the fallback)
@@ -145,7 +145,9 @@ function resubscribeOptions() {
 }
 function resubscribe() {
   if (!dataWs || dataWs.readyState !== 1 || !dataOk) return;
-  const want = [...new Set(endpoints().universe.concat([...heldUnds], ['SPY']))].slice(0, 200);
+  // The free (IEX) data plan streams at most 30 symbols; asking for more is refused outright (no ticks at all). SPY first
+  // (the SPY sleeve's entries ride on its ticks), then what is held (floor exits), then the closest dips on the watch list.
+  const want = [...new Set(['SPY', ...heldUnds, ...endpoints().universe])].slice(0, +(process.env.STREAM_MAX || 30));
   if (JSON.stringify(want) === JSON.stringify(subscribed)) return;
   if (subscribed.length) dataWs.send(JSON.stringify({ action: 'unsubscribe', trades: subscribed }));
   dataWs.send(JSON.stringify({ action: 'subscribe', trades: want }));

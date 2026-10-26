@@ -53,7 +53,7 @@ const tryN = n => new Promise(res => { const ws = new WebSocket('wss://stream.da
   ws.onmessage = ev => { for (const m of JSON.parse(ev.data)) { if (m.T === 'success' && m.msg === 'authenticated') ws.send(JSON.stringify({ action: 'subscribe', trades: syms.slice(0, n) })); else if (m.T === 'subscription') { out = 'accepted ' + (m.trades || []).length; clearTimeout(t); ws.close(); res(out); } else if (m.T === 'error') { out = `error ${m.code} ${m.msg}`; clearTimeout(t); ws.close(); res(out); } } }; });
 const r30 = await tryN(30); await new Promise(r => setTimeout(r, 1500)); const r40 = await tryN(40);
 console.log(`::notice title=stream-limit::30 symbols → ${r30} | 40 symbols → ${r40}`);
-report('stock prices stream accepts the 30 symbols the bot asks for', /^accepted/.test(r30), r30 + ' (40 → ' + r40 + ')');
+if (/406/.test(r30)) console.log('skip  symbol-limit probe — a trading session holds the plan\'s one stream connection'); else report('stock prices stream accepts the 30 symbols the bot asks for', /^accepted/.test(r30), r30 + ' (40 → ' + r40 + ')');
 
 await wsCheck('options prices stream (SPY exits)', 'wss://stream.data.alpaca.markets/v1beta1/indicative', { msgpack: true });
 
