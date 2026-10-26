@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-nOi1qJ/FRIzbBiA8BMP1ab6J9E7KEDbHd7kY9kLkjcE=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-JKsG0B1SiVr8ezUW6fnXC06v4GZsYadboqTlEeyALYg=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -56,7 +56,15 @@ h1{font-size:18px;margin:0;letter-spacing:-.01em;font-weight:700}
 .h5seg{flex-wrap:wrap;max-width:100%}.h5seg button{padding:6px 10px;font-size:12.5px}
 @media (max-width:560px){.h5seg[data-n="4"]{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:4px}.h5seg[data-n="4"] button{width:100%}}   /* the four mode buttons as a tidy 2×2 on phones, not 3 + 1 */
 @media (min-width:700px){.h5sum{display:none}}
-@media (max-width:699px){.sdwide{display:none}}   /* phones: the compact list replaces the wide table */
+@media (max-width:699px){.sdwide{display:none}}
+.drillable{cursor:pointer;border-radius:4px}.drillable:hover{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}.drillable:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.drill-ico{color:var(--accent);font-weight:700;opacity:.85}
+#drill{position:fixed;inset:0;z-index:9000}.drill-bg{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.drill-sheet{position:absolute;left:50%;top:6vh;transform:translateX(-50%);width:min(820px,calc(100vw - 24px));max-height:88vh;display:flex;flex-direction:column;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 48px rgba(0,0,0,.35)}
+.drill-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);font-size:15px}
+.drill-body{overflow:auto;padding:12px 16px 16px;-webkit-overflow-scrolling:touch}.drill-body table{font-size:12.5px}
+@media (max-width:600px){.drill-sheet{top:auto;bottom:0;left:0;transform:none;width:100%;max-height:90vh;border-radius:14px 14px 0 0}}
+body.drill-on{overflow:hidden}   /* phones: the compact list replaces the wide table */
 .mksw .flag{border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.18);flex:none}.mksw .cc{font:600 10.5px var(--font-mono,monospace);padding:2px 5px;border-radius:4px;background:var(--line);color:var(--text)}
 .mksw button[aria-pressed="true"] .cc{background:rgba(255,255,255,.22);color:inherit}
 .tabsep{width:1px;height:20px;background:var(--line);margin:0 6px;align-self:center;flex:none}
@@ -941,7 +949,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793022634';
+const BUILD_V = '1793025253';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2420,7 +2428,7 @@ function spyCard(J) {
   const state = !Y.on ? '<span class="pill" style="font-size:11px">off</span>' : Y.halted ? '<span class="pill r-Sell" style="font-size:11px">stopped for today</span>' : Y.open && Y.open.length ? `<span class="pill r-Top-Buy" style="font-size:11px">${Y.open.length > 1 ? Y.open.length + ' trades open' : 'in a trade'}</span>` : '<span class="pill r-Buy" style="font-size:11px">watching</span>';
   const R = Y.rules || { tp: S0.spyTp ?? 15, stop: S0.spyStop ?? 15, holdMin: S0.spyHoldMin ?? 10, dte: S0.spyDte ?? 1 };
   const openRows = (Y.open || []).map(o => `<tr><td class="lt"><b>SPY</b> <span class="pill ${o.kind === 'put' ? 'r-Top-Sell' : 'r-Top-Buy'}">${o.kind.toUpperCase()}</span> <span class="mut" style="font-size:11.5px">${esc(o.s)}</span></td><td>${o.qty}</td><td>${o.opened != null ? mm(o.opened) + ' ET' : '–'}</td><td>$${fmt(o.avg)}</td><td>$${fmt(o.cur)}</td><td class="${cls(o.pl)}"><b>${$$(o.pl)}</b> <span style="font-size:11.5px">(${sgn(o.plpc)}%)</span></td><td class="lt mut" style="font-size:12px">out at <b>$${fmt(o.tp)}</b> / <b>$${fmt(o.stop)}</b> per contract, or ${o.opened != null ? 'by ' + mm(o.opened + R.holdMin) : 'after ' + R.holdMin + ' min'}</td></tr>`).join('');
-  return `<div class="card" style="padding:14px 18px;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">⚡ SPY quick options</b>${state}<span class="mut" style="font-size:12px">${Y.money ? `its money $${fmt(Y.money, 0)} · in use $${fmt(Y.used || 0, 0)}` : ''}${fresh && Y.today != null ? ` · today <b class="${cls(Y.today)}">${$$(Y.today)}</b>` : ''}${fresh && Y.closed ? ` · ${Y.closed} trade${Y.closed === 1 ? '' : 's'} closed today (${$$(Y.closedPl || 0)})` : ''}</span></div>
+  return `<div class="card" style="padding:14px 18px;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px" class="drillable" data-drill="part" data-arg="spy" role="button" tabindex="0">⚡ SPY quick options <span class="drill-ico" aria-hidden="true">›</span></b>${state}<span class="mut" style="font-size:12px">${Y.money ? `its money $${fmt(Y.money, 0)} · in use $${fmt(Y.used || 0, 0)}` : ''}${fresh && Y.today != null ? ` · today <b class="${cls(Y.today)}">${$$(Y.today)}</b>` : ''}${fresh && Y.closed ? ` · ${Y.closed} trade${Y.closed === 1 ? '' : 's'} closed today (${$$(Y.closedPl || 0)})` : ''}</span></div>
 <div class="mut" style="font-size:12px;margin-top:6px">${Y.on ? `CALLs when SPY is above its VWAP and breaks the 15-minute high; PUTs below it on a break of the low · contracts expiring ${R.dte === 1 ? 'the next day' : 'up to ' + R.dte + ' days out'} · ${R.tradePct != null ? `<b>${R.tradePct}%</b> of its money per trade · ` : ''}${R.maxOpen ? `up to <b>${R.maxOpen}</b> at once · ` : ''}out at <b>+${R.tp}%</b> / <b>−${R.stop}%</b> or after <b>${R.holdMin} min</b> · at most ${Y.max} trades a day · ${esc(Y.window || '')}` : 'Switched off in Bot settings → 4c. Its open trades, if any, are still managed.'}</div>
 ${fresh ? `<div style="font-size:12.5px;margin-top:8px">${Y.idle ? `<b>Now:</b> ${esc(Y.idle)}` : '<b>Now:</b> signal — placing a trade'}${Y.spyPx ? ` <span class="mut">· SPY $${fmt(Y.spyPx)}${Y.vwap ? ', VWAP $' + fmt(Y.vwap) : ''}${Y.market && Y.market !== 'flat' ? ', ' + (Y.market === 'up' ? 'above → CALLs' : 'below → PUTs') : ''}</span>` : ''}${Y.tradesToday ? ` <span class="mut">· ${Y.tradesToday} of ${Y.max} trades today</span>` : ''}</div>` : `<div class="mut" style="font-size:12px;margin-top:8px">Last update ${esc(tET(Y.at))} — the sleeve runs only while the market is open.</div>`}
 ${openRows ? `<div class="tw" style="margin-top:8px"><table style="min-width:640px"><thead><tr><th class="lt">Trade</th><th>Qty</th><th>Opened</th><th>Bought</th><th>Now</th><th>P/L</th><th class="lt" style="text-align:left">Exits</th></tr></thead><tbody>${openRows}</tbody></table></div>` : ''}
@@ -2481,7 +2489,7 @@ function sinceCard(J) {
   const parts = `Of the bot’s ${sd(series[0].pts[series[0].pts.length - 1][1] - BASE)} (scaled to $100,000; trades closed since the start plus open positions now, in your account’s dollars): stocks ${sd(part.stock)} · CALLs ${sd(part.call)} · PUTs ${sd(part.put)} · SPY quick options ${sd(part.spy)}.`;
   const fdt = t => new Intl.DateTimeFormat('en-US', {month: 'short', day: 'numeric', timeZone: 'America/New_York'}).format(new Date(t));
   const tradingDays = new Set(series[0].pts.map(p => new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York'}).format(new Date(p[0])))).size;
-  return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">📒 Since the bot started trading — real results vs the market</b> <span class="mut" style="font-size:11.5px">· ${fdt(t0)} → ${fdt(t1)} · $100,000 at the start for each${taxed ? ' · <b>after tax</b> (if cashed out today)' : ''}</span>
+  return `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px" class="drillable" data-drill="since" role="button" tabindex="0">📒 Since the bot started trading — real results vs the market <span class="drill-ico" aria-hidden="true">›</span></b> <span class="mut" style="font-size:11.5px">· ${fdt(t0)} → ${fdt(t1)} · $100,000 at the start for each${taxed ? ' · <b>after tax</b> (if cashed out today)' : ''}</span>
 <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px"><div class="mksw h5seg" data-n="2" role="group" style="margin:0" aria-label="Tax"><button type="button" data-h5tax="before" aria-pressed="${!taxed}">Before tax</button><button type="button" data-h5tax="after" aria-pressed="${taxed}">After tax</button></div><span class="mut" style="font-size:11.5px;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap"><label style="display:inline-flex;gap:4px;align-items:center">Short-term tax <input id="h5st" type="number" min="0" max="60" step="0.1" value="${h5ST}" style="width:64px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px;color:var(--text)">%</label><label style="display:inline-flex;gap:4px;align-items:center">Long-term <input id="h5lt" type="number" min="0" max="40" step="0.1" value="${h5LT}" style="width:64px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px;color:var(--text)">%</label></span></div>
 <div style="position:relative;margin-top:8px"><svg viewBox="0 0 ${W} ${Ht}" preserveAspectRatio="none" style="width:100%;height:210px;display:block" role="img" aria-label="The bot's real account against the index funds since its first trade">${base}${lines}</svg><span style="position:absolute;left:0;top:${(Y(BASE) / Ht * 100).toFixed(2)}%;transform:translateY(-115%);font-size:10.5px;color:var(--muted);background:var(--surface);padding:0 3px;border-radius:3px">$100k</span></div>
 <div class="mut" style="font-size:11.5px;margin-top:4px;line-height:1.9">${key}</div>
@@ -2550,15 +2558,16 @@ function botView() {
   const mul = o => o.mult || (o.kind === 'Stock' ? 1 : 100), valOf = o => Math.abs(o.qty) * o.now * mul(o), costOf = o => Math.abs(o.qty) * o.avg * mul(o);
   const inStk = open.filter(o => o.kind === 'Stock').reduce((t, o) => t + valOf(o), 0), inOpt = open.filter(o => o.kind !== 'Stock').reduce((t, o) => t + valOf(o), 0);
   const inAll = inStk + inOpt, inCost = open.reduce((t, o) => t + costOf(o), 0), base = stake || acct.equity || 0, freeAmt = Math.max(0, base - inAll);
-  const what = r => r.kind === 'Stock' ? `<b>${esc(r.und)}</b>` : `<b>${esc(r.und)}</b> <span class="pill ${r.kind === 'Call' ? 'r-Top-Buy' : 'r-Top-Sell'}">${r.kind.toUpperCase()}</span> <span class="mut" style="font-size:11.5px">${fmt(r.strike, r.strike % 1 ? 1 : 0)} · ${esc((r.exp || '').slice(5))}</span>`;
+  const what = r => `<span class="drillable" data-drill="sym" data-arg="${esc(r.und)}" role="button" tabindex="0">` + what0(r) + ' <span class="drill-ico" aria-hidden="true">›</span></span>';
+  const what0 = r => r.kind === 'Stock' ? `<b>${esc(r.und)}</b>` : `<b>${esc(r.und)}</b> <span class="pill ${r.kind === 'Call' ? 'r-Top-Buy' : 'r-Top-Sell'}">${r.kind.toUpperCase()}</span> <span class="mut" style="font-size:11.5px">${fmt(r.strike, r.strike % 1 ? 1 : 0)} · ${esc((r.exp || '').slice(5))}</span>`;
   const typ = r => r.kind === 'Stock' ? 'Stock' : 'Option';
   const boxes = `<div class="lv" style="margin:0 0 14px">
-${lvBox('Today', `<span class="${cls(dayAcct)}">${$$(dayAcct)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(dayAcct / stake * 100)}% of your stake</span>` : ''}`)}
-${lvBox('Realized today', `<span class="${cls(realToday)}">${$$(realToday)}</span>`)}
-${lvBox('Total realized', `<span class="${cls(realAll)}">${$$(realAll)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(realAll / stake * 100)}%</span>` : ''}`)}
-${lvBox('In trades now', `$${fmt(inAll, 0)}${base ? ` <span class="mut" style="font-size:11.5px">${fmt(inAll / base * 100, 1)}% of your ${stake ? 'stake' : 'account'}</span>` : ''}`)}
-${stake ? lvBox('Your stake', '$' + fmt(stake, 0) + ` <span class="mut" style="font-size:11.5px">now $${fmt(stake + realAll + unreal, 0)}</span>`) : lvBox('Account value', '$' + fmt(acct.equity || 0, 0))}
-${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins / closed.length * 100)}% won` : '0')}
+${lvBox('Today', `<span class="${cls(dayAcct)}">${$$(dayAcct)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(dayAcct / stake * 100)}% of your stake</span>` : ''}`, 'today')}
+${lvBox('Realized today', `<span class="${cls(realToday)}">${$$(realToday)}</span>`, 'realToday')}
+${lvBox('Total realized', `<span class="${cls(realAll)}">${$$(realAll)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(realAll / stake * 100)}%</span>` : ''}`, 'realAll')}
+${lvBox('In trades now', `$${fmt(inAll, 0)}${base ? ` <span class="mut" style="font-size:11.5px">${fmt(inAll / base * 100, 1)}% of your ${stake ? 'stake' : 'account'}</span>` : ''}`, 'inTrades')}
+${stake ? lvBox('Your stake', '$' + fmt(stake, 0) + ` <span class="mut" style="font-size:11.5px">now $${fmt(stake + realAll + unreal, 0)}</span>`) : lvBox('Account value', '$' + fmt(acct.equity || 0, 0), 'account')}
+${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins / closed.length * 100)}% won` : '0', 'closed')}
 </div>`;
   const moneyLine = `<div style="display:flex;flex-wrap:wrap;gap:4px 18px;align-items:baseline;margin:-4px 2px 14px;font-size:12.5px"><b style="font-size:13px">💼 Money in trades now: $${fmt(inAll, 0)}</b>${open.length ? `<span>stocks <b>$${fmt(inStk, 0)}</b></span><span>options <b>$${fmt(inOpt, 0)}</b></span><span class="mut">paid $${fmt(inCost, 0)}</span><span>open P/L <b class="${cls(unreal)}">${$$(unreal)}</b></span>` : '<span class="mut">nothing open right now</span>'}<span>free to trade <b>$${fmt(freeAmt, 0)}</b> <span class="mut">of your ${stake ? '$' + fmt(stake, 0) + ' stake' : 'account'}</span></span></div>`;
   const splitCard = (() => {                     // money split: stocks, CALLs and PUTs each with their own money, use, results and loss limit
@@ -2576,7 +2585,7 @@ ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins 
       const cl = closed.filter(is), w = cl.filter(c => c.pl > 0).length, real = cl.reduce((t, c) => t + c.pl, 0);
       const todayPl = fresh && sp && sp.today != null ? sp.today : null, lim = sp ? sp.limitPct : (k === 'stock' ? (S0.dayCap ?? 3) : k === 'spy' ? (S0.spyDayCap ?? 25) : (S0.optDayCap ?? 10));
       const halted = fresh && sp && sp.halted;
-      return `<div class="card" style="padding:12px 14px;flex:1 1 230px;min-width:0"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${nm}</b><span class="pill ${halted ? 'r-Sell' : 'r-Buy'}" style="font-size:11px">${halted ? 'stopped for today' : money > 0 ? 'trading' : 'no money set'}</span></div>
+      return `<div class="card" style="padding:12px 14px;flex:1 1 230px;min-width:0"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px" class="drillable" data-drill="part" data-arg="${k}" role="button" tabindex="0">${nm} <span class="drill-ico" aria-hidden="true">›</span></b><span class="pill ${halted ? 'r-Sell' : 'r-Buy'}" style="font-size:11px">${halted ? 'stopped for today' : money > 0 ? 'trading' : 'no money set'}</span></div>
 <div style="font-size:12.5px;margin-top:6px"><span data-tip="${esc(TIP[k])}">Its money</span> <b>$${fmt(money, 0)}</b> <span class="mut">(${sh[k]}%)</span> · in use <b>$${fmt(used, 0)}</b></div>
 <div role="img" aria-label="${fmt(pct, 0)}% of its money in use" style="height:6px;border-radius:3px;background:var(--surface2);margin:6px 0;overflow:hidden"><div style="height:100%;width:${pct.toFixed(1)}%;background:${pct > 90 ? 'var(--ts)' : 'var(--accent)'}"></div></div>
 <div style="display:flex;flex-wrap:wrap;gap:2px 14px;font-size:12.5px"><span>today ${todayPl != null ? `<b class="${cls(todayPl)}">${$$(todayPl)}</b>` : '<span class="mut">—</span>'}</span><span>realized <b class="${cls(real)}">${$$(real)}</b></span><span>${cl.length} closed${cl.length ? ' · ' + Math.round(w / cl.length * 100) + '% won' : ''}</span></div>
@@ -2609,7 +2618,7 @@ ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins 
   const log = acts.length ? `<details data-k="botlog" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700;font-size:13.5px">What the bot did recently</summary><div class="card" style="padding:10px 14px;margin-top:6px;font-size:12.5px;line-height:1.7">${acts.map(a => `<div><span class="mut">${tET(a.t)}</span> · ${esc(a.m)}</div>`).join('')}</div></details>` : '';
   const env = J.env;
   const envCard = env ? `<div class="card" style="padding:12px 16px;margin:0 0 14px;${env.block ? 'border-left:4px solid var(--ts)' : env.reasons && env.reasons.length ? 'border-left:4px solid var(--s)' : ''}">
-<b style="font-size:13.5px">\ud83d\udee1\ufe0f Bot\u2019s market check</b> <span class="mut" style="font-size:11.5px">\u00b7 ${tET(env.at)} ET${env.spyPct != null ? ' \u00b7 SPY ' + sgn(env.spyPct) + '%' : ''}${env.newsOk === false ? ' \u00b7 news feed unavailable' : ''}</span>
+<b style="font-size:13.5px" class="drillable" data-drill="env" role="button" tabindex="0">\ud83d\udee1\ufe0f Bot\u2019s market check <span class="drill-ico" aria-hidden="true">›</span></b> <span class="mut" style="font-size:11.5px">\u00b7 ${tET(env.at)} ET${env.spyPct != null ? ' \u00b7 SPY ' + sgn(env.spyPct) + '%' : ''}${env.newsOk === false ? ' \u00b7 news feed unavailable' : ''}</span>
 <div style="margin-top:6px;font-size:13px">${env.block ? '<b class="neg">PAUSED \u2014 no new trades</b>' : '<b class="pos">Trading normally</b>'}</div>
 ${(env.reasons || []).map(r => `<div class="mut" style="font-size:12.5px;margin-top:3px">\u2022 ${esc(r)}</div>`).join('')}
 ${(env.flagged || []).length ? `<div style="margin-top:8px;font-size:12px"><b>Headlines it reacted to or is watching</b>${env.flagged.slice(0, 6).map(f => `<div style="margin-top:2px"><span class="mut">${tET(f.t)}</span> \u00b7 <span class="pill r-Hold" style="font-size:10px">${esc(f.cats.join(', '))}</span> ${f.url ? `<a href="${safeUrl(f.url)}" target="_blank" rel="noopener" style="color:var(--text)">${esc(f.headline)}</a>` : esc(f.headline)}</div>`).join('')}</div>` : ''}
@@ -2627,7 +2636,7 @@ ${(env.flagged || []).length ? `<div style="margin-top:8px;font-size:12px"><b>He
   const R = J.risk, L = J.limits, rg = (env && env.regime) || (R && R.regime);
   const rgTxt = {bull: ['pos', 'Bull — SPY above its 50- and 200-day averages'], neutral: ['', 'Choppy — SPY near its 50-day average'], bear: ['neg', 'Bear — SPY below its averages (fewer stocks qualify: each must be above its own 200-day)'], unknown: ['', 'Not enough history yet']}[rg || 'unknown'];
   const heatBar = R ? Math.min(100, R.heatPct / R.capPct * 100) : 0;
-  const riskCard = L ? `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">⚖️ Risk dashboard</b>
+  const riskCard = L ? `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px" class="drillable" data-drill="risk" role="button" tabindex="0">⚖️ Risk dashboard <span class="drill-ico" aria-hidden="true">›</span></b>
 <div style="margin-top:8px;font-size:13px"><b>Market regime:</b> <span class="${rgTxt[0]}">${rgTxt[1]}</span></div>
 ${R ? `<div style="margin-top:8px;font-size:13px"><b>Money at risk to the stops:</b> ${fmt(R.heatPct, 2)}% of the account <span class="mut">(cap ${R.capPct}%)</span>
 <div style="height:8px;background:var(--surface2);border-radius:4px;margin-top:4px;overflow:hidden"><div style="height:100%;width:${heatBar}%;background:${heatBar > 85 ? 'var(--ts)' : heatBar > 60 ? 'var(--s)' : 'var(--tb)'}"></div></div></div>
@@ -2681,7 +2690,7 @@ ${(() => { const Dy = J.day; if (!Dy) return ''; const $p = v => v == null ? '�
     const S = st(closed);
     let eqv = 0, pk = 0, dd = 0;
     [...closed].sort((a, b) => a.outT < b.outT ? -1 : 1).forEach(c => { eqv += c.pl; pk = Math.max(pk, eqv); dd = Math.max(dd, pk - eqv); });
-    perfCard = `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px">📊 Performance</b> <span class="mut" style="font-size:11.5px">· all closed trades</span>
+    perfCard = `<div class="card" style="padding:12px 16px;margin:0 0 14px"><b style="font-size:13.5px" class="drillable" data-drill="perf" role="button" tabindex="0">📊 Performance <span class="drill-ico" aria-hidden="true">›</span></b> <span class="mut" style="font-size:11.5px">· all closed trades</span>
 <div class="lv" style="margin:8px 0 0">
 ${lvBox('Expectancy / trade', `<span class="${cls(S.exp)}">${$$(S.exp)}</span>`)}
 ${lvBox('Profit factor', S.pf == null ? '–' : `<span class="${S.pf >= 1 ? 'pos' : 'neg'}">${fmt(S.pf, 2)}</span>`)}
@@ -3295,6 +3304,7 @@ function renderAll(bg) {
     const go = async () => { const msg = await addTicker($('#qaSym').value, tab); $('#qaMsg').textContent = msg || 'Added to My tickers.'; if (!msg) $('#qaSym').value = ''; };
     $('#qaBtn').addEventListener('click', go); $('#qaSym').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
   }
+  try { drillRefresh(); } catch (e) {}
 }
 
 function rulesView() {
@@ -3461,7 +3471,96 @@ function chart(s, a, extra) {
   svg += `<circle cx="${x(c.length - 1)}" cy="${y(s.px)}" r="3.5" fill="${up ? 'var(--tb)' : 'var(--ts)'}"/></svg>`;
   return svg;
 }
-function lvBox(l, v) { return `<div><small>${l}</small><b>${v}</b></div>`; }
+// ---- Bot trades drill-down (owner, 2026-10-26: "when I click on the label it needs to show more details") ----
+// Tap a box label, a part, a card title or a symbol → a sheet with the detail behind it, built from the decrypted journal.
+let drillState = null;   // { key, arg, tip, at }
+function drillOpen(key, arg, tip) { drillState = { key, arg: arg || '', tip: tip || '', at: null }; drillRender(true); }
+function drillClose() { drillState = null; const d = document.getElementById('drill'); if (d) d.remove(); document.body.classList.remove('drill-on'); }
+function drillRefresh() { if (drillState && botJ && botJ.at !== drillState.at) drillRender(false); }   // new journal: refresh the open sheet, keep its scroll
+function drillRender(fresh) {
+  if (!drillState) return;
+  if (!botJ) return drillClose();
+  const r = drillBody(botJ, drillState.key, drillState.arg);
+  if (!r) return drillClose();
+  drillState.at = botJ.at;
+  let d = document.getElementById('drill'), keep = 0;
+  if (d) { const b = d.querySelector('.drill-body'); keep = b ? b.scrollTop : 0; }
+  else { d = document.createElement('div'); d.id = 'drill'; document.body.appendChild(d); }
+  d.innerHTML = `<div class="drill-bg" data-drillclose="1"></div><div class="drill-sheet" role="dialog" aria-modal="true" aria-labelledby="drillTitle"><div class="drill-head"><b id="drillTitle">${esc(r.title)}</b><button type="button" class="btn ghost" data-drillclose="1" aria-label="Close details">✕</button></div><div class="drill-body">${drillState.tip ? `<div class="mut" style="font-size:12.5px;margin:0 0 10px;line-height:1.5">${esc(drillState.tip)}</div>` : ''}${r.html}<div class="mut" style="font-size:11px;margin-top:12px">From the bot’s journal of ${new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(new Date(botJ.at))} ET · updates with each check-in.</div></div></div>`;
+  document.body.classList.add('drill-on');
+  const b = d.querySelector('.drill-body'); if (b) b.scrollTop = fresh ? 0 : keep;
+  if (fresh) { const x = d.querySelector('.drill-head button'); if (x) x.focus(); }
+}
+document.addEventListener('click', e => {
+  if (e.target.closest && e.target.closest('[data-drillclose]')) { drillClose(); return; }
+  const el = e.target.closest && e.target.closest('[data-drill]'); if (!el) return;
+  if (e.target.closest('#drill') && !el.closest('#drill .drill-body')) return;
+  e.preventDefault(); const tipEl = el.closest('[data-tip]') || el.querySelector('[data-tip]');
+  const label = (el.querySelector('small') || el).textContent.replace(/›/g, '').replace(/[^\w\s&'’().\-/%]/g, ' ').replace(/\s+/g, ' ').trim();   // the label's own words, without the arrow or emoji
+  let tip = tipEl ? tipEl.getAttribute('data-tip') : '';
+  if (!tip && window.SD_TIPS && el.dataset.drill !== 'sym') { try { tip = window.SD_TIPS.lookup(label, true) || window.SD_TIPS.lookup(label, false) || ''; } catch (x) { tip = ''; } }
+  drillOpen(el.dataset.drill, el.dataset.arg, tip);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && drillState) { drillClose(); return; }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('[data-drill]') && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); e.target.closest('[data-drill]').click(); }
+});
+function drillBody(J, key, arg) {
+  const closed = J.closed || [], open = J.open || [];
+  const dET = iso => new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York'}).format(new Date(iso));
+  const tET = iso => iso ? new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(new Date(iso)) : '–';
+  const today = dET(Date.now()), usd = v => (v < 0 ? '−' : '') + '$' + fmt(Math.abs(v), 2), sd = v => `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}$${fmt(Math.abs(v), 2)}</span>`;
+  const pc = v => v == null || !isFinite(v) ? '–' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${fmt(v, 1)}%</span>`;
+  const part = r => r.kind !== 'Stock' && r.und === 'SPY' ? 'spy' : r.kind === 'Call' ? 'call' : r.kind === 'Put' ? 'put' : 'stock';
+  const PN = { stock: 'Stocks', call: 'CALLs', put: 'PUTs', spy: 'SPY quick options' };
+  const mul = o => o.mult || (o.kind === 'Stock' ? 1 : 100), val = o => Math.abs(o.qty) * o.now * mul(o);
+  const name = r => r.kind === 'Stock' ? esc(r.und) : `${esc(r.und)} ${r.kind.toUpperCase()}${r.strike ? ' ' + fmt(r.strike, r.strike % 1 ? 1 : 0) : ''}${r.exp ? ' · ' + esc(r.exp.slice(5)) : ''}`;
+  const held = c => { const h = (Date.parse(c.outT) - Date.parse(c.inT)) / 60000; return !(h >= 0) ? '–' : h < 60 ? Math.round(h) + ' min' : h < 1440 ? (h / 60).toFixed(1) + ' h' : (h / 1440).toFixed(1) + ' days'; };
+  const symLink = r => `<span class="drillable" data-drill="sym" data-arg="${esc(r.und)}" role="button" tabindex="0">${name(r)} <span class="drill-ico" aria-hidden="true">›</span></span>`;
+  const closedTbl = arr => arr.length ? `<div class="tw"><table style="min-width:620px"><thead><tr><th class="lt">Trade</th><th>Qty</th><th class="lt">Bought</th><th>At</th><th class="lt">Sold</th><th>At</th><th>Held</th><th>P/L</th><th>%</th></tr></thead><tbody>${[...arr].sort((a, b) => Date.parse(b.outT) - Date.parse(a.outT)).map(c => `<tr><td class="lt">${symLink(c)}</td><td>${fmt(c.qty, c.qty % 1 ? 2 : 0)}</td><td class="lt">${tET(c.inT)}</td><td>$${fmt(c.inPx)}</td><td class="lt">${tET(c.outT)}</td><td>$${fmt(c.outPx)}</td><td>${held(c)}</td><td><b>${sd(c.pl)}</b></td><td>${pc(c.plPct)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="mut" style="font-size:12.5px">No closed trades.</div>';
+  const openTbl = arr => arr.length ? `<div class="tw"><table style="min-width:560px"><thead><tr><th class="lt">Position</th><th>Qty</th><th class="lt">Since</th><th>Bought at</th><th>Now</th><th>Value</th><th>P/L</th><th>%</th></tr></thead><tbody>${arr.map(o => `<tr><td class="lt">${symLink(o)}</td><td>${fmt(o.qty, o.qty % 1 ? 2 : 0)}</td><td class="lt">${tET(o.since)}</td><td>$${fmt(o.avg)}</td><td>$${fmt(o.now)}</td><td>$${fmt(val(o), 0)}</td><td><b>${sd(o.pl)}</b></td><td>${pc(o.plPct)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="mut" style="font-size:12.5px">Nothing open.</div>';
+  const stats = arr => { const n = arr.length, w = arr.filter(c => c.pl > 0), l = arr.filter(c => c.pl <= 0), tot = arr.reduce((t, c) => t + c.pl, 0), gw = w.reduce((t, c) => t + c.pl, 0), gl = -l.reduce((t, c) => t + c.pl, 0);
+    return { n, won: n ? Math.round(w.length / n * 100) : 0, tot, avg: n ? tot / n : 0, avgW: w.length ? gw / w.length : 0, avgL: l.length ? -gl / l.length : 0, pf: gl > 0 ? gw / gl : (gw > 0 ? Infinity : 0), best: n ? Math.max(...arr.map(c => c.pl)) : 0, worst: n ? Math.min(...arr.map(c => c.pl)) : 0 }; };
+  const byPart = arr => `<div class="tw"><table style="min-width:520px"><thead><tr><th class="lt">Part</th><th>Trades</th><th>Won</th><th>P/L</th><th>Avg / trade</th><th>Best</th><th>Worst</th></tr></thead><tbody>${['stock', 'call', 'put', 'spy'].map(k => { const S = stats(arr.filter(c => part(c) === k)); return S.n ? `<tr><td class="lt"><span class="drillable" data-drill="part" data-arg="${k}" role="button" tabindex="0">${PN[k]} <span class="drill-ico" aria-hidden="true">›</span></span></td><td>${S.n}</td><td>${S.won}%</td><td><b>${sd(S.tot)}</b></td><td>${sd(S.avg)}</td><td>${sd(S.best)}</td><td>${sd(S.worst)}</td></tr>` : ''; }).join('') || '<tr><td class="lt mut" colspan="7">No trades yet.</td></tr>'}</tbody></table></div>`;
+  const byDay = arr => { const d = {}; arr.forEach(c => { const k = dET(c.outT); (d[k] = d[k] || []).push(c); }); const keys = Object.keys(d).sort().reverse(); return keys.length ? `<div class="tw"><table style="min-width:0;width:100%"><thead><tr><th class="lt">Day</th><th>Trades</th><th>Won</th><th>P/L</th></tr></thead><tbody>${keys.map(k => { const S = stats(d[k]); return `<tr><td class="lt">${k}</td><td>${S.n}</td><td>${S.won}%</td><td><b>${sd(S.tot)}</b></td></tr>`; }).join('')}</tbody></table></div>` : ''; };
+  const h = t => `<h4 style="margin:14px 0 6px;font-size:13px">${t}</h4>`;
+  const kv = rows => `<div class="tw"><table style="min-width:0"><tbody>${rows.filter(Boolean).map(([k, v]) => `<tr><td class="lt">${k}</td><td style="text-align:right"><b>${v}</b></td></tr>`).join('')}</tbody></table></div>`;
+  const A = J.account || {}, eq = +A.equity || 0, last = +A.last_equity || eq, inv = open.reduce((t, o) => t + val(o), 0), unreal = open.reduce((t, o) => t + o.pl, 0);
+  const closedToday = closed.filter(c => dET(c.outT) === today), realToday = closedToday.reduce((t, c) => t + c.pl, 0);
+  if (key === 'today') return { title: 'Today', html: kv([['Account value now', usd(eq)], ['At yesterday’s close', usd(last)], ['Change today', sd(eq - last) + ' ' + pc(last ? (eq / last - 1) * 100 : null)], ['of which sold today (realized)', sd(realToday)], ['open positions (whole gain/loss since bought)', sd(unreal)]]) + `<div class="mut" style="font-size:11.5px;margin-top:6px">“Today” is the broker’s own figure: account value now minus at yesterday’s close. It includes today’s sales and today’s move of everything still open.</div>` + h('Sold today') + closedTbl(closedToday) + h('Open now') + openTbl(open) };
+  if (key === 'realToday') return { title: 'Realized today — trades closed today', html: kv([['Trades closed today', closedToday.length], ['Result', sd(realToday)], ['Won', closedToday.length ? stats(closedToday).won + '%' : '–']]) + h('By part') + byPart(closedToday) + h('Every trade closed today') + closedTbl(closedToday) };
+  if (key === 'realAll' || key === 'closed') { const S = stats(closed);
+    return { title: key === 'closed' ? 'Closed trades — wins and losses' : 'Total realized — every closed trade', html: kv([['Closed trades', S.n], ['Won', S.n ? S.won + '%' : '–'], ['Total result', sd(S.tot)], ['Average per trade', sd(S.avg)], ['Average winner / loser', S.n ? sd(S.avgW) + ' / ' + sd(S.avgL) : '–'], ['Profit factor (won ÷ lost)', S.pf === Infinity ? 'no losses yet' : S.n ? fmt(S.pf, 2) : '–'], ['Best / worst trade', S.n ? sd(S.best) + ' / ' + sd(S.worst) : '–']]) + h('By part') + byPart(closed) + h('By day') + byDay(closed) + (key === 'closed' ? h('Winners') + closedTbl(closed.filter(c => c.pl > 0)) + h('Losers') + closedTbl(closed.filter(c => c.pl <= 0)) : h('Every closed trade') + closedTbl(closed)) }; }
+  if (key === 'inTrades' || key === 'account') {
+    const byP = ['stock', 'call', 'put', 'spy'].map(k => { const arr = open.filter(o => part(o) === k); return [k, arr.length, arr.reduce((t, o) => t + val(o), 0), arr.reduce((t, o) => t + o.pl, 0)]; });
+    return { title: key === 'account' ? 'Account value' : 'In trades now', html: kv([['Account value', usd(eq)], ['Cash', A.cash != null ? usd(+A.cash) : '–'], ['In trades (market value)', usd(inv) + (eq ? ' · ' + fmt(inv / eq * 100, 1) + '%' : '')], ['Not invested', eq ? usd(Math.max(0, eq - inv)) : '–'], ['Open positions', open.length], ['Open gain / loss', sd(unreal)]]) + h('By part') + `<div class="tw"><table style="min-width:420px"><thead><tr><th class="lt">Part</th><th>Positions</th><th>Value</th><th>Gain / loss</th></tr></thead><tbody>${byP.map(([k, n, v, pl]) => `<tr><td class="lt"><span class="drillable" data-drill="part" data-arg="${k}" role="button" tabindex="0">${PN[k]} <span class="drill-ico" aria-hidden="true">›</span></span></td><td>${n}</td><td>$${fmt(v, 0)}</td><td>${sd(pl)}</td></tr>`).join('')}</tbody></table></div>` + h('Every open position') + openTbl(open) };
+  }
+  if (key === 'part' && PN[arg]) {
+    const sp = J.split && J.split[arg], op = open.filter(o => part(o) === arg), cl = closed.filter(c => part(c) === arg), S = stats(cl), Y = arg === 'spy' ? J.spy : null;
+    const rows = [sp && ['Its money', usd(sp.money)], ['In use now', usd(op.reduce((t, o) => t + val(o), 0))], sp && sp.today != null && ['Today (incl. open)', sd(sp.today)], sp && sp.limitPct != null && ['Stops for the day at', `−${sp.limitPct}% of its money (${usd(sp.money * sp.limitPct / 100)})`], sp && sp.halted && ['Status', '<span class="neg">' + esc(sp.halted) + '</span>'], ['Closed trades', S.n + (S.n ? ` · ${S.won}% won` : '')], ['Total result', sd(S.tot)], S.n && ['Best / worst', sd(S.best) + ' / ' + sd(S.worst)],
+      Y && ['Trades today', `${Y.tradesToday || 0} of at most ${Y.max || '–'}`], Y && Y.idle && ['Now', esc(Y.idle)], Y && Y.spyPx && ['SPY / its VWAP', `$${fmt(Y.spyPx)} / $${fmt(Y.vwap || 0)}`], Y && Y.window && ['Trading hours', esc(Y.window)]];
+    return { title: PN[arg], html: kv(rows) + h('Open now') + openTbl(op) + h('Results by day') + (byDay(cl) || '<div class="mut" style="font-size:12.5px">No closed trades yet.</div>') + h('Every closed trade') + closedTbl(cl) };
+  }
+  if (key === 'sym' && arg) {
+    const op = open.filter(o => o.und === arg), cl = closed.filter(c => c.und === arg), S = stats(cl), w = J.watch && (J.watch.rows || []).find(r => r.s === arg);
+    return { title: arg + ' — every trade', html: kv([['Open now', op.length ? op.map(o => `${name(o)} ${sd(o.pl)}`).join(' · ') : 'nothing'], ['Closed trades', S.n + (S.n ? ` · ${S.won}% won` : '')], ['Result of closed trades', sd(S.tot)], ['Open gain / loss', sd(op.reduce((t, o) => t + o.pl, 0))], w && ['RSI-2 now', fmt(w.r2, 1) + (w.up ? ' · above its 200-day' : ' · below its 200-day')], w && w.buyAt != null && ['Buys again below', '$' + fmt(w.buyAt)]]) + h('Open') + openTbl(op) + h('Closed') + closedTbl(cl) };
+  }
+  if (key === 'env') { const E = J.env || {}, ev = arr => (arr || []).map(e => `<li>${esc(e.date || '')} ${esc(e.time || '')} — ${esc(e.title || '')}</li>`).join('');
+    return { title: 'Bot’s market check', html: kv([['Checked', tET(E.at) + ' ET'], ['New trades', E.block ? '<span class="neg">paused</span>' : '<span class="pos">allowed</span>'], ['Market', esc(E.regime || '–')], ['SPY today', E.spyPct != null ? pc(E.spyPct) : '–'], ['News feed', E.newsOk === false ? '<span class="neg">not reachable</span>' : 'ok']]) + h('Reasons') + ((E.reasons || []).length ? `<ul style="margin:0;padding-left:18px;font-size:13px">${E.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : '<div class="mut" style="font-size:12.5px">Nothing special today.</div>') + h('Scheduled today') + ((E.today || []).length ? `<ul style="margin:0;padding-left:18px;font-size:13px">${ev(E.today)}</ul>` : '<div class="mut" style="font-size:12.5px">No Fed, CPI, jobs or PPI release today.</div>') + h('Coming up') + ((E.upcoming || []).length ? `<ul style="margin:0;padding-left:18px;font-size:13px">${ev(E.upcoming)}</ul>` : '<div class="mut" style="font-size:12.5px">–</div>') + h('Headlines it flagged (last 90 minutes)') + ((E.flagged || []).length ? `<ul style="margin:0;padding-left:18px;font-size:13px">${E.flagged.map(f => `<li>${tET(f.t)} — ${f.url ? `<a href="${safeUrl(f.url)}" target="_blank" rel="noopener">${esc(f.headline)}</a>` : esc(f.headline)} <span class="mut">(${esc((f.cats || []).join(', '))})</span></li>`).join('')}</ul>` : '<div class="mut" style="font-size:12.5px">None.</div>') }; }
+  if (key === 'risk') { const Rk = J.risk || {}, L = J.limits || {};
+    return { title: 'Risk dashboard', html: kv([['Money at risk to the stops', Rk.heatPct != null ? fmt(Rk.heatPct, 2) + '% of the account' : '–'], ['Cap', Rk.capPct != null ? fmt(Rk.capPct, 1) + '%' : '–'], ['Market regime', esc(Rk.regime || '–')], L.riskPct != null && ['Risk per stock trade', L.riskPct + '%'], L.optRiskPct != null && ['Risk per option trade', L.optRiskPct + '%'], L.perSector != null && ['Max positions per sector', L.perSector], L.streak != null && ['Stop after losses in a row', L.streak], L.dayCap != null && ['Daily loss limit', L.dayCap + '%'], L.weekCap != null && ['Weekly loss limit', L.weekCap + '%']]) + h('Positions per sector') + (Object.keys(Rk.sectors || {}).length ? kv(Object.entries(Rk.sectors).sort((a, b) => b[1] - a[1]).map(([k, v]) => [esc(k), v])) : '<div class="mut" style="font-size:12.5px">No stock positions.</div>') + h('Open positions') + openTbl(open) };
+  }
+  if (key === 'perf') return drillBody(J, 'realAll', '');
+  if (key === 'since') { const S = J.since; if (!S || !(S.pts || []).length) return { title: 'Since the bot started trading', html: '<div class="mut">No data yet — it appears after the bot’s next check-in.</div>' };
+    const lastPer = pts => { const m = {}; for (const p of pts) m[dET(p[0])] = p[1]; return m; };
+    const bot = lastPer(S.pts), F = ['SPY', 'IJH', 'IWM', 'VGT', 'QQQ'].filter(k => S.bench && S.bench[k]), fd = Object.fromEntries(F.map(k => [k, lastPer(S.bench[k].pts)]));
+    const days = Object.keys(bot).sort();
+    const row = d => `<tr><td class="lt">${d}</td><td><b>$${fmt(100000 * bot[d] / S.base, 0)}</b></td>${F.map(k => { const v = fd[k][d]; return `<td>${v ? '$' + fmt(100000 * v / S.bench[k].base, 0) : '–'}</td>`; }).join('')}</tr>`;
+    return { title: 'Since the bot started — day by day', html: `<div class="mut" style="font-size:12.5px;margin-bottom:6px">Value of $100,000 at each day’s last reading (today: right now), started ${esc(S.start)}.</div><div class="tw"><table style="min-width:${300 + F.length * 90}px"><thead><tr><th class="lt">Day</th><th>Bot (all parts)</th>${F.map(k => `<th>${k}</th>`).join('')}</tr></thead><tbody>${days.reverse().map(row).join('')}</tbody></table></div>` + h('What each part made') + byPart(closed.filter(c => Date.parse(c.outT) >= Date.parse(S.start + 'T00:00:00Z'))) + h('Open now') + openTbl(open) };
+  }
+  return null;
+}
+function lvBox(l, v, dk) { return dk ? `<div class="drillable" data-drill="${dk}" role="button" tabindex="0" aria-label="${l} — details"><small>${l} <span class="drill-ico" aria-hidden="true">›</span></small><b>${v}</b></div>` : `<div><small>${l}</small><b>${v}</b></div>`; }
 function openDetail(sym, code, livePx) {
   const m = MK[code], cu = (m && m.cur) || '$';
   let s = (m && m.stocks.find(x => x.sym === sym)) || (analyseCustom().find(x => x.sym === sym && !x.pending)) || ((m && DATA.rows[sym]) ? (() => { const t = mkRec(sym, DATA.rows[sym], F); t.market = code; t.cur = m.cur; t.industry = 'Index / ETF'; rateOne(t, m.bench, m.bench); return t; })() : null);

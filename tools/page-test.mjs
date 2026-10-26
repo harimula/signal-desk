@@ -237,6 +237,19 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
     check('bot trades: Open now describes each kind correctly (swing stock, CALL, PUT, SPY quick trade, day trade) from the settings', /RSI-2 swing — sells at \+10%/.test(txt) && /CALL — sells with the stock/.test(txt) && /PUT — sells with the stock/.test(txt) && /SPY quick trade — out at \+15%/.test(txt) && /day trade — stop and target at the broker/.test(txt), txt.match(/Open now.{0,900}/)?.[0]);
     check('bot trades: option prices are shown per contract (×100) in the held table and per share in Open now, both labelled', /\$440\.00/.test(txt) && /\$4\.40/.test(txt), '');
     check('bot trades: the rules line reads the cancel time from settings', /cancelled after 45 min/.test(txt));
+    // drill-down: every clickable label opens a detail sheet built from the journal; ✕ and Escape close it; links inside open further sheets
+    { const keys = await page.$$eval('main [data-drill]', els => [...new Set(els.map(e => e.dataset.drill + '|' + (e.dataset.arg || '')))]);
+      const bad = [];
+      for (const k of keys) { const [d, a] = k.split('|');
+        await page.evaluate(([d2, a2]) => document.querySelector(`main [data-drill="${d2}"]${a2 ? `[data-arg="${a2}"]` : ''}`).click(), [d, a]); await page.waitForTimeout(150);
+        const t = await page.evaluate(() => { const x = document.getElementById('drill'); return x ? x.innerText : ''; }); if (!t || t.length < 40) bad.push(k);
+        await page.keyboard.press('Escape'); await page.waitForTimeout(80); if (await page.$('#drill')) bad.push(k + ' (did not close)'); }
+      check(`drill-down: all ${keys.length} clickable labels open a detail sheet and close with Escape`, keys.length >= 14 && !bad.length, bad.join(', ') + ' / ' + keys.join(','));
+      await page.evaluate(() => document.querySelector('main [data-drill="realAll"]').click()); await page.waitForTimeout(150);
+      await page.evaluate(() => document.querySelector('#drill [data-drill="sym"]').click()); await page.waitForTimeout(150);
+      const t2 = await page.evaluate(() => (document.getElementById('drill') || {}).innerText || '');
+      await page.click('#drill [data-drillclose="1"].btn'); await page.waitForTimeout(100);
+      check('drill-down: a symbol inside a sheet opens that symbol’s own history; ✕ closes it', /— every trade/.test(t2) && !(await page.$('#drill')), t2.slice(0, 120)); }
     // real results since the first trade: the whole account (all four parts) scaled to $100k vs $100k in each fund
     { const sc = await page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /Since the bot started trading/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
       check('since-start card: the real account (+0.60% → $100,600) against SPY, IJH, IWM, VGT and QQQ, each from $100,000, with a per-part breakdown', /\$100,600/.test(sc) && /SPY/.test(sc) && /VGT/.test(sc) && /QQQ/.test(sc) && /\$101,000/.test(sc) && /stocks/.test(sc) && /SPY quick options/.test(sc) && /far too short to judge/.test(sc), sc.slice(0, 400)); }

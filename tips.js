@@ -344,7 +344,8 @@ label[data-tip]:not([data-tip-whole]){text-decoration:none}label[data-tip]>b:fir
     if (now) go(); else timer = setTimeout(go, 280);
   }
   function hide() { clearTimeout(timer); cur = null; tip.classList.remove('on'); }
-  const target = e => { const el = e.target && e.target.closest && e.target.closest('[data-tip]'); if (!el) return null; if (el.tagName === 'LABEL' && e.target.closest('input, select, textarea, button')) return null; return el; };
+  const target = e => { if (e.target && e.target.closest && e.target.closest('[data-drill]')) return null;   // a drill-down label opens its own detail sheet (with this explanation in it)
+    const el = e.target && e.target.closest && e.target.closest('[data-tip]'); if (!el) return null; if (el.tagName === 'LABEL' && e.target.closest('input, select, textarea, button')) return null; return el; };
   document.addEventListener('pointerover', e => { if (e.pointerType === 'touch') return; const el = target(e); if (el && el !== cur) show(el); else if (!el && cur) hide(); }, true);
   document.addEventListener('pointerout', e => { if (e.pointerType === 'touch') return; const el = target(e); if (el && !el.contains(e.relatedTarget)) hide(); }, true);
   document.addEventListener('pointerdown', e => {                                  // phones and tablets: tap the term to see it, tap anywhere to close
