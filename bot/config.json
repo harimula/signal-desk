@@ -14,7 +14,7 @@
  "optPct": 3,
  "stocks": true,
  "options": true,
- "puts": true,
+ "puts": false,
  "intraday": true,
  "universe": "scan",
  "scanSize": 200,
@@ -38,7 +38,7 @@
  "liveSizePct": 25,
  "pickBy": "leaders",
  "spyOn": true,
- "spySharePct": 5,
+ "spySharePct": 10,
  "spyTradePct": 20,
  "spyTp": 5,
  "spyStop": 20,
@@ -52,7 +52,7 @@
  "spyEnd": "15:00",
  "split": true,
  "callSharePct": 20,
- "putSharePct": 5,
+ "putSharePct": 0,
  "optDayCap": 10,
  "stockUnit": "pct",
  "callUnit": "pct",
@@ -117,8 +117,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-27T20:08:34.065Z",
- "updatedBy": "Claude (CALL win-rate settings, owner request 2026-10-27)",
+ "updatedAt": "2026-10-27T20:58:12.575Z",
+ "updatedBy": "Claude (owner request 2026-10-27: PUTs 0%, SPY 10%, CALLs 20%, stocks 70%)",
  "liveConfirm": "",
  "stakeUsd": 0
 }

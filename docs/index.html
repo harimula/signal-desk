@@ -485,6 +485,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-27</td><td>Owner’s money split: stocks 70%, CALLs 20%, SPY quick options 10%, PUTs off (0%)</td></tr>
 <tr><td>2026-10-27</td><td>CALLs and PUTs set for an 80% CALL win rate (owner’s request): new setting “When to sell a CALL or PUT” — only at the take-profit, the stop or the time limit — with +5% / −90%; on real option prices for the bot’s own signals since March 2024 that won 83.5% of CALLs (54% before). PUTs reached 66% at best and lost money. Option size now follows the stop you set</td></tr>
 <tr><td>2026-10-27</td><td>CALL / PUT win-rate check: a manual workflow replays a sample of the bot’s own CALL and PUT signals since March 2024 on real option prices, next to the price model</td></tr>
 <tr><td>2026-10-27</td><td>SPY quick options set for an 80% win rate at the owner's request: take-profit 5%, stop 60%, time stop 60 minutes (about 83% of trades won in the 2023–26 replay and with real prices over the last 60 days; about break-even on average — small wins, rare large losses). A SPY trade already open when the take-profit is lowered now sells at the new level instead of waiting for its older order</td></tr>
