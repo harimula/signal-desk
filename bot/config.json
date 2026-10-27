@@ -41,9 +41,9 @@
  "spySharePct": 5,
  "spyTradePct": 20,
  "spyTp": 5,
- "spyStop": 60,
+ "spyStop": 20,
  "spyHoldMin": 60,
- "spyMaxTrades": 10,
+ "spyMaxTrades": 20,
  "spyMaxOpen": 3,
  "spyStreak": 2,
  "spyDayCap": 25,
@@ -115,8 +115,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-27T18:31:05.871Z",
- "updatedBy": "Claude (SPY 80% win-rate settings, owner request 2026-10-27)",
+ "updatedAt": "2026-10-27T19:46:21.078Z",
+ "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
 }
