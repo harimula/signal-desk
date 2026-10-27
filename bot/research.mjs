@@ -111,7 +111,7 @@ function simulate(key, data, calendar, regimeOn, useRegime) {
       let exitPx = null;
       if (p.stop && b.l <= p.stop) exitPx = Math.min(b.o, p.stop);              // the stop is checked first: a day that touches both counts as a loss
       else if (p.tp && b.h >= p.tp) exitPx = Math.max(b.o, p.tp);
-      else { p.held++; if (S.exit(D.B, D.C, j, p.held)) exitPx = b.c; }
+      else { p.held++; if (S.exit(D.B, D.C, j, p.held, p)) exitPx = b.c; }
       if (exitPx != null) {
         if (S.short) { const r = (p.entryPx - exitPx) / p.entryPx - 2 * COST; cash += p.alloc * (1 + r); trades.push(r); }
         else { cash += p.sh * exitPx * (1 - COST); trades.push((exitPx * (1 - COST)) / (p.entryPx * (1 + COST)) - 1); }
@@ -215,22 +215,23 @@ for (const [key, label, get] of BENCH5) {
 if (MKT === 'US') {
   const SPYI = Object.fromEntries(spy.map((b, i) => [b.d, i])), SPYC = spy.map(b => b.c);
   let cfg = {}; try { cfg = JSON.parse(fs.readFileSync('bot/config.json', 'utf8')); } catch (e) {}
-  const mk = ({ thr, tp, stop, hold, leaders }) => ({ kind: 'swing',
+  const mk = ({ thr, tp, stop, hold, leaders, rule = 'bounce', pct = 0.5, mf = false }) => ({ kind: 'swing',
     plan(B, C, i) { const s200 = sma(C, 200, i), r = rsi2(C, i); if (!(s200 && r != null && C[i] > s200 && r < thr)) return null;
+      if (mf) { const k = SPYI[B[i].d], m200 = k != null && k >= 199 ? sma(SPYC, 200, k) : null; if (!(m200 && SPYC[k] > m200)) return null; }   // market filter: SPY above its 200-day
       let rank = r; if (leaders && i >= 60) { const k = SPYI[B[i].d], m = k != null && k >= 60 ? SPYC[k] / SPYC[k - 60] - 1 : 0; rank = -((C[i] / C[i - 60] - 1) - m); }
       return { rank, stopPct: stop / 100, tpPct: tp > 0 ? tp / 100 : null }; },
-    exit(B, C, j, held) { const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= hold; } });
+    exit(B, C, j, held, p) { if (rule === 'profit') return C[j] >= p.entryPx * (1 + pct / 100) || held >= hold; const s5 = sma(C, 5, j); return (s5 && C[j] > s5) || held >= hold; } });
   const def = { thr: 10, tp: 10, stop: 25, hold: 10, leaders: true };            // the bot's defaults for the strategy settings
   const spyShare = cfg.spyOn === false ? 0 : (cfg.spySharePct ?? 5);
   const stockShare = cfg.split === false ? 1 : Math.max(0, 100 - (cfg.callSharePct ?? 30) - (cfg.putSharePct ?? 10) - spyShare) / 100;
-  const mine = { thr: cfg.rsiThreshold ?? 10, tp: cfg.stockTp ?? 10, stop: cfg.holdFloor ?? 25, hold: cfg.maxHold ?? 10, leaders: (cfg.pickBy || 'leaders') === 'leaders' };
+  const mine = { thr: cfg.rsiThreshold ?? 10, tp: cfg.stockTp ?? 10, stop: cfg.holdFloor ?? 25, hold: cfg.maxHold ?? 10, leaders: (cfg.pickBy || 'leaders') === 'leaders', rule: cfg.exitRule === 'profit' ? 'profit' : 'bounce', pct: cfg.exitProfitPct ?? 0.5, mf: !!cfg.marketFilter };
   const minePos = cfg.stockUnit === 'usd' ? 0.10 : (cfg.stockPct ?? 10) / 100, mineMax = cfg.maxPositions ?? 6;
   h5.modes = {};
   const runMode = (key, label, strat, pos, mx, cap) => { POS = pos; MAXPOS = mx; CAP = cap; const c = botCurve(strat); POS = POS0; MAXPOS = MAXPOS0; CAP = 1; h5.modes[key] = { label, pos, maxPos: mx, cap, trades: c.trades, ...curveStats(c.pts), pts: thin(c.pts) }; };
   runMode('conservative', 'Conservative — 8% × up to 4 stocks', mk(def), 0.08, 4, 1);
   runMode('balanced', 'Balanced — 10% × up to 6 stocks', mk(def), 0.10, 6, 1);
   runMode('aggressive', 'Aggressive — 12% × up to 8 stocks', mk(def), 0.12, 8, 1);
-  runMode('mine', `Your settings — ${Math.round(minePos * 100)}% × up to ${mineMax} stocks, buy below ${mine.thr}, ${mine.tp > 0 ? '+' + mine.tp + '% take-profit' : 'no take-profit'}, ${mine.leaders ? 'leaders first' : 'deepest dip first'}, all $100,000 on these rules`, mk(mine), minePos, mineMax, 1);   // owner (2026-10-25): compare $100K with $100K — the CALL/PUT/SPY shares (no price history) run the stock rules too instead of sitting in cash
+  runMode('mine', `Your settings — ${Math.round(minePos * 100)}% × up to ${mineMax} stocks, buy below ${mine.thr}, ${mine.tp > 0 ? '+' + mine.tp + '% take-profit' : 'no take-profit'}, ${mine.leaders ? 'leaders first' : 'deepest dip first'}${mine.rule === 'profit' ? `, sells at the first close +${mine.pct}% up` : ''}${mine.mf ? ', market filter' : ''}, all $100,000 on these rules (buys at the next open; the intraday setting is modelled in tools/winrate-study.mjs)`, mk(mine), minePos, mineMax, 1);   // owner (2026-10-25): compare $100K with $100K — the CALL/PUT/SPY shares (no price history) run the stock rules too instead of sitting in cash
   h5.modes.mine.settings = { ...mine, pos: minePos, maxPos: mineMax, stockShare, preset: cfg.preset || 'balanced', savedAt: cfg.updatedAt || null };
   for (const [k, m] of Object.entries(h5.modes)) console.log('mode', k, m.cagr, m.maxDD, m.trades);
 }

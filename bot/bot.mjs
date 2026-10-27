@@ -12,7 +12,7 @@
 //    all at -50%, all by 3:40pm the next session, never into expiry day.
 // Safety: paper endpoint by default; bot/STOP file flattens and halts; daily loss cap.
 import fs from 'node:fs';
-import { sma, rsi2, liveSignal, rsi2Trigger, rsi2ExitLevel, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit } from './strategy.mjs';
+import { sma, rsi2, liveSignal, rsi2Trigger, rsi2ExitLevel, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit, profitExit, profitExitLevel, marketAbove200 } from './strategy.mjs';
 import { buildJournal } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk, sideDayPl } from './risk.mjs';
@@ -728,6 +728,11 @@ async function run() {
   // real money starts small: every budget and risk figure is scaled by the live size setting (paper is always 100%)
   const liveScale = CFG.mode === 'live' ? CFG.liveSizePct / 100 : 1;
   if (liveScale < 1) { G.budget = (G.budget || 1) * liveScale; G.reasons.push(`Live trading at ${CFG.liveSizePct}% of the paper size (ramp-up setting)`); }
+  // market filter (setting): no new dip buys — stocks or CALLs — while SPY's last close is below its 200-day average. With the
+  // first-profitable-close exit this cut the worst fall of the 33-year test from -40% to -18% (tools/winrate-study.mjs).
+  const MF = marketAbove200(spyPrev && spyPrev.closes);
+  G.mkt = MF; G.mktBlock = CFG.marketFilter && !(MF && MF.above) ? (MF ? `SPY closed at ${MF.last}, below its 200-day average ${MF.s200}` : 'SPY\'s 200-day average is not known yet') : null;
+  if (G.mktBlock) G.reasons.push(`Market filter: ${G.mktBlock} \u2014 no new dip buys (stocks and CALLs); open positions are managed as usual`);
   if (RG.regime === 'bear') G.reasons.push('Bear market regime (SPY below its 50- and 200-day averages) \u2014 fewer stocks qualify, since each must be above its own 200-day');   // reported, not enforced: the filter did not improve RSI-2 in the research
   // (neutral regime: no size change for RSI-2)
   // circuit breakers: losing streak today, weekly drawdown
@@ -838,7 +843,8 @@ async function run() {
   lastSplit = { at: new Date().toISOString(), on: SPLIT, shares: share, stake: r0(equity),
     ...Object.fromEntries(KINDS.map(k => [k, { money: r0(SIDE[k].money), used: r0(sideUsed(k)), today: SPLIT ? sideDay[k] : null, limitPct: SIDE[k].capPct, halted: halt[k] }])) };
 
-  // ---- RSI-2 swing positions: sell at the close once above the 5-day average (or after 10 sessions) ----
+  // ---- RSI-2 swing positions: sold at the close by the chosen rule (exitRule: the bounce above the 5-day average, or the first
+  //      close at least exitProfitPct % above the buy price), or after maxHold sessions; take-profit and stop any time ----
   const swingStk = stockPos.map(p => ({ p, e: hist.find(o => o.side === 'buy' && bought(o) && cid(o).startsWith('sd-r-' + p.symbol + '-')) })).filter(x => x.e);
   const swingOpt = optPos.map(p => ({ p, e: hist.find(o => o.side === 'buy' && bought(o) && (cid(o).startsWith('sd-q-' + p.symbol + '-') || cid(o).startsWith('sd-p-' + p.symbol + '-'))) })).filter(x => x.e);
   if (swingStk.length || swingOpt.length) {
@@ -870,8 +876,8 @@ async function run() {
       if (CFG.stockTp > 0 && px && livePl >= CFG.stockTp && (day8 !== TODAY || !pdtNear)) { await out(`${p.symbol} +${livePl.toFixed(1)}% \u2014 take profit (target ${CFG.stockTp}%)`); continue; }
       if (MINS < CLOSE - 10 || !px) continue;                           // exits happen in the last 10 minutes, like a closing order
       const h = held(p.symbol, day8); if (h === 0) continue;             // never sell on the day it was bought
-      const x = rsi2Exit(completed(bars0, p.symbol).map(b => b.c), px, h, CFG.maxHold);
-      if (x.exit) await out(`${p.symbol} RSI-2 exit \u2014 ${x.why} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(2)}%)`);
+      const x = CFG.exitRule === 'profit' ? profitExit(+p.avg_entry_price, px, h, CFG.maxHold, CFG.exitProfitPct) : rsi2Exit(completed(bars0, p.symbol).map(b => b.c), px, h, CFG.maxHold);
+      if (x.exit) await out(`${p.symbol} ${CFG.exitRule === 'profit' ? 'profit exit' : 'RSI-2 exit'} \u2014 ${x.why} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(2)}%)`);
     }
     for (const { p, e } of swingOpt) {
       const sells = sellsFor(p.symbol); if (sells.some(o => o.type === 'market')) continue;
@@ -982,12 +988,12 @@ async function run() {
       const cl = completed(bars, und).map(b => b.c), mult = opt ? 100 : 1;
       const avg = +p.avg_entry_price, cur = +p.current_price;
       const row = { s: p.symbol, und, kind: opt ? (isPut ? 'put' : 'call') : 'stock', qty: Math.abs(+p.qty), avg: r2d(avg * mult), cur: r2d(cur * mult), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10,
-        undPx: r2d((last[und] && last[und].p) || cl[cl.length - 1] || 0), exitLevel: rsi2ExitLevel(cl), exitSide: isPut ? 'below' : 'above' };
+        undPx: r2d((last[und] && last[und].p) || cl[cl.length - 1] || 0), exitLevel: !opt && CFG.exitRule === 'profit' ? profitExitLevel(avg, CFG.exitProfitPct) : rsi2ExitLevel(cl), exitSide: isPut ? 'below' : 'above', exitBy: !opt && CFG.exitRule === 'profit' ? 'profit' : 'bounce' };
       if (!opt) row.floor = HOLD_FLOOR > 0 ? r2d(avg * (1 - HOLD_FLOOR / 100)) : null;
       else { row.tp = r2d(avg * mult * (1 + OPT_TP / 100)); row.stop = r2d(avg * mult * (1 - CFG.optStop / 100)); const m2 = OPT_RE.exec(p.symbol); row.exp = '20' + m2[2].slice(0, 2) + '-' + m2[2].slice(2, 4) + '-' + m2[2].slice(4, 6); }
       heldRows.push(row);
     }
-    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : G.mktBlock ? 'market filter: ' + G.mktBlock + ' \u2014 no new dip buys' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, exitRule: CFG.exitRule, exitPct: CFG.exitProfitPct, mktFilter: !!CFG.marketFilter, mkt: G.mkt || null, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
       buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
   }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
@@ -1016,7 +1022,7 @@ async function run() {
   if (sigs.length) act(`RSI-2 dips ${CFG.intraday ? 'right now (intraday)' : 'today'}${CFG.pickBy === 'leaders' ? ', leaders first' : ''}: ${sigs.map(s => s.sym + ' (RSI-2 ' + s.r2 + (s.lead != null ? ', ' + (s.lead >= 0 ? '+' : '') + s.lead + '% vs market' : '') + ')').join(', ')}`);
   const todays = hist.filter(o => o.side === 'buy' && cid(o).includes('-' + TODAY + '-') && (bought(o) || !['canceled', 'expired', 'rejected'].includes(o.status)));   // a cancelled buy that filled in part still counts
 
-  if (STK_ON && !halt.stock) {
+  if (STK_ON && !halt.stock && !G.mktBlock) {
     let slots = MAX_POS - stockPos.length - liveOrders.filter(o => o.side === 'buy' && !isOpt(o.symbol)).length;
     for (const s of sigs) {
       if (slots <= 0) break;
@@ -1043,7 +1049,7 @@ async function run() {
     let slots = MAX_OPT - optPos.length - liveOrders.filter(o => o.side === 'buy' && isOpt(o.symbol)).length;
     const hasOptOn = und => optPos.some(p => OPT_RE.exec(p.symbol)[1] === und) || liveOrders.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === und);
     const optSets = [];
-    if (OPT_ON) optSets.push(['call', sigs]);
+    if (OPT_ON && !G.mktBlock) optSets.push(['call', sigs]);
     if (PUT_ON) optSets.push(['put', shortSigs]);
     for (const [kind, list] of optSets) for (const s of list) {
       const K = kind.toUpperCase();

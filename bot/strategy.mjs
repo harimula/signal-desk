@@ -95,6 +95,26 @@ export function rsi2Exit(completedCloses, price, sessionsHeld, maxHold = 10) {
   return { exit: false, s5: r2d(s5) };
 }
 
+// ---- the "first profitable close" exit (setting exitRule = 'profit') ----
+// Sell at the close once the price is at least `pct`% above the buy price, or after maxHold sessions whatever the price.
+// The win-rate study (tools/winrate-study.mjs, 2026-10-27) found this lifts the share of winning trades from about 65% to
+// about 82% at a similar yearly return: most dips recover a little within days; the trades that do not are held until the
+// time limit, so losses are rarer but larger (average loss about -5.9% instead of -2.7%). Pair it with the market filter.
+export const profitExitLevel = (entry, pct = 0.5) => entry > 0 ? r2d(entry * (1 + pct / 100)) : null;
+export function profitExit(entry, price, sessionsHeld, maxHold = 15, pct = 0.5) {
+  const lvl = profitExitLevel(entry, pct);
+  if (lvl != null && price >= lvl) return { exit: true, why: `closing ${((price / entry - 1) * 100).toFixed(2)}% above the buy price (sells at +${pct}% or more)` };
+  if (sessionsHeld >= maxHold) return { exit: true, why: `held ${sessionsHeld} sessions` };
+  return { exit: false, level: lvl };
+}
+
+// ---- market filter (setting marketFilter): new dip buys only while SPY's last close is above its 200-day average ----
+export function marketAbove200(spyCloses) {
+  if (!Array.isArray(spyCloses) || spyCloses.length < 200) return null;          // unknown: the caller decides (the bot does not buy)
+  const s = sma(spyCloses, 200), last = spyCloses[spyCloses.length - 1];
+  return { above: last > s, last: r2d(last), s200: r2d(s) };
+}
+
 // ---- RSI-2 mirror for PUTs (an experiment: the research chose the long side only) ----
 // Put: completed close BELOW its 200-day average AND RSI-2 above 100 - threshold (a sharp pop in a downtrend).
 // Exit: once price is below its 5-day average, or after maxHold sessions.

@@ -175,6 +175,9 @@ signal-desk/
 ├── tips.js               hover help for every page: label → explanation dictionary + one tooltip engine
 ├── vendor/qrcode.js       QR code generator (MIT), still used by the old #setup= link receiver only
 ├── tools/stamp.mjs         bumps the build stamp and rewrites the CSP script hashes (run after every index.html edit)
+├── tools/research-data.mjs  downloads price history for the win-rate study to the branch research-data (workflow research-data.yml)
+├── tools/winrate-study.mjs  win-rate study of the stock rule (entries, exits, hold, stop, market filter; CALLs with model prices)
+├── tools/spy-study.mjs     SPY quick-options replay on minute prices since 2023 (model option prices, checked against real ones)
 ├── package.json  .nvmrc  eslint.config.js   npm scripts (test / lint / check / verify), Node 22 (needed for WebSocket), lint rules — no dependencies
 ├── favicon.ico  manifest.webmanifest   browser-tab icon; installable-app manifest
 ├── icons/                  logo.svg / logo.png, icon.svg, favicon, apple-touch, 192/512 and maskable PNGs
@@ -208,8 +211,9 @@ signal-desk/
 │   ├── telegram.mjs        Telegram alerts and read-only commands
 │   ├── research-in-ideas.mjs  India 5-year research with tax (breakout, momentum, momentum + safety switch)
 │   ├── research-day.mjs    day-trading research on 5-minute bars
-│   ├── test.mjs            77 unit tests (run in CI)
-│   ├── test-orders.mjs     113 end-to-end checks against a fake broker: which orders the bot places (CI)
+│   ├── winrate_report.md   the win-rate study's results (2026-10-27)
+│   ├── test.mjs            82 unit tests (run in CI)
+│   ├── test-orders.mjs     141 end-to-end checks against a fake broker: which orders the bot places (CI)
 │   └── test-india.mjs      15 India simulation checks (CI)
 ├── .github/workflows/
 │   ├── refresh.yml         refresh-prices
@@ -341,7 +345,7 @@ flowchart TD
   G -->|news crisis / FOMC window / breakers tripped| W[No new trades]
   G -->|clear| E[Entry window 9:45 → 11:00]
   E --> C{close > 200-day SMA<br/>and RSI-2 < 10<br/>and not bounced 1 %+}
-  C -->|yes, market leaders first (or deepest dips)| SZ[Size: risk % of equity<br/>≤ stock % per position<br/>heat cap, ≤ 2 per sector]
+  C -->|yes, and market filter passes:<br/>SPY above its 200-day (if on);<br/>market leaders first (or deepest dips)| SZ[Size: risk % of equity<br/>≤ stock % per position<br/>heat cap, ≤ 2 per sector]
   SZ --> O[Resting limit BUY<br/>+ optional CALL 14–35 DTE]
   C -->|no| H[Hold / wait]
   O --> M[Monitor every tick]
@@ -349,13 +353,14 @@ flowchart TD
   F -->|yes| X1[Emergency market SELL]
   M --> TP{option +50 %?}
   TP -->|yes| X2[Take profit resting order]
-  M --> L{last 10 min and<br/>close > 5-day SMA,<br/>or held 10 sessions}
+  M --> L{last 10 min and<br/>exitRule bounce: close > 5-day SMA<br/>exitRule profit: close ≥ buy + 0.5 %<br/>or held maxHold sessions}
   L -->|yes| X3[SELL at live price]
   L -->|no| N([Carry overnight])
 ```
 
 - **Entries:** 9:45–11:00 ET (after 10:15 on CPI/jobs days); limit orders at the broker.
-- **Exits:** last 10 minutes once the close is above the 5-day average, or after 10 sessions. A 25 % hard floor is a disaster brake (fires within a second off the stream).
+- **Exits:** in the last 10 minutes by the setting `exitRule`: `bounce` (default, the 33-year research rule) sells once the close is above the 5-day average; `profit` sells once the close is at least `exitProfitPct` % (default 0.5) above the position's average buy price (`profitExit()` in strategy.mjs). Either way a position is sold after `maxHold` sessions whatever the price, the `stockTp` take-profit works at any time, and the 25 % hard floor is a disaster brake held at the broker. Win-rate study 2026-10-27 (`tools/winrate-study.mjs`): `profit` + 15-session hold + market filter won ~82 % of trades over 33 years vs ~65 % for `bounce`, at a similar CAGR (+10.3 % vs +10.6 %; 2016–26 +6.4 % vs +4.3 %), worst fall −18 % vs −25 %, with larger average losses (−5.9 % vs −2.7 %). Report: `bot/winrate_report.md`.
+- **Market filter (setting `marketFilter`, default off):** no new dip buys — stocks or CALLs — while SPY's last completed close (IEX daily bars, `spyPrev`) is below its 200-day SMA (`marketAbove200()`); unknown history counts as below. PUTs, the SPY sleeve and day trading are not affected; open positions are managed as usual. The reason goes to `G.reasons` ("Market filter: …") and `watch.idle`.
 - **Options:** CALL nearest strike, 14–35 days to expiry, same dips; take-profit +50 % as a resting order, stop −50 %, closed 3 days before expiry. Skipped under the pattern-day-trader guard when equity < $25 000.
 - **Puts (experimental, OFF by default):** with **Trade PUT options** ticked, the mirror rule buys a PUT on a stock *below* its 200-day average whose RSI-2 is above 90 (a sharp pop in a downtrend), skipped once the pop has already fallen 1 %+ today. Same option rules as the CALLs (14–35 days, nearest strike, spread ≤ 20 %, shared 4-option cap and risk budget); exits when the stock closes below its 5-day average, after 10 sessions, or on the option take-profit / stop / expiry rules. Never backtested on options; the research workflow tests a stock-short proxy.
 - **Day trading (experimental, OFF by default; `docs/daytrading-rules.html`):** 5-minute IEX bars for the universe + SPY, refreshed every 55 s. Market filter: SPY vs its session VWAP. Setups: 15-minute opening-range breakout (fresh 5-min close through the range, on the VWAP side, relative volume ≥ 1.2×) and VWAP pullback-and-reclaim on a trend day (≥ 70 % of closes on one side of the running VWAP). Stop under the range (0.1 ATR) or 1.5 ATR, whichever is closer; VWAP setup 0.25 ATR beyond the pullback; target 2R; breakeven at +1R; time stop 60 min at < 0.3R; flat 15:50 (options 15:45); entries 09:45–15:30; max 3/day, 1 per stock, 2-loss streak stop, daily cap, news guard and PDT guard. Longs = shares (or CALL), shorts = PUT only (nearest expiry 1–7 days, ATM strike, spread ≤ 10 %, +50 % / −40 % option exits). Order ids `sd-d-`/`sd-dc-`/`sd-dp-` carry entry, stop, target, date and entry minute so management survives a restart; `dayState` holds the trailed stop in memory. Runs every beat before the swing entries, independent of the RSI-2 entry window.
@@ -403,11 +408,13 @@ Measured in tests against a mock broker: fill → take-profit order 40 ms; crash
 | `liveSizePct` | real-money ramp: all budgets and risk figures × this % while `mode` is live (paper always 100 %) | 25 |
 | `dayOptTp`, `dayOptStop`, `dayOptDteMax`, `dayStart`, `dayEnd` | option take-profit %, option stop %, max days to expiry, entry window | 50 / 40 / 7 / 09:45 / 15:30 |
 | `alertDetail` | phone alerts include size and limit price on buys; entry price, exit price and open profit on sells | true |
-| `intraday` | experimental: stock/CALL/PUT signals use today's live price as a provisional close (`liveSignal` in strategy.mjs) instead of waiting for the close; yesterday's close still drives the 1 % bounce rule | **false** |
+| `intraday` | stock/CALL/PUT signals use today's live price as a provisional close (`liveSignal` in strategy.mjs) instead of waiting for the close; yesterday's close still drives the 1 % bounce rule | **false** |
 | `stockUnit`, `callUnit`, `putUnit` | size each sleeve in `pct` (% of account) or `usd` (fixed dollars) | pct |
 | `stockPct`, `optPct`, `putPct` / `stockUsd`, `callUsd`, `putUsd` | money per trade for each sleeve, in the chosen unit | 10 / 2 / 1 % · $10,000 / $2,000 / $1,000 |
 | `stockCap*`, `callCap*`, `putCap*` (`Pct` or `Usd`) | ceiling on everything that sleeve holds plus its waiting buy orders; 0 = no ceiling | 0 |
 | `rsiThreshold`, `maxHold`, `entryEnd` | strategy parameters | 10 / 10 / 11:00 |
+| `exitRule`, `exitProfitPct` | when a stock is sold at the close: `bounce` (close above the 5-day average) or `profit` (first close at least `exitProfitPct` % above the buy price; range 0.1–5) | bounce / 0.5 |
+| `marketFilter` | no new dip buys (stocks and CALLs) while SPY closed below its 200-day average | false |
 | `optTakeProfit`, `optStop`, `holdFloor`, `staleMin` | exits | 50 / 50 / 25 / 45 |
 | `newsGuard`, `eventGuard`, `alerts` | guards and alerts | true |
 | `symbols` | universe | 30 US large caps |
@@ -522,7 +529,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 ## 8. Testing and quality
 
 - `bot/test-orders.mjs`: serves a just-dipped stock and a just-popped stock from a fake broker and checks the exact orders one cycle places for each CALL/PUT switch combination (puts never appear unless ticked), money limits, market scan, journal continuity (a run that starts with the market closed keeps the previous encrypted entry's panels; rewrites never duplicate the action log; a foreign-passphrase entry is skipped), and — with synthetic 5-minute bars — the day-trading engine: ORB long → stock buy with levels in the id, market-down breakdown → PUT, daily maximum, flat at 15:50, stop at market, resting take-profit. Runs in CI.
-- `bot/test.mjs`: 77 unit tests (indicators, journal encryption round trip, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing, broker HTTP wrapper: retry, timeout, never-retry-an-order). Runs in CI on every push.
+- `bot/test.mjs`: 82 unit tests (indicators, the profit exit and market filter, journal encryption round trip, call and put signals, sizing, heat, regime, guards, journal pairing, config normalisation, RSS parsing, broker HTTP wrapper: retry, timeout, never-retry-an-order). Runs in CI on every push.
 - `npm run verify` = `tools/stamp.mjs --check` (build number matches `ver.txt`, CSP hashes current, inline scripts parse) + ESLint on the bot and tools + both test files. CI (`bot-tests`) runs the same four steps on every push that touches the bot, the page or the tooling.
 - `tools/page-test.mjs` (CI job `page`): headless Chromium walks every tab as a fresh visitor and as a connected owner with the Screener sub-view remembered, asserting no script errors and no CSP violations, then types into Bot settings and saves against a stand-in GitHub API.
 - Accessibility: audited with the **full** axe-core rule set (2026-10-23; earlier passes ran a subset) in headless Chromium across every tab, both themes, and both calculators — zero violations; landmarks (`header`, `nav`, `main`), proper `tablist`/`tab` roles, labelled inputs, and all text colours at WCAG AA contrast (≥ 4.5 : 1) in both themes.
@@ -538,6 +545,7 @@ Going live is a decision the owner makes once the checklist in **Bot settings �
 
 | Date | Change | Docs touched |
 |---|---|---|
+| 2026-10-27 | **Win rate: new sell rule, market filter, option parts off** (owner: *"Please look into win rate it less than 50% I need to take it to 80% based on it change the settings and modify the bot logic"*). Live that morning: 19 closed trades, 42 % won (stocks 5/8, PUTs 1/6, SPY 2/5). Study (`tools/winrate-study.mjs`, `tools/spy-study.mjs`, report `bot/winrate_report.md`) on the `research-data` price history: every bounce-type exit wins ~65 % whatever the entry or buy level; selling only at the first close ≥ +0.5 % over the buy price, held up to 15 sessions, wins ~82 % at a similar CAGR (+10.3 % vs +10.6 % 1993–2026, +6.4 % vs +4.3 % 2016–26, +1.8 % vs +2.3 % last 5 years) with average losses −5.9 % vs −2.7 %; a market filter (SPY above its 200-day SMA) cuts its worst fall from −40 % to −18 %. Intraday buys are simulated in time order (the first dips take the free slots, as the live bot fills); an all-day best-ranked order would flatter every result by 2–6 % a year. CALLs (Black-Scholes model, 33 years): at best ~72 % won at about break-even; SPY rule replayed on 947 days of minute prices with modelled option prices (vol = 0.52 × VIX, checked against 60 days of real option bars): 48 % won at +15/−15/15 min, at most ~73 % at +10/−60/60 min, no reliable profit; PUTs and day trading lost or had no edge in earlier research. **Code:** settings `exitRule` (`bounce` default \| `profit`), `exitProfitPct` (0.5, 0.1–5) and `marketFilter` (off by default) in config.mjs; `profitExit()`, `profitExitLevel()`, `marketAbove200()` in strategy.mjs; bot.mjs sells stocks by the chosen rule, blocks new stock and CALL dip buys while the filter is on and SPY is below its 200-day (`G.mktBlock`, logged as a market-check reason and shown as `watch.idle`), and reports `exitBy`/`exitLevel` per held stock; research.mjs's “your settings” mode models both. Page: “When to sell a stock” and “Market filter” in Bot settings → 4. Strategy, “Profit needed to sell” field, Bot trades shows the profit level as the exit; tips for each new label. **Owner's settings** (bot/config.json): profit rule at 0.5 %, max hold 10 → 15, market filter on; CALLs, PUTs, SPY quick options and day trading off; CALL / PUT shares 20 / 5 % → 0 (stocks 100 %); SPY rules saved at +10 / −40 / 60 min. 4 unit tests, 10 broker checks. | §3.2, §5.2, §5.4, §8 |
 | 2026-10-27 | **Win-rate study, step 1: price history** (owner: *"win rate is less than 50%, I need it at 80%"*). New manual workflow `research-data.yml` runs `tools/research-data.mjs`, which downloads daily bars (Yahoo, split-adjusted: the 39 research stocks for ~33 years, the bot's scan list for 20 years, SPY, QQQ, VIX), SPY one-minute bars (broker market data, IEX, 2023 on) and a sample of real SPY next-day option bars, and force-pushes them as gzip JSON to the separate branch `research-data`. Nothing on main reads that branch; it only feeds the study. Prices only — no account data. | §3.4 |
 | 2026-10-26 | **Bot trades about a minute behind instead of ten** (owner: *"I feel like this part is not updating dynamically"*). The journal was published every 10 minutes (a git commit on main, then a Pages rebuild). Committing more often is not an option: the encrypted journal (~70 KB) cannot be delta-compressed, so a commit a minute would add gigabytes of history a year. Now: the session writes the journal every 60 s (was 120 s) and `publishLive()` puts it on a one-commit branch `live` through the Git Data API (blob → tree → parentless commit → force-update `refs/heads/live`; old commits are dropped and garbage-collected; pushes made with `GITHUB_TOKEN` start no workflows). The page's `botLive()` reads `contents/bot/journal.json?ref=live` with the device's GitHub token (`If-None-Match`, so unchanged reads answer 304 and do not count against the hourly limit) and uses it when it is newer than the Pages copy; Bot trades refreshes every 25 s with the token (55 s without). The 10-minute commit on main stays for history and devices without a token. |
 | 2026-10-26 | **Live price stream capped at 30 symbols.** Today's session connected its stock stream at 9:36 (32 ticks) and then received nothing for the rest of the morning (`stream.mode: polling`, last tick 9:36): once the market scan finished, `resubscribe()` asked for up to 200 symbols, but Alpaca's free (IEX) plan streams at most 30 and refuses a larger subscription outright. Now SPY first, then held underlyings, then the closest dips, at most 30 (`STREAM_MAX`); a 405/limit error halves the list and retries. The bot kept working by polling meanwhile (a full check every few seconds), so SPY entries were checked each cycle rather than on every tick. A preflight probe confirmed the plan also allows only **one** stream connection (406 "connection limit exceeded" while a session runs) — so the probe skips itself during a session, and preflight-check is best run outside market hours. Applies from the next session start. |

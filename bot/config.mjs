@@ -11,6 +11,10 @@ export const DEFAULTS = {
   version: 1, mode: 'paper', preset: 'balanced', ...PRESETS.balanced,
   stocks: true, options: true, puts: false, intraday: false,   // puts: experimental mirror of the dip rule, OFF until ticked
   rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, stockTp: 10, staleMin: 45,   // stockTp: sell a stock at this % gain (0 = off: RSI-2 exit only); 10 = research-backed default
+  // When a stock is sold (besides the take-profit and the stop): 'bounce' = at the close once above its 5-day average (the 33-year
+  // research rule); 'profit' = at the first close at least exitProfitPct % above the buy price (win-rate study 2026-10-27).
+  // marketFilter: no new dip buys (stocks and CALLs) while SPY closed below its 200-day average.
+  exitRule: 'bounce', exitProfitPct: 0.5, marketFilter: false,
   newsGuard: true, eventGuard: true, alerts: true, alertDetail: true,
   symbols: DEFAULT_SYMBOLS,
   universe: 'list', scanSize: 200, scanMinPrice: 5,
@@ -40,7 +44,7 @@ export const RANGES = {
   callSharePct: [0, 100], putSharePct: [0, 100], optDayCap: [1, 50], spySharePct: [0, 50], spyTradePct: [10, 100], spyTp: [5, 100], spyStop: [5, 60], spyHoldMin: [2, 120], spyMaxTrades: [1, 20], spyMaxOpen: [1, 5], spyStreak: [1, 6], spyDayCap: [5, 100], spyDte: [1, 5], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
   scanSize: [50, 400], scanMinPrice: [1, 500],
   liveSizePct: [5, 100], stakeUsd: [0, 1e8], dayOrMin: [5, 60], dayMaxTrades: [1, 10], dayStreak: [1, 5], dayRiskPct: [0.1, 2], dayTarget: [1, 4], dayRvol: [0.5, 3], dayTimeStop: [15, 180], dayOptTp: [10, 200], dayOptStop: [20, 80], dayOptDteMax: [1, 14],
-  rsiThreshold: [2, 30], maxHold: [1, 30], optTakeProfit: [5, 300], optStop: [5, 90], holdFloor: [2, 60], stockTp: [0, 100], staleMin: [5, 240],
+  rsiThreshold: [2, 30], maxHold: [1, 30], exitProfitPct: [0.1, 5], optTakeProfit: [5, 300], optStop: [5, 90], holdFloor: [2, 60], stockTp: [0, 100], staleMin: [5, 240],
 };
 const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 export function normalize(raw) {
@@ -49,7 +53,8 @@ export function normalize(raw) {
   if (raw.preset && PRESETS[raw.preset]) { c.preset = raw.preset; Object.assign(c, PRESETS[raw.preset]); }
   else if (raw.preset === 'custom') c.preset = 'custom';
   for (const k of Object.keys(RANGES)) if (raw[k] != null && isFinite(+raw[k]) && (c.preset === 'custom' || !(k in PRESETS.balanced))) c[k] = clamp(+raw[k], RANGES[k]);
-  for (const k of ['spyOn', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
+  for (const k of ['spyOn', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts', 'marketFilter']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
+  if (raw.exitRule === 'bounce' || raw.exitRule === 'profit') c.exitRule = raw.exitRule;
   if (raw.universe === 'scan' || raw.universe === 'list') c.universe = raw.universe;
   if (raw.pickBy === 'leaders' || raw.pickBy === 'dip') c.pickBy = raw.pickBy;
   for (const k of ['stockUnit', 'callUnit', 'putUnit']) if (raw[k] === 'pct' || raw[k] === 'usd') c[k] = raw[k];
@@ -70,4 +75,4 @@ export function normalize(raw) {
 }
 export const entryEndMin = c => { const [h, m] = c.entryEnd.split(':').map(Number); return h * 60 + m; };
 const money = (c, unit, pct, usd) => c[unit] === 'usd' ? '$' + c[usd] : c[pct] + '%';
-export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''}${c.mode === 'live' ? ' · LIVE at ' + c.liveSizePct + '% size' : ''}${c.stakeUsd > 0 ? ' · stake $' + c.stakeUsd : ''}${c.split ? ' · split ' + (100 - c.callSharePct - c.putSharePct) + '/' + c.callSharePct + '/' + c.putSharePct + ' stocks/CALLs/PUTs' : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;
+export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''}${c.mode === 'live' ? ' · LIVE at ' + c.liveSizePct + '% size' : ''}${c.stakeUsd > 0 ? ' · stake $' + c.stakeUsd : ''}${c.split ? ' · split ' + (100 - c.callSharePct - c.putSharePct) + '/' + c.callSharePct + '/' + c.putSharePct + ' stocks/CALLs/PUTs' : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · sells ${c.exitRule === 'profit' ? 'at the first close +' + c.exitProfitPct + '% up' : 'on the bounce'} (max ${c.maxHold} days)${c.marketFilter ? ' · market filter on' : ''} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;

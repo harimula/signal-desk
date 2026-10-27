@@ -1,6 +1,6 @@
 // Unit tests for the bot's rules. Run: node bot/test.mjs  (also runs on every push via GitHub Actions)
 import assert from 'node:assert/strict';
-import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit, rsi2Trigger, rsi2ExitLevel } from './strategy.mjs';
+import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit, rsi2Trigger, rsi2ExitLevel, profitExit, profitExitLevel, marketAbove200 } from './strategy.mjs';
 import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { spySignal, spyExit, spyFresh, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
@@ -365,5 +365,27 @@ test('scan: ETFs, leveraged funds and Arca listings are not stocks', () => {
 });
 test('sectors: the large scanned names have a sector (the per-sector limit covers them)', () => { for (const x of ['MU', 'AVGO', 'LLY', 'CAT', 'NEE', 'GS']) assert.notEqual(sectorOf(x), 'Other', x); });
 test('SPY fresh break: first trade of the day goes; another in the same direction needs a level beyond the last', () => { assert.equal(spyFresh('call', 502.5, 0), true); assert.equal(spyFresh('call', 502.5, 502.5), false); assert.equal(spyFresh('call', 503.1, 502.5), true); assert.equal(spyFresh('put', 499, 499.5), true); assert.equal(spyFresh('put', 499.5, 499.5), false); assert.equal(normalize({}).spyMaxOpen, 3); assert.equal(normalize({ preset: 'custom', spyMaxOpen: 9 }).spyMaxOpen, 5); });
+test('profit exit: sells at the close once the price is at least the set % above the buy price', () => {
+  assert.equal(profitExitLevel(200, 0.5), 201); assert.equal(profitExitLevel(0, 0.5), null);
+  assert.equal(profitExit(200, 201, 1, 15, 0.5).exit, true, '+0.5% exactly sells');
+  assert.equal(profitExit(200, 200.9, 3, 15, 0.5).exit, false, '+0.45% holds');
+  assert.equal(profitExit(200, 200.9, 3, 15, 0.5).level, 201);
+  assert.equal(profitExit(200, 180, 3, 15, 0.5).exit, false, 'a loss is held — no 5-day-average exit under this rule');
+  assert.equal(profitExit(200, 202, 1, 15, 1).exit, true); assert.equal(profitExit(200, 201.5, 1, 15, 1).exit, false, 'the % is a setting');
+});
+test('profit exit: after the max hold it sells whatever the price', () => { const x = profitExit(200, 150, 15, 15, 0.5); assert.equal(x.exit, true); assert.match(x.why, /held 15 sessions/); assert.equal(profitExit(200, 150, 14, 15, 0.5).exit, false); });
+test('market filter: SPY above / below its 200-day average, unknown with too little history', () => {
+  const up = Array.from({ length: 250 }, (_, i) => 400 + i), down = Array.from({ length: 250 }, (_, i) => 650 - i);
+  assert.equal(marketAbove200(up).above, true); assert.equal(marketAbove200(down).above, false);
+  assert.equal(marketAbove200(up.slice(0, 150)), null); assert.equal(marketAbove200(null), null);
+  const m = marketAbove200(down); assert.ok(m.s200 > m.last);
+});
+test('settings: sell rule, its profit % and the market filter are validated', () => {
+  const d = normalize({}); assert.equal(d.exitRule, 'bounce'); assert.equal(d.exitProfitPct, 0.5); assert.equal(d.marketFilter, false);
+  const c = normalize({ exitRule: 'profit', exitProfitPct: 1.5, marketFilter: true }); assert.equal(c.exitRule, 'profit'); assert.equal(c.exitProfitPct, 1.5); assert.equal(c.marketFilter, true);
+  assert.equal(normalize({ exitRule: 'moon' }).exitRule, 'bounce', 'an unknown rule falls back to the default');
+  assert.equal(normalize({ exitProfitPct: 50 }).exitProfitPct, 5); assert.equal(normalize({ exitProfitPct: 0 }).exitProfitPct, 0.1);
+  assert.equal(normalize({ marketFilter: 'yes' }).marketFilter, false, 'a non-boolean is ignored');
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

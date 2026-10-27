@@ -34,7 +34,7 @@ if (process.argv[2] === 'child') {
     LAG: (() => { const a = series(60, 118, [-0.05, -0.05]); const f = a[234].c; for (let i = 235; i < 298; i++) Object.assign(a[i], { o: f, h: f * 1.004, l: f * 0.996, c: f }); for (let i = 298; i < 300; i++) { const c = a[i - 1].c * 0.95; Object.assign(a[i], { o: c, h: c * 1.004, l: c * 0.996, c }); } return a; })(),   // also dipping (−5% twice) but flat for the 3 months before: 'leaders first' picks DIP (still rising), 'deepest dip' would pick LAG
     POP: series(120, 80, [0.04, 0.04]),          // downtrend, two sharp up days  -> RSI-2 ~ 100, below 200-day
     FALL: series(80, 120, [0.001, 0.001]),       // uptrend, quiet at yesterday's close; the live price below drops it 10%
-    SPY: series(400, 520, [0.001, 0.001]),
+    SPY: FAKE.spyDaily === 'down' ? series(520, 400, [-0.001, -0.001]) : series(400, 520, [0.001, 0.001]),   // 'down': below its 200-day average (market filter tests)
     QUIET: series(200, 210, [0.001, 0.001]),      // ordinary liquid stock, no signal
     ORB: series(95, 100.5, [0.001, 0.001]),
     ORB2: series(95, 100.5, [0.001, 0.001]),        // day-trade stock: flat daily picture, action is intraday
@@ -462,6 +462,29 @@ check('SPY quote exit: a streamed quote with the mid 16% under the entry sells a
 });
 const Y15 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 }, quote2: { sym: spySym, bp: 2.30, ap: 2.34 } });
 check('SPY quote exit: a quote at +10% (inside the limits) places nothing; a quote at the take-profit is left to the resting order', () => assert.equal(Y15.quoteExit.placed.length, 0, JSON.stringify(Y15.quoteExit)));
+
+// ---- win-rate rules (2026-10-27): sell at the first profitable close; market filter on new dip buys ----
+const PX = { stocks: true, options: false, symbols: ['DIP'], preset: 'custom', maxHeat: 15, stockTp: 10, holdFloor: 25, exitRule: 'profit', exitProfitPct: 0.5, maxHold: 15 };
+const closeT = '2026-10-23T19:52:00Z';                                         // 3:52 PM ET: the closing check runs
+const PX1 = run(PX, { time: closeT, positions: [qPos(209)], hist: qHist });      // QUIET ~210.4: +0.7% over a 209 buy
+check('profit rule: a stock closing 0.5%+ above its buy price is sold at the close', () => assert.ok(PX1.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell' && o.type === 'market') && (PX1.acts || []).some(m => /QUIET profit exit — closing 0\.\d+% above the buy price/.test(m)), JSON.stringify(PX1.orders) + JSON.stringify(PX1.acts)));
+const PX2 = run(PX, { time: closeT, positions: [qPos(210)], hist: qHist });      // only +0.2%
+check('profit rule: a stock only 0.2% up is held, even though it closes above its 5-day average', () => assert.ok(!PX2.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell' && o.type === 'market'), JSON.stringify(PX2.orders) + JSON.stringify(PX2.acts)));
+check('profit rule: the Bot trades row shows the profit level (0.5% above the buy price) as the exit', () => { const h = (PX2.watch.held || []).find(x => x.s === 'QUIET'); assert.ok(h && h.exitBy === 'profit' && Math.abs(h.exitLevel - 211.05) < 0.01, JSON.stringify(h)); assert.equal(PX2.watch.exitRule, 'profit'); });
+const PB2 = run({ ...PX, exitRule: 'bounce' }, { time: closeT, positions: [qPos(210)], hist: qHist });
+check('bounce rule (unchanged): the same position is sold because it closes above its 5-day average', () => assert.ok(PB2.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell' && o.type === 'market') && (PB2.acts || []).some(m => /QUIET RSI-2 exit — closed above its 5-day average/.test(m)), JSON.stringify(PB2.orders) + JSON.stringify(PB2.acts)));
+const PX3 = run({ ...PX, maxHold: 1 }, { time: closeT, positions: [qPos(230)], hist: qHist });   // down 8.5%, max hold reached
+check('profit rule: at the max hold a losing stock is sold anyway', () => assert.ok(PX3.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell' && o.type === 'market') && (PX3.acts || []).some(m => /QUIET profit exit — held 1 sessions/.test(m)), JSON.stringify(PX3.orders) + JSON.stringify(PX3.acts)));
+const PX4 = run(PX, { positions: [qPos(209)], hist: qHist });                    // 10:00 AM: not the closing check yet
+check('profit rule: nothing is sold before the last 10 minutes (the rule looks at the close)', () => assert.ok(!PX4.orders.some(o => o.symbol === 'QUIET' && o.side === 'sell' && o.type === 'market'), JSON.stringify(PX4.orders)));
+const MFD = run({ stocks: true, options: true, marketFilter: true }, { spyDaily: 'down', live: { SPY: 399.5 } });
+check('market filter on, SPY below its 200-day: no stock buy and no CALL; the reason is logged and shown', () => { assert.ok(!MFD.orders.some(o => o.side === 'buy'), JSON.stringify(MFD.orders)); assert.ok((MFD.acts || []).some(m => /Market filter: SPY closed at [\d.]+, below its 200-day average [\d.]+/.test(m)), JSON.stringify(MFD.acts)); assert.match(MFD.watch.idle || '', /^market filter/); });
+const MFU = run({ stocks: true, options: true, marketFilter: true });
+check('market filter on, SPY above its 200-day: the dip is bought as usual (stock and CALL)', () => { assert.ok(MFU.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(MFU.orders)); assert.ok(MFU.options.some(o => /^DIP\d{6}C/.test(o.symbol))); });
+const MFO = run({ stocks: true, options: false, marketFilter: false }, { spyDaily: 'down', live: { SPY: 399.5 } });
+check('market filter off: SPY below its 200-day does not stop the dip buy', () => assert.ok(MFO.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(MFO.orders) + JSON.stringify(MFO.acts)));
+const MFP = run({ stocks: false, options: false, puts: true, marketFilter: true }, { spyDaily: 'down', live: { SPY: 399.5 } });
+check('market filter: PUTs are not blocked (the filter only stops dip buys)', () => assert.ok(MFP.options.some(o => /^POP\d{6}P/.test(o.symbol)), JSON.stringify(MFP.orders) + JSON.stringify(MFP.acts)));
 
 // ---- audit fixes: STOP, hosts, old day-trade ids, manual SPY options, same-contract re-entry ----
 check('hosts: no request ever goes to the wrong Alpaca host (options contracts live on the trading API, bars and quotes on the data API)', () => { const bad = [A, B, D1, Y1, Y12].flatMap(r => r.unknown.filter(u => /^(DATA|TRADING) /.test(u))); assert.deepEqual(bad, []); });

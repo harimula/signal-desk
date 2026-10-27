@@ -30,9 +30,14 @@ as an upper bound. Past results do not predict future results.
 - **Buy:** a stock whose last close is above its 200-day average with RSI-2 below 10 (a
   sharp dip inside an uptrend). Bought in the first trading hour (from 9:45, after 10:15 on
   CPI/jobs days), market leaders first (or deepest dip first — a setting). Skipped if it already bounced 1%+ since yesterday's close.
-- **Sell:** at +10% (take-profit, changeable), otherwise in the last 10 minutes of the session once the price is above its 5-day average,
-  or after 10 sessions. No stop order — the version with a stop did worse in testing — but a
+- **Sell:** at +10% (take-profit, changeable), otherwise in the last 10 minutes of the session by the
+  chosen rule — *on the bounce* (the price is above its 5-day average; the original research rule, about 2 in 3
+  trades won) or *at the first profitable close* (at least 0.5% above the buy price; about 4 in 5 won in the
+  October 2026 win-rate study, `bot/winrate_report.md`, with larger losses on the rest) — or after the max hold
+  (10 sessions; 15 with the profit rule). No tight stop — the version with one did worse in testing — but a
   25% hard floor stays on as a disaster brake.
+- **Market filter (setting):** no new dip buys while the S&P 500 closed below its 200-day average. With the
+  profit rule it cut the worst fall of the 33-year test from −40% to −18%.
 - **CALLs** on the same dips: strike nearest the price, expiry 14–35 days. Sold with the
   stock's exit, at +50% (resting order at the broker), at −50%, or 3 days before expiry.
   Options were *not* backtested (no free historical option prices).
