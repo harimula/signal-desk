@@ -38,9 +38,12 @@ as an upper bound. Past results do not predict future results.
   25% hard floor stays on as a disaster brake.
 - **Market filter (setting):** no new dip buys while the S&P 500 closed below its 200-day average. With the
   profit rule it cut the worst fall of the 33-year test from −40% to −18%.
-- **CALLs** on the same dips: strike nearest the price, expiry 14–35 days. Sold with the
-  stock's exit, at +50% (resting order at the broker), at −50%, or 3 days before expiry.
-  Options were *not* backtested (no free historical option prices).
+- **CALLs** on the same dips: strike nearest the price, expiry from 14 days out (a setting). The
+  take-profit (+50% by default) is a resting limit order at the broker, its price rounded up to a
+  valid one — the bot never replaces it with a market sale; stop −50% by default; out 3 days before
+  expiry; and, by a setting, also when the stock bounces (default) or only at the take-profit, the
+  stop or the max hold. On real option prices since March 2024, +5% / −90% with the second rule won
+  83.5% of the bot's CALL signals (October 2026 check, `bot/winrate_report.md`).
 
 ## Professional risk controls
 - **Position sizing:** each stock trade is sized so a 3×-average-range move against it costs at
@@ -48,9 +51,12 @@ as an upper bound. Past results do not predict future results.
   Option trades: the −50% stop costs at most 0.5% of the account.
 - **Total risk cap:** money at risk across all open positions and pending orders ≤ **3%**.
 - **Sector cap:** at most **2** positions per sector.
-- **Circuit breakers:** stop for the day after **3** losing trades in a row or **−3%** on the
-  day; no new trades after **−6%** in a week.
-- **Stale orders:** entries unfilled after 45 minutes are cancelled.
+- **Circuit breakers:** stop for the day after **3** losing trades in a row (a trade counts on
+  the day it is sold, swing trades included) or **−3%** on the day; no new trades after **−6%** in a week.
+- **Stale orders:** entries unfilled after 45 minutes are cancelled, and none is ever left
+  resting while the market is closed.
+- **Only its own positions:** the bot manages a position only through its own buy, and only the
+  quantity that buy still accounts for — a stock you buy by hand after the bot sold its own is never touched.
 - **Idempotency:** the same order can never be sent twice.
 - **News & events guard:** Fed decision days (no new trades 1:30–3:00pm, no new options, half
   size), CPI/jobs/PPI mornings (wait until 10:15), Fed minutes (paused 1:45–2:30pm), breaking

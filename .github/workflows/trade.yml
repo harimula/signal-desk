@@ -47,10 +47,9 @@ jobs:
           git add bot/scan.json 2>/dev/null || true
           git diff --cached --quiet && exit 0
           git commit -m "Bot journal"
-          git ls-files --error-unmatch bot/STOP >/dev/null 2>&1 || rm -f bot/STOP   # the untracked Pause mirror would block the pull
           for i in 1 2 3; do
             git push && exit 0
-            git pull --rebase -X theirs origin main || git rebase --abort
+            git pull --rebase --autostash -X theirs origin main || git rebase --abort   # --autostash: a Pause removed during the session leaves the checked-out bot/STOP deleted
             sleep 3
           done
           git push

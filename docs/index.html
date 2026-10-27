@@ -86,7 +86,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="page">
 <nav class="idx" aria-label="Contents">
   <div class="brand">Signal Desk</div>
-  <div class="stamp">System documentation · v1.9<br>Updated 2026-10-25</div>
+  <div class="stamp">System documentation · v1.9<br>Updated 2026-10-27</div>
   <ol>
     <li><a href="#what"><span class="k">01</span>What it is</a></li>
     <li><a href="#functional"><span class="k">02</span>Functional</a></li>
@@ -273,7 +273,8 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <div class="tw"><table>
 <tr><th>Workflow</th><th>Trigger</th><th>What it does</th><th>Limit</th></tr>
 <tr><td><code>refresh-prices</code></td><td class="mono">*/10 13-21 * * 1-5 (US)<br>*/15 3-10 * * 1-5 (India)</td><td><code>fetch.mjs</code> → live.json; <code>news.mjs</code> → news.json; commit</td><td>~1 min</td></tr>
-<tr><td><code>paper-trade-bot</code></td><td class="mono">*/5 13-21 * * 1-5, manual; one session at a time</td><td><code>bot/live.mjs</code> for up to 345 min; checks <code>bot/STOP</code> on GitHub every 15 s and sells everything when it appears</td><td>358 min</td></tr>
+<tr><td><code>paper-trade-bot</code></td><td class="mono">*/5 13-21 * * 1-5, manual; one session at a time</td><td><code>bot/live.mjs</code> for up to 345 min; checks <code>bot/STOP</code> on GitHub every 15 s (5-second deadline, beside the loop), keeps a git-ignored copy (<code>bot/STOP.local</code>) and sells everything while it is set; a session that reaches 345 min before the close starts its successor first, opens nothing new in its last 10 min and ends with a manage-only check</td><td>358 min</td></tr>
+<tr><td><code>journal-refresh</code></td><td>manual; shares the trading queue</td><td>pulls, then <code>bot/bot.mjs</code> read-only (<code>BOT_READONLY=1</code>): rewrites the journal; places, changes and cancels nothing, even with the market open or the Pause set</td><td>10 min</td></tr>
 <tr><td><code>strategy-research</code></td><td>manual</td><td><code>bot/research.mjs</code> → research.json + report</td><td>40 min</td></tr>
 <tr><td><code>backtest</code></td><td>manual</td><td><code>bot/backtest.mjs</code> → backtest.json + report</td><td>30 min</td></tr>
 <tr><td><code>bot-tests</code></td><td>push / PR</td><td><code>bot/test.mjs</code> + <code>bot/test-orders.mjs</code></td><td>8 min</td></tr>
@@ -341,8 +342,8 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   O --> M[Monitor every tick]
   M --> F{price ≤ −25 % floor?}
   F -->|yes| X1[Emergency market SELL]
-  M --> TP{option +50 %?}
-  TP -->|yes| X2[Take-profit resting order]
+  M --> TP{option at its take-profit?}
+  TP -->|yes| X2[Resting limit order fills&lt;br/&gt;never a market sale]
   M --> L{last 10 min and close above 5-day SMA,&lt;br/&gt;or held 10 sessions}
   L -->|yes| X3[SELL at live price]
   L -->|no| N([Carry overnight])</pre></figure>
@@ -350,15 +351,17 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   <li><b>Entries:</b> 9:45–11:00 ET (after 10:15 on CPI/jobs days); resting limit orders at the broker.</li>
   <li><b>Exits:</b> take-profit +10 % (resting limit order, changeable); otherwise in the last 10 minutes by the setting <code>exitRule</code>: <i>bounce</i> (default) once the close is above the 5-day average, or <i>profit</i> once the close is at least <code>exitProfitPct</code> % (0.5) above the buy price; after <code>maxHold</code> sessions whatever the price. Win-rate study 2026-10-27: <i>profit</i> with a 15-session hold and the market filter won about 82 % of trades over 33 years vs 65 %, at a similar yearly return, with larger average losses (−5.9 % vs −2.7 %); report in <code>bot/winrate_report.md</code>. A 25 % hard floor is a disaster brake and fires within a second off the stream.</li>
   <li><b>Market filter</b> (setting <code>marketFilter</code>, off by default): no new dip buys — stocks or CALLs — while SPY's last close is below its 200-day average; open positions are managed as usual. With the profit rule it cut the 33-year worst fall from −40 % to −18 %.</li>
-  <li><b>Options:</b> CALL at the nearest strike, the nearest expiry from <code>optDays</code> (14) to 3 weeks later, on the same dips; take-profit <code>optTakeProfit</code> % as a resting order, stop <code>optStop</code> %, closed 3 days before expiry. <code>optExit</code> <i>bounce</i> (default) also sells when the stock closes back above (PUT: below) its 5-day average; <i>target</i> only at the take-profit, the stop, the max hold or expiry. Size and portfolio risk use the stop you set. On real option prices since March 2024, <i>target</i> with +5 % / −90 % won 83.5 % of CALLs. Skipped under the pattern-day-trader guard when equity is under $25 000.</li>
-  <li><b>Puts (experimental, off by default):</b> with <b>Trade PUT options</b> ticked, a PUT is bought on a stock <i>below</i> its 200-day average whose RSI-2 is above 90 (a sharp pop in a downtrend), skipped if it has already fallen 1 %+ today. Same option rules and caps as the CALLs; exits when the stock closes below its 5-day average, after 10 sessions, or on the option take-profit / stop / expiry rules. Never backtested on options; the research workflow tests a stock-short proxy.</li>
-  <li><b>Guards:</b> FOMC/CPI/jobs windows, live headline scan (war, White House, Fed, crisis — whole-word matching; a single company halting skips only that ticker), SPY tone; daily −3 % and weekly −6 % loss caps; 3-loss streak pause; stale orders cancelled after 45 min.</li>
+  <li><b>Options:</b> CALL at the nearest strike, the nearest expiry from <code>optDays</code> (14) to 3 weeks later, on the same dips; take-profit <code>optTakeProfit</code> % as a resting limit order, its price rounded <b>up</b> to the option's price step (<code>tickUp</code>), stop <code>optStop</code> %, closed 3 days before expiry. The bot never cancels the take-profit order to sell at market (a market sale goes at the bid — under a +5 % target, or even a loss): with no order resting it places one, which fills at once when the price is already past the target, and an order it left at an older setting is replaced at the next check. With <code>optExit</code> <i>target</i> a CALL/PUT daily loss limit only stops new options; with <i>bounce</i> it also closes the open ones. <code>maxOptions</code> counts the swing CALLs and PUTs only (not SPY quick trades, day trades or options bought by hand). No contract or quote is looked up once the option places, money or risk cap are used up, and a candidate turned down after a lookup is left for 10 minutes. <code>optExit</code> <i>bounce</i> (default) also sells when the stock closes back above (PUT: below) its 5-day average; <i>target</i> only at the take-profit, the stop, the max hold or expiry. Size and portfolio risk use the stop you set. On real option prices since March 2024, <i>target</i> with +5 % / −90 % won 83.5 % of CALLs. Skipped under the pattern-day-trader guard when equity is under $25 000.</li>
+  <li><b>Puts (experimental, off by default; the owner's are off with a 0 % share):</b> with <b>Trade PUT options</b> ticked, a PUT is bought on a stock <i>below</i> its 200-day average whose RSI-2 is above 100 − the buy level (a sharp pop in a downtrend), skipped if it has already fallen 1 %+ today. Same option rules as the CALLs (expiry window, spread rule, <code>maxOptions</code> shared with them, own money share and loss limit); exits by the same <code>optExit</code> rule (with <i>bounce</i> also when the stock closes below its 5-day average), after <code>maxHold</code> sessions, or on the option take-profit / stop / expiry rules. On real option prices (October 2026) no setting won more than 66 %, and all lost money on average.</li>
+  <li><b>Guards:</b> FOMC/CPI/jobs windows, live headline scan (war, White House, Fed, crisis — whole-word matching; a single company halting skips only that ticker), SPY tone; daily −3 % and weekly −6 % loss caps; 3-loss streak pause (a trade counts on the day it is sold, swing trades bought on an earlier day included); stale stock, CALL and PUT buys cancelled after 45 min; no entry order rests while the market is closed (cancelled at the close and again from 9:20 before the open).</li>
+  <li><b>Whose position it is:</b> a position is managed only through the bot's own latest buy of that symbol, and only for the quantity that buy still accounts for (its filled quantity less every later sale). A position bought by hand after the bot sold its own is left alone; shares the owner adds to a bot position are never sold by the bot's rules.</li>
+  <li><b>Never overnight:</b> a day trade or SPY quick trade still open from an earlier day (its session ended early) is sold at the next open.</li>
 </ul>
 
 <h3>Real-time engine</h3>
 <figure><pre class="mermaid">flowchart LR
   TU[Alpaca trade-updates websocket] -->|fill / cancel| Q[Wake queue]
-  MD[Alpaca IEX market-data websocket] -->|every trade tick| PX[livePx] --> FC[fastCheck&lt;br/&gt;floors, take-profits]
+  MD[Alpaca IEX market-data websocket] -->|every trade tick| PX[livePx] --> FC[fastCheck&lt;br/&gt;floors, option stops]
   HB[Beat 2 s, 1 s after 15:50] --> Q
   CF[config.json poll 60 s] -->|changed| Q
   Q -->|≥ 250 ms apart| CY[botCycle]
@@ -367,6 +370,8 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   CY --> NT[Telegram alert]
   AL -.->|stream down| POLL[REST polling fallback]</pre>
 <figcaption>Measured against a mock broker: fill → take-profit order in 40 ms; crash tick → floor exit in 110 ms.</figcaption></figure>
+<p><b>SPY tick entries.</b> The stream only listens while the last full check found the break <i>armed</i> (the last completed 5-minute bar closed in the market's direction on at least average volume), and each tick entry re-runs the full SPY signal; neither it nor the regular check buys until the 5-minute bar that just closed is in (2–3 s after the mark) — exactly the rule the study tested (before 27 October 2026 the tick path skipped the bar test; on real option prices those extra trades won 78.6 % instead of 82.3 %). Each SPY trade's take-profit order is remembered by its own buy, so a later trade in the same contract gets one too.</p>
+<p><b>Polling and hand-off.</b> The settings and Pause checks run beside the loop with a 5-second deadline, so a slow GitHub never holds up exits; new settings are applied between checks. In its last 10 minutes a session opens nothing new; a session that ends before the close starts its successor first and ends with a manage-only check. Trade alerts are held back only when the identical text went out in the last minute (two SPY trades differ only in their numbers).</p>
 <p><b>Journal continuity across runs.</b> Every run is a fresh process, and the panels the bot computes only while the market is open (watch list, market check, risk, day-trading block) plus the action log live in memory. At its first write the bot reads the previous <code>bot/journal.json</code> back — decrypting it with <code>JOURNAL_KEY</code> when it is encrypted — and carries those panels forward until it has computed fresh ones; the action log is appended to once and capped at 80 entries. A run that starts at or after 16:00 ET exits at once if today’s journal was already written at 15:55 or later; otherwise it runs one closing cycle, writes the journal and sends the day summary. A previous journal written under another passphrase is skipped with a log line, not a crash.</p>
 
 <h3>Settings (<code>bot/config.json</code>)</h3>
@@ -376,7 +381,9 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <tr><td><code>preset</code></td><td>conservative / balanced / aggressive / custom</td><td>balanced</td></tr>
 <tr><td><code>riskPct</code>, <code>optRiskPct</code></td><td>% of equity lost if a stock / option trade hits its stop</td><td>0.5 / 0.5</td></tr>
 <tr><td><code>maxHeat</code></td><td>% of equity at risk across everything open</td><td>3</td></tr>
-<tr><td><code>perSector</code>, <code>maxPositions</code>, <code>maxOptions</code></td><td>caps</td><td>2 / 6 / 4</td></tr>
+<tr><td><code>perSector</code>, <code>maxPositions</code>, <code>maxOptions</code></td><td>caps (<code>maxOptions</code>: swing CALLs + PUTs only)</td><td>2 / 6 / 4</td></tr>
+<tr><td><code>split</code>, <code>callSharePct</code>, <code>putSharePct</code>, <code>optDayCap</code></td><td>money split: stocks, CALLs and PUTs each own a share of the stake (stocks = the rest after CALLs, PUTs and SPY), with their own daily loss limit and losing streak</td><td>on / 30 / 10 / 10</td></tr>
+<tr><td><code>spyOn</code>, <code>spySharePct</code>, <code>spyTradePct</code>, <code>spyTp</code>, <code>spyStop</code>, <code>spyHoldMin</code>, <code>spyMaxTrades</code>, <code>spyMaxOpen</code>, <code>spyStreak</code>, <code>spyDayCap</code>, <code>spyDte</code>, <code>spyStart</code>, <code>spyEnd</code></td><td>SPY quick options: on, share of the stake, % of it per trade, take-profit, stop, time stop, trades a day, open at once, losses in a row, daily loss limit, expiry (searched one trading day further, earliest taken), window</td><td>on / 5 / 100 / 15 / 15 / 10 / 6 / 3 / 2 / 25 / 1 / 09:50 / 15:30</td></tr>
 <tr><td><code>dayCap</code>, <code>weekCap</code>, <code>streak</code></td><td>circuit breakers: % loss, % loss, losses in a row</td><td>3 / 6 / 3</td></tr>
 <tr><td><code>stockPct</code>, <code>optPct</code></td><td>max % of equity per stock position / option budget</td><td>10 / 2</td></tr>
 <tr><td><code>stocks</code>, <code>options</code>, <code>puts</code></td><td>enable each instrument (CALLs, PUTs)</td><td>true / true / <b>false</b></td></tr>
@@ -485,6 +492,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-27</td><td>Full audit of the bot (owner’s request), 26 bot fixes plus page and docs fixes, settings unchanged: CALL take-profits are never sold at market (the resting order fills; prices rounded up); positions bought by hand after the bot sold its own are left alone; far fewer broker calls for CALL candidates; with “only at take-profit, stop or time limit” a CALL loss limit stops new CALLs but keeps the open ones; max option positions counts swing CALLs/PUTs only; swing trades count in the losing streak; no entry order is left while the market is closed; the instant SPY entry uses the same tested signal; a session hand-off opens nothing new; the page’s Pause can no longer be dropped by a failed publish; SPY take-profit orders per trade; two SPY alerts no longer merge; trades left from an earlier day are sold at the open; SPY expiry search covers holidays; journal refresh is read-only</td></tr>
 <tr><td>2026-10-27</td><td>80%+ win-rate settings for stocks, CALLs and SPY (owner’s request): SPY stop 35% — the tightest that won 80% or more in every year of the test (about 82%)</td></tr>
 <tr><td>2026-10-27</td><td>Owner’s money split: stocks 70%, CALLs 20%, SPY quick options 10%, PUTs off (0%)</td></tr>
 <tr><td>2026-10-27</td><td>CALLs and PUTs set for an 80% CALL win rate (owner’s request): new setting “When to sell a CALL or PUT” — only at the take-profit, the stop or the time limit — with +5% / −90%; on real option prices for the bot’s own signals since March 2024 that won 83.5% of CALLs (54% before). PUTs reached 66% at best and lost money. Option size now follows the stop you set</td></tr>

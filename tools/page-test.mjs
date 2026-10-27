@@ -28,7 +28,7 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH 
 let failed = 0;
 const check = (name, ok, detail = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + name + (ok ? '' : '  ' + detail)); if (!ok) failed++; };
 
-async function session(label, prep) {
+async function session(label, prep, cfgPatch = {}) {                        // cfgPatch: what the stubbed bot/config.json says instead of the owner's file
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message.slice(0, 160)));
@@ -37,6 +37,7 @@ async function session(label, prep) {
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'bot/config.json'), 'utf8'));
   for (const k of ['dayOrMin', 'dayMaxTrades', 'dayTarget', 'dayOptDteMax']) delete cfg[k];          // like the real file: older saves lack these
   cfg.dayTrade = true;                                                                                 // the checks below need the day-trading fields drawn, whatever the owner's saved switch says
+  Object.assign(cfg, cfgPatch);
   let sha = 'abc', puts = [], secretPuts = [], inPuts = [];
   // the encryption library the page loads from jsDelivr, served from the locally installed package (same bytes, same SRI hash)
   await page.route('https://cdn.jsdelivr.net/npm/**', route => { const m2 = /npm\/(libsodium(?:-wrappers)?)@[^/]+\/(.*)$/.exec(route.request().url()); const f = m2 && path.join(ROOT, 'node_modules', m2[1], m2[2]); return f && fs.existsSync(f) ? route.fulfill({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(f), headers: { 'access-control-allow-origin': '*' } }) : route.abort(); });
@@ -89,6 +90,10 @@ async function session(label, prep) {
   const tipOn = await page.$eval('#sd-tip', e => e.classList.contains('on') && /breakout/.test(e.textContent)).catch(() => false);
   await page.mouse.move(2, 2); await page.evaluate(() => window.renderAll()); await page.waitForTimeout(200);
   check('hover help: settings labels are explained, the card shows on hover, and a redraw keeps it', nTips >= 40 && tipOn && (await page.$$eval('[data-tip]', e => e.length)) >= nTips, `${nTips} labels, card ${tipOn}`);
+  await page.waitForTimeout(300);
+  { const noTip = await page.evaluate(() => { const part = el => { for (const q of [':scope > b', ':scope > span > b', ':scope > .lab', ':scope > span:not(.mut):not(.hint)', ':scope > span.mut:first-child']) { const x = el.querySelector(q); if (x) return x; } return null; };   // the words tips.js looks up
+      return [...document.querySelectorAll('main label, main [data-tipkey]')].filter(el => el.offsetParent && !el.hasAttribute('data-tip')).map(el => (el.dataset.tipkey || (part(el) || el).textContent).replace(/\s+/g, ' ').trim()).filter(t => t && t.length <= 80); });
+    check('hover help: every label on Bot settings has an explanation, the sell-rule choices included', noTip.length === 0, noTip.join(' | ')); }
   // the owner's saved shares vary; set CALLs 30 / PUTs 10 / SPY 5 first so the checks below do not depend on config.json
   for (const [id, v] of [['st-callSharePct', '30'], ['st-putSharePct', '10'], ['st-spySharePct', '5']]) { await page.fill('#' + id, v); await page.evaluate(id => document.getElementById(id).dispatchEvent(new Event('change', { bubbles: true })), id); await page.waitForTimeout(150); }
   await page.evaluate(() => { const r = document.querySelector('#st-spyOn'); if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } }); await page.waitForTimeout(200);
@@ -189,6 +194,50 @@ async function session(label, prep) {
   check('settings: no CSP violation connecting Telegram or saving keys', (await page.evaluate(() => window.__csp)).length === 0, JSON.stringify(await page.evaluate(() => window.__csp)));
   await page.close();
 }
+// 2c. the opposite of the owner's sell rules saved: they load, a radio changed by a click marks the form unsaved and survives a
+//     trip to another tab, Save works on the first click after typing, and a day-trading window hidden while it is off is kept
+{
+  const { page, errors, puts } = await session('settings with the opposite sell rules saved', () => { localStorage.clear(); localStorage.setItem('sd-ghtok', JSON.stringify('ghp_fake')); localStorage.setItem('sd-ghrepo', JSON.stringify('x/y')); },
+    { exitRule: 'bounce', optExit: 'bounce', marketFilter: false, exitProfitPct: 1.5, optDays: 30, pickBy: 'dip', dayTrade: false, dayStart: '10:05', dayEnd: '14:10' });
+  const saved = () => puts.map(p => JSON.parse(Buffer.from(p.content, 'base64').toString()));
+  const bar = () => page.evaluate(() => (document.querySelector('[data-st="save"]').parentElement.textContent || '').replace(/\s+/g, ' '));
+  const form = () => page.evaluate(() => { const r = n => (document.querySelector(`input[name="${n}"]:checked`) || {}).value || null;
+    return { exitRule: r('st-exitRule'), optExit: r('st-optExit'), pickBy: r('st-pickBy'), universe: r('st-universe'), marketFilter: document.getElementById('st-marketFilter').checked, exitProfitPct: document.getElementById('st-exitProfitPct').value, optDays: document.getElementById('st-optDays').value }; });
+  const unsaved = () => page.evaluate(() => { const d = document.getElementById('stDirty'); return !!d && d.style.display !== 'none'; });
+  await page.evaluate(() => document.querySelector('#tabs [data-t="SET"]').click()); await page.waitForTimeout(1200);
+  const f0 = await form();
+  check('sell rules: a saved “On the bounce”, “Also when the stock bounces back”, “Deepest dip first”, market filter off, 1.5% and 30 days load into the form', f0.exitRule === 'bounce' && f0.optExit === 'bounce' && f0.pickBy === 'dip' && f0.marketFilter === false && f0.exitProfitPct === '1.5' && f0.optDays === '30', JSON.stringify(f0));
+  await page.click('input[name="st-optExit"][value="target"]'); await page.waitForTimeout(300);
+  const dirty1 = await unsaved();
+  await page.click('input[name="st-exitRule"][value="profit"]'); await page.click('input[name="st-pickBy"][value="leaders"]'); await page.click('input[name="st-universe"][value="list"]'); await page.click('#st-marketFilter'); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('#tabs [data-t="BOT"]').click()); await page.waitForTimeout(600);
+  await page.evaluate(() => document.querySelector('#tabs [data-t="SET"]').click()); await page.waitForTimeout(800);
+  const f1 = await form();
+  check('settings radios: a click marks the form “unsaved changes” and the choice survives a trip to another tab', dirty1 && await unsaved() && f1.optExit === 'target' && f1.exitRule === 'profit' && f1.pickBy === 'leaders' && f1.universe === 'list' && f1.marketFilter === true, JSON.stringify({ dirty1, f1 }));
+  // out of range: refused with both names, nothing sent
+  for (const [id, v] of [['#st-exitProfitPct', '6'], ['#st-optDays', '61']]) { await page.fill(id, v); await page.evaluate(i => document.querySelector(i).dispatchEvent(new Event('change', { bubbles: true })), id); }
+  await page.waitForTimeout(200); await page.evaluate(() => document.querySelector('[data-st="save"]').click()); await page.waitForTimeout(500);
+  const m0 = await bar();
+  check('sell rules: a profit % or option expiry the bot would clamp (6%, 61 days) is refused with both named, nothing saved', /Not saved/.test(m0) && /Profit needed to sell must be between 0\.1 and 5/.test(m0) && /Option expiry, at least must be between 7 and 60/.test(m0) && puts.length === 0, m0.slice(0, 300));
+  await page.fill('#st-optDays', '21'); await page.evaluate(() => document.querySelector('#st-optDays').dispatchEvent(new Event('change', { bubbles: true })));
+  // type a value and press Save straight away: leaving the box redraws the form, which used to swallow that first click
+  await page.click('#st-exitProfitPct', { clickCount: 3 }); await page.keyboard.type('0.8');
+  await page.click('[data-st="save"]');
+  for (let i = 0; i < 60 && !puts.length; i++) await page.waitForTimeout(150);
+  const s1 = saved()[0] || {};
+  check('settings: typing “Profit needed to sell” and pressing Save once saves it (the first click is no longer swallowed)', puts.length === 1 && s1.exitProfitPct === 0.8, `puts=${puts.length} ` + (await bar()).slice(0, 160));
+  check('sell rules: the clicked choices are saved — profit / target / leaders first / my list / market filter on, expiry 21 days', s1.exitRule === 'profit' && s1.optExit === 'target' && s1.pickBy === 'leaders' && s1.universe === 'list' && s1.marketFilter === true && s1.optDays === 21, JSON.stringify(s1).slice(0, 200));
+  check('day trading off: Save keeps the hidden day-trading window (10:05–14:10) instead of resetting it to 9:45–3:30', s1.dayTrade === false && s1.dayStart === '10:05' && s1.dayEnd === '14:10', `${s1.dayStart}–${s1.dayEnd}`);
+  for (let i = 0; i < 40 && !/Saved /.test(await bar()); i++) await page.waitForTimeout(150);
+  // the same for a profile number: the profile flips to Custom (a redraw) and the first click still saves
+  await page.click('#st-riskPct', { clickCount: 3 }); await page.keyboard.type('0.8');
+  await page.click('[data-st="save"]');
+  for (let i = 0; i < 60 && puts.length < 2; i++) await page.waitForTimeout(150);
+  const s2 = saved()[1] || {};
+  check('settings: typing a risk number and pressing Save once saves it as a Custom profile', puts.length === 2 && s2.riskPct === 0.8 && s2.preset === 'custom', `puts=${puts.length} ${s2.preset} ${s2.riskPct}`);
+  check('settings (opposite values): no script errors', errors.length === 0, errors.join(' | '));
+  await page.close();
+}
 // 2b. the header's market switch: every market tab follows it, shared tabs stay
 {
   const { page, errors } = await session('market switch', () => { localStorage.clear(); localStorage.setItem('sd-tab', JSON.stringify('US')); });
@@ -239,8 +288,16 @@ async function session(label, prep) {
 // 4. Bot trades rendered with real-looking data (the live journal is encrypted, so without this the cards are never executed)
 const profitFx = path.join(os.tmpdir(), 'sd-journal-profit.json');            // the full journal under the win-rate settings: profit sell rule, market filter blocking
 { const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/journal-full.json'), 'utf8'));
-  j.settings = { ...j.settings, exitRule: 'profit', exitProfitPct: 0.5, marketFilter: true, maxHold: 15, optExit: 'target' };
-  j.watch = { ...j.watch, exitRule: 'profit', exitPct: 0.5, mktFilter: true, maxHold: 15, idle: 'market filter: SPY closed at 540, below its 200-day average 552 \u2014 no new dip buys', held: (j.watch.held || []).map(h => h.kind === 'stock' ? { ...h, exitBy: 'profit', exitLevel: 412.05 } : h) };
+  // the owner's settings of 2026-10-27 \u2014 CALLs only at take-profit / stop / time, PUTs 0% and switched off \u2014 plus a stock take-profit
+  // of 0 (off) and a 21-day option window, to show those texts follow the settings; a SPY quick trade among the holdings
+  j.settings = { ...j.settings, exitRule: 'profit', exitProfitPct: 0.5, marketFilter: true, maxHold: 15, optExit: 'target', optTakeProfit: 5, optStop: 90, optDays: 21, stockTp: 0, puts: false, callSharePct: 20, putSharePct: 0, spySharePct: 10, spyTp: 5, spyStop: 35, spyHoldMin: 60 };
+  j.split = { ...j.split, shares: { call: 20, put: 0, spy: 10, stock: 70 }, stock: { ...j.split.stock, money: 70000 }, call: { ...j.split.call, money: 20000 }, put: { ...j.split.put, money: 0, today: 0 }, spy: { ...j.split.spy, money: 10000 } };
+  j.spy = { ...j.spy, rules: { tp: 5, stop: 35, holdMin: 60, dte: 1, tradePct: 20, maxOpen: 3 } };
+  j.env = { ...j.env, reasons: ['Market filter: SPY closed at 540, below its 200-day average 552 \u2014 no new dip buys (stocks and CALLs); open positions are managed as usual'] };
+  j.open = j.open.filter(o => o.kind !== 'Put');
+  j.watch = { ...j.watch, exitRule: 'profit', exitPct: 0.5, mktFilter: true, maxHold: 15, on: { stocks: true, calls: true, puts: false }, put: [], idle: 'market filter: SPY closed at 540, below its 200-day average 552 \u2014 no new dip buys',
+    held: (j.watch.held || []).map(h => h.kind === 'stock' ? { ...h, exitBy: 'profit', exitLevel: 412.05 } : { ...h, exitBy: 'target', exitLevel: null, tp: 430.5, stop: 41 })
+      .concat([{ s: 'SPY261024C00502000', und: 'SPY', kind: 'call', qty: 20, avg: 205, cur: 210, pl: 100, plpc: 2.4, undPx: 502.7, exitLevel: null, exitSide: 'above', exitBy: 'spy', tp: 215.25, stop: 133.25, holdMin: 60 }]) };
   fs.writeFileSync(profitFx, JSON.stringify(j)); }
 for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT, SPY and day-trade rows)'], ['journal-old.json', 'older journal shape (no watch rows, no split, no spy, no day block)'], [profitFx, 'profit sell rule and market filter']]) {
   journalFixture = fx;
@@ -254,6 +311,8 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
     check('bot trades: Open now describes each kind correctly (swing stock, CALL, PUT, SPY quick trade, day trade) from the settings', /RSI-2 swing — sells at \+10%/.test(txt) && /CALL — sells at \+50% or −50%, when the stock closes above its 5-day average/.test(txt) && /PUT — sells at \+50% or −50%, when the stock closes below its 5-day average/.test(txt) && /SPY quick trade — out at \+15%/.test(txt) && /day trade — stop and target at the broker/.test(txt), txt.match(/Open now.{0,900}/)?.[0]);
     check('bot trades: option prices are shown per contract (×100) in the held table and per share in Open now, both labelled', /\$440\.00/.test(txt) && /\$4\.40/.test(txt), '');
     check('bot trades: the rules line reads the cancel time from settings', /cancelled after 45 min/.test(txt));
+    { const thNoTip = await page.evaluate(() => [...document.querySelectorAll('main th')].filter(el => el.offsetParent && !el.hasAttribute('data-tip')).map(el => el.textContent.trim()));
+      check('hover help: every table heading on Bot trades has an explanation', thNoTip.length === 0, thNoTip.join(' | ')); }
     // drill-down: every clickable label opens a detail sheet built from the journal; ✕ and Escape close it; links inside open further sheets
     { const keys = await page.$$eval('main [data-drill]', els => [...new Set(els.map(e => e.dataset.drill + '|' + (e.dataset.arg || '')))]);
       const bad = [];
@@ -278,10 +337,19 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
       const a = await page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /Since the bot started trading/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
       check('bot trades: the 5-year card is gone; the real-results card switches before/after tax and has its own tax-rate boxes', gone && !/after tax \(if cashed out today\)/.test(b) && /after tax \(if cashed out today\)/.test(a) && !!(await page.$('#h5st')) && !!(await page.$('#h5lt')), a.slice(0, 200)); }
   } else if (fx === profitFx) {
-    check('bot trades: with the profit rule a held stock sells at its profit level (0.5% above the buy price), Open now says so, and the market filter shows as the reason for not entering', /MSFT closes at or above \$412\.05 \(0\.5% above the buy price/.test(txt) && /at the first close 0\.5%\+ above the buy price \(max 15 days\)/.test(txt) && /not entering now: market filter: SPY closed at 540/.test(txt) && /CALL — sells at \+50% or −50%, after 15 days, or 3 days before expiry/.test(txt), txt.slice(0, 300));
+    check('bot trades: with the profit rule a held stock sells at its profit level (0.5% above the buy price), Open now says so, and the market filter shows as the reason for not entering', /MSFT closes at or above \$412\.05 \(0\.5% above the buy price/.test(txt) && /RSI-2 swing — sells at the first close 0\.5%\+ above the buy price \(max 15 sessions\)/.test(txt) && /not entering now: market filter: SPY closed at 540/.test(txt) && /CALL — sells at \+5% or −90%, after 15 sessions, or 3 days before expiry/.test(txt), txt.match(/Open now.{0,600}/)?.[0]);
+    check('bot trades: a stock take-profit of 0 (off) is left out of Open now, not shown as “+0%”', !/sells at \+0%/.test(txt));
+    check('bot trades: the holdings table shows a CALL under “take-profit, stop or time limit” and a SPY quick trade with its own exits', /its take-profit or stop \(next column\), or after 15 sessions/.test(txt) && /SPY quick trade: its take-profit or stop \(next column\), or after 60 minutes/.test(txt) && /take-profit at \$215\.25\/contract · stop at \$133\.25\/contract · flat by 3:45 PM/.test(txt), txt.match(/What it holds and when it sells.{0,900}/)?.[0]);
+    check('bot trades: PUTs at 0% and switched off say “switched off” (not “no money set” with a $0 loss limit)', /PUTs › switched off/.test(txt) && /Switched off in Bot settings — no new PUTs\./.test(txt) && !/loses 10% of its money \(\$0\)/.test(txt), txt.match(/PUTs ›.{0,200}/)?.[0]);
+    check('bot trades: the market check names the market filter, and the option note follows the 21-day expiry setting', /No new dip buys — the market filter holds back new stocks and CALLs/.test(txt) && /options at the nearest strike 21–42 days out/.test(txt), txt.match(/market check.{0,200}/)?.[0]);
+    { await page.evaluate(() => document.querySelector('main [data-drill="part"][data-arg="put"]').click()); await page.waitForTimeout(150);
+      const t = await page.evaluate(() => (document.getElementById('drill') || {}).innerText || ''); await page.keyboard.press('Escape');
+      check('drill-down: the PUTs sheet says switched off and shows no daily loss limit', /switched off in Bot settings — no new PUTs/.test(t) && !/Stops for the day at/.test(t), t.slice(0, 200)); }
   } else {
     check('bot trades: an older journal without watch rows / split / spy renders without a blank page', /Bot trades|Your bot/.test(txt) && txt.length > 500, txt.slice(0, 200));
+    check('bot trades: an older journal shows its partial engine and risk figures without NaN (no “every NaN s”, no “undefined%”)', /engine/.test(txt) && /each stock trade risks at most 0\.5%/.test(txt) && /RSI-2 fell below 10/.test(txt), txt.match(/engine.{0,120}/)?.[0]);
   }
+  check(`bot trades (${label}): no “undefined”, “NaN” or “null” on the page`, !/\b(undefined|NaN|null)\b/.test(txt), (txt.match(/.{0,70}\b(undefined|NaN|null)\b.{0,30}/) || [''])[0]);
   check(`bot trades (${fx}): no script errors`, errors.length === 0, errors.join(' | '));
   await page.close();
 }
@@ -306,6 +374,31 @@ await browser.close(); srv.close();
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   check('docs links open inside the app (no target=_blank on docs/ links)', !/href="docs\/[^"]*"[^>]*target="_blank"/.test(html));
   for (const f of ['docs/index.html', 'docs/settings.html', 'docs/daytrading-rules.html']) { const d = fs.readFileSync(path.join(ROOT, f), 'utf8'); check(`${f}: has the sticky “Back to Signal Desk” button`, /class="backbar"><a class="back" href="\.\.\/">/.test(d)); }
+}
+// 6. the settings guide's "yours:" values against bot/config.json. Printed as a warning, never a failure: the owner saves settings
+//    from the page (that push runs these tests) and the guide is brought up to date afterwards.
+{
+  const C = JSON.parse(fs.readFileSync(path.join(ROOT, 'bot/config.json'), 'utf8')), doc = fs.readFileSync(path.join(ROOT, 'docs/settings.html'), 'utf8');
+  const t12 = s => { const [h, m] = String(s).split(':').map(Number); return `${(h + 11) % 12 + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+  const onOff = v => v ? 'on' : 'off', cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const meta = h3 => { const m = new RegExp('<h3>' + h3.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + '</h3><div class="meta">(.*?)</div>').exec(doc); return m ? m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ') : null; };
+  const want = [
+    ['Preset: Conservative / Balanced / Aggressive', `yours: ${cap(C.preset)}`], ['Risk per stock trade', `yours: ${C.riskPct}%`], ['Risk per option trade', `yours: ${C.optRiskPct}%`],
+    ['Total risk cap', `yours: ${C.maxHeat}%`], ['Max positions per sector', `yours: ${C.perSector}`], ['Daily loss limit', `yours: ${C.dayCap}%`], ['Weekly loss limit', `yours: ${C.weekCap}%`], ['Losing streak limit', `yours: ${C.streak}`],
+    ['Trade stocks / Trade CALL options / Trade PUT options', `yours: ${onOff(C.stocks)} / ${onOff(C.options)} / ${onOff(C.puts)}`],
+    ['Where the money goes (the four shares)', `yours: stocks ${100 - C.callSharePct - C.putSharePct - (C.spyOn ? C.spySharePct : 0)}% · CALLs ${C.callSharePct}% · PUTs ${C.putSharePct}% · SPY ${C.spyOn ? C.spySharePct : 0}%`],
+    ['CALLs share / PUTs share', `yours: ${C.callSharePct} / ${C.putSharePct}%`], ['SPY quick-options share', `yours: ${C.spySharePct}%`], ['SPY money per trade', `yours: ${C.spyTradePct}%`], ['Options daily loss limit', `yours: ${C.optDayCap}%`],
+    ['Per trade — stocks / CALLs / PUTs', `yours: ${C.stockPct}% / ${C.optPct}% / ${C.putPct}%`], ['Max stock positions / Max option positions', `yours: ${C.maxPositions} / ${C.maxOptions}`],
+    ['When to sell a stock', `yours: ${C.exitRule === 'profit' ? 'First profitable close' : 'On the bounce'}`], ['Profit needed to sell', `yours: ${C.exitProfitPct}%`], ['Market filter', `yours: ${onOff(C.marketFilter)}`], ['Intraday signals', `yours: ${onOff(C.intraday)}`],
+    ['RSI-2 buy level', `yours: ${C.rsiThreshold}`], ['Max hold', `yours: ${C.maxHold}`], ['Stock take-profit', `yours: +${C.stockTp}%`], ['Stock stop (hard floor)', `yours: ${C.holdFloor}%`],
+    ['Option take-profit / Option stop', `yours: +${C.optTakeProfit}% / −${C.optStop}%`], ['When to sell a CALL or PUT', `yours: ${C.optExit === 'target' ? 'Only at its take-profit, stop or time limit' : 'Also when the stock bounces back'}`], ['Option expiry, at least', `yours: ${C.optDays}`],
+    ['Entry window closes at', `yours: ${t12(C.entryEnd)}`], ['Day-trade (on/off)', `yours: ${onOff(C.dayTrade)}`],
+    ['SPY quick options (on/off)', `yours: ${onOff(C.spyOn)}`], ['SPY take-profit / SPY stop', `yours: +${C.spyTp}% / −${C.spyStop}%`], ['SPY time stop', `yours: ${C.spyHoldMin} min`], ['SPY trades open at once', `yours: ${C.spyMaxOpen}`],
+    ['SPY max trades per day · SPY losses in a row · SPY daily loss limit', `yours: ${C.spyMaxTrades} · ${C.spyStreak} · ${C.spyDayCap}%`], ['Trades from / until', `yours: ${t12(C.spyStart)} – ${t12(C.spyEnd)}`],
+    ['Scan the whole market / Only my list', `yours: ${C.universe === 'scan' ? 'scan' : 'my list'}`], ['How many stocks to watch', `yours: ${C.scanSize}`], ['Minimum share price', `yours: $${C.scanMinPrice}`], ['Practice (paper) / Real money (live)', `yours: ${C.mode}`],
+  ];
+  const off = want.filter(([h3, w]) => !(meta(h3) || '').includes(w)).map(([h3, w]) => `${h3}: config.json says “${w}”, the guide says “${(meta(h3) || 'no such entry').slice(0, 100)}”`);
+  console.log(off.length ? `  ⚠ docs/settings.html “yours:” differs from bot/config.json in ${off.length} place(s) — update the guide (warning only):\n      ${off.join('\n      ')}` : `  ✓ docs/settings.html “yours:” values match bot/config.json (${want.length} settings)`);
 }
 console.log(failed ? `\n${failed} page check(s) FAILED` : '\nall page checks passed');
 process.exit(failed ? 1 : 0);

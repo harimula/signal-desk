@@ -4,7 +4,8 @@
 //
 //   Direction  — SPY above its day's VWAP → CALLs only; below → PUTs only; on it → nothing (marketMode in daytrade.mjs).
 //   Trigger    — the live price breaks the high of the last 3 completed 5-minute bars (CALL) or their low (PUT), and the last
-//                completed bar closed in that direction on at least average volume for the day so far.
+//                completed bar closed in that direction on at least average volume for the day so far ("armed"). The same
+//                test runs on every streamed tick (bot.mjs spyEnter), on bars read after the last 5-minute mark.
 //   Contract   — nearest-the-money, expiring 1..spyDte days out (default 1 = the next trading day; never same-day), spread ≤ 5%.
 //   Exits      — take-profit +spyTp% (resting limit order at the broker), stop −spyStop%, time stop after spyHoldMin minutes,
 //                flat by spyFlat (3:45 PM). Whichever comes first.
@@ -31,9 +32,13 @@ export function spySignal({ bars, px, mins, cfg = {} }) {
   const last3 = done.slice(-3), lastBar = done[done.length - 1];
   const hi = Math.max(...last3.map(b => b.h)), lo = Math.min(...last3.map(b => b.l));
   const avgV = done.reduce((t, b) => t + (b.v || 0), 0) / done.length, busy = (lastBar.v || 0) >= avgV;
-  if (market === 'up' && px > hi && lastBar.c > lastBar.o && busy) return { side: 'call', market, vwap: r2(vw), level: r2(hi), why: `SPY ${px} broke above the 15-minute high ${r2(hi)} with SPY above its VWAP ${r2(vw)}` };
-  if (market === 'down' && px < lo && lastBar.c < lastBar.o && busy) return { side: 'put', market, vwap: r2(vw), level: r2(lo), why: `SPY ${px} broke below the 15-minute low ${r2(lo)} with SPY below its VWAP ${r2(vw)}` };
-  return { idle: market === 'up' ? `SPY above VWAP ${r2(vw)} — waiting for a break above ${r2(hi)}` : `SPY below VWAP ${r2(vw)} — waiting for a break below ${r2(lo)}`, market, vwap: r2(vw), level: market === 'up' ? r2(hi) : r2(lo) };
+  // armed: the last completed bar closed in the market's direction on at least average volume — a break of the level now
+  // would be a signal. The live tick path (bot.mjs spyWatch / spyEnter) only listens while armed, like this check.
+  const armed = (market === 'up' ? lastBar.c > lastBar.o : lastBar.c < lastBar.o) && busy;
+  if (market === 'up' && px > hi && armed) return { side: 'call', market, vwap: r2(vw), level: r2(hi), armed, why: `SPY ${px} broke above the 15-minute high ${r2(hi)} with SPY above its VWAP ${r2(vw)}` };
+  if (market === 'down' && px < lo && armed) return { side: 'put', market, vwap: r2(vw), level: r2(lo), armed, why: `SPY ${px} broke below the 15-minute low ${r2(lo)} with SPY below its VWAP ${r2(vw)}` };
+  const lvl = market === 'up' ? r2(hi) : r2(lo), dir = market === 'up' ? 'above' : 'below';
+  return { idle: armed ? `SPY ${dir} VWAP ${r2(vw)} \u2014 waiting for a break ${dir} ${lvl}` : `SPY ${dir} VWAP ${r2(vw)} \u2014 waiting for a 5-minute bar to close ${market} on busy volume, then a break ${dir} ${lvl}`, market, vwap: r2(vw), level: lvl, armed };
 }
 
 // Exit decision on an open SPY option. optPx = the option's own price now, entryPx = its fill price.

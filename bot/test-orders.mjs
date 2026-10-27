@@ -15,7 +15,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 if (process.argv[2] === 'child') {
   const cfg = JSON.parse(process.argv[3]), FAKE = JSON.parse(process.argv[4] || '{}');
-  const REAL = Date, FIXED = REAL.parse(FAKE.time || '2026-10-23T14:00:00Z');          // Fri 10:00 ET by default, inside the entry window
+  const REAL = Date; let FIXED = REAL.parse(FAKE.time || '2026-10-23T14:00:00Z');      // Fri 10:00 ET by default, inside the entry window; FAKE.stepMs moves it between cycles
   globalThis.Date = class extends REAL { constructor(...a) { if (a.length) super(...a); else super(FIXED); } static now() { return FIXED; } };
 
   const weekdays = n => { const out = []; let d = new REAL('2026-10-22T04:00:00Z'); while (out.length < n) { if (d.getUTCDay() % 6) out.unshift(new REAL(d)); d = new REAL(d.getTime() - 864e5); } return out; };
@@ -103,18 +103,21 @@ if (process.argv[2] === 'child') {
   process.env.ALPACA_URL = url; process.env.ALPACA_DATA_URL = dataUrl;
   process.env.ALPACA_KEY = 'test'; process.env.ALPACA_SECRET = 'test';
   if (FAKE.journalKey) process.env.JOURNAL_KEY = FAKE.journalKey;
+  if (FAKE.readonly) process.env.BOT_READONLY = '1';                                                            // the journal-refresh workflow's mode
   if (FAKE.reset) process.env.JOURNAL_RESET = '1';
   if (FAKE.tg) { process.env.TELEGRAM_API = url; process.env.TELEGRAM_TOKEN = 'test-token'; process.env.TELEGRAM_CHAT = '42'; }                        // privacy mode: encrypted journal (must be set before the import)
   fs.mkdirSync('bot', { recursive: true });
   const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
   if (FAKE.stop) fs.writeFileSync('bot/STOP', 'stop');
+  if (FAKE.stopLocal) fs.writeFileSync('bot/STOP.local', 'stop (from the page)');                                // the running session's mirror of the page's Pause
+  if (FAKE.sessionEndIn != null) bot.setSessionEnd(FIXED + FAKE.sessionEndIn * 60000);                           // this session ends in N minutes
   if (FAKE.prevJournal) fs.writeFileSync('bot/journal.json', JSON.stringify(FAKE.journalKey ? await bot.encryptJournal(FAKE.prevJournal, FAKE.prevKey || FAKE.journalKey, 1000) : FAKE.prevJournal));   // what the previous run left behind
   bot.applyConfig({ symbols: ['DIP', 'POP', 'FALL'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
   if (FAKE.tg) await bot.tgPollCycle();
-  const tc0 = REAL.now(); await bot.botCycle({ journal: !!FAKE.closed }); const cycleMs = REAL.now() - tc0;
+  const tc0 = REAL.now(); await bot.botCycle({ journal: !!FAKE.closed, manageOnly: !!FAKE.manageOnly }); const cycleMs = REAL.now() - tc0;
   if (FAKE.tg) await bot.tgPollCycle();
-  if (FAKE.positionsAfter) { FAKE.positions = FAKE.positionsAfter; if (FAKE.fillsAfter) FAKE.fills = FAKE.fillsAfter; }
-  if (FAKE.cycles > 1) for (let k = 1; k < FAKE.cycles; k++) await bot.botCycle({ journal: true });   // a longer session: the journal is rewritten several times
+  if (FAKE.positionsAfter) { FAKE.positions = FAKE.positionsAfter; if (FAKE.fillsAfter) FAKE.fills = FAKE.fillsAfter; if (FAKE.histAfter) FAKE.hist = FAKE.histAfter; if (FAKE.openAfter) FAKE.open = FAKE.openAfter; }
+  if (FAKE.cycles > 1) for (let k = 1; k < FAKE.cycles; k++) { if (FAKE.stepMs) FIXED += FAKE.stepMs; await bot.botCycle({ journal: true }); }   // a longer session: the journal is rewritten several times
   let fast = null;
   if (FAKE.fast) { const before = orders.length; FAKE.positions = FAKE.fast.positions; await bot.spyFast(); fast = { placed: orders.slice(before), hasOpen: bot.spyHasOpen() }; }
   let tickEntry = null;
@@ -352,7 +355,7 @@ const OD30 = run({ stocks: false, options: true, optDays: 30 }), OD14 = run({ st
 check('option expiry: a new CALL looks for expiries from 30 to 51 days out with "at least 30", 14 to 35 by default', () => { assert.ok(OD30.contractQs.some(q => /expiration_date_gte=2026-11-22/.test(q) && /expiration_date_lte=2026-12-13/.test(q)), JSON.stringify(OD30.contractQs)); assert.ok(OD14.contractQs.some(q => /expiration_date_gte=2026-11-06/.test(q) && /expiration_date_lte=2026-11-27/.test(q)), JSON.stringify(OD14.contractQs)); });
 const SW5 = run({ stocks: false, options: true, preset: 'custom', optTakeProfit: 5 }, { quote: { ap: 2.2, bp: 2.0 } }), SW50 = run({ stocks: false, options: true }, { quote: { ap: 2.2, bp: 2.0 } });
 check('option spread guard: with a +5% take-profit a CALL whose spread is 9% is skipped; with +50% it is bought', () => { assert.ok(!SW5.options.length && (SW5.acts || []).some(m => /spread too wide .*\+5% take-profit/.test(m)), JSON.stringify(SW5.acts)); assert.equal(SW50.options.length, 1, JSON.stringify(SW50.orders)); });
-check('quick exits: a CALL up 22% is sold at the 20% take-profit', () => assert.ok(Q8.orders.some(o => o.symbol === optSym && o.side === 'sell' && o.type === 'market') && (Q8.acts || []).some(m => /\+22% — take profit/.test(m)), JSON.stringify(Q8.acts)));
+check('quick exits: a CALL up 22% with no take-profit order resting gets a limit order at +20% ($6.00) — it fills at once at the bid (above $6.00); never a market sale', () => { assert.ok(!Q8.orders.some(o => o.symbol === optSym && o.type === 'market'), JSON.stringify(Q8.orders)); const tp = Q8.orders.find(o => o.symbol === optSym && o.side === 'sell' && o.type === 'limit'); assert.ok(tp && +tp.limit_price === 6, JSON.stringify(Q8.orders)); });
 check('quick exits: a CALL down 11% is sold at the 10% stop', () => assert.ok(Q9.orders.some(o => o.symbol === optSym && o.side === 'sell' && o.type === 'market') && (Q9.acts || []).some(m => /-11% — option stop/.test(m)), JSON.stringify(Q9.acts)));
 check('quick exits: a CALL up 10% is kept, with its take-profit order resting at +20% ($6.00)', () => { assert.ok(!Q10.orders.some(o => o.symbol === optSym && o.type === 'market')); const tp = Q10.orders.find(o => o.symbol === optSym && o.type === 'limit' && o.side === 'sell'); assert.ok(tp && +tp.limit_price === 6, JSON.stringify(Q10.orders)); });
 
@@ -365,7 +368,7 @@ check('deepest dip (pickBy = dip): the order is by RSI-2 and leaders are not pre
 
 // ---- SPY quick options sleeve: CALL on an upside break, PUT on a downside break, 5% of the stake, its own exits and brakes ----
 const m5 = (hm, o, h, l, c, v) => ({ t: '2026-10-23T' + hm + ':00Z', o, h, l, c, v, n: 100, vw: c });
-const spyUp = [m5('13:30', 500, 501, 499.5, 500.6, 2e6), m5('13:35', 500.6, 501.2, 500.4, 501, 2e6), m5('13:40', 501, 501.8, 500.9, 501.6, 2e6), m5('13:45', 501.6, 502, 501.4, 501.9, 2e6), m5('13:50', 501.9, 502.5, 501.8, 502.3, 2.5e6)];
+const spyUp = [m5('13:30', 500, 501, 499.5, 500.6, 2e6), m5('13:35', 500.6, 501.2, 500.4, 501, 2e6), m5('13:40', 501, 501.8, 500.9, 501.6, 2e6), m5('13:45', 501.6, 502, 501.4, 501.9, 2e6), m5('13:50', 501.9, 502.5, 501.8, 502.3, 2.5e6), m5('13:55', 502.25, 502.45, 502.15, 502.4, 2.6e6)];   // through 9:55–10:00: at 10:00 the bar that just completed is in (the bot waits for it)
 const spyDn = spyUp.map(b => ({ ...b, o: 1000 - b.o, h: 1000 - b.l, l: 1000 - b.h, c: 1000 - b.c }));
 const SO = { stocks: false, options: false, symbols: ['QUIET'], preset: 'custom' };
 const Y1 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
@@ -555,5 +558,97 @@ const FL = run(SO, { positions: [spyPos(2.1), manualSpy2], hist: spyBuy(596).con
 check('SPY fast lane: a SPY option bought by hand (down 27%) is left alone; only the sleeve\'s own trade is managed', () => assert.ok(!FL.orders.some(o => o.symbol === manualSpy2.symbol), JSON.stringify(FL.orders)));
 const QG = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), bars5: { SPY: spyUp }, live: { SPY: 502.2 }, quote2: { sym: spySym, bp: 1.70, ap: 1.74 }, quoteGone: true });
 check('SPY quote exit: if the option is already gone (take-profit filled), a late stop quote sells nothing', () => assert.equal(QG.quoteExit.placed.length, 0, JSON.stringify(QG.quoteExit)));
+
+// ---- fourth audit (2026-10-27): take-profit orders, hand positions, API load, loss limits under 'target', hand-off, SPY tick path ----
+const tpAt = (px, id = 'sd-x-' + optSym + '-tp') => [{ id: 'tp-' + px, symbol: optSym, side: 'sell', type: 'limit', limit_price: String(px), qty: '2', status: 'new', client_order_id: id }];
+const T1 = run(QX, { positions: [oPos(6.1)], hist: oHist, open: tpAt(6) });
+check('take-profit: a CALL at +22% whose take-profit order rests at today\'s +20% ($6.00) is left to the broker — nothing sold at market, nothing cancelled', () => { assert.ok(!T1.orders.some(o => o.symbol === optSym), JSON.stringify(T1.orders)); assert.ok(!T1.deletes.includes('tp-6'), JSON.stringify(T1.deletes)); });
+const T2 = run(QX, { positions: [oPos(6.1)], hist: oHist, open: tpAt(7.5) });
+check('take-profit: an order the bot left at an older setting (+50%, $7.50) is cancelled — not replaced by a market sale; the new one follows at the next check', () => { assert.ok(T2.deletes.includes('tp-7.5'), JSON.stringify(T2.deletes)); assert.ok(!T2.orders.some(o => o.symbol === optSym && o.type === 'market'), JSON.stringify(T2.orders)); assert.ok((T2.acts || []).some(m => /older setting/.test(m)), JSON.stringify(T2.acts)); });
+const T3 = run(QX, { positions: [oPos(5.5)], hist: oHist, open: tpAt(7.5, 'owner-made') });
+check('take-profit: a sell order the owner placed by hand on a bot CALL is left alone', () => { assert.ok(!T3.deletes.includes('tp-7.5') && !T3.orders.some(o => o.symbol === optSym), JSON.stringify(T3.deletes) + JSON.stringify(T3.orders)); });
+const nk = 'QUIET261113C00105000', nkPos = { symbol: nk, qty: '2', avg_entry_price: '1.02', current_price: '1.03', lastday_price: '1.02', market_value: '206', unrealized_pl: '2', unrealized_plpc: '0.0098' };
+const T4 = run({ ...QX, optTakeProfit: 5 }, { positions: [nkPos], hist: [{ ...oHist[0], symbol: nk, client_order_id: 'sd-q-' + nk + '-20261022-2-ab', limit_price: '1.02' }] });
+check('take-profit price: +5% on a $1.02 CALL that trades in nickels rests at $1.10 (rounded up), not $1.05 (+2.9%)', () => { const tp = T4.orders.find(o => o.symbol === nk && o.type === 'limit'); assert.ok(tp && tp.limit_price === '1.1', JSON.stringify(T4.orders)); });
+// a position bought by hand after the bot's own buy was sold
+const soldBack = { symbol: 'QUIET', side: 'sell', status: 'filled', client_order_id: 'sd-x-QUIET-zz', qty: '50', filled_qty: '50', filled_at: '2026-10-22T19:55:00Z' };
+const H1 = run(QX, { positions: [{ ...qPos(230), qty: '30' }], hist: [soldBack, qHist[0]] });   // down 8.5% under a 5% floor
+check('hand positions: QUIET held again after the bot sold its own (a later buy by hand) — the bot does not sell it or put a stop on it, and says why', () => { assert.ok(!H1.orders.some(o => o.symbol === 'QUIET'), JSON.stringify(H1.orders)); assert.ok((H1.acts || []).some(m => /QUIET: held, but the bot's own buy of it was sold since/.test(m)), JSON.stringify(H1.acts)); });
+const H2 = run(QX, { positions: [{ ...qPos(230), qty: '70' }], hist: qHist });                  // the bot bought 50; the owner added 20
+check('hand positions: when the owner added 20 shares to the bot\'s 50, the floor sale sells the bot\'s 50 only', () => { const o = H2.orders.find(x => x.symbol === 'QUIET' && x.side === 'sell' && x.type === 'market'); assert.ok(o && o.qty === '50', JSON.stringify(H2.orders)); });
+// API load: a turned-down CALL candidate is not looked up again on every check; no lookups without money
+const AL = run({ stocks: false, options: true, preset: 'custom', optTakeProfit: 5 }, { quote: { ap: 2.2, bp: 2.0 }, cycles: 3 });
+check('API load: a CALL turned down for its spread is looked up once, not on each of 3 checks (asked again after 10 minutes)', () => { assert.equal(AL.contractQs.filter(q => /underlying_symbols=DIP&/.test(q)).length, 1, JSON.stringify(AL.contractQs)); assert.ok((AL.acts || []).some(m => /looked at again in 10 min/.test(m)), JSON.stringify(AL.acts)); });
+const AM = run(XS, { positions: [pos(optSym, 10, 1, 30.5, 30.5)] });
+check('API load: with the CALL money all in use, no contract or quote is looked up for a CALL at all', () => { assert.ok(!AM.contractQs.some(q => /type=call/.test(q)), JSON.stringify(AM.contractQs)); assert.ok((AM.acts || []).some(m => /CALL: no money left for a new one today/.test(m)), JSON.stringify(AM.acts)); });
+// loss limit under the 'target' sell rule: stops new CALLs, keeps the open ones
+const LT = run({ ...XS, optExit: 'target' }, { positions: [pos(optSym, 25, 7, 5, 6.5)], hist: optHist, tg: true });
+check('loss limit with the "target" sell rule: CALLs down past their limit → no new CALL, but the open CALL is kept to its own exits (the study held it)', () => {
+  assert.ok(LT.split.call.halted, JSON.stringify(LT.split)); assert.ok(!LT.orders.some(o => /^DIP\d{6}C/.test(o.symbol) && o.side === 'buy'), JSON.stringify(LT.orders));
+  assert.ok(!LT.orders.some(o => o.symbol === optSym && o.type === 'market'), JSON.stringify(LT.orders));
+  assert.ok(LT.tgSent.some(m => /no new CALL trades today; open CALLs keep their own exits/.test(m.text)), JSON.stringify(LT.tgSent.map(m => m.text)));
+});
+// max option positions counts the swing CALLs and PUTs only
+const MO = run({ stocks: false, options: true, preset: 'custom', maxOptions: 1, spyTradePct: 20 }, { positions: [spyPos2(spySym, 2.1), spyPos2(s2, 2.1)], hist: [spyBuy2(spySym, 596), spyBuy2(s2, 597)], bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
+check('max option positions (1): two SPY quick trades open do not use it up — the CALL on the dip is still bought', () => assert.ok(MO.options.some(o => /^DIP\d{6}C/.test(o.symbol)), JSON.stringify(MO.orders) + JSON.stringify(MO.acts)));
+const MO2 = run({ stocks: false, options: true, preset: 'custom', maxOptions: 1 }, { positions: [oPos(5.5)], hist: oHist });
+check('max option positions (1): with one swing CALL open, no second CALL, and the log says why', () => { assert.ok(!MO2.orders.some(o => o.side === 'buy'), JSON.stringify(MO2.orders)); assert.ok((MO2.acts || []).some(m => /the most at once \(max option positions 1\)/.test(m)), JSON.stringify(MO2.acts)); });
+// losing streak counts swing trades sold today (their buy was on an earlier day)
+const swingSells = ['AAA', 'BBB', 'CCC'].map((sym, i) => ({ symbol: sym, side: 'sell', qty: '10', price: '90', order_id: 's' + i, transaction_time: '2026-10-23T13:4' + i + ':00Z' }));
+const swingBuys = ['AAA', 'BBB', 'CCC'].map((sym, i) => ({ symbol: sym, side: 'buy', status: 'filled', client_order_id: 'sd-r-' + sym + '-300-20261020-b' + i, qty: '10', filled_qty: '10', filled_avg_price: '100', limit_price: '100', filled_at: '2026-10-20T15:00:00Z' }));
+const SS3 = run({ ...XS, streak: 3 }, { fills: swingSells, hist: swingBuys, time: '2026-10-23T14:20:00Z' });
+check('losing streak: three swing stocks bought on Tuesday and sold at a loss today stop new stock buys (they used to be invisible to the brake)', () => { assert.match(SS3.split.stock.halted || '', /3 losing stock trades in a row/); assert.ok(!SS3.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(SS3.orders)); });
+// no entry order rests while the market is closed
+const PO = run({ stocks: true, options: false, symbols: ['QUIET'] }, { time: '2026-10-23T13:22:00Z', closed: true, open: [{ id: 'gtc1', symbol: 'DIP', side: 'buy', type: 'limit', limit_price: '100', qty: '10', client_order_id: 'sd-r-DIP-500-20261022-zz', time_in_force: 'gtc', submitted_at: '2026-10-22T19:40:00Z' }] });
+check('closed market (9:22 AM): yesterday\'s good-till-cancelled dip-buy is cancelled before the bell, never left to fill at the open', () => assert.ok(PO.deletes.includes('gtc1'), JSON.stringify(PO.deletes) + JSON.stringify(PO.acts)));
+const SP = run({ stocks: false, options: false, puts: true, preset: 'custom', staleMin: 30 }, { open: [{ id: 'pb1', symbol: 'POP261113P00080000', side: 'buy', type: 'limit', limit_price: '2', qty: '3', client_order_id: 'sd-p-POP261113P00080000-20261023-3-zz', submitted_at: '2026-10-23T13:20:00Z' }] });
+check('stale entries: a PUT buy unfilled past the stale time is cancelled like the others', () => assert.ok(SP.deletes.includes('pb1'), JSON.stringify(SP.deletes)));
+// all parts stopped: a part that is off does not keep the others' limits from counting
+const AH = run({ ...XS, puts: false }, { positions: losers.concat([pos(optSym, 25, 7, 5, 6.5)]), hist: optHist });
+check('loss limits: stocks and CALLs both stopped with PUTs off → the watch list says all daily loss limits are hit', () => assert.equal(AH.watch.idle, 'all daily loss limits hit', JSON.stringify(AH.watch && AH.watch.idle)));
+// the Bot trades row of a SPY quick trade shows its own exits
+check('Bot trades: a SPY quick trade\'s row shows the SPY take-profit, stop and minutes (not the CALL rules)', () => { const h = (Y7.watch.held || []).find(x => x.s === spySym); assert.ok(h && h.exitBy === 'spy' && h.holdMin === 10 && Math.abs(h.tp - 236) < 1 && Math.abs(h.stop - 174.25) < 0.01, JSON.stringify(h)); });
+// SPY tick path: the same filter as the full check
+const spyFlat = spyUp.map((b, i) => i === spyUp.length - 1 ? { ...b, o: 502.4, c: 502.2 } : b);   // the last bar closed DOWN: a break is not armed
+const TK = run(SO, { bars5: { SPY: spyFlat }, live: { SPY: 502.2 }, tick: 502.7 });
+check('SPY tick path: when the last 5-minute bar closed down, a tick through the 15-minute high places nothing (the study and the full check would not trade it)', () => { assert.ok(TK.tickEntry && !TK.tickEntry.ok && TK.tickEntry.placed.length === 0, JSON.stringify(TK.tickEntry)); assert.equal(TK.spyWatch, null); assert.match(TK.spy.idle || '', /waiting for a 5-minute bar to close up/); });
+const spyOld = spyUp.slice(0, -1);                                                   // read at 10:00 but without the 9:55 bar (published 2–3 s after it ends)
+const TB = run(SO, { bars5: { SPY: spyOld }, live: { SPY: 502.2 }, tick: 502.7 }), TB2 = run(SO, { bars5: { SPY: spyOld }, live: { SPY: 502.7 } });
+check('SPY: until the bar that completed at the last 5-minute mark is in, neither a tick nor the full check buys on the older bars (they read the bars again every 3 s)', () => { assert.ok(TB.tickEntry && !TB.tickEntry.ok && TB.tickEntry.placed.length === 0, JSON.stringify(TB.tickEntry)); assert.ok(!TB2.orders.some(o => o.side === 'buy'), JSON.stringify(TB2.orders)); assert.match(TB2.spy.idle || '', /waiting for the 5-minute bar that just closed/); });
+// a take-profit placed while the buy was still filling covers only part: replaced
+const T5 = run(QX, { positions: [{ ...oPos(5.5), qty: '5', market_value: '2750' }], hist: [{ ...oHist[0], qty: '5', filled_qty: '5' }], open: tpAt(6) });
+check('take-profit: a CALL take-profit order for 2 of 5 contracts (placed while the buy was filling) is cancelled so one for all 5 follows', () => { assert.ok(T5.deletes.includes('tp-6'), JSON.stringify(T5.deletes)); assert.ok((T5.acts || []).some(m => /covers only part of the position/.test(m)), JSON.stringify(T5.acts)); assert.ok(!T5.orders.some(o => o.symbol === optSym && o.type === 'market')); });
+const T6 = run(SO, { positions: [spyPos(2.1)], hist: spyBuy(596), open: [{ id: 'tp-part', symbol: spySym, side: 'sell', type: 'limit', limit_price: '2.36', qty: '8', status: 'new', client_order_id: 'sd-x-' + spySym + '-p' }], bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
+check('SPY take-profit: an order for 8 of 20 contracts is cancelled so one for all 20 follows', () => assert.ok(T6.deletes.includes('tp-part') && !T6.orders.some(o => o.symbol === spySym && o.type === 'market'), JSON.stringify(T6.deletes) + JSON.stringify(T6.orders)));
+// hand-off: the last 10 minutes of a session and its final check open nothing
+const HO = run({ stocks: true, options: true, symbols: ['DIP'] }, { sessionEndIn: 5, bars5: { SPY: spyUp }, live: { SPY: 502.7 }, tick2: 502.9 });
+check('hand-off: 5 minutes before the session ends, no stock, CALL or SPY trade is opened (and a SPY tick places nothing)', () => { assert.ok(!HO.orders.some(o => o.side === 'buy'), JSON.stringify(HO.orders)); assert.ok(HO.tickEntry && !HO.tickEntry.ok, JSON.stringify(HO.tickEntry)); assert.match(HO.spy.idle || '', /session ends in under 10 minutes/); });
+const HF = run({ ...SO, stocks: true, symbols: ['DIP'] }, { manageOnly: true, positions: [spyPos(1.7)], hist: spyBuy(595), bars5: { SPY: spyUp }, live: { SPY: 502.7 } });
+check('hand-off: the final check of a session still sells what must be sold (SPY stop) but buys nothing', () => { assert.ok(HF.orders.some(o => o.symbol === spySym && o.type === 'market'), JSON.stringify(HF.orders)); assert.ok(!HF.orders.some(o => o.side === 'buy'), JSON.stringify(HF.orders)); });
+// SPY take-profit order: remembered per buy, so a later trade in the same contract gets its own
+const tpBuy1 = { ...spyBuy(595)[0], id: 'b1', client_order_id: `sd-yc-${spySym}-205-20261023-595-q1` };
+const tpSold = { symbol: spySym, side: 'sell', status: 'filled', client_order_id: 'sd-x-' + spySym + '-t1', qty: '20', filled_qty: '20', filled_at: '2026-10-23T14:01:00Z' };
+const tpBuy2 = { ...tpBuy1, id: 'b2', client_order_id: `sd-yc-${spySym}-205-20261023-602-q2`, filled_at: '2026-10-23T14:02:00Z' };
+const TPS = run(SO, { positions: [spyPos(2.1)], hist: [tpBuy1], bars5: { SPY: spyUp }, live: { SPY: 502.2 }, cycles: 2, stepMs: 180000, positionsAfter: [spyPos(2.1)], histAfter: [tpBuy2, tpSold, tpBuy1] });
+check('SPY take-profit: after the first trade\'s take-profit filled, a second trade in the same contract gets its own take-profit order', () => assert.equal(TPS.orders.filter(o => o.symbol === spySym && o.side === 'sell' && o.type === 'limit').length, 2, JSON.stringify(TPS.orders)));
+// Pause mirror
+const KL = run({ stocks: true, options: true, symbols: ['DIP'] }, { stopLocal: true, positions: [{ symbol: 'AAPL', qty: '5', avg_entry_price: '200', current_price: '198', market_value: '990', unrealized_pl: '-10', unrealized_plpc: '-0.01' }] });
+check('Pause: the running session\'s mirror (bot/STOP.local) acts like bot/STOP — everything cancelled and sold, nothing bought', () => { assert.ok(KL.deletes.includes('all-orders') && KL.deletes.includes('all-positions'), JSON.stringify(KL.deletes)); assert.equal(KL.orders.length, 0); });
+// SPY switched off with a buy working
+const SOFF = run({ ...SO, spyOn: false }, { open: [{ id: 'yb1', symbol: spySym, side: 'buy', type: 'limit', limit_price: '2.05', qty: '4', client_order_id: `sd-yc-${spySym}-205-20261023-599-zz`, submitted_at: '2026-10-23T13:59:30Z' }] });
+check('SPY switched off: a SPY buy still working is cancelled at once (not left to fill unwatched)', () => assert.ok(SOFF.deletes.includes('yb1'), JSON.stringify(SOFF.deletes) + JSON.stringify(SOFF.acts)));
+// two SPY trades stopped out at once: both sale alerts reach the phone
+const TA = run({ ...SO, spyTradePct: 20 }, { positions: [spyPos2(spySym, 1.3), spyPos2(s2, 1.3)], hist: [spyBuy2(spySym, 596), spyBuy2(s2, 597)], bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tg: true });
+check('alerts: two SPY trades sold in the same check send two sale alerts (they differ only in numbers, and were merged before)', () => { const t = TA.tgSent.map(m => m.text).join('\n'); assert.ok(t.includes(spySym) && t.includes(s2), t); });
+// carried over from an earlier day
+const CO = run(SO, { positions: [spyPos(2.1)], hist: [{ ...spyBuy(890)[0], client_order_id: `sd-yc-${spySym}-205-20261022-890-ab`, filled_at: '2026-10-22T18:50:00Z' }], bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
+check('carried over: a SPY quick trade still open from yesterday is closed at once (it expires today)', () => assert.ok(CO.orders.some(o => o.symbol === spySym && o.type === 'market') && (CO.acts || []).some(m => /never stay overnight/.test(m)), JSON.stringify(CO.orders) + JSON.stringify(CO.acts)));
+const DC = run({ stocks: true, options: false, symbols: ['QUIET'] }, { positions: [openPos], hist: [{ ...histBuy, client_order_id: 'sd-d-ORB-10160-10040-10400-20261022-600-ab1', filled_at: '2026-10-22T14:00:00Z' }], live: { ORB: 102.2 } });
+check('carried over: a day trade still open from yesterday is sold (day trades never stay overnight), even with day trading switched off', () => assert.ok(DC.orders.some(o => o.symbol === 'ORB' && o.side === 'sell' && o.type === 'market'), JSON.stringify(DC.orders) + JSON.stringify(DC.acts)));
+// SPY contract window reaches one more trading day (a holiday has no expiry)
+check('SPY contracts: the search runs from the next trading day to the one after (Friday → Monday to Tuesday), so a holiday never leaves it empty', () => assert.ok(Y1.contractQs.some(q => /underlying_symbols=SPY/.test(q) && /expiration_date_gte=2026-10-26/.test(q) && /expiration_date_lte=2026-10-27/.test(q)), JSON.stringify(Y1.contractQs)));
+// read-only refresh
+const RO = run({ stocks: true, options: true, symbols: ['DIP'] }, { readonly: true, stop: true, positions: [oPos(4)], hist: oHist, open: [{ id: 'gtc2', symbol: 'DIP', side: 'buy', type: 'limit', limit_price: '100', qty: '10', client_order_id: 'sd-r-DIP-500-20261022-zz', submitted_at: '2026-10-22T19:40:00Z' }] });
+check('journal refresh (read-only): with the market open, a dip to buy, a stop to sell and even bot/STOP set, nothing is placed or cancelled', () => { assert.equal(RO.orders.length, 0, JSON.stringify(RO.orders)); assert.equal(RO.deletes.length, 0, JSON.stringify(RO.deletes)); });
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

@@ -7,13 +7,14 @@
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { HAVE_KEYS, closeMins, loadCalendar, setPublishing, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols } from './bot.mjs';
+import { HAVE_KEYS, closeMins, loadCalendar, setPublishing, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols, setSessionEnd } from './bot.mjs';
 import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { summary } from './config.mjs';
 
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const LIFE = (+process.env.RUN_MINUTES || 350) * 60000, born = Date.now();
+setSessionEnd(born + LIFE);                                   // the bot opens nothing new in this session's last 10 minutes (hand-off)
 const BEAT = +process.env.BEAT_MS || 2000, BEAT_CLOSE = 1000, MIN_GAP = 250, JOURNAL_EVERY = 60000, COMMIT_EVERY = 10 * 60000;
 let lastBeat = 0, lastFull = 0, lastJournal = 0, lastCommit = 0, errors = 0, lastCfg = 0, cfgSeen = JSON.stringify(CFG), cycling = false;
 const queue = [];                                             // reasons to run a cycle immediately
@@ -23,31 +24,46 @@ let lastSpyFast = 0, spyBusy = false, lastFastCheck = 0;
 // ---- settings hot-reload (Settings tab -> bot/config.json) ----
 const ghPagesBase = () => { const r = process.env.GITHUB_REPOSITORY || ''; const [o, n] = r.split('/'); return o && n ? `https://${o.toLowerCase()}.github.io/${n}/` : ''; };
 const CONFIG_URL = process.env.CONFIG_URL || (ghPagesBase() ? ghPagesBase() + 'bot/config.json' : '');
+// The fetch runs beside the loop with a 5-second deadline (a slow GitHub Pages must never hold up exits); the settings it
+// brings are applied between two decision cycles, never in the middle of one.
+let cfgBusy = false, cfgPending = null;
 async function pollConfig() {
   if (!CONFIG_URL) return;                                    // no Pages URL known: settings stay as the repo file had them
-  if (Date.now() - lastCfg < (+process.env.CONFIG_POLL_MS || 60000)) return; lastCfg = Date.now();
+  if (cfgBusy || Date.now() - lastCfg < (+process.env.CONFIG_POLL_MS || 60000)) return; lastCfg = Date.now(); cfgBusy = true;
   try {
-    const r = await fetch(CONFIG_URL + '?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
-    const c = applyConfig(await r.json()), s = JSON.stringify(c);
-    if (s !== cfgSeen) {
-      cfgSeen = s; console.log('\u2699\ufe0f settings applied:', summary(c)); lastJournal = 0; wake('settings changed');
-      const e2 = endpoints();
-      if (e2.trading !== EP.trading || e2.key !== EP.key) { console.log('account switched to', /paper/.test(e2.trading) ? 'PAPER' : 'LIVE', '\u2014 reconnecting streams'); Object.assign(EP, e2); try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); } catch (x) {} }
-      else resubscribe();
-    }
+    const r = await fetch(CONFIG_URL + '?t=' + Date.now(), { cache: 'no-store', signal: AbortSignal.timeout(5000) }); if (!r.ok) return;
+    cfgPending = await r.json();
   } catch (e) { console.log('config poll failed', e.message); }
+  finally { cfgBusy = false; }
+}
+function applyPendingConfig() {
+  if (!cfgPending) return; const raw = cfgPending; cfgPending = null;
+  const c = applyConfig(raw), s = JSON.stringify(c);
+  if (s !== cfgSeen) {
+    cfgSeen = s; console.log('⚙️ settings applied:', summary(c)); lastJournal = 0; wake('settings changed');
+    const e2 = endpoints();
+    if (e2.trading !== EP.trading || e2.key !== EP.key) { console.log('account switched to', /paper/.test(e2.trading) ? 'PAPER' : 'LIVE', '— reconnecting streams'); Object.assign(EP, e2); try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); } catch (x) {} }
+    else resubscribe();
+  }
 }
 // ---- kill switch from the page: Pause writes bot/STOP to GitHub; a running session must see it within seconds, not at the next
-// run. Polled every 15 s through the GitHub API with the workflow's own token; mirrored to the local file bot.mjs checks.
-let lastStopPoll = 0;
+// run. Polled every 15 s through the GitHub API with the workflow's own token (5-second deadline, beside the loop) and
+// mirrored to bot/STOP.local, which bot.mjs checks next to bot/STOP. The mirror is git-ignored: publishing the journal never
+// has to delete it to pull, so a failed pull cannot drop the Pause.
+let lastStopPoll = 0, stopBusy = false;
+const STOP_MIRROR = 'bot/STOP.local';
 async function pollStop() {
   const repo = process.env.GITHUB_REPOSITORY, tok = process.env.GITHUB_TOKEN; if (!repo || !tok) return;
-  if (Date.now() - lastStopPoll < 15000) return; lastStopPoll = Date.now();
+  if (stopBusy || Date.now() - lastStopPoll < 15000) return; lastStopPoll = Date.now(); stopBusy = true;
   try {
-    const r = await fetch(`https://api.github.com/repos/${repo}/contents/bot/STOP?ref=main&t=${Date.now()}`, { headers: { authorization: 'Bearer ' + tok, accept: 'application/vnd.github+json', 'cache-control': 'no-cache' } });
-    if (r.status === 200 && !fs.existsSync('bot/STOP')) { fs.writeFileSync('bot/STOP', 'stop (from the page)'); console.log('\u26d4 STOP set on the page \u2014 acting now'); wake('STOP'); }
-    else if (r.status === 404 && fs.existsSync('bot/STOP')) { fs.unlinkSync('bot/STOP'); console.log('\u25b6 STOP removed on the page \u2014 trading resumes'); wake('resume'); }
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/bot/STOP?ref=main&t=${Date.now()}`, { headers: { authorization: 'Bearer ' + tok, accept: 'application/vnd.github+json', 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(5000) });
+    if (r.status === 200 && !fs.existsSync(STOP_MIRROR)) { fs.writeFileSync(STOP_MIRROR, 'stop (from the page)'); console.log('⛔ STOP set on the page — acting now'); wake('STOP'); }
+    else if (r.status === 404 && (fs.existsSync(STOP_MIRROR) || fs.existsSync('bot/STOP'))) {
+      for (const f of [STOP_MIRROR, 'bot/STOP']) try { fs.unlinkSync(f); } catch (e) {}   // the checked-out copy too: the page removed it
+      console.log('▶ STOP removed on the page — trading resumes'); wake('resume');
+    }
   } catch (e) { console.log('stop poll failed', e.message); }
+  finally { stopBusy = false; }
 }
 // ---- live view: the journal also goes to a one-commit branch `live` every minute, without growing the repo's history ----
 // (the encrypted journal cannot be delta-compressed, so a commit a minute on main would add gigabytes a year). The page
@@ -79,7 +95,6 @@ const COMMIT_SH = `git add bot/journal.json; git add bot/scan.json live.json new
 git diff --cached --quiet && exit 0
 git commit -q -m "Bot journal" || exit 0
 timeout 30 git push -q && exit 0
-git ls-files --error-unmatch bot/STOP >/dev/null 2>&1 || rm -f bot/STOP   # the untracked Pause mirror would block the pull
 if timeout 45 git pull -q --rebase --autostash -X theirs origin main; then timeout 30 git push -q && exit 0; else git rebase --abort 2>/dev/null; fi
 exit 1`;
 function commit() {
@@ -146,7 +161,7 @@ function connectStreams(which = 'both') {
     for (const m of Array.isArray(arr) ? arr : [arr]) {
       if (m.T === 'success' && m.msg === 'authenticated') { dataOk = true; subscribed = []; resubscribe(); }
       else if (m.T === 't' && m.S && m.p > 0) { pushPrice(m.S, m.p, Date.parse(m.t) || Date.now()); onTick(m.S, m.p); }
-      else if (m.T === 'error') { console.log('data-stream error', m.code, m.msg); if (m.code === 405 || /limit/i.test(m.msg || '')) { process.env.STREAM_MAX = String(Math.max(5, Math.floor((+(process.env.STREAM_MAX || 30)) / 2))); subscribed = []; setTimeout(resubscribe, 1000); } }   // over the plan's symbol limit: halve and retry
+      else if (m.T === 'error') { console.log('data-stream error', m.code, m.msg); if (m.code === 405 || /symbol limit/i.test(m.msg || '')) { process.env.STREAM_MAX = String(Math.max(5, Math.floor((+(process.env.STREAM_MAX || 30)) / 2))); subscribed = []; setTimeout(resubscribe, 1000); } }   // over the plan's symbol limit (405): halve and retry; a connection limit (406) is not about the symbols
     }
   }, 'data-stream');
   // options quotes for the SPY sleeve's open trade: exits react to each quote instead of the 1-second poll (which stays as the fallback)
@@ -189,7 +204,7 @@ function onTick(sym, px) {
 // ---- graceful shutdown: GitHub (or a person) cancelling the run sends SIGINT/SIGTERM. Finish the cycle in flight,
 // write the journal and push it, then leave. Resting orders at the broker are untouched: they are day orders.
 let stopping = false;
-const onSignal = sig => { if (stopping) return; stopping = true; console.log(`${sig} received \u2014 finishing the current cycle, saving the journal`); };
+const onSignal = sig => { if (stopping) return; stopping = true; setSessionEnd(Date.now()); console.log(`${sig} received \u2014 finishing the current cycle, saving the journal`); };
 process.on('SIGTERM', () => onSignal('SIGTERM')); process.on('SIGINT', () => onSignal('SIGINT'));
 process.on('unhandledRejection', e => console.log('unhandled rejection', redact(String((e && e.message) || e))));
 
@@ -214,11 +229,12 @@ if (m1 >= closeMins()) {
 const firstToday = (() => { const js = journalStamp(); const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).replace(/-/g, ''); return !js || js.day !== d; })();
 let helloSent = !firstToday || m1 >= closeMins();
 connectStreams();
-await pollConfig();
+await pollConfig(); applyPendingConfig();
 while (Date.now() - born < LIFE && !stopping) {
   const mins = setNow();
   if (mins >= closeMins() + 5) break;
-  await pollConfig(); await pollStop();
+  pollConfig(); pollStop();                                              // beside the loop, each with a 5-second deadline
+  if (!cycling && !spyBusy) applyPendingConfig();
   const beat = mins >= closeMins() - 10 ? BEAT_CLOSE : BEAT;
   let why = queue.shift() || (Date.now() - lastFull >= beat ? 'beat' : null);
   if (!why && !(tradeOk && dataOk) && Date.now() - lastFastCheck >= 1000) { lastFastCheck = Date.now(); try { why = await fastCheck(); errors = 0; } catch (e) { errors++; if (errors > 20) await sleep(5000); } }   // streams down: poll instead, at most once a second
@@ -251,18 +267,26 @@ while (Date.now() - born < LIFE && !stopping) {
   if (Date.now() - lastBeat >= 60000) { lastBeat = Date.now(); heartbeat(); }
   await sleep(queue.length ? 50 : 200);
 }
+// Reached the time limit while the market is still open (GitHub ends a job after 6 hours): start the next session first,
+// before the final check and the publish, instead of hoping GitHub's schedule fires. It queues behind this one and starts
+// the moment this job ends. Tried twice: a missed hand-off leaves the afternoon to the 5-minute schedule.
+if (!stopping && Date.now() - born >= LIFE && setNow() < closeMins() - 2 && process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
+  for (let k = 0; k < 2; k++) {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/actions/workflows/trade.yml/dispatches`, { method: 'POST', headers: { authorization: 'Bearer ' + process.env.GITHUB_TOKEN, accept: 'application/vnd.github+json', 'content-type': 'application/json' }, body: JSON.stringify({ ref: 'main' }), signal: AbortSignal.timeout(15000) });
+      console.log(r.status === 204 ? 'next session started (it takes over when this one ends)' : 'could not start the next session: HTTP ' + r.status);
+      if (r.status === 204) break;
+    } catch (e) { console.log('could not start the next session:', e.message); }
+    await sleep(3000);
+  }
+}
 while (committing) await sleep(500);                                    // let a publish in progress finish before the final journal write
-try { await botCycle({ journal: true }); } catch (e) { console.log('final cycle error', e.message); }
+applyPendingConfig();
+// the final check manages what is open (exits, take-profit orders) but opens nothing: a trade placed now would be left
+// unwatched while the next session starts
+try { await botCycle({ journal: true, manageOnly: true }); } catch (e) { console.log('final cycle error', e.message); }
 if (setNow() >= closeMins() && !stopping) await eodReport();   // the session that reaches the close sends the day's summary
 await commit();
-// Reached the time limit while the market is still open (GitHub ends a job after 6 hours): start the next session now
-// instead of hoping GitHub's schedule fires. It queues behind this one and starts the moment this job ends.
-if (!stopping && Date.now() - born >= LIFE && setNow() < closeMins() - 2 && process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
-  try {
-    const r = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/actions/workflows/trade.yml/dispatches`, { method: 'POST', headers: { authorization: 'Bearer ' + process.env.GITHUB_TOKEN, accept: 'application/vnd.github+json', 'content-type': 'application/json' }, body: JSON.stringify({ ref: 'main' }) });
-    console.log(r.status === 204 ? 'next session started (it takes over when this one ends)' : 'could not start the next session: HTTP ' + r.status);
-  } catch (e) { console.log('could not start the next session:', e.message); }
-}
 try { tradeWs && tradeWs.close(); dataWs && dataWs.close(); optWs && optWs.close(); } catch (e) {}
 console.log('Session runner finished.');
 process.exit(0);

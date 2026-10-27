@@ -1,7 +1,8 @@
 name: journal-refresh
 # Manual: one bot check that only reads the account and rewrites the (encrypted) journal — e.g. to fill a new Bot trades
-# card at the weekend. With the market closed it places, changes and cancels nothing. Shares the session's queue, so it
-# never runs at the same time as a trading session.
+# card at the weekend. It runs read-only (BOT_READONLY): it places, changes and cancels nothing, even if started while the
+# market is open or while the page's Pause is set. Shares the session's queue, so it never runs at the same time as a
+# trading session; it pulls first, because a run that waited in the queue was checked out when it was started.
 on:
   workflow_dispatch:
 permissions:
@@ -18,8 +19,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version-file: .nvmrc }
       - run: |
+          git pull -q --ff-only origin main || true
           node bot/bot.mjs
         env:
+          BOT_READONLY: '1'
           ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
           ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
           JOURNAL_KEY: ${{ secrets.JOURNAL_KEY }}
@@ -29,5 +32,5 @@ jobs:
           git add bot/journal.json
           git diff --cached --quiet && exit 0
           git commit -m "Bot journal (refresh)"
-          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs origin main || git rebase --abort; sleep 3; done
+          for i in 1 2 3; do git push && exit 0; git pull --rebase --autostash -X theirs origin main || git rebase --abort; sleep 3; done
           git push

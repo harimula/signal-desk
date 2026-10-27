@@ -394,5 +394,49 @@ test('settings: sell rule, its profit % and the market filter are validated', ()
   assert.equal(normalize({ exitProfitPct: 50 }).exitProfitPct, 5); assert.equal(normalize({ exitProfitPct: 0 }).exitProfitPct, 0.1);
   assert.equal(normalize({ marketFilter: 'yes' }).marketFilter, false, 'a non-boolean is ignored');
 });
+
+console.log('Fourth audit (2026-10-27)');
+const { tick, tickUp, ownQty, withOpenings } = await import('./bot.mjs');           // pure helpers; imported here, after the HTTP tests set their short deadline
+test('take-profit prices round UP to a valid price; ordinary prices round to the nearest', () => {
+  const nickel = 'QUIET261113C00105000', dime = 'QUIET261113C00210000', spy = 'SPY261024C00502000';
+  assert.equal(tickUp(1.071, nickel), 1.1); assert.equal(tick(1.071, nickel), 1.05);
+  assert.equal(tickUp(1.05, nickel), 1.05, 'a price already on the grid stays'); assert.equal(tickUp(6.0000000001, dime), 6, 'float noise does not add a step');
+  assert.equal(tickUp(6.01, dime), 6.1); assert.equal(tickUp(2.3575, spy), 2.36); assert.equal(tickUp(100.001), 100.01);
+  assert.equal(tickUp(2.99, nickel), 3, 'crossing $3 lands on a price valid in both steps');
+});
+test('own quantity: the bot\'s buy less every later sale; a later hand position is not the bot\'s; never more than held; never a short', () => {
+  const buy = { symbol: 'X', side: 'buy', status: 'filled', qty: '50', filled_at: '2026-10-20T15:00:00Z' };
+  const p = q => ({ symbol: 'X', qty: String(q) });
+  assert.equal(ownQty(p(50), buy, [buy]), 50);
+  const soldAll = { symbol: 'X', side: 'sell', status: 'filled', qty: '50', filled_qty: '50', filled_at: '2026-10-21T19:55:00Z' };
+  assert.equal(ownQty(p(30), buy, [soldAll, buy]), 0, 'bought back by hand after the bot sold');
+  assert.equal(ownQty(p(70), buy, [buy]), 50, 'the owner added 20');
+  const earlier = { ...soldAll, filled_at: '2026-10-19T19:55:00Z' };
+  assert.equal(ownQty(p(50), buy, [buy, earlier]), 50, 'a sale before the buy belongs to an older position');
+  assert.equal(ownQty(p(20), { ...buy, status: 'canceled', qty: '40', filled_qty: '20' }, []), 20, 'filled in part, then cancelled');
+  assert.equal(ownQty(p(-10), buy, [buy]), 0, 'short'); assert.equal(ownQty(p(10), null, []), 0, 'no buy of ours');
+  const pieces = { ...buy, submitted_at: '2026-10-20T14:00:00Z', filled_at: '2026-10-20T14:05:00Z' }, early = { ...soldAll, qty: '3', filled_qty: '3', filled_at: '2026-10-20T14:03:00Z' };
+  assert.equal(ownQty(p(47), pieces, [pieces, early]), 47, 'a sale while the buy was still filling (from its submission) counts');
+});
+test('swing trades sold today get their opening buy from the order history (for the streak brake and the day summary)', () => {
+  const fills = [{ symbol: 'A', side: 'sell', qty: '10', price: '90', order_id: 's1', transaction_time: '2026-10-23T14:00:00Z' }, { symbol: 'B', side: 'buy', qty: '5', price: '20', order_id: 'b1', transaction_time: '2026-10-23T14:05:00Z' }, { symbol: 'B', side: 'sell', qty: '5', price: '21', order_id: 's2', transaction_time: '2026-10-23T14:10:00Z' }];
+  const hist = [{ symbol: 'A', side: 'buy', status: 'filled', qty: '10', filled_qty: '10', filled_avg_price: '100', filled_at: '2026-10-20T15:00:00Z', id: 'o1' }, { symbol: 'A', side: 'buy', status: 'filled', qty: '10', filled_avg_price: '80', filled_at: '2026-10-01T15:00:00Z', id: 'o0' }];
+  const all = withOpenings(fills, hist, '2026-10-23'), J = buildJournal(all, []).closed;
+  assert.equal(all.length, 4, 'one opening buy added, for A only (B was bought today)');
+  const a = J.find(c => c.sym === 'A'); assert.ok(a && a.pl === -100 && a.inPx === 100, JSON.stringify(J));
+  assert.equal(lossStreak(J.filter(c => c.sym === 'A')), 1);
+  assert.equal(withOpenings(fills, [], '2026-10-23').length, 3, 'no buy on record: nothing invented');
+  const partBuy = [{ symbol: 'A', side: 'buy', status: 'canceled', qty: '20', filled_qty: '10', filled_at: null, submitted_at: '2026-10-22T14:00:00Z', updated_at: '2026-10-22T14:30:00Z', filled_avg_price: '100' }];
+  const o2 = withOpenings(fills, partBuy, '2026-10-23').find(f => /^open:/.test(f.order_id)); assert.ok(o2 && o2.transaction_time.slice(0, 10) === '2026-10-22', 'a buy filled in part keeps its own day, not today: ' + JSON.stringify(o2));
+  const mixed = [{ symbol: 'C', side: 'sell', qty: '10', price: '9', order_id: 'x1', transaction_time: '2026-10-23T14:00:00Z' }, { symbol: 'C', side: 'buy', qty: '5', price: '9', order_id: 'x2', transaction_time: '2026-10-23T14:01:00Z' }, { symbol: 'C', side: 'sell', qty: '5', price: '9.5', order_id: 'x3', transaction_time: '2026-10-23T14:02:00Z' }];
+  const op = withOpenings(mixed, [{ symbol: 'C', side: 'buy', status: 'filled', qty: '10', filled_avg_price: '10', filled_at: '2026-10-22T15:00:00Z' }], '2026-10-23').filter(f => /^open:/.test(f.order_id));
+  assert.equal(op.length, 1); assert.equal(op[0].qty, '10', 'only the 10 carried from yesterday');
+});
+test('SPY sleeve: "armed" — a break counts only after a 5-minute bar closed in its direction on at least average volume (the tick path waits for it too)', () => {
+  assert.equal(spySignal({ bars: up, px: 502.2, mins: 600 }).armed, true);
+  const down = up.map((b, i) => i === 4 ? { ...b, o: 502.4, c: 502.0 } : b), w = spySignal({ bars: down, px: 502.7, mins: 600 });
+  assert.equal(w.armed, false); assert.equal(w.side, undefined, 'the same break is not a signal'); assert.match(w.idle, /waiting for a 5-minute bar to close up/);
+  const quiet = up.map((b, i) => i === 4 ? { ...b, v: 5e5 } : b); assert.equal(spySignal({ bars: quiet, px: 502.2, mins: 600 }).armed, false);
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
