@@ -214,12 +214,13 @@ async function spyManage({ open, sellsFor, halt }) {
     const openedMins = d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null);
     const out = async why => { spySelling.add(p.symbol); setTimeout(() => spySelling.delete(p.symbol), 60000); const r = await closeOut(p.symbol, qty, sells, `${p.symbol} SPY ${d ? d.kind.toUpperCase() : 'option'} ${why}`); if (r === 'refused') { spySelling.delete(p.symbol); return; } delete spyState[p.symbol]; };   // refused: let the next check try again at once
     const x = spyExit({ entryPx: entry, optPx: cur, openedMins, mins: MINS, cfg: { ...CFG, spyFlat: CFG.spyFlat - EARLY() } });
-    if (x && x.kind === 'tp' && sells.some(o => o.type === 'limit')) continue;           // the resting take-profit order at the broker handles it
+    const tpPx = tick(entry * (1 + CFG.spyTp / 100), p.symbol);
+    if (x && x.kind === 'tp' && sells.some(o => o.type === 'limit' && +o.limit_price <= tpPx + Math.max(0.015, entry * 0.005))) continue;   // the resting take-profit at today's setting (give or take rounding) handles it; one left at an older, higher setting does not make the trade wait (sold at market)
     if (x) { await out(x.why); continue; }
     if (halt.spy && spyCapHit) { await out(`\u2014 ${halt.spy}; closing`); continue; }   // the daily money limit closes what is open; a losing streak only stops new trades
     if (!sells.length && !(spyState[p.symbol] || {}).tpPlaced) {                            // resting take-profit, placed once
       spyState[p.symbol] = { tpPlaced: true };
-      const tpOk = await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(entry * (1 + CFG.spyTp / 100), p.symbol)), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} SPY option \u2014 take-profit order at +${CFG.spyTp}%`);
+      const tpOk = await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tpPx), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} SPY option \u2014 take-profit order at +${CFG.spyTp}%`);
       if (!tpOk) delete spyState[p.symbol];                                                   // refused: try again next check
     }
   }
