@@ -187,6 +187,64 @@ export function optionStudy(P, p, o, from = 0) {
   const n = out.length, w = out.filter(x => x.r > 0);
   return { n, win: n ? w.length / n * 100 : 0, exp: n ? out.reduce((a, b) => a + b.r, 0) / n * 100 : 0, avgW: w.length ? w.reduce((a, b) => a + b.r, 0) / w.length * 100 : 0, avgL: n - w.length ? out.filter(x => x.r <= 0).reduce((a, b) => a + b.r, 0) / (n - w.length) * 100 : 0, why: out.reduce((q, x) => (q[x.why] = (q[x.why] || 0) + 1, q), {}) };
 }
+// ---- CALLs and PUTs as the bot trades them, for the option win-rate question (2026-10-27) ----
+// side 'call': the dip rule (above the 200-day, RSI-2 falls below thr during the day; market filter if p.mkt).
+// side 'put': the pop rule (below the 200-day, RSI-2 rises above 100 - thr during the day; not market-filtered).
+// Option: strike at the price, o.dte calendar days to expiry, Black-Scholes with ivMult × 20-day realised volatility, fixed for
+// the trade; o.spread paid on the way in and on every exit except a filled take-profit (a resting limit order).
+// Exits, checked each day: stop first (option value at the stock's worst price of the day), then take-profit (at its best),
+// then at the close: o.rule — 'bounce' (CALL: stock closes above its 5-day average; PUT: below), 'optProfit' (the option itself
+// closes o.x above its cost), 'none' — and the time exits: o.hold sessions, or 3 days before expiry.
+export function bsPut(S, K, T, v) { return bsCall(S, K, T, v) - S + K; }   // put-call parity, no rates
+export function triggerAbove(c0, c1, thr) {                                // the lowest price today at which RSI-2 is above 100 - thr
+  const d1 = c1 - c0, t = thr / 100;
+  if (d1 > 0) return c1 - d1 * t / (1 - t) + 1e-9;
+  return c1 + (-d1) * (1 - t) / t + 1e-9;
+}
+// One option trade bought on day t at stock price S0 (strike K), its exits replayed on the model price.
+export function optionExitModel(P, X, t, S0, side, o, K = S0) {
+  const { cal, T } = P, call = side === 'call', price = call ? bsCall : bsPut, i = X.ix[t - 1];
+  let m = 0, v2 = 0; for (let k = i - 19; k <= i; k++) { const r = Math.log(X.c[k] / X.c[k - 1]); m += r; v2 += r * r; }
+  const vol = Math.min(1.5, Math.max(0.15, o.ivMult * Math.sqrt(Math.max(0, v2 / 20 - (m / 20) ** 2) * 252)));
+  const exp = cal[t] + o.dte, c0 = price(S0, K, o.dte / 365, vol) * (1 + o.spread);
+  let res = null;
+  for (let u = t + 1, held = 1; u < T && !res; u++, held++) {
+    const jj = X.ix[u]; if (jj < 0) continue;
+    const left = (exp - cal[u]) / 365, val = px => price(px, K, left, vol);
+    const worst = val(call ? X.l[jj] : X.h[jj]), best = val(call ? X.h[jj] : X.l[jj]), opn = val(X.o[jj]), cls = val(X.c[jj]);
+    if (o.stop && worst <= c0 * (1 - o.stop)) res = { r: Math.min(opn, c0 * (1 - o.stop)) * (1 - o.spread) / c0 - 1, why: 'stop', u };
+    else if (o.tp && best >= c0 * (1 + o.tp)) res = { r: Math.max(opn, c0 * (1 + o.tp)) / c0 - 1, why: 'tp', u };
+    else {
+      const C = X.c[jj], rule = o.rule === 'bounce' ? (call ? C > X.s5[jj] : C < X.s5[jj]) : o.rule === 'optProfit' ? cls * (1 - o.spread) >= c0 * (1 + o.x) : false;
+      if (rule) res = { r: cls * (1 - o.spread) / c0 - 1, why: 'rule', u };
+      else if (held >= o.hold || exp - cal[u] <= 3) res = { r: cls * (1 - o.spread) / c0 - 1, why: 'time', u };
+    }
+  }
+  return res;
+}
+export function optionTrades(P, side, p, o, from = 0) {
+  const { cal, T, S, spy } = P, out = [], call = side === 'call';
+  for (const s of Object.keys(S)) {
+    const X = S[s]; let busyUntil = -1;
+    for (let t = Math.max(1, cal.findIndex(d => d >= from)); t < T; t++) {
+      if (t <= busyUntil) continue;
+      const i = X.ix[t - 1], j = X.ix[t]; if (i < 205 || j !== i + 1) continue;
+      let S0;
+      if (call) {
+        if (p.mkt && !(spy.c[t - 1] > spy.s200[t - 1])) continue;
+        const trig = triggerBelow(X.c[i - 1], X.c[i], p.thr); if (!(X.l[j] <= trig)) continue;
+        S0 = Math.min(X.o[j], trig); if (!(S0 > X.sum199[i] / 199)) continue;
+      } else {
+        const trig = triggerAbove(X.c[i - 1], X.c[i], p.thr); if (!(X.h[j] >= trig)) continue;
+        S0 = Math.max(X.o[j], trig); if (!(S0 < X.sum199[i] / 199)) continue;
+      }
+      const res = optionExitModel(P, X, t, S0, side, o);
+      if (res) { out.push({ ...res, s, t, y: new Date(cal[t] * 864e5).getUTCFullYear() }); busyUntil = res.u; }
+    }
+  }
+  return out;
+}
+export const optStats = tr => { const n = tr.length, w = tr.filter(x => x.r > 0), l = tr.filter(x => x.r <= 0); return { n, win: n ? w.length / n * 100 : 0, exp: n ? tr.reduce((a, b) => a + b.r, 0) / n * 100 : 0, avgW: w.length ? w.reduce((a, b) => a + b.r, 0) / w.length * 100 : 0, avgL: l.length ? l.reduce((a, b) => a + b.r, 0) / l.length * 100 : 0, why: tr.reduce((q, x) => (q[x.why] = (q[x.why] || 0) + 1, q), {}) }; };
 export function summarize(res) {
   const { eq, trades, days } = res, n = trades.length, w = trades.filter(x => x.r > 0), l = trades.filter(x => x.r <= 0);
   const gw = w.reduce((a, b) => a + b.r, 0), gl = -l.reduce((a, b) => a + b.r, 0), yrs = days / 252;
@@ -264,6 +322,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log('| Rule | Won | Avg win | Avg loss | Avg trade | Trades/yr | Per year 1993–2026 | Worst fall | Per year 2016–26 | Per year last 5 | Worst fall last 5 | Scan list 2016–26: won · per year |\n|---|---|---|---|---|---|---|---|---|---|---|---|');
     for (const [name, over] of R) { const r = row(name, { ...OWN, ...over }), a = r['base.all'], o = r['base.oos'], f = r['base.5y'], sc = r['scan.oos'];
       console.log(`| ${name} | ${a.win.toFixed(1)}% | ${pc(a.avgW)} | ${pc(a.avgL)} | ${(a.exp >= 0 ? '+' : '−') + Math.abs(a.exp).toFixed(2)}% | ${Math.round(a.perYr)} | ${pc(a.cagr)} | −${a.dd.toFixed(0)}% | ${pc(o.cagr)} | ${pc(f.cagr)} | −${f.dd.toFixed(0)}% | ${sc.win.toFixed(1)}% · ${pc(sc.cagr)} |`); }
+  }
+  if (grid === 'opts') {                                      // OPTS='[{"name":..,"side":"call","tp":0.1,"stop":0.7,"rule":"none","hold":10}]'
+    const base = { tp: 0.5, stop: 0.5, rule: 'bounce', x: 0, hold: 15, dte: 17, ivMult: 1.2, spread: 0.02 };
+    const L = JSON.parse(process.env.OPTS || '[]');
+    console.log(`${'option exits'.padEnd(46)} | 39 stocks 1993-2026: trades  won   avg   avgW   avgL | scan list 2016-26: trades  won   avg   avgW   avgL`);
+    const f = x => (x >= 0 ? '+' : '') + x.toFixed(1);
+    for (const v of L) {
+      const o = { ...base, ...v }, sig = { thr: v.thr ?? 25, mkt: v.side === 'call' };
+      const a = optStats(optionTrades(U.base, v.side, sig, o)), b = optStats(optionTrades(U.scan, v.side, sig, o, dn('2016-01-01')));
+      console.log(`${(v.name || '').padEnd(46)} | ${String(a.n).padStart(6)} ${a.win.toFixed(1).padStart(5)}% ${f(a.exp).padStart(5)}% ${f(a.avgW).padStart(5)} ${f(a.avgL).padStart(6)} | ${String(b.n).padStart(6)} ${b.win.toFixed(1).padStart(5)}% ${f(b.exp).padStart(5)}% ${f(b.avgW).padStart(5)} ${f(b.avgL).padStart(6)}`);
+    }
   }
   if (process.env.ONLY) for (const v of JSON.parse(process.env.ONLY)) add(v.name, v);
   for (const [name, p] of variants) show(row(name, p));
