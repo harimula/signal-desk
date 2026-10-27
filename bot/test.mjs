@@ -33,6 +33,8 @@ test('stock size limited by risk at stop', () => { assert.equal(stockQty({ equit
 test('stock size limited by $ budget', () => { assert.equal(stockQty({ equity: 100000, riskPct: 0.5, entry: 100, stop: 99, budget: 10000 }), 100); });
 test('no size when stop is above entry', () => { assert.equal(stockQty({ equity: 100000, riskPct: 0.5, entry: 100, stop: 101, budget: 1e9 }), 0); });
 test('option size: -50% stop risks <= riskPct', () => { assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 1e9 }), 5); });
+test('option size: a wider stop buys fewer contracts for the same risk (90% stop → 2 instead of 5)', () => { assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 1e9, stopPct: 90 }), 2); assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 1e9, stopPct: 50 }), 5); });
+test('open risk: an option counts what its own stop would lose', () => { const pos = [{ symbol: 'AAA261113C00100000', qty: '2', avg_entry_price: '3' }]; assert.equal(openRisk({ positions: pos, orders: [], stopFor: () => null }), 300); assert.equal(openRisk({ positions: pos, orders: [], stopFor: () => null, optStopFor: () => 0.9 }), 540); });
 test('regime: bull / bear / unknown', () => {
   assert.equal(regimeOf(Array.from({ length: 250 }, (_, i) => 100 + i)).regime, 'bull');
   assert.equal(regimeOf(Array.from({ length: 250 }, (_, i) => 400 - i)).regime, 'bear');
@@ -379,6 +381,11 @@ test('market filter: SPY above / below its 200-day average, unknown with too lit
   assert.equal(marketAbove200(up).above, true); assert.equal(marketAbove200(down).above, false);
   assert.equal(marketAbove200(up.slice(0, 150)), null); assert.equal(marketAbove200(null), null);
   const m = marketAbove200(down); assert.ok(m.s200 > m.last);
+});
+test('settings: option sell rule and expiry are validated', () => {
+  const d = normalize({}); assert.equal(d.optExit, 'bounce'); assert.equal(d.optDays, 14);
+  const c = normalize({ optExit: 'target', optDays: 30 }); assert.equal(c.optExit, 'target'); assert.equal(c.optDays, 30);
+  assert.equal(normalize({ optExit: 'moon' }).optExit, 'bounce'); assert.equal(normalize({ optDays: 500 }).optDays, 60); assert.equal(normalize({ optDays: 1 }).optDays, 7);
 });
 test('settings: sell rule, its profit % and the market filter are validated', () => {
   const d = normalize({}); assert.equal(d.exitRule, 'bounce'); assert.equal(d.exitProfitPct, 0.5); assert.equal(d.marketFilter, false);

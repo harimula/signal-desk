@@ -76,6 +76,34 @@ expiry, market filter on, each trade measured on its own (no money limits).
 Time decay eats the small stock gains a high win rate is made of: the best CALL setting wins about 7 in 10,
 at about break-even, with losers that go to nearly zero. **CALLs off.**
 
+### 2b. Follow-up: CALLs and PUTs on real option prices (owner: *"How can I make calls and puts to 80%"*)
+
+A wider model search (`node tools/winrate-study.mjs opts`) showed that only one shape reaches 80%: a **small
+take-profit, a wide stop and no bounce exit** — keep the option until its take-profit, its stop, the max hold or
+3 days before expiry. `tools/option-check.mjs` (workflow `option-check.yml`) then replayed a sample of the bot's
+own signals since March 2024 on the **real daily prices of the contract the bot would have bought** (nearest
+strike, nearest expiry 14–35 days out; bought at the day's average price + 1%, sold at −1% except a filled
+take-profit), next to the model on the same signals:
+
+| CALLs, 278 signals | Real: won · avg trade · avg win · avg loss | Model, same signals: won · avg trade |
+|---|---|---|
+| Until 2026-10-27: +50% / −50%, sold with the stock's bounce | 54.0% · −0.75% · +31.7% · −38.8% | 53.6% · −1.65% |
+| **Take-profit / stop / time only, +5% / −90% (saved)** | **83.5% · +0.89% · +17.6% · −83.4%** | 82.0% · −0.09% |
+| Same, +10% / −90% | 80.6% · +0.87% · +20.7% · −81.4% | 79.1% · +0.05% |
+| Same, +5% / −90%, expiry at least 30 days (184 signals) | 79.9% · +0.52% | 82.6% · −1.88% |
+| Same, +10% / −90%, expiry at least 30 days (184 signals) | 78.3% · +1.88% | 77.2% · −3.22% |
+
+| PUTs, 140 signals | Real: won · avg trade | Model: won · avg trade |
+|---|---|---|
+| Until 2026-10-27: +50% / −50%, bounce | 34.3% · −14.52% | 39.3% · −14.86% |
+| +5% / −90%, take-profit / stop / time only | 65.7% · −7.92% | 67.1% · −15.46% |
+| +5% / −90%, at least 30 days (81 signals) | 70.4% · −7.70% | 67.9% · −14.31% |
+
+CALLs reach 8 in 10 with the 14-day window; PUTs do not reach it with any setting and lose money with every
+one. 278 trades put about ±2.2% around the CALL win rate and several % around the average trade, so the small
+positive average is not evidence of profit. Saved: `optExit` target, take-profit 5%, stop 90%, `optDays` 14; the
+option size now follows the stop (a −90% stop buys about 45% fewer contracts for the same 1% risk).
+
 ## 3. PUTs and day trading
 
 From the earlier research (`bot/research_report.md`, `bot/research_day_report.md`): the PUT stand-in (shorting

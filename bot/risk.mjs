@@ -26,10 +26,10 @@ export function stockQty({ equity, riskPct, entry, stop, budget }) {
 }
 
 // Contracts so that the -50% option stop loses at most riskPct% of equity — and never more than the budget.
-export function optionQty({ equity, riskPct, price, budget }) {
+export function optionQty({ equity, riskPct, price, budget, stopPct = 50 }) {          // stopPct: the option stop in force (a wider stop → fewer contracts for the same risk)
   if (!(price > 0)) return 0;
   const perContract = price * 100;
-  return Math.max(0, Math.min(Math.floor(budget / perContract), Math.floor(equity * riskPct / 100 / (perContract * 0.5))));
+  return Math.max(0, Math.min(Math.floor(budget / perContract), Math.floor(equity * riskPct / 100 / (perContract * Math.min(1, Math.max(0.05, stopPct / 100))))));
 }
 
 // Market regime from SPY daily closes (oldest -> newest, completed sessions only).
@@ -52,17 +52,17 @@ export function lossStreak(closed) {
 }
 
 // Money at risk right now: distance to each stop (stocks) and the -50% stop (options), plus pending entries.
-export function openRisk({ positions, orders, stopFor }) {
+export function openRisk({ positions, orders, stopFor, optStopFor = () => 0.5 }) {   // optStopFor(symbol): the fraction of the premium lost at that option's stop
   let r = 0;
   for (const p of positions) {
     const q = Math.abs(+p.qty), avg = +p.avg_entry_price;
-    if (/\d{6}[CP]\d{8}$/.test(p.symbol)) r += q * 100 * avg * 0.5;
+    if (/\d{6}[CP]\d{8}$/.test(p.symbol)) r += q * 100 * avg * optStopFor(p.symbol);
     else { const st = stopFor(p.symbol); r += q * (st ? Math.max(0, avg - st) : avg * 0.05); }
   }
   for (const o of orders) {
     if (o.side !== 'buy' || !o.limit_price) continue;
     const q = +o.qty, lim = +o.limit_price;
-    if (/\d{6}[CP]\d{8}$/.test(o.symbol)) r += q * 100 * lim * 0.5;
+    if (/\d{6}[CP]\d{8}$/.test(o.symbol)) r += q * 100 * lim * optStopFor(o.symbol);
     else { const st = stopFor(o.symbol, o); r += q * (st ? Math.max(0, lim - st) : lim * 0.05); }
   }
   return r;

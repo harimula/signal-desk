@@ -139,6 +139,9 @@ async function session(label, prep) {
   check('sell rule: Strategy offers “First profitable close” and “On the bounce”, the profit % and the market filter', await page.evaluate(() => !!document.querySelector('input[name="st-exitRule"][value="profit"]') && !!document.querySelector('input[name="st-exitRule"][value="bounce"]') && !!document.getElementById('st-exitProfitPct') && !!document.getElementById('st-marketFilter')));
   await page.evaluate(() => { for (const v of ['bounce', 'profit']) { const r = document.querySelector(`input[name="st-exitRule"][value="${v}"]`); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } const m = document.getElementById('st-marketFilter'); m.checked = true; m.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.fill('#st-exitProfitPct', '0.7'); await page.evaluate(() => document.querySelector('#st-exitProfitPct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(300);
+  check('option sell rule: Strategy offers “Only at its take-profit, stop or time limit” / “Also when the stock bounces back” and the expiry field', await page.evaluate(() => !!document.querySelector('input[name="st-optExit"][value="target"]') && !!document.querySelector('input[name="st-optExit"][value="bounce"]') && !!document.getElementById('st-optDays')));
+  await page.evaluate(() => { const r = document.querySelector('input[name="st-optExit"][value="target"]'); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.fill('#st-optDays', '30'); await page.evaluate(() => document.querySelector('#st-optDays').dispatchEvent(new Event('change', { bubbles: true })));
   check('sell rule: the label follows the profit % typed in', /once it is 0\.7%\+ above the buy price/.test(await page.evaluate(() => document.querySelector('input[name="st-exitRule"][value="profit"]').parentElement.textContent)));
   await page.evaluate(() => document.querySelector('[data-st="save"]').click());
   let msg = '';
@@ -146,6 +149,7 @@ async function session(label, prep) {
   check('settings: Save reaches GitHub with the typed value', puts.length === 1 && JSON.parse(Buffer.from(puts[0].content, 'base64')).rsiThreshold === 12, msg.slice(0, 120));
   check('money split: Save writes the split and the CALL / PUT shares to config.json', puts.length === 1 && (c => c.split === true && c.callSharePct === 25 && c.putSharePct === 10 && c.optDayCap === 10 && c.pickBy === 'dip' && c.spyOn === true && c.spySharePct === 5 && c.spyTp === 20 && c.spyStart === '09:50' && c.spyTradePct === 50)(JSON.parse(Buffer.from(puts[0].content, 'base64'))), puts.length ? Buffer.from(puts[0].content, 'base64').toString().slice(0, 0) : 'no save');
   check('sell rule: Save writes the sell rule, its % and the market filter to config.json', puts.length === 1 && (c => c.exitRule === 'profit' && c.exitProfitPct === 0.7 && c.marketFilter === true)(JSON.parse(Buffer.from(puts[0].content, 'base64'))));
+  check('option sell rule: Save writes the option sell rule and the expiry', puts.length === 1 && (c => c.optExit === 'target' && c.optDays === 30)(JSON.parse(Buffer.from(puts[0].content, 'base64'))));
   check('settings: Save bar reports success', /Saved /.test(msg), msg.slice(0, 120));
   check('settings: no script error during save', errors.length === 0, errors.join(' | '));
   // Telegram connect: token check → finds the chat from the owner's /start → test message → both values sealed as secrets
@@ -235,7 +239,7 @@ async function session(label, prep) {
 // 4. Bot trades rendered with real-looking data (the live journal is encrypted, so without this the cards are never executed)
 const profitFx = path.join(os.tmpdir(), 'sd-journal-profit.json');            // the full journal under the win-rate settings: profit sell rule, market filter blocking
 { const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/journal-full.json'), 'utf8'));
-  j.settings = { ...j.settings, exitRule: 'profit', exitProfitPct: 0.5, marketFilter: true, maxHold: 15 };
+  j.settings = { ...j.settings, exitRule: 'profit', exitProfitPct: 0.5, marketFilter: true, maxHold: 15, optExit: 'target' };
   j.watch = { ...j.watch, exitRule: 'profit', exitPct: 0.5, mktFilter: true, maxHold: 15, idle: 'market filter: SPY closed at 540, below its 200-day average 552 \u2014 no new dip buys', held: (j.watch.held || []).map(h => h.kind === 'stock' ? { ...h, exitBy: 'profit', exitLevel: 412.05 } : h) };
   fs.writeFileSync(profitFx, JSON.stringify(j)); }
 for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT, SPY and day-trade rows)'], ['journal-old.json', 'older journal shape (no watch rows, no split, no spy, no day block)'], [profitFx, 'profit sell rule and market filter']]) {
@@ -274,7 +278,7 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
       const a = await page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /Since the bot started trading/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
       check('bot trades: the 5-year card is gone; the real-results card switches before/after tax and has its own tax-rate boxes', gone && !/after tax \(if cashed out today\)/.test(b) && /after tax \(if cashed out today\)/.test(a) && !!(await page.$('#h5st')) && !!(await page.$('#h5lt')), a.slice(0, 200)); }
   } else if (fx === profitFx) {
-    check('bot trades: with the profit rule a held stock sells at its profit level (0.5% above the buy price), Open now says so, and the market filter shows as the reason for not entering', /MSFT closes at or above \$412\.05 \(0\.5% above the buy price/.test(txt) && /at the first close 0\.5%\+ above the buy price \(max 15 days\)/.test(txt) && /not entering now: market filter: SPY closed at 540/.test(txt), txt.slice(0, 300));
+    check('bot trades: with the profit rule a held stock sells at its profit level (0.5% above the buy price), Open now says so, and the market filter shows as the reason for not entering', /MSFT closes at or above \$412\.05 \(0\.5% above the buy price/.test(txt) && /at the first close 0\.5%\+ above the buy price \(max 15 days\)/.test(txt) && /not entering now: market filter: SPY closed at 540/.test(txt) && /CALL — sells at \+50% or −50%, after 15 days, or 3 days before expiry/.test(txt), txt.slice(0, 300));
   } else {
     check('bot trades: an older journal without watch rows / split / spy renders without a blank page', /Bot trades|Your bot/.test(txt) && txt.length > 500, txt.slice(0, 200));
   }

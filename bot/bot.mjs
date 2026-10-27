@@ -891,7 +891,9 @@ async function run() {
       else if (halt[kindOf(p.symbol)]) await out(`${p.symbol} ${SPLIT ? NM[kindOf(p.symbol)].one + ' daily loss limit' : 'daily loss cap'} hit \u2014 closing options`);
       else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes \u2014 closing options`);
       else if (daysToExp <= 3) await out(`${p.symbol} ${daysToExp} days to expiry \u2014 out before time decay accelerates`);
-      else if (MINS >= CLOSE - 10 && px && held(und, day8) > 0) { const isPut = cid(e).startsWith('sd-p-'); const x = (isPut ? rsi2ShortExit : rsi2Exit)(completed(bars0, und).map(b => b.c), px, held(und, day8), CFG.maxHold); if (x.exit) await out(`${p.symbol} stock ${x.why} \u2014 selling the ${isPut ? 'PUT' : 'CALL'}`); }
+      else if (MINS >= CLOSE - 10 && px && held(und, day8) > 0) { const isPut = cid(e).startsWith('sd-p-'), h = held(und, day8);
+        if (CFG.optExit === 'target') { if (h >= CFG.maxHold) await out(`${p.symbol} held ${h} sessions \u2014 selling the ${isPut ? 'PUT' : 'CALL'} (max hold)`); }   // 'target': no bounce exit, only take-profit, stop, max hold, expiry
+        else { const x = (isPut ? rsi2ShortExit : rsi2Exit)(completed(bars0, und).map(b => b.c), px, h, CFG.maxHold); if (x.exit) await out(`${p.symbol} stock ${x.why} \u2014 selling the ${isPut ? 'PUT' : 'CALL'}`); } }
       else if (!sells.length && !(pdtNear && day8 === TODAY)) await send({ symbol: p.symbol, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(tick(avg * (1 + OPT_TP / 100), p.symbol)), time_in_force: 'day', client_order_id: 'sd-x-' + p.symbol + '-' + rid() }, `${p.symbol} take-profit at +${OPT_TP}%`);
     }
   }
@@ -989,12 +991,12 @@ async function run() {
       const cl = completed(bars, und).map(b => b.c), mult = opt ? 100 : 1;
       const avg = +p.avg_entry_price, cur = +p.current_price;
       const row = { s: p.symbol, und, kind: opt ? (isPut ? 'put' : 'call') : 'stock', qty: Math.abs(+p.qty), avg: r2d(avg * mult), cur: r2d(cur * mult), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10,
-        undPx: r2d((last[und] && last[und].p) || cl[cl.length - 1] || 0), exitLevel: !opt && CFG.exitRule === 'profit' ? profitExitLevel(avg, CFG.exitProfitPct) : rsi2ExitLevel(cl), exitSide: isPut ? 'below' : 'above', exitBy: !opt && CFG.exitRule === 'profit' ? 'profit' : 'bounce' };
+        undPx: r2d((last[und] && last[und].p) || cl[cl.length - 1] || 0), exitLevel: !opt && CFG.exitRule === 'profit' ? profitExitLevel(avg, CFG.exitProfitPct) : opt && CFG.optExit === 'target' ? null : rsi2ExitLevel(cl), exitSide: isPut ? 'below' : 'above', exitBy: !opt && CFG.exitRule === 'profit' ? 'profit' : opt && CFG.optExit === 'target' ? 'target' : 'bounce' };
       if (!opt) row.floor = HOLD_FLOOR > 0 ? r2d(avg * (1 - HOLD_FLOOR / 100)) : null;
       else { row.tp = r2d(avg * mult * (1 + OPT_TP / 100)); row.stop = r2d(avg * mult * (1 - CFG.optStop / 100)); const m2 = OPT_RE.exec(p.symbol); row.exp = '20' + m2[2].slice(0, 2) + '-' + m2[2].slice(2, 4) + '-' + m2[2].slice(4, 6); }
       heldRows.push(row);
     }
-    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : G.mktBlock ? 'market filter: ' + G.mktBlock + ' \u2014 no new dip buys' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, exitRule: CFG.exitRule, exitPct: CFG.exitProfitPct, mktFilter: !!CFG.marketFilter, mkt: G.mkt || null, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : G.mktBlock ? 'market filter: ' + G.mktBlock + ' \u2014 no new dip buys' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, exitRule: CFG.exitRule, exitPct: CFG.exitProfitPct, optExit: CFG.optExit, mktFilter: !!CFG.marketFilter, mkt: G.mkt || null, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
       buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
   }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`);
@@ -1010,7 +1012,7 @@ async function run() {
     const src = ord && /^sd-s-/.test(cid(ord)) ? ord : hist.find(o => o.side === 'buy' && cid(o).startsWith('sd-s-' + sym + '-'));
     return src ? +cid(src).split('-')[4] / 100 : null;
   };
-  let heat = openRisk({ positions, orders: liveOrders, stopFor });
+  let heat = openRisk({ positions, orders: liveOrders, stopFor, optStopFor: sym => (isSpyOption(sym) ? CFG.spyStop : CFG.optStop) / 100 });
   const heatCap = equity * MAX_HEAT / 100;
   const undOf = s => isOpt(s) ? OPT_RE.exec(s)[1] : s;
   const sectorCount = {};
@@ -1059,19 +1061,19 @@ async function run() {
       // a call is skipped once the dip has bounced 1%+; a put once the pop has already fallen 1%+
       if (!s.px || hasOptOn(s.sym) || (kind === 'call' ? s.px > s.prevClose * 1.01 : s.px < s.prevClose * 0.99) || (CFG.newsGuard && symbolRisk(s.sym, newsCache.syms)) || sectorFull(s.sym)) continue;
       if (todays.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym)) continue;
-      const cj = await T(`/v2/options/contracts?underlying_symbols=${s.sym}&type=${kind}&status=active&expiration_date_gte=${ymdDash(Date.now() + 14 * 864e5)}&expiration_date_lte=${ymdDash(Date.now() + 35 * 864e5)}&strike_price_gte=${r2d(s.px * 0.95)}&strike_price_lte=${r2d(s.px * 1.05)}&limit=200`);
+      const cj = await T(`/v2/options/contracts?underlying_symbols=${s.sym}&type=${kind}&status=active&expiration_date_gte=${ymdDash(Date.now() + (CFG.optDays ?? 14) * 864e5)}&expiration_date_lte=${ymdDash(Date.now() + ((CFG.optDays ?? 14) + 21) * 864e5)}&strike_price_gte=${r2d(s.px * 0.95)}&strike_price_lte=${r2d(s.px * 1.05)}&limit=200`);
       const cs = (cj.option_contracts || []).filter(c => c.tradable !== false);
-      if (!cs.length) { act(`${s.sym} ${K}: no contract 14\u201335 days out near ${s.px}`); continue; }
+      if (!cs.length) { act(`${s.sym} ${K}: no contract ${CFG.optDays ?? 14}\u2013${(CFG.optDays ?? 14) + 21} days out near ${s.px}`); continue; }
       const ex = [...new Set(cs.map(c => c.expiration_date))].sort()[0];
       const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - s.px) - Math.abs(+b.strike_price - s.px))[0];
       const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`)).quotes || {})[c.symbol];
       if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); continue; }
-      const maxSpr = Math.min(0.2, CFG.optStop / 200);                   // the spread must be under half the stop, or the stop fires on the spread alone
-      if ((q.ap - q.bp) / q.ap > maxSpr) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over ${+(maxSpr * 100).toFixed(1)}% for a ${CFG.optStop}% stop) \u2014 skipped`); continue; }
+      const maxSpr = Math.min(0.2, CFG.optStop / 200, OPT_TP / 100);    // the spread must be under half the stop (or the stop fires on the spread alone) and under the take-profit (or the spread eats the target)
+      if ((q.ap - q.bp) / q.ap > maxSpr) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over ${+(maxSpr * 100).toFixed(1)}% for a +${OPT_TP}% take-profit / ${CFG.optStop}% stop) \u2014 skipped`); continue; }
       const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.03), c.symbol);
-      const qty = optionQty({ equity, riskPct: OPT_RISK_PCT * G.budget, price: lim, budget: slBudget(kind) });
+      const qty = optionQty({ equity, riskPct: OPT_RISK_PCT * G.budget, price: lim, budget: slBudget(kind), stopPct: CFG.optStop });
       if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's money budget \u2014 skipped${capNote(kind)}`); continue; }
-      const addO = qty * lim * 100 * 0.5;
+      const addO = qty * lim * 100 * CFG.optStop / 100;                 // money lost if it reaches its stop
       if (heat + addO > heatCap) { act(`${c.symbol} skipped \u2014 total risk would exceed ${MAX_HEAT}% of the account`); continue; }
       await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
         client_order_id: `${kind === 'put' ? 'sd-p-' : 'sd-q-'}${c.symbol}-${TODAY}-${qty}-${rid()}` }, kind === 'put' ? `${s.sym} PUT on RSI-2 pop (RSI-2 ${s.r2}, below 200-day ${s.s200})` : `${s.sym} CALL on RSI-2 dip (RSI-2 ${s.r2})`);
