@@ -484,6 +484,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <p><b>Maintenance rule:</b> every change to the website, the bot or the workflows updates <code>docs/ARCHITECTURE.md</code>, this page and, when the architecture changes, <code>docs/architecture.pptx</code>, in the same commit.</p>
 <div class="tw"><table>
 <tr><th>Date</th><th>Change</th><th>Chapter</th></tr>
+<tr><td>2026-10-27</td><td>Bot trades: an open CALL or PUT now says exactly when it sells (+50% / −50%, when the stock closes above — for a PUT below — its 5-day average, or 3 days before expiry); the old text said “one night at most”, which was wrong</td></tr>
 <tr><td>2026-10-27</td><td>Win rate (owner: “I need it at 80%”): new sell rule “first profitable close” (+0.5% over the buy price, up to 15 sessions; about 82% of trades won in the 33-year test vs 65%, similar yearly return, larger losses), new market filter (no dip buys while the S&amp;P 500 is below its 200-day average), and CALLs, PUTs, SPY quick options and day trading switched off — none reached 80% at a profit in the tests. Report: bot/winrate_report.md</td></tr>
 <tr><td>2026-10-27</td><td>Win-rate study, step 1: a manual workflow downloads price history (daily bars, SPY minute bars, a sample of SPY option bars) to a separate branch used only by the study</td></tr>
 <tr><td>2026-10-26</td><td>Bot trades now about a minute behind the bot instead of ten (on devices connected to GitHub): the bot publishes a live copy every minute and the tab refreshes every 25 seconds</td></tr>

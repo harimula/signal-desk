@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-I+kKakppd/kys3garJvp919aJXauXO9Qc73RBrscJUA=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-w5CRweo3p8aLaJP2rYYAQxyNUDX8Toud4x16JPTHid8=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -949,7 +949,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793115237';
+const BUILD_V = '1793122472';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2613,7 +2613,7 @@ ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins 
     if (spyDay.has(o.sym)) return `SPY quick trade — out at +${SS.spyTp ?? 15}% / −${SS.spyStop ?? 15}% or after ${SS.spyHoldMin ?? 10} min`;
     if (dayOpen.has(o.sym)) return 'day trade — stop and target at the broker, flat by 3:50 PM';
     if (o.kind === 'Stock') return `RSI-2 swing — sells at +${SS.stockTp ?? 10}%, or ${SS.exitRule === 'profit' ? `at the first close ${SS.exitProfitPct ?? 0.5}%+ above the buy price` : 'at the close above its 5-day avg'} (max ${SS.maxHold ?? 10} days) · ${SS.holdFloor ?? 25}% stop at the broker`;
-    return `${o.kind.toUpperCase()} — sells with the stock's exit, at +${SS.optTakeProfit ?? 50}% or −${SS.optStop ?? 50}%, one night at most`;
+    return `${o.kind.toUpperCase()} — sells at +${SS.optTakeProfit ?? 50}% or −${SS.optStop ?? 50}%, when the stock closes ${/put/i.test(o.kind) ? 'below' : 'above'} its 5-day average (max ${SS.maxHold ?? 10} days), or 3 days before expiry`;
   };
   const openTbl = open.length ? `<h3 style="margin:16px 0 8px">Open now <span class="mut" style="font-weight:400;font-size:13px">· ${open.length}</span></h3>
 <div class="tw card"><table style="min-width:640px"><thead><tr><th class="lt">What</th><th class="lt">Type</th><th>Qty</th><th class="lt">Bought</th><th>Bought at</th><th>Now</th><th>P/L $</th><th>P/L %</th><th class="lt">Status</th></tr></thead><tbody>${open.map(o => {
