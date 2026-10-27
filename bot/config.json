@@ -42,7 +42,7 @@
  "spyTradePct": 20,
  "spyTp": 15,
  "spyStop": 15,
- "spyHoldMin": 10,
+ "spyHoldMin": 15,
  "spyMaxTrades": 6,
  "spyMaxOpen": 3,
  "spyStreak": 2,
@@ -112,7 +112,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-26T18:04:36.072Z",
+ "updatedAt": "2026-10-27T14:06:44.778Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
