@@ -98,9 +98,27 @@ the real option minute prices.
 | +10% / −60% / 60 min | 3,746 · 73.7% · −0.1% | 70.6% · +0.7% |
 | +30% / −40% / 60 min | 3,302 · 52.4% · +0.5% | — |
 
-No setting reached 80%, and none made money reliably. Because the sleeve trades several times a day, it would
-dominate the overall win rate: with it on, expect about 3 trades in 4 to win overall. **Sleeve off**, saved at
-the setting with the most winners in case the owner switches it back on.
+With a 10% take-profit no setting reached 80%, and none made money reliably. **Follow-up the same afternoon**
+(owner: *"How to make SPY to 80% win rate — make the settings based on it"*), a wider search:
+
+| Take-profit / stop / time stop | Model, 947 days: trades · won · avg trade · avg win · avg loss | Real prices, last 60 days: won · avg trade |
+|---|---|---|
+| +10% / −40% / 15 min (owner's settings at 1:28 PM) | 3,421 · 59.1% · −0.24% · +9.9% · −15.0% | 61.4% · +0.96% |
+| **+5% / −60% / 60 min (saved 2026-10-27)** | **3,865 · 83.5% · −0.04% · +6.1% · −30.8%** | **83.0% · +0.07%** |
+| +5% / −50% / 60 min | 3,868 · 83.1% · −0.16% · +6.1% · −30.8% | 83.0% · +0.18% |
+| +5% / −40% / 60 min | 3,864 · 82.5% · −0.16% · +6.0% · −29.3% | 82.3% · −0.01% |
+| +5% / −60% / 30 min | 3,814 · 79.0% · +0.10% · +6.1% · −22.4% | 78.9% · +0.19% |
+| +5% / −60% / 90 min | 3,909 · 85.1% · −0.25% · +6.0% · −36.3% | 84.9% · +0.14% |
+| +6% / −60% / 60 min | 3,837 · 81.3% · −0.05% · +6.9% · −30.3% | 79.6% · −0.21% |
+| +8% / −60% / 120 min | 3,861 · 80.9% · −0.40% · +8.7% · −38.7% | 78.3% · −0.13% |
+
++5% / −60% / 60 min won 85.3%, 81.8%, 83.9% and 82.1% of trades in 2023, 2024, 2025 and 2026 (CALLs 82.6%,
+PUTs 84.4%), with the average trade between −0.6% and +0.6% by year. The standard error of an average trade
+over ~3,800 trades is about ±0.2%, so none of these settings is shown to make or lose money; the win rates
+(±0.6%) are solid. Variants that did not change the picture: entry windows ending at noon or 2 PM, at most 3
+or 5 trades a day, one trade at a time, 3 losses in a row (all 82.5–84.5% won, averages within ±0.2%). With SPY
+trading ~4 times a day it makes up most of the bot's trades, so the overall win rate should land near 8 in 10
+even with CALLs and PUTs on.
 
 ## 5. What changed
 
@@ -111,6 +129,10 @@ when it blocks. Owner's settings (bot/config.json): sell at the first close +0.5
 on; CALLs, PUTs, SPY quick options and day trading off; CALL and PUT shares 20% / 5% → 0% (stocks now get 100%);
 SPY rules saved at +10% / −40% / 60 minutes. Positions already open keep being managed — an open CALL by its own
 rules — and nothing is sold because of the change itself.
+
+Later the same day the owner switched CALLs, PUTs and SPY back on (split 70/20/5/5, Aggressive preset, which
+also set 3 positions per sector), keeping the new stock rule and the market filter; then asked for an 80% SPY
+win rate: SPY take-profit 5%, stop 60%, time stop 60 minutes (section 4).
 
 ## 6. Reproduce
 

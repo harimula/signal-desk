@@ -44,7 +44,7 @@ export function bs(S, K, T, v, call) {
 export const yearsLeft = (m, day, next) => { const extra = Math.max(0, (Date.parse(next) - Date.parse(day)) / 864e5 - 1); return (Math.max(0, 960 - m) / 390 + 0.3 + 1 + 0.15 * extra) / 252; };
 
 // ---- real option bars (last ~60 days) ----
-function loadReal() {
+export function loadReal() {
   const raw = load('spyopt.json.gz').bars, by = {};
   for (const [sym, b] of Object.entries(raw)) {
     const m = /^SPY(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/.exec(sym); if (!m) continue;
@@ -56,7 +56,7 @@ function loadReal() {
 }
 
 // calibrate k (option volatility = k × VIX) on near-the-money real bars
-function calibrate(days, real) {
+export function calibrate(days, real) {
   const pts = [];
   for (const D of days) {
     const R = real[D.d]; if (!R || !D.next || !D.vix) continue;
@@ -78,7 +78,7 @@ function calibrate(days, real) {
 // ---- one day of the bot's SPY rule ----
 // cfg: the spy* settings. price(tr, minuteBar, which) returns the option price for an open trade at that minute
 // ('o','h','l','c' of the underlying for the model; real bars when available), or null when unknown.
-function runDay(D, cfg, priceAt, open0) {
+export function runDay(D, cfg, priceAt, open0) {
   const C = { ...SPY_DEFAULTS, ...cfg }, out = [], open = [], five = [], lastLvl = { call: 0, put: 0 };
   let trades = 0, streak = 0, dayPl = 0, stopped = false;
   for (const b of D.bars) {
@@ -131,7 +131,7 @@ export function modelPricer(D, k) {
     priceAt: (tr, b, w) => bs(b[w], tr.K, yearsLeft(b.m, D.d, D.next), v, tr.call),
   };
 }
-function realPricer(D, R) {
+export function realPricer(D, R) {
   const occ = (call, K) => `SPY${D.next.slice(2, 4)}${D.next.slice(5, 7)}${D.next.slice(8, 10)}${call ? 'C' : 'P'}${String(Math.round(K * 1000)).padStart(8, '0')}`;
   const lastPx = new Map();
   const at = (tr, b, w) => {
@@ -166,5 +166,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   for (const tp of [10, 15, 20, 30]) for (const stop of [15, 25, 40, 60]) for (const hold of [15, 30, 60]) grid.push({ ...own, spyTp: tp, spyStop: stop, spyHoldMin: hold });
   const rows = grid.map(c => ({ c, s: stat(runAll(days, c, 'model')) })).sort((a, b) => b.s.win - a.s.win);
   for (const { c, s } of rows) line(`tp ${c.spyTp} stop ${c.spyStop} hold ${c.spyHoldMin}`, s);
+  if (process.env.GRID) {                                    // GRID='[{"name":..,"spyTp":..},..]': model on all days and real prices on the last ~60
+    const yrs = days.length / 252, ryrs = realDays.length / 252;
+    const sleeve = (tr, c, y) => tr.reduce((t, x) => t + x.r * (c.spyTradePct ?? 100) / 100, 0) / y * 100;   // % of the SPY share per year (the share is refilled from the stake every day, so it adds up rather than compounds)
+    const aw = tr => { const w = tr.filter(x => x.r > 0), l = tr.filter(x => x.r <= 0); return [w.length ? w.reduce((a, b) => a + b.r, 0) / w.length * 100 : 0, l.length ? l.reduce((a, b) => a + b.r, 0) / l.length * 100 : 0]; };
+    console.log(`\n${'setting'.padEnd(40)} | model ${days.length} days: trades  won  avg  avgW  avgL  sleeve/yr | real ${realDays.length} days: trades  won  avg  sleeve/yr`);
+    for (const g of JSON.parse(process.env.GRID)) {
+      const c = { ...own, ...g }, m = runAll(days, c, 'model'), r = runAll(realDays, c, 'real'), sm = stat(m), sr = stat(r), [w1, l1] = aw(m);
+      console.log(`${(g.name || '').padEnd(40)} | ${String(sm.n).padStart(6)} ${sm.win.toFixed(1).padStart(5)}% ${(sm.exp >= 0 ? '+' : '') + sm.exp.toFixed(2)}% ${w1.toFixed(1).padStart(5)} ${l1.toFixed(1).padStart(6)} ${sleeve(m, c, yrs).toFixed(1).padStart(7)}% | ${String(sr.n).padStart(5)} ${sr.win.toFixed(1).padStart(5)}% ${(sr.exp >= 0 ? '+' : '') + sr.exp.toFixed(2)}% ${sleeve(r, c, ryrs).toFixed(1).padStart(7)}%`);
+    }
+  }
   if (process.env.REALGRID) { console.log('\nthe same grid on the real-price days'); for (const { c } of rows.slice(0, 15)) line(`REAL tp ${c.spyTp} stop ${c.spyStop} hold ${c.spyHoldMin}`, stat(runAll(realDays, c, 'real'))); }
 }
