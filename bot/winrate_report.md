@@ -148,6 +148,10 @@ or 5 trades a day, one trade at a time, 3 losses in a row (all 82.5–84.5% won,
 trading ~4 times a day it makes up most of the bot's trades, so the overall win rate should land near 8 in 10
 even with CALLs and PUTs on.
 
+Later the owner set the stop to −20% (75.4% won, real 76.9%), then asked for 80%+: at +5% / 60 min a −30% stop
+won 80.4% overall but fell under 80% in 2024 and 2026; **−35% won 81.8% (real 82.3%; 83.5%, 80.0%, 82.6%, 80.5%
+in 2023–26)**, saved; −40% 82.4%.
+
 ## 5. What changed
 
 Code: `exitRule` (`bounce` | `profit`), `exitProfitPct` and `marketFilter` settings (bot/config.mjs),

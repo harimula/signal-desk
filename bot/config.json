@@ -41,7 +41,7 @@
  "spySharePct": 10,
  "spyTradePct": 20,
  "spyTp": 5,
- "spyStop": 20,
+ "spyStop": 35,
  "spyHoldMin": 60,
  "spyMaxTrades": 20,
  "spyMaxOpen": 3,
@@ -117,8 +117,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-27T20:58:12.575Z",
- "updatedBy": "Claude (owner request 2026-10-27: PUTs 0%, SPY 10%, CALLs 20%, stocks 70%)",
+ "updatedAt": "2026-10-27T21:13:32.964Z",
+ "updatedBy": "Claude (80%+ win rate for stocks, CALLs and SPY, owner request 2026-10-27)",
  "liveConfirm": "",
  "stakeUsd": 0
 }
