@@ -1,0 +1,169 @@
+{
+ "at": "2026-10-27T19:51:51.370Z",
+ "signals": {
+  "call": 7185,
+  "put": 3526
+ },
+ "results": {
+  "call now": {
+   "real": {
+    "n": 278,
+    "win": 54,
+    "avg": -0.75,
+    "avgW": 31.7,
+    "avgL": -38.8
+   },
+   "model": {
+    "n": 278,
+    "win": 53.6,
+    "avg": -1.65,
+    "avgW": 34.3,
+    "avgL": -43.2
+   }
+  },
+  "call tp5-stop90-target-14d": {
+   "real": {
+    "n": 278,
+    "win": 83.5,
+    "avg": 0.89,
+    "avgW": 17.6,
+    "avgL": -83.4
+   },
+   "model": {
+    "n": 278,
+    "win": 82,
+    "avg": -0.09,
+    "avgW": 18.4,
+    "avgL": -84.3
+   }
+  },
+  "call tp10-stop90-target-14d": {
+   "real": {
+    "n": 278,
+    "win": 80.6,
+    "avg": 0.87,
+    "avgW": 20.7,
+    "avgL": -81.4
+   },
+   "model": {
+    "n": 278,
+    "win": 79.1,
+    "avg": 0.05,
+    "avgW": 21.7,
+    "avgL": -82.2
+   }
+  },
+  "call tp5-stop90-target-30d": {
+   "real": {
+    "n": 184,
+    "win": 79.9,
+    "avg": 0.52,
+    "avgW": 17.6,
+    "avgL": -67.4
+   },
+   "model": {
+    "n": 184,
+    "win": 82.6,
+    "avg": -1.88,
+    "avgW": 13.5,
+    "avgL": -74.7
+   }
+  },
+  "call tp10-stop90-target-30d": {
+   "real": {
+    "n": 184,
+    "win": 78.3,
+    "avg": 1.88,
+    "avgW": 21.6,
+    "avgL": -69.1
+   },
+   "model": {
+    "n": 184,
+    "win": 77.2,
+    "avg": -3.22,
+    "avgW": 18.2,
+    "avgL": -75.6
+   }
+  },
+  "put now": {
+   "real": {
+    "n": 140,
+    "win": 34.3,
+    "avg": -14.52,
+    "avgW": 33.9,
+    "avgL": -39.8
+   },
+   "model": {
+    "n": 140,
+    "win": 39.3,
+    "avg": -14.86,
+    "avgW": 31.5,
+    "avgL": -44.8
+   }
+  },
+  "put tp5-stop90-target-14d": {
+   "real": {
+    "n": 140,
+    "win": 65.7,
+    "avg": -7.92,
+    "avgW": 29.9,
+    "avgL": -80.4
+   },
+   "model": {
+    "n": 140,
+    "win": 67.1,
+    "avg": -15.46,
+    "avgW": 19,
+    "avgL": -85.8
+   }
+  },
+  "put tp10-stop90-target-14d": {
+   "real": {
+    "n": 140,
+    "win": 62.9,
+    "avg": -8.92,
+    "avgW": 33.6,
+    "avgL": -80.9
+   },
+   "model": {
+    "n": 140,
+    "win": 61.4,
+    "avg": -17.95,
+    "avgW": 22.9,
+    "avgL": -83
+   }
+  },
+  "put tp5-stop90-target-30d": {
+   "real": {
+    "n": 81,
+    "win": 70.4,
+    "avg": -7.7,
+    "avgW": 19.9,
+    "avgL": -73.4
+   },
+   "model": {
+    "n": 81,
+    "win": 67.9,
+    "avg": -14.31,
+    "avgW": 15.5,
+    "avgL": -77.4
+   }
+  },
+  "put tp10-stop90-target-30d": {
+   "real": {
+    "n": 81,
+    "win": 60.5,
+    "avg": -13.39,
+    "avgW": 26,
+    "avgL": -73.7
+   },
+   "model": {
+    "n": 81,
+    "win": 64.2,
+    "avg": -14.38,
+    "avgW": 19.1,
+    "avgL": -74.4
+   }
+  }
+ }
+}
