@@ -438,5 +438,45 @@ test('SPY sleeve: "armed" — a break counts only after a 5-minute bar closed in
   assert.equal(w.armed, false); assert.equal(w.side, undefined, 'the same break is not a signal'); assert.match(w.idle, /waiting for a 5-minute bar to close up/);
   const quiet = up.map((b, i) => i === 4 ? { ...b, v: 5e5 } : b); assert.equal(spySignal({ bars: quiet, px: 502.2, mins: 600 }).armed, false);
 });
+
+console.log('India earnings calendar (earnings-in.mjs)');
+const EI = await import('../earnings-in.mjs');
+test('India results: NSE and BSE dates, and the quarter a meeting is about (from the description, else the quarter end before it)', () => {
+  assert.equal(EI.parseDay('30-Oct-2026'), '2026-10-30'); assert.equal(EI.parseDay('02 Nov 2026'), '2026-11-02'); assert.equal(EI.parseDay('soon'), '');
+  assert.equal(EI.quarterEndBefore('2026-10-30'), '2026-09-30'); assert.equal(EI.quarterEndBefore('2027-01-15'), '2026-12-31'); assert.equal(EI.quarterEndBefore('2026-05-20'), '2026-03-31');
+  assert.equal(EI.periodEnd('To consider and approve the financial results for the period ended September 30, 2026', '2026-10-30'), '2026-09-30');
+  assert.equal(EI.periodEnd('Results for the quarter and half year ended 30th September, 2026', '2026-11-05'), '2026-09-30');
+  assert.equal(EI.periodEnd('audited results for the year ended 31.03.2026', '2026-05-12'), '2026-03-31');
+  assert.equal(EI.periodEnd('Financial Results', '2027-02-04'), '2026-12-31', 'no date in the text: the quarter end before the meeting');
+  assert.equal(EI.periodEnd('results for the period ended September 15, 2026', '2026-10-30'), '2026-09-30', 'not a quarter end: falls back');
+});
+test('India results: only results meetings are kept, one per company and day; BSE names are title-cased', () => {
+  const nse = EI.fromNse([
+    { symbol: 'RELIANCE', company: 'Reliance Industries Limited', purpose: 'Financial Results/Fund Raising', bm_desc: 'To consider and approve the financial results for the period ended September 30, 2026', date: '30-Oct-2026' },
+    { symbol: 'RELIANCE', company: 'Reliance Industries Limited', purpose: 'Financial Results', bm_desc: '', date: '30-Oct-2026' },
+    { symbol: 'ABC', company: 'Abc Ltd', purpose: 'Fund Raising', bm_desc: 'To consider raising funds', date: '31-Oct-2026' },
+    { symbol: 'M&M', company: 'Mahindra & Mahindra Limited', purpose: 'Financial Results', bm_desc: '', date: '04-Nov-2026' }]);
+  assert.deepEqual(nse.map(r => r.s + ' ' + r.d + ' ' + r.p), ['RELIANCE 2026-10-30 2026-09-30', 'M&M 2026-11-04 2026-09-30']);
+  const bse = EI.fromBse([{ scrip_Code: '500325', short_name: 'RELIANCE', Long_Name: 'RELIANCE INDUSTRIES LTD.', meeting_date: '30 Oct 2026' }, { short_name: '', meeting_date: '30 Oct 2026' }]);
+  assert.deepEqual(bse, [{ s: 'RELIANCE', n: 'Reliance Industries Ltd.', d: '2026-10-30', p: '2026-09-30' }]);
+});
+test('India results: big = the Nifty 100 in index order (1–50 get tiles), then the page’s own India stocks', () => {
+  const B = EI.bigList(['TCS.NS', 'TMPV.NS', 'TMPV.NS']);
+  assert.equal(EI.bigRank('RELIANCE', B), 1); assert.ok(EI.bigRank('TCS', B) <= 50); assert.equal(EI.bigRank('TMPV', B), 101); assert.equal(EI.bigRank('TINYCO', B), 0);
+  assert.equal(B.filter(s => s === 'TMPV').length, 1);
+});
+test('India results: Yahoo numbers — reported EPS against its estimate by quarter, today’s estimates for the next report, estimates kept after it', () => {
+  const y = EI.parseYahoo({ quoteSummary: { result: [{ calendarEvents: { earnings: { earningsDate: [{ raw: 1, fmt: '2026-10-30' }], earningsAverage: { raw: 17.31 }, revenueAverage: { raw: 3.2e12 } } }, earningsHistory: { history: [{ quarter: { fmt: '2026-06-30' }, epsActual: { raw: 15.48 }, epsEstimate: { raw: 14.97 } }] } }] } });
+  assert.deepEqual(y, { d: '2026-10-30', eE: 17.31, rE: 3.2e12, h: [['2026-06-30', 15.48, 14.97]] });
+  assert.equal(EI.parseYahoo({ quoteSummary: { result: [] } }), null);
+  const rows = [{ s: 'RELIANCE', n: 'Reliance', d: '2026-10-30', p: '2026-09-30', k: 1 }, { s: 'TCS', n: 'TCS', d: '2026-10-08', p: '2026-09-30', k: 2 }, { s: 'HDFCBANK', n: 'HDFC Bank', d: '2026-10-17', p: '2026-09-30', k: 3 }, { s: 'TINY', n: 'Tiny', d: '2026-10-30', p: '2026-09-30', k: 0 }];
+  const Y = { RELIANCE: y, TCS: { d: '2027-01-12', eE: 40, rE: 7.5e11, h: [['2026-09-30', 38.37, 38.07]] }, HDFCBANK: { d: '2027-01-16', eE: 13, rE: 5e11, h: [['2026-06-30', 12.35, 12.5]] } };
+  const prev = [{ s: 'HDFCBANK', d: '2026-10-17', eE: 12.49, rE: 4.9e11 }];
+  const out = EI.withNumbers(rows, Y, prev, '2026-10-28');
+  assert.deepEqual(out[0], { s: 'RELIANCE', n: 'Reliance', d: '2026-10-30', p: '2026-09-30', k: 1, eE: 17.31, rE: 3.2e12 }, 'still to report: the next report’s estimates');
+  assert.deepEqual([out[1].eA, out[1].eE, out[1].rE], [38.37, 38.07, undefined], 'reported: the actual against its own estimate (not next quarter’s)');
+  assert.deepEqual([out[2].eA, out[2].eE, out[2].rE], [undefined, 12.49, 4.9e11], 'reported, not yet in Yahoo’s history: the estimates from before are kept');
+  assert.deepEqual(Object.keys(out[3]), ['s', 'n', 'd', 'p', 'k'], 'a company that is not big carries no numbers');
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

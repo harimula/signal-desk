@@ -84,6 +84,7 @@
     'during the day': 'Results out while the market is open (9:30 AM–4:00 PM Eastern): the stock can move at once.',
     'after the close': 'Results out after 4:00 PM Eastern. The stock moves in after-hours trading and at the next morning’s open.',
     'not announced': 'The company has not said whether it reports before the open or after the close.',
+    'meeting': 'India: the board meeting that approves the quarter’s results. The results come out that day, during market hours (9:15 AM–3:30 PM India time) or after the close; the exact time is not announced in advance.',
     'quarter': 'The company’s fiscal quarter being reported. It can differ from the calendar quarter (Apple’s fiscal year ends in September, for example).',
     'eps estimate': 'Earnings per share that analysts expect, on average — adjusted (non-GAAP), the figure markets compare with.',
     'eps actual': 'Earnings per share the company reported (adjusted, non-GAAP). Empty until it reports.',

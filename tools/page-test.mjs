@@ -382,6 +382,15 @@ journalFixture = null;
     MIDCO: { name: 'Midco Holdings', estimateCurrency: 'USD' }, PLTR: { name: 'Palantir Technologies', estimateCurrency: 'USD' }, NIOX: { name: 'Niox Motors', estimateCurrency: 'CNY' } };
   // the bot's most-traded list (never the owner's live file): PLTR is the second most traded, so it counts as big despite its sales
   await page.route('**/bot/scan.json*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ day: '20260101', key: '200:50', symbols: ['NVDA', 'PLTR', 'AAPL', 'MSFT'] }) }));
+  // India: the server's file (earnings-in.json) — last week's reports (TCS beat, HDFCBANK reported, numbers not in yet) and
+  // next week's (RELIANCE and INFY full tiles, HAL and TMPV chips, SMALLCO not big); written 30 hours ago (stale banner)
+  const istMon = (() => { const t = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()), w = new Date(t + 'T12:00:00Z').getUTCDay(); return new Date(Date.parse(t + 'T12:00:00Z') - ((w + 6) % 7) * 864e5); })();
+  const inDay = n => new Date(istMon.getTime() + n * 864e5).toISOString().slice(0, 10);
+  const IN_ROWS = [{ s: 'TCS', n: 'Tata Consultancy Services Limited', d: inDay(-6), p: '2026-09-30', k: 2, eE: 38.07, eA: 38.37 }, { s: 'HDFCBANK', n: 'HDFC Bank Limited', d: inDay(-4), p: '2026-09-30', k: 3 },
+    { s: 'RELIANCE', n: 'Reliance Industries Limited', d: inDay(8), p: '2026-09-30', k: 1, eE: 17.31, rE: 3.2e12 }, { s: 'INFY', n: 'Infosys Limited', d: inDay(9), p: '2026-09-30', k: 5, eE: 18.2, rE: 4.7e11 },
+    { s: 'HAL', n: 'Hindustan Aeronautics Limited', d: inDay(9), p: '2026-09-30', k: 51, eE: 30.1, rE: 7.3048e11 }, { s: 'TMPV', n: 'Tata Motors Passenger Vehicles Limited', d: inDay(10), p: '2026-09-30', k: 101 },
+    { s: 'SMALLCO', n: 'Small Company Limited', d: inDay(10), p: '2026-09-30', k: 0 }];
+  await page.route('**/earnings-in.json*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ at: Date.now() - 30 * 3600e3, src: 'NSE', rows: IN_ROWS }) }));
   await page.route('https://finnhub.io/**', route => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/v1/stock/profile2') { const sy = u.searchParams.get('symbol'); prof.push(sy); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PROF[sy] || {}) }); }
@@ -399,7 +408,7 @@ journalFixture = null;
       { date: day(4), symbol: 'NIOX', hour: 'amc', quarter: 3, year: y, epsEstimate: -1.2, epsActual: null, revenueEstimate: 2e10, revenueActual: null }] }) });   // in yuan (its profile says): not big
   });
   await page.goto(base, { waitUntil: 'networkidle' });
-  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('sd-pf', JSON.stringify({ h1: { sym: 'AAPL', market: 'US', qty: 10, cost: 150, at: Date.now(), pfid: 'p1' } })); localStorage.setItem('sd-wl', JSON.stringify(['NVDA'])); });
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('sd-pf', JSON.stringify({ h1: { sym: 'AAPL', market: 'US', qty: 10, cost: 150, at: Date.now(), pfid: 'p1' }, h2: { sym: 'TCS.NS', market: 'IN', qty: 5, cost: 3000, at: Date.now(), pfid: 'p1' } })); localStorage.setItem('sd-wl', JSON.stringify(['NVDA', 'INFY.NS'])); });
   await page.reload({ waitUntil: 'networkidle' });
   await page.evaluate(() => document.querySelector('#tabs [data-t="ERN"]').click()); await page.waitForTimeout(400);
   check('earnings: without a Finnhub key the tab explains the one free key, and its button opens ⚡ Live prices', /One free key/.test(await page.textContent('#view')) && await page.evaluate(() => { document.querySelector('[data-ernsetup]').click(); return document.querySelector('#pxBox').open === true; }));
@@ -452,6 +461,29 @@ journalFixture = null;
   await page.reload({ waitUntil: 'networkidle' }); await page.evaluate("ERN_CO_MS = 20; fhKey = 'test-key'; document.querySelector('#tabs [data-t=\"ERN\"]').click();"); await page.waitForTimeout(900);   // a reload opens on the stocks tab
   const kept = await page.evaluate(() => { const b = document.querySelector('[data-ernv="list"]'); return b ? b.getAttribute('aria-selected') + ' ' + !!document.querySelector('#ernList') : 'no tabs: ' + document.querySelector('#view').textContent.replace(/\s+/g, ' ').slice(0, 300); });
   check('earnings: the chosen view stays chosen on this device; names come from the device cache (no new lookups)', kept === 'true true' && prof.length === 6, `${kept} · ${prof.length} lookups`);
+  // India: the market switch changes the calendar — no Finnhub calls, no key needed
+  const callsUS = calls; await page.evaluate("fhKey = ''; document.querySelector('[data-mkt=IN]').click();"); await page.waitForTimeout(700);
+  const inHead = (await page.textContent('#view')).replace(/\s+/g, ' ');
+  check('earnings, India: the switch shows the India calendar — no Finnhub key needed and no Finnhub call', /Earnings — India/.test(inHead) && !/One free key/.test(inHead) && calls === callsUS && /last updated 30 h ago/.test(inHead), `${calls - callsUS} calls · ${inHead.slice(0, 300)}`);
+  await chip('[data-ernv="big"]'); await chip('[data-ernbw="nextweek"]');
+  const inT = await tiles(), inC = await chips(), rel = await tileOf('RELIANCE'), inf = await tileOf('INFY');
+  check('earnings, India: the Nifty 50 get full tiles (index order), the rest of the Nifty 100 and the page’s own India stocks are chips, small companies stay off', inT.join(',') === 'RELIANCE,INFY' && inC.join(',') === 'HAL,TMPV', `tiles ${inT.join(',')} · chips ${inC.join(',')}`);
+  check('earnings, India: rupees and crores — EPS estimate ₹17.31, sales estimate ₹3.20 lakh cr, ₹73,048 cr; your watchlist star tagged', /Reliance Industries Limited/.test(rel) && /est ₹17\.31/.test(rel) && /est ₹3\.20 lakh cr/.test(rel) && /Watchlist/.test(inf)
+    && await page.evaluate(() => /HAL Hindustan Aeronautics Limited, still to report, EPS expected ₹30\.10, sales expected ₹73,048 cr/.test(document.querySelector('#ernBoard .ebc').getAttribute('data-tip') || '')), rel + ' ## ' + inf);
+  await chip('[data-ernbw="lastweek"]');
+  const tcs = await tileOf('TCS'), hdfc = await tileOf('HDFCBANK');
+  check('earnings, India: last week — TCS beat (₹38.37 vs ₹38.07) and is tagged You hold; HDFCBANK met but its numbers are not in yet: Reported', /\bbeat\b/.test(tcs) && /₹38\.37 \+0\.8%/.test(tcs) && /You hold/.test(tcs) && /\bdone\b/.test(hdfc) && /Reported/.test(hdfc), tcs + ' ## ' + hdfc);
+  const inCard = (await page.textContent('#view')).replace(/\s+/g, ' ');
+  check('earnings, India: “Coming up for your stocks” lists your Indian stocks’ next results meeting', /Coming up for your stocks.*board meeting, results that day — INFY Infosys Limited.*Watchlist/.test(inCard), inCard.slice(0, 600));
+  await chip('[data-ernv="list"]'); await chip('[data-ernr="nextweek"]'); await chip('[data-ernf="all"]');
+  const inRows = await rows(), inTxt = (await page.textContent('#ernList')).replace(/\s+/g, ' '), inHdr = await page.$$eval('#ernList th', ths => ths.map(t => t.textContent.trim()));
+  const inBand = await page.$$eval('#ernList tbody tr.ernbig', trs => trs.map(tr => tr.cells[1].textContent.trim().split(/\s+/)[0]));
+  check('earnings, India: the full calendar — board meetings by day, quarter by its months, EPS in rupees, big companies on the gold band, no revenue-actual columns', inRows.join(',') === 'RELIANCE,INFY,HAL,TMPV,SMALLCO' && inHdr.join('|') === 'Meeting|Company|Quarter|EPS estimate|EPS actual|EPS surprise|Revenue estimate'
+    && /Board meeting/.test(inTxt) && /Jul–Sep 2026/.test(inTxt) && /₹17\.31/.test(inTxt) && inBand.join(',') === 'RELIANCE,INFY,HAL,TMPV' && await page.evaluate(() => [...document.querySelectorAll('#ernList th')].every(th => th.hasAttribute('data-tip'))), `${inRows.join(',')} · ${inHdr.join('|')} · band ${inBand.join(',')}`);
+  await chip('[data-ernf="mine"]'); const inMine = await rows();
+  await page.evaluate(() => document.querySelector('[data-mkt="US"]').click()); await page.waitForTimeout(500);
+  check('earnings, India: “Yours” keeps your Indian watchlist star; switching back to USA shows the US calendar again', inMine.join(',') === 'INFY' && /Earnings — USA/.test(await page.textContent('#view')), inMine.join(','));
+  await page.evaluate("fhKey = 'test-key'; renderAll();"); await page.waitForTimeout(500);
   await page.setViewportSize({ width: 390, height: 844 }); await chip('[data-ernv="big"]'); await page.waitForTimeout(300);
   const phone = await page.evaluate(() => ({ over: document.documentElement.scrollWidth - window.innerWidth, cols: window.getComputedStyle(document.querySelector('#ernBoard .ebrd')).gridTemplateColumns.split(' ').length }));
   check('earnings: on a phone the board stacks the days in one column, with no sideways scrolling', phone.over <= 1 && phone.cols === 1, JSON.stringify(phone));
