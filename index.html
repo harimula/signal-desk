@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-JbFeNraM0bEi5NrF/3zS1/ssG/Bfjy3IDbtblgKKTOQ=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-q6Jrlt8SLclNLzFQ5AckgIYZiDDVw2niDTyLUntN9IU=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -291,7 +291,7 @@ ul.why{margin:6px 0 0;padding-left:18px}
 <section aria-label="Status"><div class="subhead"><div class="asof" id="asof"></div><span id="feed" style="font-size:12px;font-weight:700"></span><span id="fhLive" style="display:none;color:var(--tb);font-weight:700;font-size:12px">● LIVE US</span><div id="rfMsg"></div></div>
 <div class="wrap"><details id="pxBox" style="font-size:12.5px;margin:2px 0 4px"><summary style="cursor:pointer;font-weight:700">⚡ Live prices — set up once per device</summary>
 <div class="card" style="margin-top:8px;padding:14px 16px;max-width:640px">
-<div style="font-weight:700">1 · Finnhub key — prices tick live by themselves (USA)</div>
+<div style="font-weight:700">1 · Finnhub key — prices tick live by themselves (USA), and the Earnings tab</div>
 <div class="mut" style="margin:2px 0 6px">Free at <b>finnhub.io</b> → sign up → copy the API key from the dashboard.</div>
 <div style="display:flex;gap:6px;flex-wrap:wrap"><input id="fhIn" aria-label="Finnhub API key" placeholder="Paste Finnhub key here" style="min-width:240px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text)"><button class="btn" id="fhSave" type="button">Save</button></div>
 <div class="mut" id="fhSt" style="margin-top:4px"></div>
@@ -626,7 +626,7 @@ function analyzeAll() {
   }
 }
 analyzeAll();
-const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades'], ['SET', 'Bot settings'], ['NEWS', 'News']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
+const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades'], ['SET', 'Bot settings'], ['NEWS', 'News'], ['ERN', 'Earnings']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
 let pfolios = [{id: 'p1', name: 'Portfolio'}];
 const pfOf = k => (typeof k === 'string' && k.startsWith('PF:')) ? k.slice(3) : null;
 const pfName = id => { const p = pfolios.find(x => x.id === id); return p ? p.name : 'Portfolio'; };
@@ -747,10 +747,10 @@ function chrome() {
   const m = MK[mkt], f = fresh(m);
   document.querySelectorAll('#mkSw [data-mkt]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mkt === mkt)));
   $('#mdots').innerHTML = [mkt].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
-  $('#asof').innerHTML = (tab === 'SET' ? (mkt === 'IN' ? 'India bot \u2014 strategies and simulated stake' : 'Control panel \u2014 risk, capital, strategy, keys') : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'BOT' ? 'Your bot — real rules, real prices, every trade' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? esc(m.label) + ' intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
-  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
+  $('#asof').innerHTML = (tab === 'SET' ? (mkt === 'IN' ? 'India bot \u2014 strategies and simulated stake' : 'Control panel \u2014 risk, capital, strategy, keys') : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'ERN' ? 'Earnings calendar — who reports when, and what they report' : tab === 'BOT' ? 'Your bot — real rules, real prices, every trade' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? esc(m.label) + ' intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
+  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
   let h = linkedNote ? `<div class="banner info">${linkedNote}</div>` : '';
-  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && tab !== 'SET' && !pfOf(tab)) {
+  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && tab !== 'ERN' && tab !== 'SET' && !pfOf(tab)) {
     if (f.level === 'stale') h += `<div class="banner warn"><b>Stale data. Entry zones are for reference only.</b> This snapshot is ${ageText(f.age)} old and prices have likely moved. Press ↻ Refresh prices.</div>`;
     else if (f.level === 'aging') h += `<div class="banner warn"><b>Snapshot is ageing.</b> Pulled ${ageText(f.age)} ago. Press ↻ Refresh prices.</div>`;
     h += `<div class="banner info srcnote">${esc(m.stamp.note)} Prices update when you press ↻ Refresh prices or on the auto-refresh schedule you pick (Yahoo data can lag ~15 minutes). Signals are rule-based readouts, not advice. The page places no orders.</div>`;
@@ -949,7 +949,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793139521';
+const BUILD_V = '1793217583';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1018,7 +1018,7 @@ setInterval(() => {
   analyzeAll(); renderAll(true); syncRecs();
   for (const [sym, d9] of flash) document.querySelectorAll(`[data-s="${CSS.escape(sym)}"]`).forEach(el => el.classList.add(d9 >= 0 ? 'tkup' : 'tkdn'));
 }, 2500);
-const fhi = $('#fhIn'); if (fhi) { fhi.value = fhKey; $('#fhSave').addEventListener('click', () => { fhKey = $('#fhIn').value.trim(); save('sd-fh', fhKey); fhStatus(fhKey ? 'Key saved.' : 'Key cleared.'); fhConnect(); goliveCheck(); }); }
+const fhi = $('#fhIn'); if (fhi) { fhi.value = fhKey; $('#fhSave').addEventListener('click', () => { fhKey = $('#fhIn').value.trim(); save('sd-fh', fhKey); fhStatus(fhKey ? 'Key saved.' : 'Key cleared.'); fhConnect(); goliveCheck(); if (app === 'desk' && tab === 'ERN') { ernRows = null; ernErr = ''; renderAll(); } }); }   // a saved key fills the Earnings tab at once
 if (fhKey) fhConnect();
 const fmpi = $('#fmpIn'); if (fmpi) { fmpi.value = load('sd-fmp', ''); $('#fmpSave').addEventListener('click', () => { const v = $('#fmpIn').value.trim(); save('sd-fmp', v); $('#fmpSt').textContent = v ? 'FMP key saved. Press \u21bb Refresh prices to get live quotes.' : 'FMP key cleared.'; goliveCheck(); }); }
 function goliveCheck() { const el = $('#golive'); if (el) el.style.display = (fhKey || load('sd-fmp', '')) ? 'none' : ''; }
@@ -2301,6 +2301,140 @@ ${briefCard}${myNewsCard(ago, first)}${schedCard}
 ${nwItems == null ? '<div class="mut" style="padding:10px 0">Loading…</div>' : list || `<div class="mut" style="padding:10px 0">${(nwItems || []).length ? 'Nothing in this category in the last 3 days.' : 'No headlines yet. They appear once the server feed runs (every 10 minutes on market days), or right away once a Finnhub key is saved in ⚡ Live prices.'}</div>`}
 <div class="mut" style="font-size:11px;margin-top:8px">${srcLine ? srcLine + '. ' : ''}Sources: Yahoo Finance, Federal Reserve, Benzinga (via Alpaca), Finnhub. Tags are keyword-based. Not advice.</div></div>`;
 }
+// ---------- Earnings tab: who reports when — the day, the session and the numbers (Finnhub, with the free live-prices key) ----------
+// Finnhub's earnings calendar gives, per company: the report date, the session it announced (bmo = before the open, amc =
+// after the close, dmh = during the day), the fiscal quarter, and EPS and revenue — the analysts' average estimate, and the
+// actual figures once reported (EPS adjusted, non-GAAP: the number markets react to). Read in three one-week pieces (last
+// week, this week, next week) and again every 15 minutes while the tab is open: actual figures arrive through the day.
+let ernRows = null, ernAt = 0, ernBusy = false, ernErr = '', ernQ = '', ernAll = false;
+let ernRange = load('sd-ernr', 'week'), ernFilt = load('sd-ernf', 'mine');
+const etDay = (ms = Date.now()) => new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York'}).format(new Date(ms));   // yyyy-mm-dd in New York
+const dAdd = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+const wdOf = d => new Date(d + 'T12:00:00Z').getUTCDay();
+const monOf = d => dAdd(d, -((wdOf(d) + 6) % 7));
+const ernNextWd = d => { let x = dAdd(d, 1); while (wdOf(x) === 0 || wdOf(x) === 6) x = dAdd(x, 1); return x; };
+const ernNum = v => v == null || v === '' || !isFinite(+v) ? null : +v;
+async function ernLoad(force) {
+  const k = typeof fhKey !== 'undefined' ? fhKey : '';
+  if (!k) { ernErr = 'nokey'; return; }
+  if (ernErr === 'nokey') ernErr = '';
+  if (ernBusy || (!force && ernRows && Date.now() - ernAt < 15 * 60000) || (!force && !ernRows && ernErr && Date.now() - ernAt < 60000)) return;
+  ernBusy = true; ernAt = Date.now();
+  const mon = monOf(etDay()), weeks = [-7, 0, 7].map(o => [dAdd(mon, o), dAdd(mon, o + 6)]);
+  const got = await Promise.allSettled(weeks.map(([a, b]) => tryJson(`https://finnhub.io/api/v1/calendar/earnings?from=${a}&to=${b}&token=${encodeURIComponent(k)}`, 15000)));
+  const ok = got.filter(x => x.status === 'fulfilled' && x.value && Array.isArray(x.value.earningsCalendar));
+  if (ok.length) {
+    const seen = new Map();
+    for (const x of ok) for (const e of x.value.earningsCalendar) {
+      if (!e || !e.symbol || !/^\d{4}-\d{2}-\d{2}$/.test(e.date || '')) continue;
+      const sym = String(e.symbol).toUpperCase();
+      seen.set(sym + '|' + e.date, {sym, date: e.date, hour: ['bmo', 'amc', 'dmh'].includes(e.hour) ? e.hour : '', q: ernNum(e.quarter), y: ernNum(e.year), epsE: ernNum(e.epsEstimate), epsA: ernNum(e.epsActual), revE: ernNum(e.revenueEstimate), revA: ernNum(e.revenueActual)});
+    }
+    ernRows = [...seen.values()]; ernErr = ok.length < weeks.length ? 'part' : '';
+  } else {
+    const r = got.find(x => x.status === 'rejected'), m = r ? String((r.reason && r.reason.message) || r.reason) : '';
+    const said = got.map(x => x.status === 'fulfilled' && x.value && x.value.error ? String(x.value.error) : '').find(Boolean) || '';   // Finnhub can answer 200 with {error: "..."}
+    ernErr = /HTTP 401|invalid api key/i.test(m + said) ? 'key' : /HTTP 403|access/i.test(m + said) ? 'plan' : /HTTP 429|limit/i.test(m + said) ? 'rate' : 'net';
+  }
+  ernBusy = false;
+  if (app === 'desk' && tab === 'ERN') renderAll(true);
+}
+setInterval(() => { if (app === 'desk' && tab === 'ERN' && !document.hidden) ernLoad(); }, 5 * 60000);   // ernLoad keeps 15 minutes between reads
+const ernMsg = () => ({key: 'Finnhub refused the saved key. Check it in ⚡ Live prices (top of the page).', plan: 'Finnhub says this key’s plan does not include the earnings calendar.', rate: 'Finnhub’s limit of 60 requests a minute was reached — trying again in a minute.', net: 'Could not reach Finnhub — trying again in a minute.', part: 'Part of the calendar could not be loaded — showing what came in.'})[ernErr] || '';
+const ERN_HR = {bmo: ['Before the open', 'before 9:30 AM ET'], dmh: ['During the day', '9:30 AM–4:00 PM ET'], amc: ['After the close', 'after 4:00 PM ET'], '': ['Not announced', 'time not given']};
+const ERN_SHORT = {bmo: 'before the open', dmh: 'during the day', amc: 'after the close', '': 'time not given'};
+const ernHrOrder = h => ({bmo: 0, dmh: 1, amc: 2})[h] ?? 3;
+const ernDl = d => new Intl.DateTimeFormat('en-US', {weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC'}).format(new Date(d + 'T12:00:00Z'));
+const ernRel = (d, t) => d === t ? 'today' : d === dAdd(t, 1) ? 'tomorrow' : d === dAdd(t, -1) ? 'yesterday' : '';
+const ernEps = v => v == null ? '—' : (v < 0 ? '−$' : '$') + Math.abs(v).toFixed(2);
+const ernRev = v => { if (v == null) return '—'; const d1 = x => x.toFixed(1).replace(/\.0$/, ''); return '$' + (v >= 1e11 ? Math.round(v / 1e9) + 'B' : v >= 1e9 ? d1(v / 1e9) + 'B' : v >= 1e8 ? Math.round(v / 1e6) + 'M' : v >= 1e6 ? d1(v / 1e6) + 'M' : Math.round(v).toLocaleString('en-US')); };   // $176B, $16.8B, $63B, $812M, $2.5M
+const ernSur = (a, e, minE) => { if (a == null || e == null || Math.abs(e) < minE) return '<span class="mut">—</span>'; const p = (a - e) / Math.abs(e) * 100; return `<b class="${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${Math.abs(p).toFixed(1)}%</b>`; };
+const ernName = s => { const r = DATA.rows[s]; if (r && !/\.NS$/.test(s)) return r[0] || ''; const c = custom && custom[idOf(s)]; return (c && c.rec && c.rec[0]) || ''; };
+// whose stock it is: your portfolios, watchlist (★) and My tickers, and the bot's positions and watch list (when its journal is open here)
+function ernTags() {
+  const T = new Map(), add = (s, t) => { s = String(s || '').toUpperCase(); if (!s || /\.NS$|^\^|=/.test(s)) return; const a = T.get(s) || []; if (!a.includes(t)) a.push(t); T.set(s, a); };
+  try { Object.values(pf || {}).forEach(h => h && h.sym && h.market !== 'IN' && h.market !== 'CM' && add(h.sym, 'You hold')); } catch (e) {}
+  try { wl.forEach(s => add(s, 'Watchlist')); } catch (e) {}
+  try { Object.values(custom || {}).forEach(c => c && c.sym && c.market !== 'IN' && add(c.sym, 'My tickers')); } catch (e) {}
+  const W = botJ && botJ.watch;
+  if (W) {
+    (W.held || []).forEach(h => add(h.und || h.s, h.kind === 'call' ? 'Bot holds a CALL' : h.kind === 'put' ? 'Bot holds a PUT' : 'Bot holds'));
+    (W.rows || []).forEach(r => add(r.s, 'Bot watches'));
+  }
+  return T;
+}
+function ernRanges() {
+  const t = etDay(), mon = monOf(t), nx = ernNextWd(t);
+  return {today: [t, t, 'Today'], nextday: [nx, nx, nx === dAdd(t, 1) ? 'Tomorrow' : new Intl.DateTimeFormat('en-US', {weekday: 'long', timeZone: 'UTC'}).format(new Date(nx + 'T12:00:00Z'))],
+    week: [mon, dAdd(mon, 6), 'This week'], nextweek: [dAdd(mon, 7), dAdd(mon, 13), 'Next week'], lastweek: [dAdd(mon, -7), dAdd(mon, -1), 'Last week']};
+}
+function ernPick(range, filt, q) {
+  const R = ernRanges(), [a0, a1] = R[range] || R.week, T = ernTags();
+  let a = (ernRows || []).filter(r => r.date >= a0 && r.date <= a1);
+  if (filt === 'mine') a = a.filter(r => T.has(r.sym));
+  else if (filt === 'big') a = a.filter(r => r.revE >= 1e9 || !!(DATA.rows[r.sym] && !/\.NS$/.test(r.sym)));
+  const Q = String(q || '').trim().toUpperCase();
+  if (Q) a = a.filter(r => r.sym.includes(Q) || ernName(r.sym).toUpperCase().includes(Q));
+  return a.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0) || ernHrOrder(x.hour) - ernHrOrder(y.hour) || (y.revE || 0) - (x.revE || 0) || (x.sym < y.sym ? -1 : 1));
+}
+const ernTagHTML = tg => tg.map(t => ` <span class="pill ${/^You|^Bot holds/.test(t) ? 'r-Buy' : 'r-Hold'}" style="font-size:10px">${esc(t)}</span>`).join('');
+function ernListHTML() {
+  if (!ernRows) return `<div class="mut" style="padding:10px 0">${ernErr && ernErr !== 'nokey' ? esc(ernMsg()) + ' <button class="btn" type="button" data-ernretry>Try again</button>' : 'Loading the calendar…'}</div>`;
+  const T = ernTags(), a = ernPick(ernRange, ernFilt, ernQ), today = etDay(), cap = ernAll ? Infinity : 300;
+  if (!a.length) return `<div class="mut" style="padding:10px 0">${ernQ.trim() ? 'No company matches “' + esc(ernQ.trim()) + '” in this range.' : ernFilt === 'mine' ? 'None of your stocks or the bot’s report in this range — try “Large companies” or “All”.' : 'No reports in this range.'}</div>`;
+  const perDay = {}; for (const r of a) perDay[r.date] = (perDay[r.date] || 0) + 1;
+  let html = '', n = 0, day = '';
+  for (const r of a) {
+    if (n >= cap) break;
+    if (r.date !== day) { day = r.date; const rel = ernRel(day, today), c = perDay[day]; html += `<tr><td colspan="9" class="lt" style="background:var(--h-bg)"><b>${ernDl(day)}</b>${rel ? ' · ' + rel : ''} <span class="mut">· ${c} ${c === 1 ? 'company' : 'companies'}</span></td></tr>`; }
+    const nm = ernName(r.sym), hr = ERN_HR[r.hour] || ERN_HR[''], open = !!(DATA.rows[r.sym] && !/\.NS$/.test(r.sym));
+    html += `<tr${open ? ` data-s="${esc(r.sym)}" data-m="US" tabindex="0" style="cursor:pointer"` : ''}><td class="lt" style="white-space:nowrap">${hr[0]}<div class="mut" style="font-size:11px">${hr[1]}</div></td>`
+      + `<td class="lt"><b>${esc(r.sym)}</b>${nm ? ` <span class="mut">${esc(nm.slice(0, 30))}</span>` : ''}${ernTagHTML(T.get(r.sym) || [])}</td>`
+      + `<td>${r.q && r.y ? 'Q' + r.q + ' ' + r.y : '—'}</td><td>${ernEps(r.epsE)}</td><td>${r.epsA == null ? '<span class="mut">—</span>' : '<b>' + ernEps(r.epsA) + '</b>'}</td><td>${ernSur(r.epsA, r.epsE, 0.005)}</td>`
+      + `<td>${ernRev(r.revE)}</td><td>${r.revA == null ? '<span class="mut">—</span>' : '<b>' + ernRev(r.revA) + '</b>'}</td><td>${ernSur(r.revA, r.revE, 1)}</td></tr>`;
+    n++;
+  }
+  const more = a.length > n ? `<div style="margin-top:8px"><button class="btn" type="button" data-ernall>Show all ${a.length.toLocaleString('en-US')}</button> <span class="mut" style="font-size:12px">the first ${n} are shown — or narrow the list with the search box</span></div>` : '';
+  return `<div class="tw"><table style="min-width:880px"><thead><tr><th class="lt" style="text-align:left">Time</th><th class="lt" style="text-align:left">Company</th><th>Quarter</th><th>EPS estimate</th><th>EPS actual</th><th>EPS surprise</th><th>Revenue estimate</th><th>Revenue actual</th><th>Revenue surprise</th></tr></thead><tbody>${html}</tbody></table></div>${more}`;
+}
+function earningsView() {
+  ernLoad();
+  if (!botJ && typeof botLoad === 'function') { try { botLoad(); } catch (e) {} }   // the bot's positions and watch list, when its journal opens on this device
+  const intro = `<h2 style="margin-bottom:6px">Earnings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">When companies report their quarterly results — the day, the time (before the open or after the close), what analysts expect and, once out, what came in. Eastern Time.</div>`;
+  if (ernErr === 'nokey') return intro + `<div class="card" style="padding:14px 18px"><b style="font-size:15px">One free key, once per device</b><div style="font-size:13.5px;margin-top:6px;line-height:1.5">The calendar comes from Finnhub — the same free key that makes prices move live on this page. Save it once in ⚡ Live prices and the calendar appears here.</div><div style="margin-top:10px"><button class="btn" type="button" data-ernsetup>Set up the free key</button></div></div>`;
+  const R = ernRanges(), T = ernTags(), today = etDay();
+  const mineN = [...T.values()].filter(a => a.some(t => !/^Bot watches/.test(t))).length;
+  const near = (ernRows || []).filter(r => r.date >= today && r.date <= dAdd(today, 13) && (T.get(r.sym) || []).some(t => !/^Bot watches/.test(t))).sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0) || ernHrOrder(x.hour) - ernHrOrder(y.hour));
+  const big = (ernRows || []).filter(r => r.date >= R.week[0] && r.date <= R.week[1] && r.revE > 0).sort((a, b) => b.revE - a.revE).slice(0, 8);
+  const line = r => { const rel = ernRel(r.date, today), nm = ernName(r.sym); return `<li><b>${ernDl(r.date)}</b>${rel ? ' (' + rel + ')' : ''} · ${ERN_SHORT[r.hour] || ERN_SHORT['']} — <b>${esc(r.sym)}</b>${nm ? ' <span class="mut">' + esc(nm.slice(0, 30)) + '</span>' : ''}${ernTagHTML((T.get(r.sym) || []).filter(t => !/^Bot watches/.test(t)))}${r.epsE != null ? ` <span class="mut" style="font-size:12px">· EPS expected ${ernEps(r.epsE)}</span>` : ''}</li>`; };
+  const yours = `<div class="card" style="padding:14px 18px;margin-bottom:14px"><b style="font-size:15px">Coming up for your stocks</b> <span class="mut" style="font-size:12px">· the next two weeks — your portfolios, watchlist (★), My tickers and what the bot holds</span>
+${!ernRows ? `<div class="mut" style="margin-top:8px">${ernErr ? esc(ernMsg()) : 'Loading…'}</div>` : near.length ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:13.5px;line-height:1.6">${near.slice(0, 15).map(line).join('')}</ul>${near.length > 15 ? `<div class="mut" style="font-size:12px">… and ${near.length - 15} more in the calendar below</div>` : ''}` : `<div class="mut" style="margin-top:8px;font-size:13px">${mineN ? 'None of your stocks report in the next two weeks.' : 'Add stocks to a portfolio, your watchlist (★) or My tickers to see their report dates here.'}</div>`}
+${big.length ? `<div style="margin-top:10px;font-size:13px;border-top:1px solid var(--line);padding-top:8px"><b>Biggest this week:</b> ${big.map(r => `${esc(r.sym)} <span class="mut">${ernDl(r.date).split(',')[0]} ${ERN_SHORT[r.hour] || ERN_SHORT['']}</span>`).join(' · ')}</div>` : ''}</div>`;
+  const cnt = (rg, f) => ernRows ? ` <span class="mut" style="font-size:11px">${ernPick(rg, f, '').length}</span>` : '';
+  const chipsR = Object.entries(R).map(([k, v]) => `<button class="vtab" type="button" role="tab" data-ernr="${k}" aria-selected="${ernRange === k}">${esc(v[2])}${cnt(k, ernFilt)}</button>`).join('');
+  const chipsF = [['mine', 'Yours & the bot’s'], ['big', 'Large companies'], ['all', 'All']].map(([k, l]) => `<button class="vtab" type="button" role="tab" data-ernf="${k}" aria-selected="${ernFilt === k}">${l}${cnt(ernRange, k)}</button>`).join('');
+  const ago = ernAt ? Math.max(0, Math.round((Date.now() - ernAt) / 60000)) : null;
+  return intro + yours + `<div class="card" style="padding:12px 18px"><b style="font-size:15px">Calendar</b>
+<div class="vnav" role="tablist" aria-label="Which days" style="margin:10px 0 4px">${chipsR}</div>
+<div class="vnav" role="tablist" aria-label="Which companies" style="margin:4px 0">${chipsF}</div>
+<div class="toolbar" style="margin:8px 0"><input id="ernQ" type="search" placeholder="Find a ticker or company" aria-label="Find a ticker or company" value="${esc(ernQ)}" autocomplete="off"></div>
+${ernRows && ernErr === 'part' ? `<div class="banner warn" style="margin:6px 0">${esc(ernMsg())}</div>` : ''}
+<div id="ernList">${ernListHTML()}</div>
+<div class="mut" style="font-size:11px;margin-top:8px">Source: Finnhub earnings calendar${ernRows && ago != null ? ' · read ' + (ago < 1 ? 'just now' : ago + ' min ago') : ''}. EPS is adjusted (non-GAAP), the figure markets react to; estimates are analysts’ averages; surprise = actual against estimate. Time is the session the company announced — exact minutes are not given; a report after the close moves the price at the next open. Not advice.</div></div>`;
+}
+// chips, “show all”, retry and set-up buttons; the search box redraws only the list (the box keeps its focus); a row of a stock
+// the page knows opens its chart and levels
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-ernr], [data-ernf], [data-ernall], [data-ernsetup], [data-ernretry], #ernList tr[data-s]'); if (!t) return;
+  if (t.dataset.ernr) { ernRange = t.dataset.ernr; save('sd-ernr', ernRange); ernAll = false; renderAll(); }
+  else if (t.dataset.ernf) { ernFilt = t.dataset.ernf; save('sd-ernf', ernFilt); ernAll = false; renderAll(); }
+  else if (t.hasAttribute('data-ernall')) { ernAll = true; renderAll(); }
+  else if (t.hasAttribute('data-ernsetup')) { const bx = $('#pxBox'); if (bx) { bx.open = true; bx.scrollIntoView({behavior: 'smooth', block: 'start'}); setTimeout(() => { const i = $('#fhIn'); if (i) i.focus(); }, 400); } }
+  else if (t.hasAttribute('data-ernretry')) ernLoad(true);
+  else if (t.dataset.s) openDetail(t.dataset.s, 'US');
+});
+document.addEventListener('keydown', e => { if (e.key !== 'Enter') return; const tr = e.target.closest && e.target.closest('#ernList tr[data-s]'); if (tr) { e.preventDefault(); openDetail(tr.dataset.s, 'US'); } });
+document.addEventListener('input', e => { if (!e.target || e.target.id !== 'ernQ') return; ernQ = e.target.value; ernAll = false; const l = $('#ernList'); if (l) { l.innerHTML = ernListHTML(); try { twNav2($('#view')); } catch (e2) {} } });
 // ---------- Bot trades tab: reads bot/journal.json written by the paper-trading bot ----------
 // ---- encrypted journal (privacy mode): decrypt in the browser with your passphrase ----
 async function jDecrypt(j, pass) {
@@ -3193,7 +3327,7 @@ ${inChk('alerts', 'India Telegram summary', 'one message after each NSE day: buy
   const side = `<nav class="stnav" aria-label="Settings sections"><div class="mut" style="font-size:11.5px;margin-bottom:6px">On this page</div>${secIds.map(([id, t]) => `<a href="#${id}">${esc(t)}</a>`).join('')}<a href="docs/settings.html" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">What each setting does ↗</a></nav>`;
   return `<h2 style="margin-bottom:6px">Bot settings — ${mkt === 'IN' ? 'India bot' : 'USA bot'}</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">${mkt === 'IN' ? 'The India simulation reads these after each NSE close.' : 'Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.'} <a href="docs/settings.html"><b>What does each setting do? → the settings guide, with a worked example for every setting</b></a> <span class="mut">· guide updated 2026-10-27</span></div><div class="stwrap${mkt === 'IN' ? ' one' : ''}">${mkt === 'IN' ? '' : side}<div style="min-width:0">${body}</div></div>`;
 }
-function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
+function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'ERN' ? earningsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {
   root.querySelectorAll('.tw').forEach(tw => {
     let wrap = tw.parentElement;
@@ -3255,7 +3389,7 @@ function renderAll(bg) {
   $('#view').dataset.app = 'desk';
   if (typeof goliveCheck === 'function') goliveCheck();
   renderTabs(); chrome();
-  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || tab === 'NEWS' || tab === 'SET' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
+  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SET' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
   const view = $('#view');
   const openKeys = new Set(Array.from(view.querySelectorAll('details[data-k][open]')).map(d2 => d2.dataset.k));
   const sameView = view.dataset.rv === app + ':' + tab, scY = window.scrollY, scX = window.scrollX;

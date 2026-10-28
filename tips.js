@@ -75,6 +75,16 @@
     'years +': 'How many of the tested years ended positive.',
     'expectancy': 'Average profit per trade. Above $0 over 50+ trades is what a real edge looks like.',
     'net p/l': 'Total profit minus total loss.',
+    // ---------- tables: earnings calendar ----------
+    'time': 'When the company announces its results: before the open (before 9:30 AM Eastern), after the close (after 4:00 PM — the price reacts at the next open), or during the day. Companies give the session, not the exact minute.',
+    'company': 'The ticker and, when the page knows it, the company name. Tags: You hold (in a portfolio), Watchlist (★), My tickers, Bot holds (the bot’s position), Bot watches (on the bot’s list). Tap a row of a stock the page follows for its chart.',
+    'quarter': 'The company’s fiscal quarter being reported. It can differ from the calendar quarter (Apple’s fiscal year ends in September, for example).',
+    'eps estimate': 'Earnings per share that analysts expect, on average — adjusted (non-GAAP), the figure markets compare with.',
+    'eps actual': 'Earnings per share the company reported (adjusted, non-GAAP). Empty until it reports.',
+    'eps surprise': 'How far the reported earnings per share came in above (+) or below (−) the analysts’ estimate. A big miss or beat often moves the stock several percent.',
+    'revenue estimate': 'Sales for the quarter that analysts expect, on average.',
+    'revenue actual': 'Sales the company reported for the quarter. Empty until it reports.',
+    'revenue surprise': 'How far the reported sales came in above (+) or below (−) the analysts’ estimate.',
     // ---------- tables: news / rules / options ----------
     'when': 'Date and time (Eastern).',
     'event': 'The scheduled release or headline.',

@@ -368,6 +368,54 @@ journalFixture = null;
   check('setup link: saying yes installs the new token', (await c.evaluate(() => JSON.parse(localStorage.getItem('sd-ghtok')))) === 'NEW');
   await C.close();
 }
+// Earnings tab: a Finnhub stand-in (four companies a week, relative to the week asked for), a portfolio holding and a
+// watchlist star, the day and company chips, the search box, hover help on every column; and the state with no key
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message.slice(0, 160)));
+  page.on('console', m => { if (m.type() === 'error' && !/net::|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text().slice(0, 160)); });
+  await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI)); });
+  let calls = 0;
+  await page.route('https://finnhub.io/**', route => {
+    const u = new URL(route.request().url());
+    if (u.pathname !== '/api/v1/calendar/earnings') return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    calls++;
+    const from = u.searchParams.get('from'), y = +from.slice(0, 4), day = n => new Date(Date.parse(from + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ earningsCalendar: [
+      { date: day(0), symbol: 'AAPL', hour: 'amc', quarter: 4, year: y, epsEstimate: 1.6, epsActual: null, revenueEstimate: 95e9, revenueActual: null },
+      { date: day(1), symbol: 'NVDA', hour: 'bmo', quarter: 3, year: y, epsEstimate: 0.8, epsActual: 0.9, revenueEstimate: 33e9, revenueActual: 35e9 },
+      { date: day(2), symbol: 'TINYCO', hour: '', quarter: 2, year: y, epsEstimate: -0.05, epsActual: null, revenueEstimate: 2.5e6, revenueActual: null },
+      { date: day(3), symbol: 'MSFT', hour: 'amc', quarter: 1, year: y, epsEstimate: 3.0, epsActual: 2.7, revenueEstimate: 64e9, revenueActual: 63e9 }] }) });
+  });
+  await page.goto(base, { waitUntil: 'networkidle' });
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('sd-pf', JSON.stringify({ h1: { sym: 'AAPL', market: 'US', qty: 10, cost: 150, at: Date.now(), pfid: 'p1' } })); localStorage.setItem('sd-wl', JSON.stringify(['NVDA'])); });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.evaluate(() => document.querySelector('#tabs [data-t="ERN"]').click()); await page.waitForTimeout(400);
+  check('earnings: without a Finnhub key the tab explains the one free key, and its button opens ⚡ Live prices', /One free key/.test(await page.textContent('#view')) && await page.evaluate(() => { document.querySelector('[data-ernsetup]').click(); return document.querySelector('#pxBox').open === true; }));
+  await page.evaluate("fhKey = 'test-key'; renderAll();"); await page.waitForTimeout(900);   // a key on this device (set directly, so no live stream opens in a test)
+  const rows = async () => page.$$eval('#ernList tbody tr', trs => trs.filter(tr => tr.cells.length > 1).map(tr => tr.cells[1].textContent.replace(/\s+/g, ' ').trim().split(' ')[0]));
+  const chip = async sel => { await page.evaluate(s => document.querySelector(s).click(), sel); await page.waitForTimeout(250); };
+  await chip('[data-ernr="week"]'); await chip('[data-ernf="all"]');
+  const all = await rows(), txt = (await page.textContent('#ernList')).replace(/\s+/g, ' ');
+  check('earnings: this week, all companies — four reports read from three weekly pieces, grouped by day in report order', calls === 3 && all.join(',') === 'AAPL,NVDA,TINYCO,MSFT', `${calls} calls, rows ${all.join(',')}`);
+  check('earnings: the session, quarter and numbers show (after the close, before the open, EPS $0.90 vs $0.80 = +12.5%, revenue $63B vs $64B = −1.6%)', /After the close/.test(txt) && /Before the open/.test(txt) && /Not announced/.test(txt) && /Q3 20\d\d/.test(txt) && /\$0\.90/.test(txt) && /\+12\.5%/.test(txt) && /−10\.0%/.test(txt) && /\$63B/.test(txt) && /\$95B/.test(txt) && /\$2\.5M/.test(txt) && /−1\.6%/.test(txt) && /−\$0\.05/.test(txt), txt.slice(0, 900));
+  await chip('[data-ernf="big"]'); const big = await rows();
+  await chip('[data-ernf="mine"]'); const mine = await rows(), mineTxt = (await page.textContent('#ernList')).replace(/\s+/g, ' ');
+  check('earnings: “Large companies” drops the $2.5M company; “Yours & the bot’s” keeps your holding (AAPL, tagged You hold) and your watchlist star (NVDA)', big.join(',') === 'AAPL,NVDA,MSFT' && mine.join(',') === 'AAPL,NVDA' && /AAPL Apple.*You hold/.test(mineTxt) && /Watchlist/.test(mineTxt), `big ${big.join(',')} · mine ${mine.join(',')} · ${mineTxt.slice(0, 200)}`);
+  const card = (await page.textContent('#view')).replace(/\s+/g, ' ');
+  check('earnings: “Coming up for your stocks” lists your stocks’ next reports with the session, and the biggest reports of the week', /Coming up for your stocks.*after the close — AAPL Apple.*You hold/.test(card) && /before the open — NVDA.*Watchlist/.test(card) && /Biggest this week: AAPL .*MSFT .*NVDA /.test(card), card.slice(0, 900));
+  await chip('[data-ernf="all"]'); await page.focus('#ernQ'); await page.keyboard.type('msf'); await page.waitForTimeout(250);
+  check('earnings: the search box narrows the list as you type and keeps its focus', (await rows()).join(',') === 'MSFT' && await page.evaluate(() => document.activeElement && document.activeElement.id === 'ernQ'), (await rows()).join(','));
+  await page.fill('#ernQ', ''); await page.waitForTimeout(250);
+  const noTip = await page.$$eval('#ernList th', ths => ths.filter(th => !th.hasAttribute('data-tip')).map(th => th.textContent.trim()));
+  check('earnings: hover help explains every column', noTip.length === 0, noTip.join(' | '));
+  await chip('[data-ernr="lastweek"]'); const last = await rows();
+  check('earnings: last week shows that week’s reports too', last.join(',') === 'AAPL,NVDA,TINYCO,MSFT', last.join(','));
+  const csp = await page.evaluate(() => window.__csp);
+  check('earnings: no script errors and no Content-Security-Policy violations', errors.length === 0 && csp.length === 0, errors.concat(csp).join(' | '));
+  await page.close();
+}
 await browser.close(); srv.close();
 // 5. documentation pages: a way back to the app, opened in the same window (the site runs as a home-screen app)
 {
