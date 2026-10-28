@@ -1,0 +1,38 @@
+BSE next 21d               200 · 322511 bytes
+BSE next 21d n             1576
+BSE next 21d sample        [{"scrip_Code":"526921","short_name":"21STCENMGM","Long_Name":"Twentyfirst Century Management Services Ltd","meeting_date":"29 Oct 2026","URL":"https://www.bseindia.com/stock-share-price/twentyfirst-century-management-services-ltd/21stcenmgm/526921/"},{"scrip_Code":"532628","short_name":"3IINFOLTD","Long_Name":"3i Infotech Ltd","meeting_date":"29 Oct 2026","URL":"https://www.bseindia.com/stock-share-price/3i-infotech-ltd/3iinfoltd/532628/"}]
+BSE next 21d nifty         ["RELIANCE 30 Oct 2026","SUNPHARMA 30 Oct 2026","ITC 02 Nov 2026","SBIN 03 Nov 2026","BHARTIARTL 05 Nov 2026"]
+BSE past 10d               200 · 2 bytes
+BSE past 10d n             0
+BSE past 10d sample        []
+BSE past 10d nifty         []
+BSE no dates               200 · 322511 bytes
+BSE no dates n             1576
+BSE no dates sample        [{"scrip_Code":"526921","short_name":"21STCENMGM","Long_Name":"Twentyfirst Century Management Services Ltd","meeting_date":"29 Oct 2026","URL":"https://www.bseindia.com/stock-share-price/twentyfirst-century-management-services-ltd/21stcenmgm/526921/"},{"scrip_Code":"532628","short_name":"3IINFOLTD","Long_Name":"3i Infotech Ltd","meeting_date":"29 Oct 2026","URL":"https://www.bseindia.com/stock-share-price/3i-infotech-ltd/3iinfoltd/532628/"}]
+BSE no dates nifty         ["RELIANCE 30 Oct 2026","SUNPHARMA 30 Oct 2026","ITC 02 Nov 2026","SBIN 03 Nov 2026","BHARTIARTL 05 Nov 2026"]
+NSE home                   200 · cookies 5
+NSE event-calendar         200 · 204923 bytes
+NSE event-calendar n       826
+NSE event-calendar sample  [{"symbol":"AARON","company":"Aaron Industries Limited","purpose":"Financial Results/Other business matters","bm_desc":"To consider and approve the financial results for the period ended September 30, 2026 and other business matters","date":"30-Oct-2026"},{"symbol":"AARTIIND","company":"Aarti Industries Limited","purpose":"Financial Results","bm_desc":"To consider and approve the financial results for the period ended September 30, 2026","date":"30-Oct-2026"}]
+NSE event-calendar nifty   [["RELIANCE","30-Oct-2026","Financial Results/Fund Raising"],["SUNPHARMA","30-Oct-2026","Financial Results"],["ITC","02-Nov-2026","Financial Results"],["SBIN","03-Nov-2026","Financial Results"],["BHARTIARTL","05-Nov-2026","Financial Results"]]
+NSE fin-results            200 · 2910904 bytes
+NSE fin-results n          3816
+NSE fin-results sample     [{"audited":"Un-Audited","bank":"N","broadCastDate":"30-Jul-2026 17:17:53","companyName":"V.S.T Tillers Tractors Limited","consolidated":"Consolidated","cumulative":"Non-cumulative","difference":"00:00:49","exchdisstime":"30-Jul-2026 17:18:42","filingDate":"30-Jul-2026 17:17","financialYear":"01-Apr-2024 To 31-Mar-2025","format":"New","fromDate":"01-Oct-2024","indAs":"Ind-AS New","industry":"-","isin":"INE764D01017","oldNewFlag":"N","params":"01-Oct-202431-Dec-2024Q3UNNCNEVSTTILLERS","period":"Quarterly","reInd":"N","relatingTo":"Third Quarter","resultDescription":null,"resultDetailedDataLink":null,"seqNumber":"1197616","symbol":"VSTTILLERS","toDate":"31-Dec-2024","xbrl":"https://nsearchives.nseindia.com/corporate/xbrl/INDAS_121277_1705282_30072026051753.xml"},{"audited":"Un-Audited","bank":"N","broadCastDate":"30-Jul-2026 17:15:56","companyName":"V.S.T Tillers Tractors Limited","consoli
+NSE fin-results nifty      [["BHARTIARTL","06-Feb-2025 23:15","Third Quarter"],["BHARTIARTL","06-Feb-2025 22:19","Third Quarter"],["ITC","06-Feb-2025 19:20","Third Quarter"],["ITC","06-Feb-2025 19:15","Third Quarter"],["SBIN","06-Feb-2025 16:52","Third Quarter"],["SBIN","06-Feb-2025 16:50","Third Quarter"],["SUNPHARMA","31-Jan-2025 19:33","Third Quarter"],["SUNPHARMA","31-Jan-2025 19:31","Third Quarter"]]
+NSE results-comp           200 · 14525 bytes
+NSE results-comp n         5
+NSE results-comp sample    [{"re_amt_grs_np_asst":null,"re_bal_rbi_oth_bnk_funds":null,"re_basic_eps":null,"re_basic_eps_for_cont_dic_opr":"6.44","re_bsc_eps_bfr_exi":null,"re_cap_ade_rat":null,"re_cet_1_ret":null,"re_con_pro_loss":"872100","re_create_dt":"16-JAN-2025","re_curr_tax":"248300","re_debt_eqt_rat":"0","re_debt_rdmption":null,"re_debt_ser_cov":"0.03","re_deff_tax":"39300","re_depr_und_exp":"445900","re_desc_note_fin":"Notes to Financial Results:   1.The following ratios which form part of the Standalone Financial Results for the quarter and nine months ended 31st December, 2024, are reproduced below, as there are no rows designated for the same in the XBRL format:                      Ratio                                                               Quarter ended                   Nine Months ended                                                                                      31st December, 2024
+NSE results-comp nifty     []
+Yahoo crumb                200 · got one
+Yahoo RELIANCE.NS          200 · 1805 bytes
+  calendar                 {"dates":["2026-10-30"],"epsAvg":17.30714,"revAvg":3207094545450,"call":[]}
+  history                  [["2025-09-30",13.42,14.3451],["2025-12-31",13.78,14.88712],["2026-03-31",12.54,15.39111],["2026-06-30",15.48,14.97444]]
+Yahoo TCS.NS               200 · 1832 bytes
+  calendar                 {"dates":["2026-10-08"],"epsAvg":38.31464,"revAvg":730475286250,"call":["2026-10-08"]}
+  history                  [["2025-12-31",36.5856,36.1858],["2026-03-31",37.92,38.10987],["2026-06-30",38.281,37.33412],["2026-09-30",38.37,38.06858]]
+Yahoo HDFCBANK.NS          200 · 1816 bytes
+  calendar                 {"dates":["2027-01-16"],"epsAvg":13.01,"revAvg":495461127500,"call":["2026-10-17"]}
+  history                  [["2025-12-31",12.08,10.485],["2026-03-31",12.45,12.35],["2026-06-30",12.35,12.515],["2026-09-30",12.63,12.494]]
+Yahoo MARUTI.NS            200 · 1858 bytes
+  calendar                 {"dates":["2027-01-28"],"epsAvg":94.4,"revAvg":546959126330,"call":["2026-10-27"]}
+  history                  [["2025-12-31",120.67,141.14279],["2026-03-31",114.2,133.26585],["2026-06-30",106.62,110.52333],["2026-09-30",76.81,98.12222]]
