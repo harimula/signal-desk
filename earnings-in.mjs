@@ -23,6 +23,7 @@ export function parseDay(s) {
   const m = /^(\d{1,2})[\s-]+([A-Za-z]{3,9})[\s-]+(\d{4})/.exec(String(s || '').trim());
   return m && MON[m[2].toLowerCase()] ? ymd(+m[3], MON[m[2].toLowerCase()], +m[1]) : '';
 }
+const titleCase = s => String(s || '').toLowerCase().replace(/\b([a-z])/g, c => c.toUpperCase()).trim();
 const isQuarterEnd = d => /-(03-31|06-30|09-30|12-31)$/.test(d || '');
 // the latest quarter end before a day: a meeting on 2026-10-30 approves the quarter to 2026-09-30
 export function quarterEndBefore(d) {
@@ -47,11 +48,11 @@ export function fromNse(list) {
     if (!e || !/financial results?/i.test(`${e.purpose || ''} ${e.bm_desc || ''}`)) continue;
     const s = String(e.symbol || '').trim().toUpperCase(), d = parseDay(e.date);
     if (!/^[A-Z0-9&-]{1,20}$/.test(s) || !d) continue;
-    out.set(s + '|' + d, { s, n: String(e.company || '').trim().slice(0, 80), d, p: periodEnd(e.bm_desc, d) });
+    const n = String(e.company || '').trim();
+    out.set(s + '|' + d, { s, n: (/[a-z]/.test(n) ? n : titleCase(n)).slice(0, 80), d, p: periodEnd(e.bm_desc, d) });   // a few names come in capitals
   }
   return [...out.values()];
 }
-const titleCase = s => String(s || '').toLowerCase().replace(/\b([a-z])/g, c => c.toUpperCase()).replace(/\bLtd\b/g, 'Ltd').trim();
 // BSE forthcoming results → the same shape (BSE's short name is the NSE symbol for nearly every large company)
 export function fromBse(list) {
   const out = new Map();
@@ -92,6 +93,21 @@ export function withNumbers(rows, Y, prevRows, today) {
     for (const k of ['eE', 'eA', 'rE']) if (x[k] == null) delete x[k];
     return x;
   });
+}
+
+// one meeting per company and quarter: a moved meeting stays listed on its old day too. Reported (EPS in) → the last
+// meeting held; not yet → the latest date (the new one)
+export function onePerQuarter(rows, today) {
+  const G = new Map();
+  for (const r of rows) { const k = r.s + '|' + r.p; if (!G.has(k)) G.set(k, []); G.get(k).push(r); }
+  const out = [];
+  for (const g of G.values()) {
+    if (g.length === 1) { out.push(g[0]); continue; }
+    g.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+    const held = g.filter(r => r.d <= today);
+    out.push(g.some(r => r.eA != null) && held.length ? held[held.length - 1] : g[g.length - 1]);
+  }
+  return out;
 }
 
 // ---- network ----
@@ -162,7 +178,7 @@ export async function main() {
       }));
     }
   }
-  rows = withNumbers(rows, Y, prev && prev.rows, today).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0) || (a.k || 999) - (b.k || 999) || (a.s < b.s ? -1 : 1));
+  rows = onePerQuarter(withNumbers(rows, Y, prev && prev.rows, today), today).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0) || (a.k || 999) - (b.k || 999) || (a.s < b.s ? -1 : 1));
   const same = prev && prev.src === src && JSON.stringify(prev.rows) === JSON.stringify(rows) && now - (prev.at || 0) < 6 * 3600e3;
   console.log(`${rows.length} results meetings ${from} → ${to} from ${src}; ${rows.filter(r => r.k).length} big; Yahoo ${got}/${asked} (${need.length} due)`);
   if (same) { console.log('No change: file left as it is'); return; }

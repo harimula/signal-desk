@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-Ev7biOiv/wR66fUE/A8uYdR2lsnUv8RnXfe11Mt7PyI=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-LY+eyPoEw1EtL5OCPT/bmzQ/6gtP/Bn+KJsgjdSEY8A=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -996,7 +996,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793229247';
+const BUILD_V = '1793229687';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2566,7 +2566,7 @@ function ernTile(r, T) {
   const st = ernState(r), cur = ernCur(r), nm = ernName(r.sym, r), tg = ernMine(r, T), at = ernAttr(r);
   const val = (lab, a, e, f, minE) => `<span class="mut">${lab}</span><span>${a != null ? f(a, cur) + (e != null && Math.abs(e) >= minE ? ' ' + ernSur(a, e, minE) : '') : e != null ? '<span class="mut">est</span> ' + f(e, cur) : '<span class="mut">—</span>'}</span>`;
   return `<div class="ebt ${st}"${at ? at + ' tabindex="0" role="button"' : ''}><div class="ebt1"><b>${esc(r.sym)}</b>${st === 'soon' ? '' : `<span class="ebr">${ERN_ST[st]}</span>`}</div>`
-    + `<div class="ebtn">${nm ? esc(nm) : '&nbsp;'}</div><div class="ebtv">${val('EPS', r.epsA, r.epsE, ernEps, 0.005)}${val('Sales', r.revA, r.revE, ernRev, 1)}</div>${tg.length ? `<div class="ebtg">${ernTagHTML(tg)}</div>` : ''}</div>`;
+    + `<div class="ebtn">${nm ? esc(nm) : '&nbsp;'}</div><div class="ebtv">${((r.epsA != null || r.epsE != null ? val('EPS', r.epsA, r.epsE, ernEps, 0.005) : '') + (r.revA != null || r.revE != null ? val('Sales', r.revA, r.revE, ernRev, 1) : '')) || '<span class="mut" style="grid-column:1/-1">No figures yet</span>'}</div>${tg.length ? `<div class="ebtg">${ernTagHTML(tg)}</div>` : ''}</div>`;
 }
 // a ticker chip for the other big companies: its numbers on hover, tap or focus (and, for a stock the page follows, a tap opens its chart)
 function ernChip(r) {

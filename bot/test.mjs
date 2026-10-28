@@ -478,5 +478,12 @@ test('India results: Yahoo numbers — reported EPS against its estimate by quar
   assert.deepEqual([out[2].eA, out[2].eE, out[2].rE], [undefined, 12.49, 4.9e11], 'reported, not yet in Yahoo’s history: the estimates from before are kept');
   assert.deepEqual(Object.keys(out[3]), ['s', 'n', 'd', 'p', 'k'], 'a company that is not big carries no numbers');
 });
+test('India results: a moved meeting shows once — the new date until the EPS is in, the meeting held once it is; capitals become a name', () => {
+  const moved = [{ s: 'TATASTEEL', d: '2026-10-27', p: '2026-09-30', k: 26 }, { s: 'TATASTEEL', d: '2026-11-07', p: '2026-09-30', k: 26, eE: 2.78 }, { s: 'OTHER', d: '2026-10-27', p: '2026-09-30', k: 0 }];
+  assert.deepEqual(EI.onePerQuarter(moved, '2026-10-29').map(r => r.s + ' ' + r.d), ['TATASTEEL 2026-11-07', 'OTHER 2026-10-27']);
+  const held = [{ s: 'X', d: '2026-10-20', p: '2026-09-30', k: 5, eA: 1, eE: 0.9 }, { s: 'X', d: '2026-11-04', p: '2026-09-30', k: 5, eA: 1, eE: 0.9 }];
+  assert.deepEqual(EI.onePerQuarter(held, '2026-10-29').map(r => r.d), ['2026-10-20']);
+  assert.equal(EI.fromNse([{ symbol: 'TATACONSUM', company: 'TATA CONSUMER PRODUCTS LIMITED', purpose: 'Financial Results', date: '26-Oct-2026' }])[0].n, 'Tata Consumer Products Limited');
+});
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
