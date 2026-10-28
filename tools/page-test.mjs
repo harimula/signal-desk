@@ -368,17 +368,23 @@ journalFixture = null;
   check('setup link: saying yes installs the new token', (await c.evaluate(() => JSON.parse(localStorage.getItem('sd-ghtok')))) === 'NEW');
   await C.close();
 }
-// Earnings tab: a Finnhub stand-in (four companies a week, relative to the week asked for), a portfolio holding and a
-// watchlist star, the day and company chips, the search box, hover help on every column; and the state with no key
+// Earnings tab: a Finnhub stand-in (eight reports a week, relative to the week asked for — four Monday to Thursday, and four
+// on Friday for the big-company rules), company profiles, the bot's most-traded list, a portfolio holding and a watchlist
+// star; the Big companies board (the default view) and the Full calendar with its chips, search and hover help; no key
 {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message.slice(0, 160)));
   page.on('console', m => { if (m.type() === 'error' && !/net::|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text().slice(0, 160)); });
   await page.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI)); });
-  let calls = 0;
+  let calls = 0; const prof = [];
+  const PROF = { AAPL: { name: 'Apple Inc', estimateCurrency: 'USD' }, NVDA: { name: 'NVIDIA Corp', estimateCurrency: 'USD' }, MSFT: { name: 'Microsoft Corp', estimateCurrency: 'USD' },
+    MIDCO: { name: 'Midco Holdings', estimateCurrency: 'USD' }, PLTR: { name: 'Palantir Technologies', estimateCurrency: 'USD' }, NIOX: { name: 'Niox Motors', estimateCurrency: 'CNY' } };
+  // the bot's most-traded list (never the owner's live file): PLTR is the second most traded, so it counts as big despite its sales
+  await page.route('**/bot/scan.json*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ day: '20260101', key: '200:50', symbols: ['NVDA', 'PLTR', 'AAPL', 'MSFT'] }) }));
   await page.route('https://finnhub.io/**', route => {
     const u = new URL(route.request().url());
+    if (u.pathname === '/api/v1/stock/profile2') { const sy = u.searchParams.get('symbol'); prof.push(sy); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PROF[sy] || {}) }); }
     if (u.pathname !== '/api/v1/calendar/earnings') return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     calls++;
     const from = u.searchParams.get('from'), y = +from.slice(0, 4), day = n => new Date(Date.parse(from + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
@@ -386,32 +392,69 @@ journalFixture = null;
       { date: day(0), symbol: 'AAPL', hour: 'amc', quarter: 4, year: y, epsEstimate: 1.6, epsActual: null, revenueEstimate: 95e9, revenueActual: null },
       { date: day(1), symbol: 'NVDA', hour: 'bmo', quarter: 3, year: y, epsEstimate: 0.8, epsActual: 0.9, revenueEstimate: 33e9, revenueActual: 35e9 },
       { date: day(2), symbol: 'TINYCO', hour: '', quarter: 2, year: y, epsEstimate: -0.05, epsActual: null, revenueEstimate: 2.5e6, revenueActual: null },
-      { date: day(3), symbol: 'MSFT', hour: 'amc', quarter: 1, year: y, epsEstimate: 3.0, epsActual: 2.7, revenueEstimate: 64e9, revenueActual: 63e9 }] }) });
+      { date: day(3), symbol: 'MSFT', hour: 'amc', quarter: 1, year: y, epsEstimate: 3.0, epsActual: 2.7, revenueEstimate: 64e9, revenueActual: 63e9 },
+      { date: day(4), symbol: 'MIDCO', hour: 'bmo', quarter: 3, year: y, epsEstimate: 1.0, epsActual: null, revenueEstimate: 6e9, revenueActual: null },        // big ($5B+), not a full tile
+      { date: day(4), symbol: 'PLTR', hour: 'bmo', quarter: 3, year: y, epsEstimate: 0.1, epsActual: 0.12, revenueEstimate: 1.2e9, revenueActual: 1.3e9 },   // big by trading: a full tile
+      { date: day(4), symbol: 'TM', hour: 'amc', quarter: 2, year: y, epsEstimate: 80, epsActual: null, revenueEstimate: 1.2e13, revenueActual: null },        // yen-sized: not dollars, not big
+      { date: day(4), symbol: 'NIOX', hour: 'amc', quarter: 3, year: y, epsEstimate: -1.2, epsActual: null, revenueEstimate: 2e10, revenueActual: null }] }) });   // in yuan (its profile says): not big
   });
   await page.goto(base, { waitUntil: 'networkidle' });
   await page.evaluate(() => { localStorage.clear(); localStorage.setItem('sd-pf', JSON.stringify({ h1: { sym: 'AAPL', market: 'US', qty: 10, cost: 150, at: Date.now(), pfid: 'p1' } })); localStorage.setItem('sd-wl', JSON.stringify(['NVDA'])); });
   await page.reload({ waitUntil: 'networkidle' });
   await page.evaluate(() => document.querySelector('#tabs [data-t="ERN"]').click()); await page.waitForTimeout(400);
   check('earnings: without a Finnhub key the tab explains the one free key, and its button opens ⚡ Live prices', /One free key/.test(await page.textContent('#view')) && await page.evaluate(() => { document.querySelector('[data-ernsetup]').click(); return document.querySelector('#pxBox').open === true; }));
-  await page.evaluate("fhKey = 'test-key'; renderAll();"); await page.waitForTimeout(900);   // a key on this device (set directly, so no live stream opens in a test)
-  const rows = async () => page.$$eval('#ernList tbody tr', trs => trs.filter(tr => tr.cells.length > 1).map(tr => tr.cells[1].textContent.replace(/\s+/g, ' ').trim().split(' ')[0]));
+  await page.evaluate("ERN_CO_MS = 20; fhKey = 'test-key'; renderAll();");   // a key on this device (set directly, so no live stream opens in a test); profiles quickly
+  for (let i = 0; i < 40 && prof.length < 6; i++) await page.waitForTimeout(100);
+  await page.waitForTimeout(500);
   const chip = async sel => { await page.evaluate(s => document.querySelector(s).click(), sel); await page.waitForTimeout(250); };
+  const tiles = async () => page.$$eval('#ernBoard .ebt', els => els.map(e => e.querySelector('.ebt1 b').textContent));
+  const chips = async () => page.$$eval('#ernBoard .ebc', els => els.map(e => e.querySelector('[aria-hidden]').textContent));
+  const days = await page.$$eval('#ernBoard .ebday', els => els.length), t1 = await tiles(), c1 = await chips();
+  check('earnings: the Big companies board is the first view — one column per weekday', await page.evaluate(() => !!document.querySelector('#ernBoard') && document.querySelector('[data-ernv="big"]').getAttribute('aria-selected') === 'true') && days === 5, `${days} days`);
+  check('earnings: big = $5B+ sales or among the 100 most traded; the largest ($20B+, the 25 most traded) get full tiles, the others a ticker chip; small, yen-sized and yuan figures stay off', t1.join(',') === 'AAPL,NVDA,MSFT,PLTR' && c1.join(',') === 'MIDCO', `tiles ${t1.join(',')} · chips ${c1.join(',')}`);
+  const tileOf = async sy => page.evaluate(s => { const t = [...document.querySelectorAll('#ernBoard .ebt')].find(e => e.querySelector('.ebt1 b').textContent === s); return t ? t.className + ' | ' + t.textContent.replace(/\s+/g, ' ') : ''; }, sy);
+  const [ta, tn, tm, tp] = [await tileOf('AAPL'), await tileOf('NVDA'), await tileOf('MSFT'), await tileOf('PLTR')];
+  check('earnings: gold tiles still to report (estimates), green beat, red missed — with the reported figures and surprises', /\bsoon\b/.test(ta) && /est \$1\.60/.test(ta) && /est \$95B/.test(ta) && !/Beat|Missed/.test(ta)
+    && /\bbeat\b/.test(tn) && /Beat/.test(tn) && /\$0\.90 \+12\.5%/.test(tn) && /\$35B \+6\.1%/.test(tn) && /\bmiss\b/.test(tm) && /Missed/.test(tm) && /\$2\.70 −10\.0%/.test(tm) && /\bbeat\b/.test(tp) && /\+20\.0%/.test(tp), [ta, tn, tm, tp].join(' ## '));
+  check('earnings: tiles carry the company name (the page’s own, else Finnhub’s profile) and your tags; a chip gives its numbers on hover or tap', /Apple Inc/.test(ta) && /You hold/.test(ta) && /Watchlist/.test(tn) && /Palantir Technologies/.test(tp)
+    && await page.evaluate(() => /MIDCO Midco Holdings, still to report, EPS expected \$1\.00, sales expected \$6B/.test(document.querySelector('#ernBoard .ebc').getAttribute('data-tip') || '')), tp);
+  const todayWd = await page.evaluate('wdOf(etDay())'), nowCols = await page.$$eval('#ernBoard .ebday.now', els => els.map(e => e.textContent));
+  check('earnings: today’s column is marked (on a weekday)', todayWd >= 1 && todayWd <= 5 ? nowCols.length === 1 && /Today/.test(nowCols[0]) : nowCols.length === 0, `weekday ${todayWd}, ${nowCols.length} marked`);
+  check('earnings: company names are looked up once each and kept on this device, never synced; the yuan company shows in yuan', prof.length === 6 && new Set(prof).size === 6 && await page.evaluate("(() => { const c = JSON.parse(localStorage.getItem('ern-co-v1') || '{}'); return !!(c.NIOX && c.NIOX[1] === 'CNY') && !syncKey('ern-co-v1') && !syncKey('sd-ernv') && !syncKey('sd-ernbw') && !syncKey('sd-ernr') && !syncKey('sd-ernf'); })()"), prof.join(','));
+  await chip('[data-ernbw="nextweek"]'); const tNext = await tiles(), selNext = await page.evaluate(() => document.querySelector('[data-ernbw="nextweek"]').getAttribute('aria-selected'));
+  await chip('[data-ernbw="lastweek"]'); const tLast = await tiles(), lastPast = await page.$$eval('#ernBoard .ebday.past', els => els.length);
+  check('earnings: the week tabs move the board (next week, last week — all days past)', selNext === 'true' && tNext.join(',') === 'AAPL,NVDA,MSFT,PLTR' && tLast.join(',') === 'AAPL,NVDA,MSFT,PLTR' && lastPast === 5, `${selNext} ${tNext.join(',')} · ${tLast.join(',')} · past ${lastPast}`);
+  await chip('[data-ernbw="week"]');
+  const opened = await page.evaluate(() => { const t = [...document.querySelectorAll('#ernBoard .ebt[data-s]')].find(e => e.dataset.s === 'AAPL'); if (!t) return 'no tile'; t.click(); const d = document.querySelector('#dlg'); const ok = d && d.open; if (ok) d.close(); return ok; });
+  check('earnings: tapping the tile of a stock the page follows opens its chart', opened === true, String(opened));
+  const noTipB = await page.evaluate(() => { const els = [...document.querySelectorAll('#ernBoard .ebsl, [data-ernv]')]; return els.length < 6 ? ['only ' + els.length] : els.filter(e => !e.hasAttribute('data-tip')).map(e => e.textContent.trim()); });
+  check('earnings: hover help on the session labels and the view tabs', noTipB.length === 0, noTipB.join(' | '));
+  await chip('[data-ernv="list"]');
+  const rows = async () => page.$$eval('#ernList tbody tr', trs => trs.filter(tr => tr.cells.length > 1).map(tr => tr.cells[1].textContent.replace(/\s+/g, ' ').trim().split(' ')[0]));
   await chip('[data-ernr="week"]'); await chip('[data-ernf="all"]');
   const all = await rows(), txt = (await page.textContent('#ernList')).replace(/\s+/g, ' ');
-  check('earnings: this week, all companies — four reports read from three weekly pieces, grouped by day in report order', calls === 3 && all.join(',') === 'AAPL,NVDA,TINYCO,MSFT', `${calls} calls, rows ${all.join(',')}`);
+  check('earnings: this week, all companies — eight reports read from three weekly pieces, grouped by day in report order', calls === 3 && all.join(',') === 'AAPL,NVDA,TINYCO,MSFT,MIDCO,PLTR,TM,NIOX', `${calls} calls, rows ${all.join(',')}`);
   check('earnings: the session, quarter and numbers show (after the close, before the open, EPS $0.90 vs $0.80 = +12.5%, revenue $63B vs $64B = −1.6%)', /After the close/.test(txt) && /Before the open/.test(txt) && /Not announced/.test(txt) && /Q3 20\d\d/.test(txt) && /\$0\.90/.test(txt) && /\+12\.5%/.test(txt) && /−10\.0%/.test(txt) && /\$63B/.test(txt) && /\$95B/.test(txt) && /\$2\.5M/.test(txt) && /−1\.6%/.test(txt) && /−\$0\.05/.test(txt), txt.slice(0, 900));
-  await chip('[data-ernf="big"]'); const big = await rows();
+  const band = await page.$$eval('#ernList tbody tr.ernbig', trs => trs.map(tr => tr.cells[1].textContent.trim().split(/\s+/)[0]));
+  check('earnings: in the full calendar big companies sit on a gold band with a “Big” label; figures in another currency show its code, not $', band.join(',') === 'AAPL,NVDA,MSFT,MIDCO,PLTR' && /PLTR Palantir[^|]*?Big/.test(txt) && /CNY 20B/.test(txt) && /−CNY 1\.20/.test(txt) && /80\.00/.test(txt) && /\b12T\b/.test(txt) && !/\$12T|\$80\.00|\$20B/.test(txt), `${band.join(',')} · ${txt.slice(txt.indexOf('MIDCO'), txt.indexOf('MIDCO') + 400)}`);
+  await chip('[data-ernf="big"]'); const big = await rows(), bandBig = await page.$$eval('#ernList tbody tr.ernbig', trs => trs.length);
   await chip('[data-ernf="mine"]'); const mine = await rows(), mineTxt = (await page.textContent('#ernList')).replace(/\s+/g, ' ');
-  check('earnings: “Large companies” drops the $2.5M company; “Yours & the bot’s” keeps your holding (AAPL, tagged You hold) and your watchlist star (NVDA)', big.join(',') === 'AAPL,NVDA,MSFT' && mine.join(',') === 'AAPL,NVDA' && /AAPL Apple.*You hold/.test(mineTxt) && /Watchlist/.test(mineTxt), `big ${big.join(',')} · mine ${mine.join(',')} · ${mineTxt.slice(0, 200)}`);
+  check('earnings: “Big companies” keeps the big ones (no gold band needed there); “Yours & the bot’s” keeps your holding (AAPL, tagged You hold) and your watchlist star (NVDA)', big.join(',') === 'AAPL,NVDA,MSFT,MIDCO,PLTR' && bandBig === 0 && mine.join(',') === 'AAPL,NVDA' && /AAPL Apple.*You hold/.test(mineTxt) && /Watchlist/.test(mineTxt), `big ${big.join(',')} (band ${bandBig}) · mine ${mine.join(',')} · ${mineTxt.slice(0, 200)}`);
   const card = (await page.textContent('#view')).replace(/\s+/g, ' ');
-  check('earnings: “Coming up for your stocks” lists your stocks’ next reports with the session, and the biggest reports of the week', /Coming up for your stocks.*after the close — AAPL Apple.*You hold/.test(card) && /before the open — NVDA.*Watchlist/.test(card) && /Biggest this week: AAPL .*MSFT .*NVDA /.test(card), card.slice(0, 900));
+  check('earnings: “Coming up for your stocks” lists your stocks’ next reports with the session', /Coming up for your stocks.*after the close — AAPL Apple.*You hold/.test(card) && /before the open — NVDA.*Watchlist/.test(card), card.slice(0, 900));
   await chip('[data-ernf="all"]'); await page.focus('#ernQ'); await page.keyboard.type('msf'); await page.waitForTimeout(250);
   check('earnings: the search box narrows the list as you type and keeps its focus', (await rows()).join(',') === 'MSFT' && await page.evaluate(() => document.activeElement && document.activeElement.id === 'ernQ'), (await rows()).join(','));
   await page.fill('#ernQ', ''); await page.waitForTimeout(250);
   const noTip = await page.$$eval('#ernList th', ths => ths.filter(th => !th.hasAttribute('data-tip')).map(th => th.textContent.trim()));
   check('earnings: hover help explains every column', noTip.length === 0, noTip.join(' | '));
   await chip('[data-ernr="lastweek"]'); const last = await rows();
-  check('earnings: last week shows that week’s reports too', last.join(',') === 'AAPL,NVDA,TINYCO,MSFT', last.join(','));
+  check('earnings: last week shows that week’s reports too', last.join(',') === 'AAPL,NVDA,TINYCO,MSFT,MIDCO,PLTR,TM,NIOX', last.join(','));
+  await page.reload({ waitUntil: 'networkidle' }); await page.evaluate("ERN_CO_MS = 20; fhKey = 'test-key'; document.querySelector('#tabs [data-t=\"ERN\"]').click();"); await page.waitForTimeout(900);   // a reload opens on the stocks tab
+  const kept = await page.evaluate(() => { const b = document.querySelector('[data-ernv="list"]'); return b ? b.getAttribute('aria-selected') + ' ' + !!document.querySelector('#ernList') : 'no tabs: ' + document.querySelector('#view').textContent.replace(/\s+/g, ' ').slice(0, 300); });
+  check('earnings: the chosen view stays chosen on this device; names come from the device cache (no new lookups)', kept === 'true true' && prof.length === 6, `${kept} · ${prof.length} lookups`);
+  await page.setViewportSize({ width: 390, height: 844 }); await chip('[data-ernv="big"]'); await page.waitForTimeout(300);
+  const phone = await page.evaluate(() => ({ over: document.documentElement.scrollWidth - window.innerWidth, cols: window.getComputedStyle(document.querySelector('#ernBoard .ebrd')).gridTemplateColumns.split(' ').length }));
+  check('earnings: on a phone the board stacks the days in one column, with no sideways scrolling', phone.over <= 1 && phone.cols === 1, JSON.stringify(phone));
   const csp = await page.evaluate(() => window.__csp);
   check('earnings: no script errors and no Content-Security-Policy violations', errors.length === 0 && csp.length === 0, errors.concat(csp).join(' | '));
   await page.close();

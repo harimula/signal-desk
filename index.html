@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-q6Jrlt8SLclNLzFQ5AckgIYZiDDVw2niDTyLUntN9IU=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-Mmw2EV7GJysNqIO+FJIumL6CgJhFkrGGlrsDS9dzMt0=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -242,6 +242,53 @@ ul.why{margin:6px 0 0;padding-left:18px}
 .rules td.n{white-space:nowrap;font-weight:700}
 .rules h3{font-size:14px;margin:0 0 10px;font-weight:600}
 .rules ul{margin:6px 0;padding-left:18px}
+/* Earnings — the big-companies board: one column per day, read top to bottom like the trading day (before the open, during
+   it, after the close). Gold: still to report; green: beat the analysts' estimate; red: missed it; grey: in line. */
+.ebhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px 16px;flex-wrap:wrap}
+.eblg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--muted);margin-top:5px}
+.eblg span{display:inline-flex;align-items:center;gap:6px}
+.ebsw{width:11px;height:11px;border-radius:3px;display:inline-block;background:var(--gold)}
+.ebsw.beat{background:var(--tb)}.ebsw.miss{background:var(--ts)}.ebsw.line{background:var(--h)}
+.ebrd{display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));gap:8px;margin-top:12px;align-items:start}
+.ebday{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 8px 10px;min-width:0}
+.ebday.now{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
+.ebdh{display:flex;align-items:baseline;gap:8px;padding:0 2px 7px;border-bottom:1px solid var(--line)}
+.ebdh b{font-size:13px;font-weight:600}.ebdh .mut{font-size:11.5px}
+.ebnow{font-size:11.5px;font-weight:700;color:var(--gold)}
+.ebn{margin-left:auto}
+.ebnone{font-size:12px;padding:10px 2px 2px}
+.ebs{margin-top:9px}
+.ebsl{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:600;color:var(--muted);margin:0 2px 6px}
+.ebsl::after{content:'';flex:1;height:1px;background:var(--line)}
+.ebtiles{display:grid;gap:6px}
+.ebt{min-width:0;border-radius:8px;padding:7px 9px 8px 12px;background:var(--warn-bg);box-shadow:inset 3px 0 0 var(--gold)}
+.ebt.beat{background:var(--tb-bg);box-shadow:inset 3px 0 0 var(--tb)}
+.ebt.miss{background:var(--ts-bg);box-shadow:inset 3px 0 0 var(--ts)}
+.ebt.line,.ebt.done{background:var(--h-bg);box-shadow:inset 3px 0 0 var(--h)}
+.ebt[data-s]{cursor:pointer}.ebt[data-s]:hover{outline:1px solid var(--h);outline-offset:-1px}
+.ebt1{display:flex;align-items:baseline;justify-content:space-between;gap:6px}
+.ebt1 b{font:600 15px/1.25 var(--font-mono);color:var(--gold)}
+.ebr{font-size:11px;font-weight:700;white-space:nowrap;color:var(--h)}
+.ebt.beat .ebt1 b,.ebt.beat .ebr{color:var(--tb)}.ebt.miss .ebt1 b,.ebt.miss .ebr{color:var(--ts)}.ebt.line .ebt1 b,.ebt.done .ebt1 b{color:var(--text)}
+.ebtn{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ebtv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:1px 8px;margin-top:4px;font-size:11.5px;font-variant-numeric:tabular-nums}
+.ebtv>span:nth-child(even){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ebtg{margin-top:5px}.ebtg .pill{margin:0 4px 0 0}
+.ebchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.ebc{font:600 11.5px/1.2 var(--font-mono);padding:4px 7px;border-radius:6px;background:var(--warn-bg);color:var(--gold);cursor:help}
+.ebc[data-tip]{text-decoration:none}.ebc[data-s]{cursor:pointer}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}   /* read by screen readers, not shown */
+.ebc.beat{background:var(--tb-bg);color:var(--tb)}.ebc.miss{background:var(--ts-bg);color:var(--ts)}.ebc.line,.ebc.done{background:var(--h-bg);color:var(--h)}
+/* the full calendar: big companies on a gold band (not in the "Big companies" filter, where every row is one) */
+tr.ernbig td{background:var(--warn-bg)}
+tr.ernbig td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+.ernbigp{background:var(--gold);color:var(--surface)}
+@media (max-width:999px){.ebrd{grid-template-columns:minmax(0,1fr)}.ebtiles{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
+@media (max-width:699px){
+  .ebday{padding:7px 7px 9px}
+  .ebday.past .ebtiles{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}   /* phones: days already reported shrink to ticker + result */
+  .ebday.past .ebtn,.ebday.past .ebtv,.ebday.past .ebtg{display:none}
+}
 @media (max-width:700px){
   #pftab{min-width:700px}#dttab{min-width:860px}
   #tb th:nth-child(7),#tb td:nth-child(7),#tb th:nth-child(11),#tb td:nth-child(11),#tb th:nth-child(12),#tb td:nth-child(12),#tb th:nth-child(13),#tb td:nth-child(13),#tb th:nth-child(14),#tb td:nth-child(14),#tb th:nth-child(15),#tb td:nth-child(15),#tb th:nth-child(16),#tb td:nth-child(16),#tb th:nth-child(17),#tb td:nth-child(17),#tb th:nth-child(20),#tb td:nth-child(20){display:none}
@@ -949,7 +996,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793217583';
+const BUILD_V = '1793224673';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1105,7 +1152,7 @@ function acctUi() {
 // plus the calculators' inputs. Stored at user/settings.enc.json (AES-256-GCM, PBKDF2-SHA256 x600k; older files carry their own count). Last write wins.
 // Never synced: device identity, view state, and anything DERIVED that is rewritten on every
 // render (logs, cached recommendations) — those would push a commit on every price tick.
-const SYNC_LOCAL = ['sd-ghtok', 'sd-jkey', 'sd-ghrepo', 'sd-syncat', 'sd-tab', 'sd-app', 'sd-reqs', 'sd-dtlog', 'sd-oplog', 'sd-recs'];
+const SYNC_LOCAL = ['sd-ghtok', 'sd-jkey', 'sd-ghrepo', 'sd-syncat', 'sd-tab', 'sd-app', 'sd-reqs', 'sd-dtlog', 'sd-oplog', 'sd-recs', 'sd-ernr', 'sd-ernf', 'sd-ernv', 'sd-ernbw'];   // … and the Earnings tab's view choices
 const SYNC_EXTRA = ['bangalore-corpus-calculator-v3', 'rent-vs-emi-v1', 'rentemi-v1'];
 const SYNC_PATH = '/contents/user/settings.enc.json';
 const syncKey = k => !!k && ((k.startsWith('sd-') && !SYNC_LOCAL.includes(k)) || SYNC_EXTRA.includes(k) || /^(rent|emi|retire|corpus)/i.test(k));
@@ -2308,6 +2355,7 @@ ${nwItems == null ? '<div class="mut" style="padding:10px 0">Loading…</div>' :
 // week, this week, next week) and again every 15 minutes while the tab is open: actual figures arrive through the day.
 let ernRows = null, ernAt = 0, ernBusy = false, ernErr = '', ernQ = '', ernAll = false;
 let ernRange = load('sd-ernr', 'week'), ernFilt = load('sd-ernf', 'mine');
+let ernView = load('sd-ernv', 'big'), ernBW = load('sd-ernbw', 'week');   // the Big companies board or the Full calendar; the board's week
 const etDay = (ms = Date.now()) => new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York'}).format(new Date(ms));   // yyyy-mm-dd in New York
 const dAdd = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 const wdOf = d => new Date(d + 'T12:00:00Z').getUTCDay();
@@ -2340,16 +2388,80 @@ async function ernLoad(force) {
   if (app === 'desk' && tab === 'ERN') renderAll(true);
 }
 setInterval(() => { if (app === 'desk' && tab === 'ERN' && !document.hidden) ernLoad(); }, 5 * 60000);   // ernLoad keeps 15 minutes between reads
+// The 100 most-traded US stocks count as big too: the bot's daily market scan (bot/scan.json, most traded first) — the names
+// the bot trades. Read at most once an hour; without the file, sales alone decide.
+let ernScan = null, ernScanAt = 0;
+async function ernScanLoad() {
+  if (Date.now() - ernScanAt < 3600000) return;
+  ernScanAt = Date.now();
+  try {
+    const r = await fetch('bot/scan.json?t=' + Math.floor(Date.now() / 3600000), {cache: 'no-store'}); if (!r.ok) return;
+    const j = await r.json(); if (!j || !Array.isArray(j.symbols)) return;
+    ernScan = new Map(j.symbols.map((s, i) => [String(s).toUpperCase(), i + 1]));
+    if (app === 'desk' && tab === 'ERN' && ernRows) renderAll(true);
+  } catch (e) {}
+}
+// Company names, and the currency the analysts' figures are in, from Finnhub's company profile: looked up one at a time
+// (every 2.5 s, only while this tab is open) for the big companies on screen, then kept on this device for 120 days. The
+// key has no sd- prefix, so it never syncs. Figures in another currency (yen, yuan…) show its code and do not count as size.
+const ERN_CO_KEY = 'ern-co-v1';
+let ERN_CO_MS = 2500, ernCo = {};
+try { ernCo = JSON.parse(localStorage.getItem(ERN_CO_KEY) || '{}') || {}; for (const k of Object.keys(ernCo)) if (!Array.isArray(ernCo[k]) || !(Date.now() - ernCo[k][2] < 120 * 864e5)) delete ernCo[k]; } catch (e) { ernCo = {}; }   // drop entries past 120 days
+let ernCoQ = [], ernCoRun = false, ernCoN = 0, ernCoWait = 0, ernCoDirty = false, ernCoDrawn = 0;
+const ernCoTried = new Set();
+const ernCoGet = s => { const c = ernCo[s]; return Array.isArray(c) && Date.now() - c[2] < 120 * 864e5 ? c : null; };
+function ernCoWant(syms) {
+  if (typeof fhKey === 'undefined' || !fhKey) return;
+  for (const s of syms) if (/^[A-Z]{1,5}$/.test(s) && !ernCoGet(s) && !ernCoTried.has(s) && !ernCoQ.includes(s)) ernCoQ.push(s);   // BRK.B-style symbols: the free plan refuses them
+  if (!ernCoRun && ernCoQ.length) { ernCoRun = true; setTimeout(ernCoStep, Math.min(400, ERN_CO_MS)); }
+}
+async function ernCoStep() {
+  if (!(app === 'desk' && tab === 'ERN') || document.hidden || !ernCoQ.length || ernCoN >= 150) { ernCoRun = false; return; }   // drawing the tab again resumes
+  if (ernCoWait > Date.now()) { setTimeout(ernCoStep, ernCoWait - Date.now()); return; }
+  const s = ernCoQ.shift(); ernCoN++; ernCoTried.add(s);
+  try {
+    const j = await tryJson(`https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(s)}&token=${encodeURIComponent(fhKey)}`, 10000);
+    ernCo[s] = [String((j && j.name) || '').slice(0, 60), String((j && (j.estimateCurrency || j.currency)) || '').toUpperCase().slice(0, 3), Date.now()];
+    ernCoDirty = true;
+  } catch (e) {
+    const m = String((e && e.message) || e);
+    if (/HTTP 429/.test(m)) { ernCoTried.delete(s); ernCoQ.unshift(s); ernCoN--; ernCoWait = Date.now() + 60000; }   // Finnhub's 60-a-minute limit: wait a minute
+    else if (/HTTP 40[34]/.test(m)) ernCo[s] = ['', '', Date.now()];   // not on the free plan: don't ask again for 120 days
+    else if (/HTTP 401/.test(m)) ernCoN = 150;   // key refused: stop for this visit
+  }
+  try { localStorage.setItem(ERN_CO_KEY, JSON.stringify(ernCo)); } catch (e) {}
+  const more = ernCoQ.length > 0;
+  if (more) setTimeout(ernCoStep, ERN_CO_MS); else ernCoRun = false;
+  if (ernCoDirty && (!more || Date.now() - ernCoDrawn > 4000)) { ernCoDirty = false; ernCoDrawn = Date.now(); if (app === 'desk' && tab === 'ERN') renderAll(true); }
+}
 const ernMsg = () => ({key: 'Finnhub refused the saved key. Check it in ⚡ Live prices (top of the page).', plan: 'Finnhub says this key’s plan does not include the earnings calendar.', rate: 'Finnhub’s limit of 60 requests a minute was reached — trying again in a minute.', net: 'Could not reach Finnhub — trying again in a minute.', part: 'Part of the calendar could not be loaded — showing what came in.'})[ernErr] || '';
 const ERN_HR = {bmo: ['Before the open', 'before 9:30 AM ET'], dmh: ['During the day', '9:30 AM–4:00 PM ET'], amc: ['After the close', 'after 4:00 PM ET'], '': ['Not announced', 'time not given']};
 const ERN_SHORT = {bmo: 'before the open', dmh: 'during the day', amc: 'after the close', '': 'time not given'};
 const ernHrOrder = h => ({bmo: 0, dmh: 1, amc: 2})[h] ?? 3;
 const ernDl = d => new Intl.DateTimeFormat('en-US', {weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC'}).format(new Date(d + 'T12:00:00Z'));
 const ernRel = (d, t) => d === t ? 'today' : d === dAdd(t, 1) ? 'tomorrow' : d === dAdd(t, -1) ? 'yesterday' : '';
-const ernEps = v => v == null ? '—' : (v < 0 ? '−$' : '$') + Math.abs(v).toFixed(2);
-const ernRev = v => { if (v == null) return '—'; const d1 = x => x.toFixed(1).replace(/\.0$/, ''); return '$' + (v >= 1e11 ? Math.round(v / 1e9) + 'B' : v >= 1e9 ? d1(v / 1e9) + 'B' : v >= 1e8 ? Math.round(v / 1e6) + 'M' : v >= 1e6 ? d1(v / 1e6) + 'M' : Math.round(v).toLocaleString('en-US')); };   // $176B, $16.8B, $63B, $812M, $2.5M
+// the currency of a company's figures: another one when its profile says so; '?' when the sales figure cannot be dollars (no
+// company sells $300B+ a quarter — yen or won figures look like that before the profile arrives); otherwise US dollars
+const ernCur = r => { const c = ernCoGet(r.sym); if (c && c[1] && c[1] !== 'USD') return c[1]; return Math.max(r.revE || 0, r.revA || 0) > 3e11 ? '?' : 'USD'; };
+const ernPre = cur => cur === 'USD' ? '$' : cur === '?' ? '' : cur + ' ';
+const ernEps = (v, cur = 'USD') => v == null ? '—' : (v < 0 ? '−' : '') + ernPre(cur) + Math.abs(v).toFixed(2);
+const ernRev = (v, cur = 'USD') => { if (v == null) return '—'; const d1 = x => x.toFixed(1).replace(/\.0$/, ''); return ernPre(cur) + (v >= 1e12 ? d1(v / 1e12) + 'T' : v >= 1e11 ? Math.round(v / 1e9) + 'B' : v >= 1e9 ? d1(v / 1e9) + 'B' : v >= 1e8 ? Math.round(v / 1e6) + 'M' : v >= 1e6 ? d1(v / 1e6) + 'M' : Math.round(v).toLocaleString('en-US')); };   // $176B, $16.8B, $63B, $812M, $2.5M; CNY 20B
 const ernSur = (a, e, minE) => { if (a == null || e == null || Math.abs(e) < minE) return '<span class="mut">—</span>'; const p = (a - e) / Math.abs(e) * 100; return `<b class="${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${Math.abs(p).toFixed(1)}%</b>`; };
-const ernName = s => { const r = DATA.rows[s]; if (r && !/\.NS$/.test(s)) return r[0] || ''; const c = custom && custom[idOf(s)]; return (c && c.rec && c.rec[0]) || ''; };
+const ernName = s => { const r = DATA.rows[s]; if (r && !/\.NS$/.test(s) && r[0]) return r[0]; const c = custom && custom[idOf(s)]; if (c && c.rec && c.rec[0]) return c.rec[0]; const p = ernCoGet(s); return (p && p[0]) || ''; };
+// Big: sales of $5 billion+ a quarter (in dollars), or one of the 100 most-traded US stocks. The largest — $20 billion+, or
+// the 25 most traded — get a full tile on the board; the rest are listed by ticker.
+const ernSize = r => ernCur(r) === 'USD' ? (r.revE != null ? r.revE : r.revA) : null;
+const ernRank = s => (ernScan && ernScan.get(s)) || 0;
+const ernIsBig = r => (ernSize(r) || 0) >= 5e9 || (ernRank(r.sym) > 0 && ernRank(r.sym) <= 100);
+const ernIsTop = r => (ernSize(r) || 0) >= 2e10 || (ernRank(r.sym) > 0 && ernRank(r.sym) <= 25);
+// beat or missed: reported earnings per share against the analysts' estimate, to the cent (sales when there is no EPS estimate)
+const ernState = r => {
+  const c = (a, e, t) => a > e + t ? 'beat' : a < e - t ? 'miss' : 'line';
+  if (r.epsA != null && r.epsE != null) return c(r.epsA, r.epsE, 0.005);
+  if (r.revA != null && r.revE != null) return c(r.revA, r.revE, Math.abs(r.revE) * 0.0005);
+  return r.epsA != null || r.revA != null ? 'done' : 'soon';
+};
+const ERN_ST = {soon: 'Still to report', beat: 'Beat', miss: 'Missed', line: 'In line', done: 'Reported'};
 // whose stock it is: your portfolios, watchlist (★) and My tickers, and the bot's positions and watch list (when its journal is open here)
 function ernTags() {
   const T = new Map(), add = (s, t) => { s = String(s || '').toUpperCase(); if (!s || /\.NS$|^\^|=/.test(s)) return; const a = T.get(s) || []; if (!a.includes(t)) a.push(t); T.set(s, a); };
@@ -2372,7 +2484,7 @@ function ernPick(range, filt, q) {
   const R = ernRanges(), [a0, a1] = R[range] || R.week, T = ernTags();
   let a = (ernRows || []).filter(r => r.date >= a0 && r.date <= a1);
   if (filt === 'mine') a = a.filter(r => T.has(r.sym));
-  else if (filt === 'big') a = a.filter(r => r.revE >= 1e9 || !!(DATA.rows[r.sym] && !/\.NS$/.test(r.sym)));
+  else if (filt === 'big') a = a.filter(ernIsBig);
   const Q = String(q || '').trim().toUpperCase();
   if (Q) a = a.filter(r => r.sym.includes(Q) || ernName(r.sym).toUpperCase().includes(Q));
   return a.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0) || ernHrOrder(x.hour) - ernHrOrder(y.hour) || (y.revE || 0) - (x.revE || 0) || (x.sym < y.sym ? -1 : 1));
@@ -2381,59 +2493,125 @@ const ernTagHTML = tg => tg.map(t => ` <span class="pill ${/^You|^Bot holds/.tes
 function ernListHTML() {
   if (!ernRows) return `<div class="mut" style="padding:10px 0">${ernErr && ernErr !== 'nokey' ? esc(ernMsg()) + ' <button class="btn" type="button" data-ernretry>Try again</button>' : 'Loading the calendar…'}</div>`;
   const T = ernTags(), a = ernPick(ernRange, ernFilt, ernQ), today = etDay(), cap = ernAll ? Infinity : 300;
-  if (!a.length) return `<div class="mut" style="padding:10px 0">${ernQ.trim() ? 'No company matches “' + esc(ernQ.trim()) + '” in this range.' : ernFilt === 'mine' ? 'None of your stocks or the bot’s report in this range — try “Large companies” or “All”.' : 'No reports in this range.'}</div>`;
+  if (!a.length) return `<div class="mut" style="padding:10px 0">${ernQ.trim() ? 'No company matches “' + esc(ernQ.trim()) + '” in this range.' : ernFilt === 'mine' ? 'None of your stocks or the bot’s report in this range — try “Big companies” or “All”.' : 'No reports in this range.'}</div>`;
   const perDay = {}; for (const r of a) perDay[r.date] = (perDay[r.date] || 0) + 1;
   let html = '', n = 0, day = '';
   for (const r of a) {
     if (n >= cap) break;
     if (r.date !== day) { day = r.date; const rel = ernRel(day, today), c = perDay[day]; html += `<tr><td colspan="9" class="lt" style="background:var(--h-bg)"><b>${ernDl(day)}</b>${rel ? ' · ' + rel : ''} <span class="mut">· ${c} ${c === 1 ? 'company' : 'companies'}</span></td></tr>`; }
-    const nm = ernName(r.sym), hr = ERN_HR[r.hour] || ERN_HR[''], open = !!(DATA.rows[r.sym] && !/\.NS$/.test(r.sym));
-    html += `<tr${open ? ` data-s="${esc(r.sym)}" data-m="US" tabindex="0" style="cursor:pointer"` : ''}><td class="lt" style="white-space:nowrap">${hr[0]}<div class="mut" style="font-size:11px">${hr[1]}</div></td>`
-      + `<td class="lt"><b>${esc(r.sym)}</b>${nm ? ` <span class="mut">${esc(nm.slice(0, 30))}</span>` : ''}${ernTagHTML(T.get(r.sym) || [])}</td>`
-      + `<td>${r.q && r.y ? 'Q' + r.q + ' ' + r.y : '—'}</td><td>${ernEps(r.epsE)}</td><td>${r.epsA == null ? '<span class="mut">—</span>' : '<b>' + ernEps(r.epsA) + '</b>'}</td><td>${ernSur(r.epsA, r.epsE, 0.005)}</td>`
-      + `<td>${ernRev(r.revE)}</td><td>${r.revA == null ? '<span class="mut">—</span>' : '<b>' + ernRev(r.revA) + '</b>'}</td><td>${ernSur(r.revA, r.revE, 1)}</td></tr>`;
+    const nm = ernName(r.sym), hr = ERN_HR[r.hour] || ERN_HR[''], open = !!(DATA.rows[r.sym] && !/\.NS$/.test(r.sym)), big = ernIsBig(r), cur = ernCur(r);
+    const cls = big && ernFilt !== 'big' ? ' class="ernbig"' : '', fx = cur === 'USD' ? '' : ` title="${cur === '?' ? 'Not in US dollars — Finnhub does not say which currency' : 'In ' + esc(cur) + ', the currency the company reports in'}"`;
+    html += `<tr${cls}${open ? ` data-s="${esc(r.sym)}" data-m="US" tabindex="0" style="cursor:pointer"` : ''}><td class="lt" style="white-space:nowrap">${hr[0]}<div class="mut" style="font-size:11px">${hr[1]}</div></td>`
+      + `<td class="lt"><b>${esc(r.sym)}</b>${nm ? ` <span class="mut">${esc(nm.slice(0, 30))}</span>` : ''}${big ? ' <span class="pill ernbigp" style="font-size:10px">Big</span>' : ''}${ernTagHTML(T.get(r.sym) || [])}</td>`
+      + `<td>${r.q && r.y ? 'Q' + r.q + ' ' + r.y : '—'}</td><td${fx}>${ernEps(r.epsE, cur)}</td><td${fx}>${r.epsA == null ? '<span class="mut">—</span>' : '<b>' + ernEps(r.epsA, cur) + '</b>'}</td><td>${ernSur(r.epsA, r.epsE, 0.005)}</td>`
+      + `<td${fx}>${ernRev(r.revE, cur)}</td><td${fx}>${r.revA == null ? '<span class="mut">—</span>' : '<b>' + ernRev(r.revA, cur) + '</b>'}</td><td>${ernSur(r.revA, r.revE, 1)}</td></tr>`;
     n++;
   }
   const more = a.length > n ? `<div style="margin-top:8px"><button class="btn" type="button" data-ernall>Show all ${a.length.toLocaleString('en-US')}</button> <span class="mut" style="font-size:12px">the first ${n} are shown — or narrow the list with the search box</span></div>` : '';
   return `<div class="tw"><table style="min-width:880px"><thead><tr><th class="lt" style="text-align:left">Time</th><th class="lt" style="text-align:left">Company</th><th>Quarter</th><th>EPS estimate</th><th>EPS actual</th><th>EPS surprise</th><th>Revenue estimate</th><th>Revenue actual</th><th>Revenue surprise</th></tr></thead><tbody>${html}</tbody></table></div>${more}`;
 }
+// The Big companies board: the week's big reports, one column per day (a Saturday or Sunday only when someone big reports
+// then), each split by session. Two share classes of one company (GOOGL, GOOG) show once: same day, session and estimates.
+function ernBoardRows(range) {
+  const R = ernRanges(), [a0, a1] = R[range] || R.week, best = new Map();
+  const pref = x => (ernRank(x.sym) || 999) * 10 + (DATA.rows[x.sym] ? 0 : 5) + x.sym.length / 100;
+  for (const r of ernRows || []) {
+    if (r.date < a0 || r.date > a1 || !ernIsBig(r)) continue;
+    const k = r.revE != null && r.epsE != null ? [r.date, r.hour, r.revE, r.epsE].join('|') : r.sym + '|' + r.date;
+    const o = best.get(k); if (!o || pref(r) < pref(o)) best.set(k, r);
+  }
+  return [...best.values()];
+}
+const ernMine = (r, T) => (T.get(r.sym) || []).filter(t => !/^Bot watches/.test(t));
+const ernOpen = s => !!(DATA.rows[s] && !/\.NS$/.test(s));
+// a full tile: ticker, result, name, EPS and sales — the estimate until the company reports, then the figure and its surprise
+function ernTile(r, T) {
+  const st = ernState(r), cur = ernCur(r), nm = ernName(r.sym), tg = ernMine(r, T);
+  const val = (lab, a, e, f, minE) => `<span class="mut">${lab}</span><span>${a != null ? f(a, cur) + (e != null && Math.abs(e) >= minE ? ' ' + ernSur(a, e, minE) : '') : e != null ? '<span class="mut">est</span> ' + f(e, cur) : '<span class="mut">—</span>'}</span>`;
+  return `<div class="ebt ${st}"${ernOpen(r.sym) ? ` data-s="${esc(r.sym)}" data-m="US" tabindex="0" role="button"` : ''}><div class="ebt1"><b>${esc(r.sym)}</b>${st === 'soon' ? '' : `<span class="ebr">${ERN_ST[st]}</span>`}</div>`
+    + `<div class="ebtn">${nm ? esc(nm) : '&nbsp;'}</div><div class="ebtv">${val('EPS', r.epsA, r.epsE, ernEps, 0.005)}${val('Sales', r.revA, r.revE, ernRev, 1)}</div>${tg.length ? `<div class="ebtg">${ernTagHTML(tg)}</div>` : ''}</div>`;
+}
+// a ticker chip for the other big companies: its numbers on hover, tap or focus (and, for a stock the page follows, a tap opens its chart)
+function ernChip(r) {
+  const st = ernState(r), cur = ernCur(r), nm = ernName(r.sym);
+  const info = [r.sym + (nm ? ' ' + nm : ''), ERN_ST[st].toLowerCase(),
+    r.epsA != null ? 'EPS ' + ernEps(r.epsA, cur) + (r.epsE != null ? ' vs ' + ernEps(r.epsE, cur) + ' expected' : '') : r.epsE != null ? 'EPS expected ' + ernEps(r.epsE, cur) : '',
+    r.revA != null ? 'sales ' + ernRev(r.revA, cur) + (r.revE != null ? ' vs ' + ernRev(r.revE, cur) : '') : r.revE != null ? 'sales expected ' + ernRev(r.revE, cur) : ''].filter(Boolean).join(', ');
+  const inner = `<span aria-hidden="true">${esc(r.sym)}</span><span class="vh">${esc(info)}</span>`;
+  return ernOpen(r.sym) ? `<span class="ebc ${st}" data-s="${esc(r.sym)}" data-m="US" tabindex="0" role="button" title="${esc(info)}">${inner}</span>` : `<span class="ebc ${st}" tabindex="0" data-tip="${esc(info)}">${inner}</span>`;
+}
+function ernBoardHTML(T) {
+  if (!ernRows) return `<div class="mut" style="padding:10px 0">${ernErr && ernErr !== 'nokey' ? esc(ernMsg()) + ' <button class="btn" type="button" data-ernretry>Try again</button>' : 'Loading the calendar…'}</div>`;
+  const R = ernRanges(), [a0, a1] = R[ernBW] || R.week, today = etDay(), rows = ernBoardRows(ernBW), days = [];
+  for (let d = a0; d <= a1; d = dAdd(d, 1)) if ((wdOf(d) !== 0 && wdOf(d) !== 6) || rows.some(r => r.date === d)) days.push(d);
+  const bySize = (x, y) => (ernSize(y) || 0) - (ernSize(x) || 0) || (ernRank(x.sym) || 999) - (ernRank(y.sym) || 999) || (x.sym < y.sym ? -1 : 1);
+  const col = d => {
+    const rs = rows.filter(r => r.date === d), rel = ernRel(d, today);
+    let h = `<section class="ebday${d === today ? ' now' : d < today ? ' past' : ''}" aria-label="${ernDl(d)}"><div class="ebdh"><b>${ernDl(d)}</b>${d === today ? '<span class="ebnow">Today</span>' : rel ? `<span class="mut">${rel}</span>` : ''}${rs.length ? `<span class="ebn mut">${rs.length} ${rs.length === 1 ? 'company' : 'companies'}</span>` : ''}</div>`;
+    if (!rs.length) return h + '<div class="mut ebnone">No big company reports</div></section>';
+    for (const hr of ['bmo', 'dmh', 'amc', '']) {
+      const g = rs.filter(r => r.hour === hr).sort(bySize); if (!g.length) continue;
+      const tiles = g.filter(r => ernIsTop(r) || ernMine(r, T).length), chips = g.filter(r => !tiles.includes(r));
+      h += `<div class="ebs"><div class="ebsl" data-tipkey="${ERN_HR[hr][0].toLowerCase()}">${ERN_HR[hr][0]}</div>${tiles.length ? `<div class="ebtiles">${tiles.map(r => ernTile(r, T)).join('')}</div>` : ''}${chips.length ? `<div class="ebchips">${chips.map(ernChip).join('')}</div>` : ''}</div>`;
+    }
+    return h + '</section>';
+  };
+  return `<div class="ebrd" style="--n:${days.length}">${days.map(col).join('')}</div>`;
+}
 function earningsView() {
-  ernLoad();
+  ernLoad(); ernScanLoad();
   if (!botJ && typeof botLoad === 'function') { try { botLoad(); } catch (e) {} }   // the bot's positions and watch list, when its journal opens on this device
   const intro = `<h2 style="margin-bottom:6px">Earnings</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">When companies report their quarterly results — the day, the time (before the open or after the close), what analysts expect and, once out, what came in. Eastern Time.</div>`;
   if (ernErr === 'nokey') return intro + `<div class="card" style="padding:14px 18px"><b style="font-size:15px">One free key, once per device</b><div style="font-size:13.5px;margin-top:6px;line-height:1.5">The calendar comes from Finnhub — the same free key that makes prices move live on this page. Save it once in ⚡ Live prices and the calendar appears here.</div><div style="margin-top:10px"><button class="btn" type="button" data-ernsetup>Set up the free key</button></div></div>`;
   const R = ernRanges(), T = ernTags(), today = etDay();
   const mineN = [...T.values()].filter(a => a.some(t => !/^Bot watches/.test(t))).length;
   const near = (ernRows || []).filter(r => r.date >= today && r.date <= dAdd(today, 13) && (T.get(r.sym) || []).some(t => !/^Bot watches/.test(t))).sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0) || ernHrOrder(x.hour) - ernHrOrder(y.hour));
-  const big = (ernRows || []).filter(r => r.date >= R.week[0] && r.date <= R.week[1] && r.revE > 0).sort((a, b) => b.revE - a.revE).slice(0, 8);
-  const line = r => { const rel = ernRel(r.date, today), nm = ernName(r.sym); return `<li><b>${ernDl(r.date)}</b>${rel ? ' (' + rel + ')' : ''} · ${ERN_SHORT[r.hour] || ERN_SHORT['']} — <b>${esc(r.sym)}</b>${nm ? ' <span class="mut">' + esc(nm.slice(0, 30)) + '</span>' : ''}${ernTagHTML((T.get(r.sym) || []).filter(t => !/^Bot watches/.test(t)))}${r.epsE != null ? ` <span class="mut" style="font-size:12px">· EPS expected ${ernEps(r.epsE)}</span>` : ''}</li>`; };
+  const line = r => { const rel = ernRel(r.date, today), nm = ernName(r.sym); return `<li><b>${ernDl(r.date)}</b>${rel ? ' (' + rel + ')' : ''} · ${ERN_SHORT[r.hour] || ERN_SHORT['']} — <b>${esc(r.sym)}</b>${nm ? ' <span class="mut">' + esc(nm.slice(0, 30)) + '</span>' : ''}${ernTagHTML((T.get(r.sym) || []).filter(t => !/^Bot watches/.test(t)))}${r.epsE != null ? ` <span class="mut" style="font-size:12px">· EPS expected ${ernEps(r.epsE, ernCur(r))}</span>` : ''}</li>`; };
   const yours = `<div class="card" style="padding:14px 18px;margin-bottom:14px"><b style="font-size:15px">Coming up for your stocks</b> <span class="mut" style="font-size:12px">· the next two weeks — your portfolios, watchlist (★), My tickers and what the bot holds</span>
-${!ernRows ? `<div class="mut" style="margin-top:8px">${ernErr ? esc(ernMsg()) : 'Loading…'}</div>` : near.length ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:13.5px;line-height:1.6">${near.slice(0, 15).map(line).join('')}</ul>${near.length > 15 ? `<div class="mut" style="font-size:12px">… and ${near.length - 15} more in the calendar below</div>` : ''}` : `<div class="mut" style="margin-top:8px;font-size:13px">${mineN ? 'None of your stocks report in the next two weeks.' : 'Add stocks to a portfolio, your watchlist (★) or My tickers to see their report dates here.'}</div>`}
-${big.length ? `<div style="margin-top:10px;font-size:13px;border-top:1px solid var(--line);padding-top:8px"><b>Biggest this week:</b> ${big.map(r => `${esc(r.sym)} <span class="mut">${ernDl(r.date).split(',')[0]} ${ERN_SHORT[r.hour] || ERN_SHORT['']}</span>`).join(' · ')}</div>` : ''}</div>`;
+${!ernRows ? `<div class="mut" style="margin-top:8px">${ernErr ? esc(ernMsg()) : 'Loading…'}</div>` : near.length ? `<ul style="margin:8px 0 0;padding-left:18px;font-size:13.5px;line-height:1.6">${near.slice(0, 15).map(line).join('')}</ul>${near.length > 15 ? `<div class="mut" style="font-size:12px">… and ${near.length - 15} more in the full calendar</div>` : ''}` : `<div class="mut" style="margin-top:8px;font-size:13px">${mineN ? 'None of your stocks report in the next two weeks.' : 'Add stocks to a portfolio, your watchlist (★) or My tickers to see their report dates here.'}</div>`}</div>`;
+  const views = `<div class="vnav" role="tablist" aria-label="Earnings view" style="margin:0 0 10px">${[['big', 'Big companies'], ['list', 'Full calendar']].map(([k, l]) => `<button class="vtab" type="button" role="tab" data-ernv="${k}" data-tipkey="${l.toLowerCase()}" aria-selected="${ernView === k}">${l}</button>`).join('')}</div>`;
+  const ago = ernAt ? Math.max(0, Math.round((Date.now() - ernAt) / 60000)) : null;
+  const src = `Source: Finnhub earnings calendar${ernRows && ago != null ? ' · read ' + (ago < 1 ? 'just now' : ago + ' min ago') : ''}.`;
+  const part = ernRows && ernErr === 'part' ? `<div class="banner warn" style="margin:6px 0">${esc(ernMsg())}</div>` : '';
+  if (ernView !== 'list') {
+    const rows = ernRows ? ernBoardRows(ernBW) : [];
+    if (ernRows) ernCoWant(rows.filter(ernIsTop).concat(rows.filter(r => !ernIsTop(r))).map(r => r.sym));   // names for the full tiles first
+    const weeks = [['lastweek', 'Last week'], ['week', 'This week'], ['nextweek', 'Next week']].map(([k, l]) => `<button class="vtab" type="button" role="tab" data-ernbw="${k}" aria-selected="${ernBW === k}">${l}${ernRows ? ` <span class="mut" style="font-size:11px">${ernBoardRows(k).length}</span>` : ''}</button>`).join('');
+    const key = [['soon', 'Still to report'], ['beat', 'Beat the estimate'], ['miss', 'Missed it'], ['line', 'In line']].map(([k, l]) => `<span><i class="ebsw ${k}"></i>${l}</span>`).join('');
+    return intro + yours + views + `<div class="card" id="ernBoard" style="padding:12px 18px 14px"><div class="ebhead"><div><b style="font-size:15px">Big companies reporting</b><div class="eblg">${key}</div></div><div class="vnav" role="tablist" aria-label="Which week" style="margin:0">${weeks}</div></div>
+${part}${ernBoardHTML(T)}
+<div class="mut" style="font-size:11px;margin-top:10px;line-height:1.5">Big companies: sales of at least $5 billion a quarter, or one of the 100 most-traded US stocks (the bot’s daily list). The largest — $20 billion or more a quarter, or the 25 most traded — and your own stocks get a full tile; the others are listed by ticker: point at or tap one for its numbers. Beat or missed compares the reported earnings per share with the analysts’ average estimate. Tap a stock the page follows to open its chart. ${src} Not advice.</div></div>`;
+  }
+  if (ernRows) ernCoWant(ernPick(ernRange, ernFilt, ernQ).filter(ernIsBig).slice(0, 60).map(r => r.sym));
   const cnt = (rg, f) => ernRows ? ` <span class="mut" style="font-size:11px">${ernPick(rg, f, '').length}</span>` : '';
   const chipsR = Object.entries(R).map(([k, v]) => `<button class="vtab" type="button" role="tab" data-ernr="${k}" aria-selected="${ernRange === k}">${esc(v[2])}${cnt(k, ernFilt)}</button>`).join('');
-  const chipsF = [['mine', 'Yours & the bot’s'], ['big', 'Large companies'], ['all', 'All']].map(([k, l]) => `<button class="vtab" type="button" role="tab" data-ernf="${k}" aria-selected="${ernFilt === k}">${l}${cnt(ernRange, k)}</button>`).join('');
-  const ago = ernAt ? Math.max(0, Math.round((Date.now() - ernAt) / 60000)) : null;
-  return intro + yours + `<div class="card" style="padding:12px 18px"><b style="font-size:15px">Calendar</b>
+  const chipsF = [['mine', 'Yours & the bot’s'], ['big', 'Big companies'], ['all', 'All']].map(([k, l]) => `<button class="vtab" type="button" role="tab" data-ernf="${k}"${k === 'big' ? ' data-tipkey="big companies"' : ''} aria-selected="${ernFilt === k}">${l}${cnt(ernRange, k)}</button>`).join('');
+  return intro + yours + views + `<div class="card" style="padding:12px 18px"><b style="font-size:15px">Calendar</b>
 <div class="vnav" role="tablist" aria-label="Which days" style="margin:10px 0 4px">${chipsR}</div>
 <div class="vnav" role="tablist" aria-label="Which companies" style="margin:4px 0">${chipsF}</div>
 <div class="toolbar" style="margin:8px 0"><input id="ernQ" type="search" placeholder="Find a ticker or company" aria-label="Find a ticker or company" value="${esc(ernQ)}" autocomplete="off"></div>
-${ernRows && ernErr === 'part' ? `<div class="banner warn" style="margin:6px 0">${esc(ernMsg())}</div>` : ''}
+${part}
 <div id="ernList">${ernListHTML()}</div>
-<div class="mut" style="font-size:11px;margin-top:8px">Source: Finnhub earnings calendar${ernRows && ago != null ? ' · read ' + (ago < 1 ? 'just now' : ago + ' min ago') : ''}. EPS is adjusted (non-GAAP), the figure markets react to; estimates are analysts’ averages; surprise = actual against estimate. Time is the session the company announced — exact minutes are not given; a report after the close moves the price at the next open. Not advice.</div></div>`;
+<div class="mut" style="font-size:11px;margin-top:8px">${src} EPS is adjusted (non-GAAP), the figure markets react to; estimates are analysts’ averages; surprise = actual against estimate. Big companies (gold band) as on the Big companies board. Time is the session the company announced — exact minutes are not given; a report after the close moves the price at the next open. Not advice.</div></div>`;
 }
-// chips, “show all”, retry and set-up buttons; the search box redraws only the list (the box keeps its focus); a row of a stock
-// the page knows opens its chart and levels
+// view and week tabs, chips, “show all”, retry and set-up buttons; the search box redraws only the list (the box keeps its
+// focus); a row, tile or chip of a stock the page knows opens its chart and levels
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-ernr], [data-ernf], [data-ernall], [data-ernsetup], [data-ernretry], #ernList tr[data-s]'); if (!t) return;
-  if (t.dataset.ernr) { ernRange = t.dataset.ernr; save('sd-ernr', ernRange); ernAll = false; renderAll(); }
+  const t = e.target.closest && e.target.closest('[data-ernv], [data-ernbw], [data-ernr], [data-ernf], [data-ernall], [data-ernsetup], [data-ernretry], #ernList tr[data-s], #ernBoard [data-s]'); if (!t) return;
+  if (t.dataset.ernv) { ernView = t.dataset.ernv; save('sd-ernv', ernView); renderAll(); }
+  else if (t.dataset.ernbw) { ernBW = t.dataset.ernbw; save('sd-ernbw', ernBW); renderAll(); }
+  else if (t.dataset.ernr) { ernRange = t.dataset.ernr; save('sd-ernr', ernRange); ernAll = false; renderAll(); }
   else if (t.dataset.ernf) { ernFilt = t.dataset.ernf; save('sd-ernf', ernFilt); ernAll = false; renderAll(); }
   else if (t.hasAttribute('data-ernall')) { ernAll = true; renderAll(); }
   else if (t.hasAttribute('data-ernsetup')) { const bx = $('#pxBox'); if (bx) { bx.open = true; bx.scrollIntoView({behavior: 'smooth', block: 'start'}); setTimeout(() => { const i = $('#fhIn'); if (i) i.focus(); }, 400); } }
   else if (t.hasAttribute('data-ernretry')) ernLoad(true);
   else if (t.dataset.s) openDetail(t.dataset.s, 'US');
 });
-document.addEventListener('keydown', e => { if (e.key !== 'Enter') return; const tr = e.target.closest && e.target.closest('#ernList tr[data-s]'); if (tr) { e.preventDefault(); openDetail(tr.dataset.s, 'US'); } });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest && e.target.closest(e.key === 'Enter' ? '#ernList tr[data-s], #ernBoard [data-s]' : '#ernBoard [data-s]');   // board tiles are buttons: Space too
+  if (el) { e.preventDefault(); openDetail(el.dataset.s, 'US'); }
+});
 document.addEventListener('input', e => { if (!e.target || e.target.id !== 'ernQ') return; ernQ = e.target.value; ernAll = false; const l = $('#ernList'); if (l) { l.innerHTML = ernListHTML(); try { twNav2($('#view')); } catch (e2) {} } });
 // ---------- Bot trades tab: reads bot/journal.json written by the paper-trading bot ----------
 // ---- encrypted journal (privacy mode): decrypt in the browser with your passphrase ----
