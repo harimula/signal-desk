@@ -49,6 +49,15 @@ const READONLY = process.env.BOT_READONLY === '1';
 let SESSION_END = 0;
 export const setSessionEnd = ms => { SESSION_END = +ms || 0; };
 const sessionEnding = () => SESSION_END > 0 && Date.now() >= SESSION_END - 10 * 60000;
+// When a session ends (live.mjs). One born between 6:00 and 9:25 ET — the early start that waits for the open, or the 9:20
+// schedule — hands over to a fresh session at 9:25 instead of running its whole life: the fresh one's 345 minutes then last
+// to about 3:10 PM, so the day's one mid-session hand-off (10 minutes without new trades) falls after the SPY window (until
+// 3:00 PM) and not around noon, where on 2026-10-29 it took the day's only clean SPY setup (12:00). Others run their life.
+export const HANDOVER_MIN = 9 * 60 + 25;
+export function sessionEndFor(bornMs, lifeMs) {
+  const p = etParts(new Date(bornMs)), s = ((+p.hour % 24) * 60 + +p.minute) * 60 + new Date(bornMs).getUTCSeconds();   // ET offsets are whole hours
+  return s >= 6 * 3600 && s < HANDOVER_MIN * 60 ? bornMs + (HANDOVER_MIN * 60 - s) * 1000 : bornMs + lifeMs;
+}
 // The page's Pause: bot/STOP in the repo, mirrored by a running session to bot/STOP.local (git-ignored, so publishing the
 // journal never has to delete it to pull, and a failed pull can never drop it).
 export const STOP_FILES = ['bot/STOP', 'bot/STOP.local'];
@@ -186,7 +195,7 @@ async function dayTradeCycle(ctx) {
   const dayClosed = (fillsCache.closed || []).filter(c => c.inT && c.outT && c.inT.slice(0, 10) === c.outT.slice(0, 10));
   let streak = 0; for (const c of [...dayClosed].sort((a, b) => a.outT < b.outT ? 1 : -1)) { if (c.pl < 0) streak++; else break; }
   const pdtBlock = equity < 25000 && +acct.daytrade_count >= 3 && !acct.pattern_day_trader;
-  const idle = !CFG.dayTrade ? 'day trading is off' : capHit ? 'daily loss limits hit' : G.block ? 'paused by the market check' : noNew ? noNew : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.dayMaxTrades ? `${tradesToday} day trades today — daily maximum reached` : streak >= CFG.dayStreak ? `${streak} day-trade losses in a row — done for the day` : MINS < dayC.start ? 'before the day-trade window' : MINS >= dayC.end ? 'day-trade window closed' : market === 'flat' ? 'market undecided (SPY on its VWAP) — waiting' : null;
+  const idle = !CFG.dayTrade ? 'day trading is off' : capHit ? 'daily loss limits hit' : userPause ? 'paused from Telegram' : G.block ? 'paused by the market check' : noNew ? noNew : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.dayMaxTrades ? `${tradesToday} day trades today — daily maximum reached` : streak >= CFG.dayStreak ? `${streak} day-trade losses in a row — done for the day` : MINS < dayC.start ? 'before the day-trade window' : MINS >= dayC.end ? 'day-trade window closed' : market === 'flat' ? 'market undecided (SPY on its VWAP) — waiting' : null;
   const setups = [];
   if (CFG.dayTrade) {
     const dailyBars = await loadBars();
@@ -316,7 +325,7 @@ async function spyCycle(ctx) {
   if (!pending) spyPendingUntil = 0;                                                             // the last buy (placed well before this picture) has filled or was cancelled: the next entry may go
   const maxOpen = CFG.spyMaxOpen || 1, tradeMoney = SIDE.spy.money * CFG.spyTradePct / 100, free = SIDE.spy.money - SL_used(positions, live);
   const stale = sig && sig.side && !spyFresh(sig.side, sig.level, spyLvl(sig.side));
-  const idle = !CFG.spyOn ? 'switched off' : halt.spy ? halt.spy : G.block ? 'paused by the market check' : userPause ? 'paused from Telegram' : noNew ? noNew : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.spyMaxTrades ? `${tradesToday} SPY trades today — daily maximum reached` : pending ? 'buy order working' : open.length >= maxOpen ? (maxOpen > 1 ? `${open.length} SPY trades open — the most at once` : 'in a trade') : open.length && free < tradeMoney * 0.5 ? 'all of the SPY money is in trades' : sig && sig.idle ? sig.idle : !sig ? 'waiting for SPY bars' : sig.side && !spyLatestIn() ? 'waiting for the 5-minute bar that just closed' : stale ? `waiting for a new break (last ${sig.side.toUpperCase()} at ${spyLvl(sig.side)})` : null;
+  const idle = !CFG.spyOn ? 'switched off' : halt.spy ? halt.spy : userPause ? 'paused from Telegram' : G.block ? 'paused by the market check' : noNew ? noNew : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.spyMaxTrades ? `${tradesToday} SPY trades today — daily maximum reached` : pending ? 'buy order working' : open.length >= maxOpen ? (maxOpen > 1 ? `${open.length} SPY trades open — the most at once` : 'in a trade') : open.length && free < tradeMoney * 0.5 ? 'all of the SPY money is in trades' : sig && sig.idle ? sig.idle : !sig ? 'waiting for SPY bars' : sig.side && !spyLatestIn() ? 'waiting for the 5-minute bar that just closed' : stale ? `waiting for a new break (last ${sig.side.toUpperCase()} at ${spyLvl(sig.side)})` : null;
   const r0 = x => Math.round(x);
   const openRows = open.map(({ p, d, e, q }) => ({ s: p.symbol, id: e ? cid(e) : '', entry: +p.avg_entry_price || (d ? d.entry : 0), pending: false, kind: d ? d.kind : 'call', qty: q, own: q, avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
   const keepPending = lastSpy && lastSpy.open ? lastSpy.open.filter(o => o.pending && live.some(l => l.symbol === o.s && l.side === 'buy')) : [];
@@ -1147,14 +1156,14 @@ async function run() {
       if (opt) { const m2 = OPT_RE.exec(p.symbol); row.exp = '20' + m2[2].slice(0, 2) + '-' + m2[2].slice(2, 4) + '-' + m2[2].slice(4, 6); }
       heldRows.push(row);
     }
-    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : G.block ? 'paused by the market check' : noNew ? noNew : G.mktBlock ? 'market filter: ' + G.mktBlock + ' \u2014 no new dip buys' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, exitRule: CFG.exitRule, exitPct: CFG.exitProfitPct, optExit: CFG.optExit, mktFilter: !!CFG.marketFilter, mkt: G.mkt || null, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : userPause ? 'paused from Telegram' : G.block ? 'paused by the market check' : noNew ? noNew : G.mktBlock ? 'market filter: ' + G.mktBlock + ' \u2014 no new dip buys' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, exitRule: CFG.exitRule, exitPct: CFG.exitProfitPct, optExit: CFG.optExit, mktFilter: !!CFG.marketFilter, mkt: G.mkt || null, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
       buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
   }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`, 'pops:' + shortSigs.map(s => s.sym).join(','));   // logged again when the names change, not every time an RSI value moves
   // ---- new entries ----
   if (bothHalted) { if (!SPLIT) act(`Daily loss cap ${LOSS_CAP}% hit (${dayPct.toFixed(2)}%) — no new trades today`); return; }
   if (MINS < G.minStart || MINS >= Math.min(ENTRY_END, CLOSE - 15)) { console.log('Outside the RSI-2 entry window.'); return; }
-  if (G.block) { console.log('Paused by market check.'); return; }
+  if (G.block) { console.log(userPause ? 'Paused from Telegram.' : 'Paused by market check.'); return; }
   if (noNew) { console.log(noNew); return; }
 
   // ---- portfolio risk: heat (money at risk to the stops) and sector concentration ----

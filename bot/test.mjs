@@ -93,6 +93,14 @@ test('defense contracts and power news are not war news', () => {
   assert.ok(classify('Missiles fired at tanker in the Red Sea').includes('war'));
   assert.ok(classify('Airstrikes reported near the border').includes('war'));
 });
+test('the defense department\'s name ("Department of War", since 2025) is not war news; war itself still is', () => {
+  assert.equal(classify("Appian's Defense Cloud Achieves Impact Level 5 Provisional Authorization To Operate From U.S. Department Of War").length, 0);
+  assert.equal(classify('War Department awards $2B radar contract to Raytheon').length, 0);
+  assert.ok(classify('QatarEnergy CEO Says Two LNG Trains Damaged In Iranian Attacks; Iran war escalates').includes('war'));
+  assert.ok(classify('Department of War confirms troops deployed after the invasion').includes('war'), 'other war words still count');
+  const g = guard({ events: [], todayDash: '2026-10-29', mins: 11 * 60 + 3, headlines: [{ headline: "Appian's Defense Cloud Achieves Impact Level 5 Provisional Authorization To Operate From U.S. Department Of War", created_at: new Date().toISOString() }] });
+  assert.equal(g.block, false);
+});
 test('PUT rule is the mirror of the dip rule', () => {
   const mk = (start, end, tail) => { const c = []; for (let i = 0; i < 298; i++) c.push(start + (end - start) * i / 297); for (const g of tail) c.push(c[c.length - 1] * (1 + g)); return c; };
   const bars = c => c.map(x => ({ o: x, h: x * 1.004, l: x * 0.996, c: x }));
@@ -437,6 +445,20 @@ test('SPY sleeve: "armed" — a break counts only after a 5-minute bar closed in
   const down = up.map((b, i) => i === 4 ? { ...b, o: 502.4, c: 502.0 } : b), w = spySignal({ bars: down, px: 502.7, mins: 600 });
   assert.equal(w.armed, false); assert.equal(w.side, undefined, 'the same break is not a signal'); assert.match(w.idle, /waiting for a 5-minute bar to close up/);
   const quiet = up.map((b, i) => i === 4 ? { ...b, v: 5e5 } : b); assert.equal(spySignal({ bars: quiet, px: 502.2, mins: 600 }).armed, false);
+});
+
+console.log('Session hand-off (2026-10-29)');
+const { sessionEndFor, HANDOVER_MIN } = await import('./bot.mjs');
+test('a session born before the open hands over at 9:25 ET, so the next one\'s life ends after the SPY window; others run their whole life', () => {
+  const LIFE = 345 * 60000, et = iso => Date.parse(iso);                       // 2026-10-29 is EDT (UTC-4); 2026-11-02 is EST (UTC-5)
+  assert.equal(HANDOVER_MIN, 9 * 60 + 25);
+  assert.equal(sessionEndFor(et('2026-10-29T10:20:51Z'), LIFE), et('2026-10-29T13:25:00Z'), 'born 6:20:51 AM → ends 9:25:00 AM');
+  assert.equal(sessionEndFor(et('2026-10-29T13:24:30Z'), LIFE), et('2026-10-29T13:25:00Z'), 'born 9:24:30 AM → ends 9:25:00 AM');
+  assert.equal(sessionEndFor(et('2026-11-02T11:00:00Z'), LIFE), et('2026-11-02T14:25:00Z'), 'winter time: born 6:00 AM EST → ends 9:25 AM EST');
+  const b2 = et('2026-10-29T13:26:10Z'); assert.equal(sessionEndFor(b2, LIFE), b2 + LIFE, 'born 9:26 AM → full life, to 3:11 PM');
+  assert.ok(new Date(b2 + LIFE).toISOString() > '2026-10-29T19:00:00Z', 'the hand-off starts after 3:00 PM, when the SPY window has closed');
+  const b3 = et('2026-10-29T16:06:07Z'); assert.equal(sessionEndFor(b3, LIFE), b3 + LIFE, 'a mid-day successor runs its whole life');
+  const b4 = et('2026-10-29T09:30:00Z'); assert.equal(sessionEndFor(b4, LIFE), b4 + LIFE, 'born 5:30 AM (exits at once: before 6:00) → unchanged');
 });
 
 console.log('India earnings calendar (earnings-in.mjs)');

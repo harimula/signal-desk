@@ -7,14 +7,17 @@
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { HAVE_KEYS, closeMins, loadCalendar, setPublishing, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols, setSessionEnd } from './bot.mjs';
+import { HAVE_KEYS, closeMins, loadCalendar, setPublishing, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols, setSessionEnd, sessionEndFor } from './bot.mjs';
 import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { summary } from './config.mjs';
 
 if (!HAVE_KEYS) { console.log('No Alpaca keys configured - nothing to do.'); process.exit(0); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const LIFE = (+process.env.RUN_MINUTES || 350) * 60000, born = Date.now();
-setSessionEnd(born + LIFE);                                   // the bot opens nothing new in this session's last 10 minutes (hand-off)
+// born before the open (6:00-9:25 ET): this session hands over to a fresh one at 9:25, so the fresh one's life ends after the
+// SPY window instead of around noon (bot.mjs sessionEndFor); otherwise it runs its whole life
+const END = sessionEndFor(born, LIFE);
+setSessionEnd(END);                                           // the bot opens nothing new in this session's last 10 minutes (hand-off)
 const BEAT = +process.env.BEAT_MS || 2000, BEAT_CLOSE = 1000, MIN_GAP = 250, JOURNAL_EVERY = 60000, COMMIT_EVERY = 10 * 60000;
 let lastBeat = 0, lastFull = 0, lastJournal = 0, lastCommit = 0, errors = 0, lastCfg = 0, cfgSeen = JSON.stringify(CFG), cycling = false;
 const queue = [];                                             // reasons to run a cycle immediately
@@ -213,7 +216,7 @@ const m0 = setNow();
 // GitHub's scheduler often starts runs late, so the workflow also fires from 8:45 ET (7:45 in winter) and the run waits here
 // until 9:20 instead of exiting: the session is up before the open even when the 9:20 start is delayed.
 if (m0 >= 6 * 60 && m0 < 9 * 60 + 20) {   // from 6:00 ET: tools/kick-bot.mjs may start the session early (GitHub's schedule is unreliable)
-  console.log(`Early start (${Math.floor(m0 / 60)}:${String(m0 % 60).padStart(2, '0')} ET) - waiting until 9:20 ET.`); while (setNow() < 9 * 60 + 20) await sleep(15000); }   // the session's life counts from the process start: GitHub kills a job after 358 minutes, early wait included
+  console.log(`Early start (${Math.floor(m0 / 60)}:${String(m0 % 60).padStart(2, '0')} ET) - waiting until 9:20 ET; a fresh session takes over at 9:25 ET.`); while (setNow() < 9 * 60 + 20) await sleep(15000); }   // the session's life counts from the process start: GitHub kills a job after 358 minutes, early wait included
 const m1 = setNow();
 await loadCalendar();                                                   // today's real close (13:00 on early-close days)
 if (m1 < 9 * 60 + 20 || m1 >= closeMins() + 5) { console.log('Outside 9:20-16:05 ET - next scheduled run will take over.'); process.exit(0); }
@@ -226,11 +229,13 @@ if (m1 >= closeMins()) {
   console.log('Market closed and today\'s journal is incomplete - running one closing cycle.');
 }
 // first run of the day (no journal from today yet, market hours): send the good-morning alert once the first cycle is done
-const firstToday = (() => { const js = journalStamp(); const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).replace(/-/g, ''); return !js || js.day !== d; })();
+// (a journal written only before the open — by the early session that handed over at 9:25 — does not count)
+const firstToday = (() => { const js = journalStamp(); const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).replace(/-/g, ''); return !js || js.day !== d || js.mins < 9 * 60 + 30; })();
 let helloSent = !firstToday || m1 >= closeMins();
 connectStreams();
 await pollConfig(); applyPendingConfig();
-while (Date.now() - born < LIFE && !stopping) {
+let closedForDay = false;                                              // the market does not open again today: no successor
+while (Date.now() < END && !stopping) {
   const mins = setNow();
   if (mins >= closeMins() + 5) break;
   pollConfig(); pollStop();                                              // beside the loop, each with a 5-second deadline
@@ -251,7 +256,7 @@ while (Date.now() - born < LIFE && !stopping) {
         // closed: leave only when the day is over or the next open is not today; before the bell, wait for it (the 9:20 start must not exit)
         const todayET = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
         const openDay = ck.next_open ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(ck.next_open)) : '';
-        if (setNow() >= closeMins() || openDay !== todayET) { console.log('Market is closed - stopping.'); break; }
+        if (setNow() >= closeMins() || openDay !== todayET) { console.log('Market is closed - stopping.'); closedForDay = true; break; }
         const waitMs = Math.max(5000, Math.min(60000, Date.parse(ck.next_open) - Date.now()));
         console.log(`Market opens at ${ck.next_open} - waiting.`); await sleep(waitMs);
       }
@@ -267,10 +272,11 @@ while (Date.now() - born < LIFE && !stopping) {
   if (Date.now() - lastBeat >= 60000) { lastBeat = Date.now(); heartbeat(); }
   await sleep(queue.length ? 50 : 200);
 }
-// Reached the time limit while the market is still open (GitHub ends a job after 6 hours): start the next session first,
-// before the final check and the publish, instead of hoping GitHub's schedule fires. It queues behind this one and starts
-// the moment this job ends. Tried twice: a missed hand-off leaves the afternoon to the 5-minute schedule.
-if (!stopping && Date.now() - born >= LIFE && setNow() < closeMins() - 2 && process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
+// Reached its end while the market is (or will be) open today — the 9:25 hand-over of an early session, or the time limit
+// (GitHub ends a job after 6 hours): start the next session first, before the final check and the publish, instead of hoping
+// GitHub's schedule fires. It queues behind this one and starts the moment this job ends. Tried twice: a missed hand-off
+// leaves the rest of the day to the 5-minute schedule.
+if (!stopping && !closedForDay && Date.now() >= END && setNow() < closeMins() - 2 && process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
   for (let k = 0; k < 2; k++) {
     try {
       const r = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/actions/workflows/trade.yml/dispatches`, { method: 'POST', headers: { authorization: 'Bearer ' + process.env.GITHUB_TOKEN, accept: 'application/vnd.github+json', 'content-type': 'application/json' }, body: JSON.stringify({ ref: 'main' }), signal: AbortSignal.timeout(15000) });

@@ -33,9 +33,9 @@ jobs:
           ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
           GITHUB_TOKEN: ${{ github.token }}
           DAYS: ${{ inputs.days }}
-          # Public half of a key pair whose private half never enters the repository: the account part of the result (orders,
-          # equity, session log lines) is sealed to it, because the bot's trades are private. Remove the line to skip that part.
-          SEAL_PUB: MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA3WPFRyrCe2dic0zyZxEvsfT8CmfLycuYvGpsk4dbsTEaTskvYe1IXWsyARpidITcGPxREmQpjrMIlmxrqP07RwYJSzrScXFtzTsXyGKynqRIC9U1t191a1jPtbjIHRwdMIvTefYzN6CNKqZlRy7JFKxQ1BYCSStY4qry8O4Zz6XVL181oeTrnq+ILtIM5nsD5jEYgVMkM7PO0ot+uUkpquXUVwSiVZTy/HxuYO9xAfubYIxlLmHSwuwB9ppQ1w8mU2MRMhpCmKbdBKkvTDrbdR2P0yU3iAQtI6Lkp1fL0H5+o0c+KRck1O0c0fCZF7N9Rrb+9ke172CauZtRh+CdEQynX/ymA5Yym48EY9MjgaarQPZCgdJ1aobLK6NdmLTPcpg5GJC8OvpvXFUKJ9KudAbOkg0vpFoNr+aunSWqvv+iK+M/VJZHMUDSIFYwKU4moXxqIwpOeE/Ms6+owZSjKZjSpbkH4SBUQO7aVg4pvgERXc49hjcIn50nDm+x9rBfAgMBAAE=
+          # Optional SEAL_PUB: the public half (base64 SPKI) of a key pair whose private half you keep. With it, the result also
+          # carries the account part (orders, daily equity, the sessions' own log lines), sealed to that key; without it, only
+          # the market part. A one-off key was used on 2026-10-29 and removed.
       - run: |
           git config user.name "signal-desk-bot"
           git config user.email "bot@users.noreply.github.com"

@@ -20,8 +20,10 @@ const RX = {};
 const rxFor = w => RX[w] || (RX[w] = new RegExp(
   '\\b' + w.replace(/\*$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (w.endsWith('*') ? '' : '\\b'), 'i'));
 
-// Everyday idioms that contain a keyword but are not about the keyword ("war chest", "bidding war").
-const IDIOMS = /\b(war chests?|war rooms?|bidding wars?|price wars?|streaming wars?|turf wars?|culture wars?|star wars)\b/gi;
+// Everyday idioms that contain a keyword but are not about the keyword ("war chest", "bidding war"), and the name the US
+// defense department has carried since 2025 ("Department of War"), which heads every defense-contract story ("Appian's
+// Defense Cloud Achieves … Authorization From U.S. Department Of War" paused all new trades for 14 minutes on 2026-10-29).
+export const IDIOMS = /\b(war chests?|war rooms?|bidding wars?|price wars?|streaming wars?|turf wars?|culture wars?|star wars|department of war|war department)\b/gi;
 
 export function classify(text) {
   const t = ' ' + String(text || '').replace(IDIOMS, ' ') + ' ';

@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { spySignal, spyFresh, SPY_DEFAULTS } from '../bot/spyopt.mjs';
 import { vwap } from '../bot/daytrade.mjs';
-import { guard, classify, KEYWORDS } from '../bot/news.mjs';
+import { guard, classify, KEYWORDS, IDIOMS } from '../bot/news.mjs';
 import { normalize } from '../bot/config.mjs';
 
 const KEY = process.env.ALPACA_KEY, SECRET = process.env.ALPACA_SECRET;
@@ -71,7 +71,6 @@ async function news(day) {
   return out.sort((a, b) => a.ms - b.ms);
 }
 // which keyword made a headline count (the same whole-word test as news.mjs classify)
-const IDIOMS = /\b(war chests?|war rooms?|bidding wars?|price wars?|streaming wars?|turf wars?|culture wars?|star wars)\b/gi;
 const wordsOf = text => { const t = ' ' + String(text).replace(IDIOMS, ' ') + ' ', hit = [];
   for (const [cat, ws] of Object.entries(KEYWORDS)) for (const w of ws) if (new RegExp('\\b' + w.replace(/\*$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (w.endsWith('*') ? '' : '\\b'), 'i').test(t)) hit.push(`${cat}: ${w}`);
   return hit; };
