@@ -326,6 +326,15 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
       const t2 = await page.evaluate(() => (document.getElementById('drill') || {}).innerText || '');
       await page.click('#drill [data-drillclose="1"].btn'); await page.waitForTimeout(100);
       check('drill-down: a symbol inside a sheet opens that symbol’s own history; ✕ closes it', /— every trade/.test(t2) && !(await page.$('#drill')), t2.slice(0, 120)); }
+    // the results row (owner, 2026-10-29): won and lost trades and where the bot stands, in dollars and % of the account before
+    // its trades (equity $100,000 − closed +$260 − open +$348.80 = $99,391.20); the day card names the journal's session
+    { const res = await page.evaluate(() => [...document.querySelectorAll('.lv.lvres > div')].map(d => d.innerText.replace(/\s+/g, ' ').trim()));
+      check('bot trades: a results row — won +$360.00 (+0.36%, 2 trades), lost −$100.00 (−0.10%, 1 trade), so far +$608.80 (+0.61%, in profit)', res.length === 3 && /^Won trades.*\+\$360\.00 \+0\.36% · 2 trades$/.test(res[0]) && /^Lost trades.*−\$100\.00 −0\.10% · 1 trade$/.test(res[1]) && /^Overall so far.*\+\$608\.80 \+0\.61% · in profit$/.test(res[2]), res.join(' | '));
+      check('bot trades: the day card shows its % and profit or loss, and before the open names the journal’s day (Sat 24 Oct) — realized that day too', /Sat 24 Oct › \+\$500\.00 \+0\.50% · profit/.test(txt) && /Realized Sat 24 Oct › \+\$300\.00/.test(txt), txt.slice(txt.indexOf('Sat 24 Oct') - 20, txt.indexOf('Sat 24 Oct') + 160));
+      await page.evaluate(() => document.querySelector('main [data-drill="won"]').click()); await page.waitForTimeout(150);
+      const tw = await page.evaluate(() => (document.getElementById('drill') || {}).innerText.replace(/\s+/g, ' ') || '');
+      await page.keyboard.press('Escape'); await page.waitForTimeout(80);
+      check('bot trades: the won sheet adds what the winners made on the money they used (+$360 on $5,000 = +7.20%) and lists them', /Won trades — what the winners made/.test(tw) && /\+7\.20% of \$5,000\.00/.test(tw) && /KO/.test(tw) && /SPY/.test(tw) && !/AAPL/.test(tw.replace(/By part.*?(Every winning trade)/, '$1')), tw.slice(0, 400)); }
     // real results since the first trade: the whole account (all four parts) scaled to $100k vs $100k in each fund
     { const sc = await page.evaluate(() => { const c = [...document.querySelectorAll('.card')].find(x => /Since the bot started trading/.test(x.textContent)); return c ? c.innerText.replace(/\s+/g, ' ') : ''; });
       check('since-start card: the real account (+0.60% → $100,600) against SPY, IJH, IWM, VGT and QQQ, each from $100,000, with a per-part breakdown', /\$100,600/.test(sc) && /SPY/.test(sc) && /VGT/.test(sc) && /QQQ/.test(sc) && /\$101,000/.test(sc) && /stocks/.test(sc) && /SPY quick options/.test(sc) && /far too short to judge/.test(sc), sc.slice(0, 400)); }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-LY+eyPoEw1EtL5OCPT/bmzQ/6gtP/Bn+KJsgjdSEY8A=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-B1lMiIdcSLNX/kfXb0WPViczohDrPh0mE+c6rWnN8xs=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -215,6 +215,9 @@ dialog::backdrop{background:rgba(8,10,16,.6)}
 .lv{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;margin:10px 0;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
 .lv div{background:var(--surface);padding:10px 12px}
 .lv small{display:block;color:var(--muted);font-size:11.5px}.lv b{font-size:15px;font-weight:600}
+.lv.lvtop{margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0}   /* Bot trades: the summary, then won / lost / overall as one strip of three under it */
+.lv.lvres{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:0;border-top:0;border-top-left-radius:0;border-top-right-radius:0}
+.lv .lvsub{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
 .lp{background:var(--accent-bg);border-radius:8px;padding:12px 14px;margin:12px 0}
 .lp .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .lp input{width:130px}
@@ -996,7 +999,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793229687';
+const BUILD_V = '1793277261';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2926,12 +2929,23 @@ function botView() {
   const tET = iso => iso ? new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(new Date(iso)) : '–';
   const dLab = d => new Intl.DateTimeFormat('en-GB', {weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC'}).format(new Date(d + 'T12:00:00Z'));
   const today = dET(Date.now());
+  // "today" on the cards is the session the journal describes: before the open (or at a weekend) that is the last trading
+  // day, and the cards then name it instead of calling it Today
+  const sess = J.at ? dET(J.at) : today, sessLab = sess === today ? 'Today' : dLab(sess).replace(/,/g, '');
   const closed = J.closed || [], open = J.open || [];
-  const realToday = closed.filter(c => dET(c.outT) === today).reduce((t, c) => t + c.pl, 0);
+  const realToday = closed.filter(c => dET(c.outT) === sess).reduce((t, c) => t + c.pl, 0);
   const realAll = closed.reduce((t, c) => t + c.pl, 0);
   const unreal = open.reduce((t, o) => t + o.pl, 0);
   const acct = J.account || {}, dayAcct = (acct.equity || 0) - (acct.last_equity || 0), stake = J.settings && +J.settings.stakeUsd > 0 ? +J.settings.stakeUsd : 0;
   const wins = closed.filter(c => c.pl > 0).length;
+  // won and lost trades, and where the bot stands now (closed + open), as shares of what the account (or the stake) was before
+  // the bot's trades: its value now minus everything the bot made or lost
+  const wonT = closed.filter(c => c.pl > 0), lostT = closed.filter(c => c.pl <= 0), lastEq = +acct.last_equity || 0;
+  const gW = wonT.reduce((t, c) => t + c.pl, 0), gL = lostT.reduce((t, c) => t + c.pl, 0), netAll = realAll + unreal, base0 = stake || ((+acct.equity || 0) - netAll);
+  const pctB = v => base0 > 0 ? `${v >= 0 ? '+' : '−'}${fmt(Math.abs(v / base0 * 100), 2)}%` : '';
+  const m0 = v => Math.abs(v) < 0.005 ? '$0.00' : $$(v), c0 = v => Math.abs(v) < 0.005 ? 'mut' : cls(v), nT = n => n + (n === 1 ? ' trade' : ' trades');
+  const resCell = (lab, dk, v, sub) => `<div class="drillable" data-drill="${dk}" role="button" tabindex="0" aria-label="${lab} — details"><small>${lab} <span class="drill-ico" aria-hidden="true">›</span></small><b class="${c0(v)}">${m0(v)}</b><span class="lvsub">${sub}</span></div>`;
+  const resRow = `<div class="lv lvres" style="margin:0 0 14px">${resCell('Won trades', 'won', gW, [pctB(gW), nT(wonT.length)].filter(Boolean).join(' · '))}${resCell('Lost trades', 'lost', gL, [pctB(gL), nT(lostT.length)].filter(Boolean).join(' · '))}${resCell('Overall so far', 'net', netAll, [pctB(netAll), netAll >= 0 ? 'in profit' : 'in loss'].filter(Boolean).join(' · '))}</div>`;
   // money in trades right now: market value of every open position (options: price × 100 shares per contract)
   const mul = o => o.mult || (o.kind === 'Stock' ? 1 : 100), valOf = o => Math.abs(o.qty) * o.now * mul(o), costOf = o => Math.abs(o.qty) * o.avg * mul(o);
   const inStk = open.filter(o => o.kind === 'Stock').reduce((t, o) => t + valOf(o), 0), inOpt = open.filter(o => o.kind !== 'Stock').reduce((t, o) => t + valOf(o), 0);
@@ -2939,14 +2953,14 @@ function botView() {
   const what = r => `<span class="drillable" data-drill="sym" data-arg="${esc(r.und)}" role="button" tabindex="0">` + what0(r) + ' <span class="drill-ico" aria-hidden="true">›</span></span>';
   const what0 = r => r.kind === 'Stock' ? `<b>${esc(r.und)}</b>` : `<b>${esc(r.und)}</b> <span class="pill ${r.kind === 'Call' ? 'r-Top-Buy' : 'r-Top-Sell'}">${r.kind.toUpperCase()}</span> <span class="mut" style="font-size:11.5px">${fmt(r.strike, r.strike % 1 ? 1 : 0)} · ${esc((r.exp || '').slice(5))}</span>`;
   const typ = r => r.kind === 'Stock' ? 'Stock' : 'Option';
-  const boxes = `<div class="lv" style="margin:0 0 14px">
-${lvBox('Today', `<span class="${cls(dayAcct)}">${$$(dayAcct)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(dayAcct / stake * 100)}% of your stake</span>` : ''}`, 'today')}
-${lvBox('Realized today', `<span class="${cls(realToday)}">${$$(realToday)}</span>`, 'realToday')}
+  const boxes = `<div class="lv lvtop">
+${lvBox(sessLab, `<span class="${cls(dayAcct)}">${$$(dayAcct)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(dayAcct / stake * 100)}% of your stake</span>` : lastEq > 0 ? ` <span class="mut" style="font-size:11.5px">${dayAcct >= 0 ? '+' : '−'}${fmt(Math.abs(dayAcct / lastEq * 100), 2)}% · ${dayAcct >= 0 ? 'profit' : 'loss'}</span>` : ''}`, 'today')}
+${lvBox(sess === today ? 'Realized today' : 'Realized ' + sessLab, `<span class="${cls(realToday)}">${$$(realToday)}</span>`, 'realToday')}
 ${lvBox('Total realized', `<span class="${cls(realAll)}">${$$(realAll)}</span>${stake ? ` <span class="mut" style="font-size:11.5px">${sgn(realAll / stake * 100)}%</span>` : ''}`, 'realAll')}
 ${lvBox('In trades now', `$${fmt(inAll, 0)}${base ? ` <span class="mut" style="font-size:11.5px">${fmt(inAll / base * 100, 1)}% of your ${stake ? 'stake' : 'account'}</span>` : ''}`, 'inTrades')}
 ${stake ? lvBox('Your stake', '$' + fmt(stake, 0) + ` <span class="mut" style="font-size:11.5px">now $${fmt(stake + realAll + unreal, 0)}</span>`) : lvBox('Account value', '$' + fmt(acct.equity || 0, 0), 'account')}
 ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins / closed.length * 100)}% won` : '0', 'closed')}
-</div>`;
+</div>${resRow}`;
   const moneyLine = `<div style="display:flex;flex-wrap:wrap;gap:4px 18px;align-items:baseline;margin:-4px 2px 14px;font-size:12.5px"><b style="font-size:13px">💼 Money in trades now: $${fmt(inAll, 0)}</b>${open.length ? `<span>stocks <b>$${fmt(inStk, 0)}</b></span><span>options <b>$${fmt(inOpt, 0)}</b></span><span class="mut">paid $${fmt(inCost, 0)}</span><span>open P/L <b class="${cls(unreal)}">${$$(unreal)}</b></span>` : '<span class="mut">nothing open right now</span>'}<span>free to trade <b>$${fmt(freeAmt, 0)}</b> <span class="mut">of your ${stake ? '$' + fmt(stake, 0) + ' stake' : 'account'}</span></span></div>`;
   const splitCard = (() => {                     // money split: stocks, CALLs and PUTs each with their own money, use, results and loss limit
     const S0 = J.settings || {}, on = J.split ? J.split.on : S0.split !== false;
@@ -3912,7 +3926,7 @@ function drillBody(J, key, arg) {
   const closed = J.closed || [], open = J.open || [];
   const dET = iso => new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York'}).format(new Date(iso));
   const tET = iso => iso ? new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(new Date(iso)) : '–';
-  const today = dET(Date.now()), usd = v => (v < 0 ? '−' : '') + '$' + fmt(Math.abs(v), 2), sd = v => `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}$${fmt(Math.abs(v), 2)}</span>`;
+  const now0 = dET(Date.now()), today = J.at ? dET(J.at) : now0, usd = v => (v < 0 ? '−' : '') + '$' + fmt(Math.abs(v), 2), sd = v => `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}$${fmt(Math.abs(v), 2)}</span>`;
   const pc = v => v == null || !isFinite(v) ? '–' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${fmt(v, 1)}%</span>`;
   const part = r => r.kind !== 'Stock' && r.und === 'SPY' ? 'spy' : r.kind === 'Call' ? 'call' : r.kind === 'Put' ? 'put' : 'stock';
   const PN = { stock: 'Stocks', call: 'CALLs', put: 'PUTs', spy: 'SPY quick options' };
@@ -3930,8 +3944,18 @@ function drillBody(J, key, arg) {
   const kv = rows => `<div class="tw"><table style="min-width:0"><tbody>${rows.filter(Boolean).map(([k, v]) => `<tr><td class="lt">${k}</td><td style="text-align:right"><b>${v}</b></td></tr>`).join('')}</tbody></table></div>`;
   const A = J.account || {}, eq = +A.equity || 0, last = +A.last_equity || eq, inv = open.reduce((t, o) => t + val(o), 0), unreal = open.reduce((t, o) => t + o.pl, 0);
   const closedToday = closed.filter(c => dET(c.outT) === today), realToday = closedToday.reduce((t, c) => t + c.pl, 0);
-  if (key === 'today') return { title: 'Today', html: kv([['Account value now', usd(eq)], ['At yesterday’s close', usd(last)], ['Change today', sd(eq - last) + ' ' + pc(last ? (eq / last - 1) * 100 : null)], ['of which sold today (realized)', sd(realToday)], ['open positions (whole gain/loss since bought)', sd(unreal)]]) + `<div class="mut" style="font-size:11.5px;margin-top:6px">“Today” is the broker’s own figure: account value now minus at yesterday’s close. It includes today’s sales and today’s move of everything still open.</div>` + h('Sold today') + closedTbl(closedToday) + h('Open now') + openTbl(open) };
-  if (key === 'realToday') return { title: 'Realized today — trades closed today', html: kv([['Trades closed today', closedToday.length], ['Result', sd(realToday)], ['Won', closedToday.length ? stats(closedToday).won + '%' : '–']]) + h('By part') + byPart(closedToday) + h('Every trade closed today') + closedTbl(closedToday) };
+  const pc2 = v => v == null || !isFinite(v) ? '–' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), 2)}%</span>`;
+  if (key === 'won' || key === 'lost' || key === 'net') {
+    const cost = c => Math.abs(c.qty) * c.inPx * (c.mult || (c.kind === 'Stock' ? 1 : 100)), real = closed.reduce((t, c) => t + c.pl, 0);
+    const stake = J.settings && +J.settings.stakeUsd > 0 ? +J.settings.stakeUsd : 0, base0 = stake || (eq - real - unreal), share = v => base0 > 0 ? pc2(v / base0 * 100) : '';
+    const note = `<div class="mut" style="font-size:11.5px;margin-top:6px">Percentages are of ${usd(base0)} — ${stake ? 'your stake' : 'what the account was before the bot’s trades (its value now minus everything the bot has made or lost)'}.</div>`;
+    if (key === 'net') return { title: 'Overall so far — in profit or loss, closed and open trades', html: kv([['Closed trades (sold)', sd(real) + ' ' + share(real)], ['Open positions (if sold at today’s prices)', sd(unreal) + ' ' + share(unreal)], ['Together', sd(real + unreal) + ' ' + share(real + unreal)], [stake ? 'Your stake' : 'The account before the bot’s trades', usd(base0)], ['Account value now', usd(eq)]]) + note + `<div class="mut" style="font-size:11.5px;margin-top:4px">Open positions can still go either way: their part is what they would make or lose if sold now.</div>` + h('Open now') + openTbl(open) };
+    const arr = closed.filter(c => key === 'won' ? c.pl > 0 : c.pl <= 0), S = stats(arr), used = arr.reduce((t, c) => t + cost(c), 0);
+    return { title: key === 'won' ? 'Won trades — what the winners made' : 'Lost trades — what the losers cost', html: kv([['Trades', `${arr.length} of ${closed.length} closed`], [key === 'won' ? 'Made together' : 'Lost together', sd(S.tot) + ' ' + share(S.tot)], ['Average per trade', S.n ? sd(S.avg) : '–'], ['On the money they used', used ? pc2(S.tot / used * 100) + ' of ' + usd(used) : '–'], [key === 'won' ? 'Biggest win' : 'Biggest loss', S.n ? sd(key === 'won' ? S.best : S.worst) : '–']]) + note + h('By part') + byPart(arr) + h(key === 'won' ? 'Every winning trade' : 'Every losing trade') + closedTbl(arr) };
+  }
+  const isNow = today === now0, dayW = isNow ? 'today' : 'that day', dayT = isNow ? 'Today' : new Intl.DateTimeFormat('en-GB', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'}).format(new Date(today + 'T12:00:00Z')).replace(/,/g, '');
+  if (key === 'today') return { title: isNow ? 'Today' : `${dayT} — the last session`, html: kv([[isNow ? 'Account value now' : 'Account value at its close', usd(eq)], ['At the close the day before', usd(last)], [isNow ? 'Change today' : 'Change that day', sd(eq - last) + ' ' + pc2(last ? (eq / last - 1) * 100 : null) + ` · ${eq >= last ? 'profit' : 'loss'}`], [`of which sold ${dayW} (realized)`, sd(realToday)], ['open positions (whole gain/loss since bought)', sd(unreal)]]) + `<div class="mut" style="font-size:11.5px;margin-top:6px">The broker’s own figure: account value ${isNow ? 'now' : 'at that day’s close'} minus at the close the day before. It includes ${dayW}’s sales and ${dayW}’s move of everything still open.${isNow ? '' : ' Before the market opens (and at weekends) the cards show the last trading day; they switch to the new day at the first check after the open.'}</div>` + h(`Sold ${dayW}`) + closedTbl(closedToday) + h('Open now') + openTbl(open) };
+  if (key === 'realToday') return { title: `Realized ${isNow ? 'today' : dayT} — trades closed ${dayW}`, html: kv([[`Trades closed ${dayW}`, closedToday.length], ['Result', sd(realToday)], ['Won', closedToday.length ? stats(closedToday).won + '%' : '–']]) + h('By part') + byPart(closedToday) + h(`Every trade closed ${dayW}`) + closedTbl(closedToday) };
   if (key === 'realAll' || key === 'closed') { const S = stats(closed);
     return { title: key === 'closed' ? 'Closed trades — wins and losses' : 'Total realized — every closed trade', html: kv([['Closed trades', S.n], ['Won', S.n ? S.won + '%' : '–'], ['Total result', sd(S.tot)], ['Average per trade', sd(S.avg)], ['Average winner / loser', S.n ? sd(S.avgW) + ' / ' + sd(S.avgL) : '–'], ['Profit factor (won ÷ lost)', S.pf === Infinity ? 'no losses yet' : S.n ? fmt(S.pf, 2) : '–'], ['Best / worst trade', S.n ? sd(S.best) + ' / ' + sd(S.worst) : '–']]) + h('By part') + byPart(closed) + h('By day') + byDay(closed) + (key === 'closed' ? h('Winners') + closedTbl(closed.filter(c => c.pl > 0)) + h('Losers') + closedTbl(closed.filter(c => c.pl <= 0)) : h('Every closed trade') + closedTbl(closed)) }; }
   if (key === 'inTrades' || key === 'account') {

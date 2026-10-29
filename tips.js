@@ -117,9 +117,12 @@
     '5 years': 'The bot’s exact rules replayed on real prices over the last 5 years from a fresh start, next to index funds you could simply have bought.',
     'per year': 'Average growth per year over the 5 years (compound annual growth rate).', 'worst fall': 'The biggest drop from a high point to a later low during the 5 years.',
     // ---------- stat boxes ----------
-    'today': 'Change in account value since yesterday’s close (open and closed trades together).',
+    'today': 'Change in account value since yesterday’s close (open and closed trades together), in dollars and %. Before the market opens the card shows the last trading day instead, named by its date.',
     'realized today': 'Profit or loss locked in by trades closed today.',
     'total realized': 'Profit or loss from every closed trade since the bot started.',
+    'won trades': 'Every closed trade that made money: what they made together, as a share of what the account (or your stake) was before the bot’s trades, and how many there were. Tap for each trade and what they made on the money they used.',
+    'lost trades': 'Every closed trade that lost money (or broke even): what they lost together, as a share of what the account was before the bot’s trades, and how many there were.',
+    'overall so far': 'Whether the bot is in profit or loss overall: closed trades plus what the open positions would make or lose if sold at today’s prices — in dollars and as a share of what the account was before the bot’s trades.',
     'in trades now': 'What every open position is worth right now, and the share of your stake (or account) that is.',
     'your stake': 'The money you told the bot to treat as yours (Bot settings → 3). “now” = stake + all profits and losses.',
     'account value': 'Total value of the practice account (cash + positions).',
