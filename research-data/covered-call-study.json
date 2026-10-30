@@ -1,0 +1,535 @@
+{
+ "at": "2026-10-30T10:39:13.047Z",
+ "feed": "sip",
+ "assumptions": {
+  "spreadPct": 4,
+  "minPremium": 0.05,
+  "priceRange": [
+   15,
+   120
+  ],
+  "rsiBuy": 25,
+  "profitPct": 0.5,
+  "maxHold": 15,
+  "floorPct": 25,
+  "minDte": 7,
+  "marketFilter": true,
+  "from": "2024-02-01",
+  "to": "2026-09-01"
+ },
+ "lists": {
+  "base": {
+   "stocks": 39,
+   "signals": 111,
+   "paired": 83,
+   "noCall": 28,
+   "baseline": {
+    "n": 83,
+    "winPct": 80.72,
+    "avgPct": -0.09,
+    "avgWinPct": 1.83,
+    "avgLossPct": -8.14,
+    "avgDays": 5.1,
+    "worstPct": -25,
+    "why": {
+     "profit": 67,
+     "maxhold": 15,
+     "floor": 1
+    }
+   },
+   "variants": {
+    "x5tp50": {
+     "n": 83,
+     "winPct": 78.31,
+     "avgPct": 0.42,
+     "avgWinPct": 2.77,
+     "avgLossPct": -8.06,
+     "avgDays": 9.82,
+     "worstPct": -23.03,
+     "why": {
+      "tp then profit": 54,
+      "tp then maxhold": 22,
+      "called": 6,
+      "tp then floor": 1
+     },
+     "deltaAvgPct": 0.51,
+     "worsePct": 19.28,
+     "extraDays": 4.72,
+     "byYear": {
+      "2024": {
+       "n": 32,
+       "deltaAvgPct": 1.1
+      },
+      "2025": {
+       "n": 31,
+       "deltaAvgPct": 0.25
+      },
+      "2026": {
+       "n": 20,
+       "deltaAvgPct": -0.01
+      }
+     }
+    },
+    "x5hold": {
+     "n": 83,
+     "winPct": 67.47,
+     "avgPct": 0.69,
+     "avgWinPct": 3.78,
+     "avgLossPct": -5.71,
+     "avgDays": 15,
+     "worstPct": -21.18,
+     "why": {
+      "expired then profit": 28,
+      "expired then maxhold": 45,
+      "called": 9,
+      "floor": 1
+     },
+     "deltaAvgPct": 0.79,
+     "worsePct": 30.12,
+     "extraDays": 9.9,
+     "byYear": {
+      "2024": {
+       "n": 32,
+       "deltaAvgPct": 1.54
+      },
+      "2025": {
+       "n": 31,
+       "deltaAvgPct": 0.43
+      },
+      "2026": {
+       "n": 20,
+       "deltaAvgPct": 0.14
+      }
+     }
+    },
+    "x10tp50": {
+     "n": 38,
+     "winPct": 78.95,
+     "avgPct": -0.08,
+     "avgWinPct": 2.74,
+     "avgLossPct": -10.67,
+     "avgDays": 9.24,
+     "worstPct": -23.8,
+     "why": {
+      "tp then profit": 28,
+      "tp then maxhold": 7,
+      "expired then maxhold": 1,
+      "tp then floor": 1,
+      "called": 1
+     },
+     "deltaAvgPct": 0.5,
+     "worsePct": 23.68,
+     "extraDays": 4.13,
+     "byYear": {
+      "2024": {
+       "n": 13,
+       "deltaAvgPct": 0.77
+      },
+      "2025": {
+       "n": 16,
+       "deltaAvgPct": -0.22
+      },
+      "2026": {
+       "n": 9,
+       "deltaAvgPct": 1.41
+      }
+     }
+    },
+    "x10hold": {
+     "n": 38,
+     "winPct": 57.89,
+     "avgPct": -0.57,
+     "avgWinPct": 4.5,
+     "avgLossPct": -7.54,
+     "avgDays": 16.13,
+     "worstPct": -22.75,
+     "why": {
+      "expired then profit": 10,
+      "expired then maxhold": 25,
+      "floor": 1,
+      "called": 2
+     },
+     "deltaAvgPct": 0.01,
+     "worsePct": 42.11,
+     "extraDays": 11.03,
+     "byYear": {
+      "2024": {
+       "n": 13,
+       "deltaAvgPct": 1.59
+      },
+      "2025": {
+       "n": 16,
+       "deltaAvgPct": 0.01
+      },
+      "2026": {
+       "n": 9,
+       "deltaAvgPct": -2.27
+      }
+     }
+    }
+   }
+  },
+  "scan": {
+   "stocks": 60,
+   "signals": 174,
+   "paired": 145,
+   "noCall": 29,
+   "baseline": {
+    "n": 145,
+    "winPct": 86.9,
+    "avgPct": 0.84,
+    "avgWinPct": 2.54,
+    "avgLossPct": -10.37,
+    "avgDays": 4.48,
+    "worstPct": -29.25,
+    "why": {
+     "profit": 126,
+     "maxhold": 15,
+     "floor": 4
+    }
+   },
+   "variants": {
+    "x5tp50": {
+     "n": 145,
+     "winPct": 77.93,
+     "avgPct": 1.42,
+     "avgWinPct": 4.33,
+     "avgLossPct": -8.87,
+     "avgDays": 10.72,
+     "worstPct": -26.92,
+     "why": {
+      "tp then maxhold": 34,
+      "tp then profit": 82,
+      "called": 22,
+      "tp then floor": 6,
+      "expired then maxhold": 1
+     },
+     "deltaAvgPct": 0.57,
+     "worsePct": 21.38,
+     "extraDays": 6.24,
+     "byYear": {
+      "2024": {
+       "n": 72,
+       "deltaAvgPct": 0.92
+      },
+      "2025": {
+       "n": 49,
+       "deltaAvgPct": 0.58
+      },
+      "2026": {
+       "n": 24,
+       "deltaAvgPct": -0.45
+      }
+     }
+    },
+    "x5hold": {
+     "n": 145,
+     "winPct": 69.66,
+     "avgPct": 2.07,
+     "avgWinPct": 6.07,
+     "avgLossPct": -7.12,
+     "avgDays": 14.59,
+     "worstPct": -24.71,
+     "why": {
+      "expired then maxhold": 67,
+      "called": 44,
+      "expired then profit": 28,
+      "floor": 6
+     },
+     "deltaAvgPct": 1.22,
+     "worsePct": 25.52,
+     "extraDays": 10.12,
+     "byYear": {
+      "2024": {
+       "n": 72,
+       "deltaAvgPct": 1.61
+      },
+      "2025": {
+       "n": 49,
+       "deltaAvgPct": 1.53
+      },
+      "2026": {
+       "n": 24,
+       "deltaAvgPct": -0.57
+      }
+     }
+    },
+    "x10tp50": {
+     "n": 99,
+     "winPct": 87.88,
+     "avgPct": 3.27,
+     "avgWinPct": 5.37,
+     "avgLossPct": -11.94,
+     "avgDays": 9.61,
+     "worstPct": -23.98,
+     "why": {
+      "tp then profit": 63,
+      "tp then maxhold": 14,
+      "called": 15,
+      "tp then floor": 4,
+      "expired then maxhold": 2,
+      "expired then profit": 1
+     },
+     "deltaAvgPct": 1.67,
+     "worsePct": 18.18,
+     "extraDays": 5.71,
+     "byYear": {
+      "2024": {
+       "n": 48,
+       "deltaAvgPct": 1.91
+      },
+      "2025": {
+       "n": 34,
+       "deltaAvgPct": 1.7
+      },
+      "2026": {
+       "n": 17,
+       "deltaAvgPct": 0.95
+      }
+     }
+    },
+    "x10hold": {
+     "n": 99,
+     "winPct": 71.72,
+     "avgPct": 2.98,
+     "avgWinPct": 7.62,
+     "avgLossPct": -8.79,
+     "avgDays": 14.71,
+     "worstPct": -23,
+     "why": {
+      "expired then maxhold": 49,
+      "called": 21,
+      "expired then profit": 24,
+      "floor": 5
+     },
+     "deltaAvgPct": 1.38,
+     "worsePct": 34.34,
+     "extraDays": 10.81,
+     "byYear": {
+      "2024": {
+       "n": 48,
+       "deltaAvgPct": 1.93
+      },
+      "2025": {
+       "n": 34,
+       "deltaAvgPct": 2.06
+      },
+      "2026": {
+       "n": 17,
+       "deltaAvgPct": -1.55
+      }
+     }
+    }
+   }
+  }
+ },
+ "examples": [
+  {
+   "list": "base",
+   "worst": [
+    {
+     "sym": "INTC",
+     "day": "2026-07-07",
+     "entry": 110.39,
+     "base": {
+      "ret": 1.95,
+      "days": 2,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": -19.78,
+      "days": 15,
+      "why": "tp then maxhold"
+     },
+     "delta": -21.72
+    },
+    {
+     "sym": "WMT",
+     "day": "2025-02-07",
+     "entry": 101.15,
+     "base": {
+      "ret": 1.75,
+      "days": 1,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": -2.42,
+      "days": 15,
+      "why": "tp then maxhold"
+     },
+     "delta": -4.17
+    },
+    {
+     "sym": "KO",
+     "day": "2026-06-30",
+     "entry": 81.27,
+     "base": {
+      "ret": 3.53,
+      "days": 2,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": 1.81,
+      "days": 6,
+      "why": "tp then profit"
+     },
+     "delta": -1.72
+    }
+   ],
+   "best": [
+    {
+     "sym": "KO",
+     "day": "2026-01-15",
+     "entry": 70.48,
+     "base": {
+      "ret": 1.8,
+      "days": 2,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": 6.86,
+      "days": 24,
+      "why": "called"
+     },
+     "delta": 5.06
+    },
+    {
+     "sym": "WMT",
+     "day": "2024-04-30",
+     "entry": 59.35,
+     "base": {
+      "ret": 0.61,
+      "days": 2,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": 6.5,
+      "days": 13,
+      "why": "called"
+     },
+     "delta": 5.9
+    },
+    {
+     "sym": "INTC",
+     "day": "2026-04-20",
+     "entry": 65.7,
+     "base": {
+      "ret": 0.85,
+      "days": 1,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": 11.64,
+      "days": 19,
+      "why": "called"
+     },
+     "delta": 10.78
+    }
+   ]
+  },
+  {
+   "list": "scan",
+   "worst": [
+    {
+     "sym": "NBIS",
+     "day": "2025-11-04",
+     "entry": 110.54,
+     "base": {
+      "ret": 5.84,
+      "days": 1,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": -20.3,
+      "days": 8,
+      "why": "tp then floor"
+     },
+     "delta": -26.14
+    },
+    {
+     "sym": "MRVL",
+     "day": "2025-02-27",
+     "entry": 87.65,
+     "base": {
+      "ret": 4.76,
+      "days": 1,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": -17.49,
+      "days": 7,
+      "why": "tp then floor"
+     },
+     "delta": -22.24
+    },
+    {
+     "sym": "INTC",
+     "day": "2026-07-07",
+     "entry": 110.39,
+     "base": {
+      "ret": 1.95,
+      "days": 2,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": -19.78,
+      "days": 15,
+      "why": "tp then maxhold"
+     },
+     "delta": -21.72
+    }
+   ],
+   "best": [
+    {
+     "sym": "BE",
+     "day": "2025-09-25",
+     "entry": 68.69,
+     "base": {
+      "ret": 2.37,
+      "days": 1,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": 13.05,
+      "days": 16,
+      "why": "called"
+     },
+     "delta": 10.67
+    },
+    {
+     "sym": "INTC",
+     "day": "2026-04-20",
+     "entry": 65.7,
+     "base": {
+      "ret": 0.85,
+      "days": 1,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": 11.64,
+      "days": 19,
+      "why": "called"
+     },
+     "delta": 10.78
+    },
+    {
+     "sym": "NBIS",
+     "day": "2026-01-08",
+     "entry": 97.3,
+     "base": {
+      "ret": 0.65,
+      "days": 1,
+      "why": "profit"
+     },
+     "covered": {
+      "ret": 12.68,
+      "days": 2,
+      "why": "tp then profit"
+     },
+     "delta": 12.03
+    }
+   ]
+  }
+ ],
+ "apiCalls": 117
+}
