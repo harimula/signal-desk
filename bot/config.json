@@ -51,7 +51,7 @@
  "spyStart": "09:50",
  "spyEnd": "15:00",
  "wheelOn": true,
- "wheelSharePct": 30,
+ "wheelSharePct": 40,
  "wheelOtmPct": 5,
  "wheelTp": 50,
  "wheelStop": 0,
@@ -126,7 +126,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-30T11:10:19.819Z",
+ "updatedAt": "2026-10-30T11:10:30.672Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
