@@ -4,10 +4,10 @@ import { rsi2Signal, rsi2Exit, rsi2, sma, rsi2ShortSignal, rsi2ShortExit, rsi2Tr
 import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { spySignal, spyExit, spyFresh, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
-import { buildJournal, parseSym } from './journal.mjs';
+import { buildJournal, parseSym, optionEvents } from './journal.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
-import { normalize } from './config.mjs';
+import { normalize, summary } from './config.mjs';
 import { isStockAsset } from './scan.mjs';
 import http from 'node:http';
 import { rankByLiquidity } from './scan.mjs';
@@ -59,6 +59,52 @@ test('FIFO pairing, options x100, partial exits', () => {
   assert.equal(j.closed.find(c => c.kind === 'Call').pl, 500);
 });
 test('option symbol parsing', () => { const s = parseSym('SPY261218P00600000'); assert.equal(s.kind, 'Put'); assert.equal(s.strike, 600); assert.equal(s.exp, '2026-12-18'); });
+test('sold options (the wheel): a sale opens a sold lot, the buy-back closes it with sale − buy; an expiry closes it at 0 (premium kept)', () => {
+  const P = 'KO261120P00065000', C = 'KO261218C00068000';
+  const j = buildJournal([
+    { order_id: 's1', symbol: P, side: 'sell', qty: '1', price: '0.90', transaction_time: '2026-10-19T15:00:00Z' },
+    { order_id: 'b1', symbol: P, side: 'buy', qty: '1', price: '0.45', transaction_time: '2026-10-30T15:00:00Z' },
+    { order_id: 's2', symbol: C, side: 'sell', qty: '1', price: '0.60', transaction_time: '2026-11-23T15:00:00Z' }], [], [{ sym: C, t: '2026-12-18T21:00:00Z', why: 'expired' }]);
+  const tp = j.closed.find(c => c.sym === P), ex = j.closed.find(c => c.sym === C);
+  assert.equal(tp.pl, 45); assert.equal(tp.short, true); assert.equal(tp.wheel, true); assert.equal(tp.inPx, 0.9); assert.equal(tp.outPx, 0.45); assert.equal(tp.plPct, 50);
+  assert.equal(ex.pl, 60); assert.equal(ex.why, 'expired'); assert.equal(ex.outPx, 0);
+  const o = buildJournal([{ order_id: 's1', symbol: P, side: 'sell', qty: '1', price: '0.90', transaction_time: '2026-10-19T15:00:00Z' }], [{ symbol: P, qty: '-1', avg_entry_price: '0.9', current_price: '0.5', unrealized_pl: '40', unrealized_plpc: '0.444' }]).open[0];
+  assert.equal(o.short, true); assert.equal(o.since, '2026-10-19T15:00:00Z'); assert.equal(o.qty, -1);
+  const st = buildJournal([{ order_id: 'x', symbol: 'AAPL', side: 'sell', qty: '3', price: '263', transaction_time: '2026-10-21T17:00:00Z' }], []);
+  assert.equal(st.closed.length, 0, 'a stock sale with no buy in the fills is still a gap, never a short');
+});
+test('assignment: the put closes at 0 and its shares come in at the strike (OPTRD); called away later, they go at the call strike', () => {
+  const P = 'KO261120P00065000', C = 'KO261218C00068000';
+  const ev = optionEvents([
+    { activity_type: 'OPASN', symbol: P, qty: '1', date: '2026-11-20', id: 'n1' }, { activity_type: 'OPTRD', symbol: 'KO', qty: '100', price: '90', net_amount: '-6500', date: '2026-11-20', id: 'n2' },
+    { activity_type: 'OPASN', symbol: C, qty: '1', date: '2026-12-18', id: 'n3' }, { activity_type: 'OPTRD', symbol: 'KO', qty: '-100', price: '68', date: '2026-12-18', id: 'n4' }]);
+  assert.equal(ev.fills.length, 2); assert.equal(ev.events.length, 2); assert.equal(ev.fills[0].side, 'buy'); assert.equal(ev.fills[1].side, 'sell');
+  const j = buildJournal([
+    { order_id: 's1', symbol: P, side: 'sell', qty: '1', price: '0.90', transaction_time: '2026-10-19T15:00:00Z' },
+    { order_id: 's2', symbol: C, side: 'sell', qty: '1', price: '0.60', transaction_time: '2026-11-23T15:00:00Z' }].concat(ev.fills), [], ev.events);
+  assert.equal(j.closed.find(c => c.sym === P).pl, 90); assert.equal(j.closed.find(c => c.sym === P).why, 'assigned');
+  assert.equal(j.closed.find(c => c.sym === C).pl, 60);
+  const sh = j.closed.find(c => c.sym === 'KO'); assert.equal(sh.pl, 300); assert.equal(sh.wheel, true); assert.equal(sh.inPx, 65); assert.equal(sh.outPx, 68);
+});
+test('sold options: a sale filled in pieces with its buy-back filling between them is still one sold lot (ordered by first fill)', () => {
+  const C = 'KO261218C00068000';
+  const j = buildJournal([
+    { order_id: 's1', symbol: C, side: 'sell', qty: '1', price: '0.60', transaction_time: '2026-11-23T15:00:00Z' },
+    { order_id: 'b1', symbol: C, side: 'buy', qty: '1', price: '0.30', transaction_time: '2026-11-23T15:05:00Z' },
+    { order_id: 's1', symbol: C, side: 'sell', qty: '1', price: '0.60', transaction_time: '2026-11-23T15:10:00Z' }], [{ symbol: C, qty: '-1', avg_entry_price: '0.6', current_price: '0.5', unrealized_pl: '10', unrealized_plpc: '0.16' }]);
+  assert.equal(j.closed.length, 1); assert.equal(j.closed[0].short, true); assert.equal(j.closed[0].pl, 30); assert.equal(j.closed[0].outT, '2026-11-23T15:05:00Z');
+});
+test('day P/L by part: the wheel\'s sold option and its buy-back count for the wheel, held from yesterday it is a negative holding', () => {
+  const P = 'KO261120P00065000', w = s => s === P || s === 'KO';
+  const d1 = sideDayPl({ positions: [{ symbol: P, qty: '-1', current_price: '0.70', lastday_price: '0.90' }], fills: [], wheel: w });
+  assert.equal(d1.wheel, 20); assert.equal(d1.put, 0);
+  const d2 = sideDayPl({ positions: [], fills: [{ symbol: P, side: 'buy', qty: '1', price: '0.45' }], lastDay: { [P]: 0.6 }, wheel: w });
+  assert.equal(d2.wheel, 15, 'bought back at 0.45 after closing at 0.60 yesterday: +$15 today');
+  const d3 = sideDayPl({ positions: [{ symbol: P, qty: '-1', current_price: '0.80' }], fills: [{ symbol: P, side: 'sell', qty: '1', price: '0.90' }], wheel: w });
+  assert.equal(d3.wheel, 10, 'sold today at 0.90, worth 0.80 now');
+  const d4 = sideDayPl({ positions: [{ symbol: 'AAPL', qty: '3', current_price: '10' }], fills: [{ symbol: 'AAPL', side: 'buy', qty: '5', price: '9' }] });
+  assert.equal(d4.stock, -15, 'a gap in the fills (more bought than held) is still read as nothing held yesterday for other symbols');
+});
 
 console.log('News & events guard');
 const ev = [{ date: '2026-10-28', time: '14:00', type: 'FOMC', title: 'Fed' }, { date: '2026-11-10', time: '08:30', type: 'CPI', title: 'CPI' }];
@@ -447,6 +493,14 @@ test('SPY sleeve: "armed" — a break counts only after a 5-minute bar closed in
   const quiet = up.map((b, i) => i === 4 ? { ...b, v: 5e5 } : b); assert.equal(spySignal({ bars: quiet, px: 502.2, mins: 600 }).armed, false);
 });
 
+test('wheel settings: off by default; switched on, the shares never pass 100% (the wheel gives way last), a stop under 1.5× is raised, min ≤ max price', () => {
+  const d = normalize({}); assert.equal(d.wheelOn, false); assert.equal(d.wheelOtmPct, 5); assert.equal(d.wheelTp, 50); assert.equal(d.wheelStop, 0); assert.equal(d.wheelTrend, true);
+  const c = normalize({ preset: 'custom', callSharePct: 40, putSharePct: 10, spyOn: true, spySharePct: 20, wheelOn: true, wheelSharePct: 45, wheelStop: 1.2, wheelMinPrice: 200, wheelMaxPrice: 100 });
+  assert.equal(c.wheelSharePct, 30); assert.equal(c.wheelStop, 1.5); assert.equal(c.wheelMaxPrice, 200);
+  assert.equal(normalize({ wheelOn: false, wheelSharePct: 45, callSharePct: 40, putSharePct: 10, spySharePct: 20 }).wheelSharePct, 45, 'switched off it takes nothing, so it is left as typed');
+  assert.match(summary(c), /split 0\/40\/10\/20\/30 stocks\/CALLs\/PUTs\/SPY\/wheel/);
+});
+
 console.log('Session hand-off (2026-10-29)');
 const { sessionEndFor, HANDOVER_MIN } = await import('./bot.mjs');
 test('a session born before the open hands over at 9:25 ET, so the next one\'s life ends after the SPY window; others run their whole life', () => {
@@ -459,6 +513,114 @@ test('a session born before the open hands over at 9:25 ET, so the next one\'s l
   assert.ok(new Date(b2 + LIFE).toISOString() > '2026-10-29T19:00:00Z', 'the hand-off starts after 3:00 PM, when the SPY window has closed');
   const b3 = et('2026-10-29T16:06:07Z'); assert.equal(sessionEndFor(b3, LIFE), b3 + LIFE, 'a mid-day successor runs its whole life');
   const b4 = et('2026-10-29T09:30:00Z'); assert.equal(sessionEndFor(b4, LIFE), b4 + LIFE, 'born 5:30 AM (exits at once: before 6:00) → unchanged');
+});
+
+console.log('Wheel: cash-secured puts and covered calls (wheel.mjs)');
+const W = await import('./wheel.mjs');
+const tdays = (() => { const hol = new Set(['2026-09-07', '2026-11-26', '2026-12-25', '2027-01-01', '2027-01-18', '2026-06-19']), out = []; for (let t = Date.parse('2026-05-01'); t <= Date.parse('2027-02-26'); t += 864e5) { const d = new Date(t), s = d.toISOString().slice(0, 10); if (d.getUTCDay() % 6 && !hol.has(s)) out.push(s); } return out; })();
+test('wheel: monthly expirations — the third Friday, or the trading day before it on a holiday (Juneteenth 2026)', () => {
+  assert.equal(W.thirdFriday(2026, 9), '2026-10-16'); assert.equal(W.thirdFriday(2026, 10), '2026-11-20');
+  const isT = d => tdays.includes(d); assert.equal(W.monthlyExpiry(2026, 5, isT), '2026-06-18'); assert.equal(W.monthlyExpiry(2026, 11, isT), '2026-12-18');
+});
+test('wheel: the sale window is the first three trading days after a monthly expiration; outside it the next one is named', () => {
+  const a = W.wheelCycle('2026-10-19', tdays); assert.equal(a.last, '2026-10-16'); assert.equal(a.next, '2026-11-20'); assert.equal(a.day, 1); assert.equal(a.window, true); assert.equal(a.expiry, '2026-11-20'); assert.deepEqual(a.windowDays, ['2026-10-19', '2026-10-20', '2026-10-21']);
+  const b = W.wheelCycle('2026-10-22', tdays); assert.equal(b.day, 4); assert.equal(b.window, false); assert.deepEqual(b.windowDays, ['2026-11-23', '2026-11-24', '2026-11-25']); assert.equal(b.expiry, '2026-12-18');
+  const c = W.wheelCycle('2026-11-20', tdays); assert.equal(c.window, false, 'expiration day itself is not in the window'); assert.equal(c.next, '2026-11-20');
+  const d = W.wheelCycle('2026-10-24', tdays); assert.equal(d.day, 0, 'a weekend day is never a sale day'); assert.equal(d.window, false);
+});
+test('wheel: strikes — puts at the highest strike at least X% under, calls at the lowest at or above the cost and X% over', () => {
+  assert.equal(W.putStrike([90, 92.5, 95, 97.5, 100], 100, 5), 95); assert.equal(W.putStrike([90, 92.5, 96], 100, 5), 92.5); assert.equal(W.putStrike([99, 100], 100, 5), null);
+  assert.equal(W.callStrike([100, 102.5, 105, 107.5], 100, 5), 105); assert.equal(W.callStrike([100, 102.5, 105, 107.5], 100, 5, 106), 107.5, 'never under the cost'); assert.equal(W.callStrike([100, 102.5], 100, 5), null);
+  assert.equal(W.wheelTpPrice(1.5, 50), 0.75); assert.equal(W.wheelTpPrice(0, 50), null);
+  assert.deepEqual(W.parseOcc('KO261120P00065000'), { und: 'KO', exp: '2026-11-20', kind: 'put', K: 65 });
+  assert.equal(W.wheelId('put', 'KO261120P00065000', '20261019', 'ab1'), 'sd-wp-KO261120P00065000-20261019-ab1'); assert.ok(W.isWheelSell('sd-wc-X-1') && W.isWheelBuy('sd-wb-X-1') && !W.isWheelId('sd-q-X'));
+});
+test('wheel bookkeeping: a sold put is remembered; then bought back, expired or assigned (shares at the strike, cost = strike − premium)', () => {
+  const P = 'KO261120P00065000', sale = { symbol: P, side: 'sell', client_order_id: 'sd-wp-' + P + '-20261019-a', filled_qty: '1', filled_avg_price: '0.9', filled_at: '2026-10-19T15:00:00Z', status: 'filled' };
+  const r1 = W.wheelReconcile({ mem: null, positions: [{ symbol: P, qty: '-1', avg_entry_price: '0.9' }], hist: [sale], today: '2026-10-19', now: '2026-10-19T15:00:20Z' });
+  assert.deepEqual(r1.mem.opts[P], { und: 'KO', kind: 'put', K: 65, exp: '2026-11-20', qty: 1, prem: 0.9, since: '2026-10-19', seen: '2026-10-19T15:00:20Z', base: 0 }); assert.equal(r1.events.length, 0);
+  const tp = W.wheelReconcile({ mem: r1.mem, positions: [], hist: [sale, { symbol: P, side: 'buy', client_order_id: 'sd-wb-' + P + '-b', filled_qty: '1', filled_at: '2026-10-30T15:00:00Z' }], today: '2026-10-30' });
+  assert.equal(tp.events[0].type, 'bought back'); assert.deepEqual(tp.mem.opts, {});
+  const ex = W.wheelReconcile({ mem: r1.mem, positions: [], hist: [sale], today: '2026-11-23' }); assert.equal(ex.events[0].type, 'expired'); assert.deepEqual(ex.mem.shares, {});
+  const early = W.wheelReconcile({ mem: r1.mem, positions: [], hist: [sale], today: '2026-10-30' }); assert.equal(early.events.length, 0, 'gone before its day with no trade: kept'); assert.ok(early.mem.opts[P]);
+  const as = W.wheelReconcile({ mem: r1.mem, positions: [{ symbol: 'KO', qty: '100', avg_entry_price: '65' }], hist: [sale], today: '2026-11-23' });
+  assert.equal(as.events[0].type, 'assigned'); assert.deepEqual(as.mem.shares.KO, { qty: 100, cost: 64.1, since: '2026-11-23' });
+});
+test('wheel bookkeeping: a covered call that ends in the money takes the shares away; shares sold by hand shrink the part; others are never touched', () => {
+  const C = 'KO261218C00068000', sale = { symbol: C, side: 'sell', client_order_id: 'sd-wc-' + C + '-20261123-a', filled_qty: '1', filled_avg_price: '0.6', filled_at: '2026-11-23T15:00:00Z' };
+  const mem0 = { opts: {}, shares: { KO: { qty: 100, cost: 64.1 } } };
+  const r1 = W.wheelReconcile({ mem: mem0, positions: [{ symbol: 'KO', qty: '100', avg_entry_price: '65' }, { symbol: C, qty: '-1', avg_entry_price: '0.6' }], hist: [sale], today: '2026-11-23' });
+  assert.equal(r1.mem.opts[C].base, 0, 'the part\'s own shares are not counted as held outside it');
+  const away = W.wheelReconcile({ mem: r1.mem, positions: [], hist: [sale], today: '2026-12-21' }); assert.equal(away.events[0].type, 'called away'); assert.deepEqual(away.mem.shares, {});
+  const kept = W.wheelReconcile({ mem: r1.mem, positions: [{ symbol: 'KO', qty: '100', avg_entry_price: '65' }], hist: [sale], today: '2026-12-21' }); assert.equal(kept.events[0].type, 'expired'); assert.equal(kept.mem.shares.KO.qty, 100);
+  const hand = W.wheelReconcile({ mem: mem0, positions: [{ symbol: 'KO', qty: '40', avg_entry_price: '65' }], hist: [], today: '2026-11-24' }); assert.equal(hand.mem.shares.KO.qty, 40);
+  const manual = W.wheelReconcile({ mem: null, positions: [{ symbol: 'PEP261120P00140000', qty: '-1', avg_entry_price: '2' }], hist: [], today: '2026-10-20' }); assert.deepEqual(manual.mem.opts, {}, 'a put sold by hand is not the part\'s');
+});
+test('wheel bookkeeping: without a memory, shares bought at the strike of a sold put that is gone are adopted; a stock another part bought is not', () => {
+  const P = 'KO261120P00065000', sale = { symbol: P, side: 'sell', client_order_id: 'sd-wp-' + P + '-20261019-a', filled_qty: '1', filled_avg_price: '0.9', filled_at: '2026-10-19T15:00:00Z' };
+  const r = W.wheelReconcile({ mem: null, positions: [{ symbol: 'KO', qty: '100', avg_entry_price: '65' }], hist: [sale], today: '2026-11-23' });
+  assert.deepEqual(r.mem.shares.KO, { qty: 100, cost: 64.1, since: '2026-11-23' }); assert.equal(r.events[0].adopted, true);
+  const other = W.wheelReconcile({ mem: null, positions: [{ symbol: 'KO', qty: '100', avg_entry_price: '65' }], hist: [sale, { symbol: 'KO', side: 'buy', client_order_id: 'sd-r-KO-1', filled_qty: '100', filled_at: '2026-11-02T15:00:00Z' }], today: '2026-11-23' });
+  assert.deepEqual(other.mem.shares, {});
+});
+test('wheel trend filter: the close before each window day so far must be above its 200-day average; one under ends the window', () => {
+  const days = [], closes = []; for (let i = 0; i < 240; i++) { days.push(new Date(Date.parse('2026-01-01') + i * 864e5).toISOString().slice(0, 10)); closes.push(100 + i * 0.1); }
+  const first = days[230], second = days[231];
+  assert.equal(W.aboveTrendAt(days, closes, first), true); assert.equal(W.aboveTrendAt(days.slice(0, 150), closes.slice(0, 150), days[149]), null, 'under 200 closes: unknown');
+  assert.deepEqual(W.trendThrough(days, closes, [first, second, days[232]], second), { ok: true, under: null });
+  const c2 = closes.slice(); c2[229] = 50;                                    // the close before the window's first day fell under
+  assert.deepEqual(W.trendThrough(days, c2, [first, second, days[232]], second), { ok: false, under: days[229] }, 'it stays off for the rest of the window');
+  const c3 = closes.slice(); c3[230] = 50;                                    // above before day 1, under before day 2
+  assert.equal(W.trendThrough(days, c3, [first, second, days[232]], first).ok, true); assert.equal(W.trendThrough(days, c3, [first, second, days[232]], second).ok, false);
+});
+test('wheel: one sale per stock per cycle — filled sales of the window\'s expiry are counted by stock and kind', () => {
+  const s = (sym, q, cid = 'sd-wp-' + sym + '-20261019-a', side = 'sell') => ({ symbol: sym, side, client_order_id: cid, filled_qty: String(q) });
+  const h = [s('KO261120P00065000', 1), s('KO261120P00062500', 0), s('PEP261218P00140000', 1), s('KO261120C00070000', 2, 'sd-wc-KO261120C00070000-20261019-b'), s('KO261120P00065000', 1, 'sd-wb-KO261120P00065000-c', 'buy'), s('MO261120P00050000', 1, 'manual-1')];
+  assert.deepEqual([...W.soldFor(h, '2026-11-20', 'put')], [['KO', 1]], 'unfilled, other expiry, buy-backs and orders placed by hand do not count');
+  assert.deepEqual([...W.soldFor(h, '2026-11-20', 'call')], [['KO', 2]]);
+});
+test('wheel bookkeeping (review): shares another part or the owner bought are never taken for an assignment, nor adopted while the memory is intact', () => {
+  const P = 'KO261120P00065000', sale = { symbol: P, side: 'sell', client_order_id: 'sd-wp-' + P + '-20261019-a', filled_qty: '1', filled_avg_price: '0.9', filled_at: '2026-10-19T15:00:00Z' };
+  const mem = W.wheelReconcile({ mem: null, positions: [{ symbol: P, qty: '-1', avg_entry_price: '0.9' }], hist: [sale], today: '2026-10-19', now: '2026-10-19T15:00:20Z' }).mem;
+  const dipBuy = { symbol: 'KO', side: 'buy', client_order_id: 'sd-r-KO-1', filled_qty: '100', filled_at: '2026-11-02T15:00:00Z' };
+  const r = W.wheelReconcile({ mem, positions: [{ symbol: 'KO', qty: '100', avg_entry_price: '65.3' }], hist: [sale, dipBuy], today: '2026-11-23', now: '2026-11-23T14:00:00Z' });
+  assert.equal(r.events[0].type, 'expired', 'the dip part\'s 100 shares are not the put\'s'); assert.deepEqual(r.mem.shares, {}); assert.equal(r.mem.done[P], '2026-11-23');
+  const hand = { symbol: 'KO', side: 'buy', client_order_id: 'web-1', filled_qty: '100', filled_at: '2026-11-24T15:00:00Z' };
+  const r2 = W.wheelReconcile({ mem: r.mem, positions: [{ symbol: 'KO', qty: '100', avg_entry_price: '65.2' }], hist: [sale, hand], today: '2026-11-24', now: '2026-11-24T16:00:00Z' });
+  assert.deepEqual(r2.mem.shares, {}, 'shares bought by hand at the old strike are not adopted'); assert.equal(r2.events.length, 0);
+  const real = W.wheelReconcile({ mem, positions: [{ symbol: 'KO', qty: '150', avg_entry_price: '65' }], hist: [sale, { ...dipBuy, filled_qty: '50' }], today: '2026-11-23', now: '2026-11-23T14:00:00Z' });
+  assert.equal(real.events[0].type, 'assigned', 'an assignment beside 50 shares the dip part bought'); assert.equal(real.mem.shares.KO.qty, 100);
+});
+test('wheel bookkeeping (review): a contract the owner sells by hand after the wheel bought it back is not the wheel\'s', () => {
+  const P = 'KO261120P00065000', sale = { symbol: P, side: 'sell', client_order_id: 'sd-wp-' + P + '-20261019-a', filled_qty: '1', filled_avg_price: '0.9', filled_at: '2026-10-19T15:00:00Z' };
+  const back = { symbol: P, side: 'buy', client_order_id: 'sd-wb-' + P + '-b', filled_qty: '1', filled_at: '2026-10-22T15:00:00Z' }, hand = { symbol: P, side: 'sell', client_order_id: 'web-2', filled_qty: '1', filled_at: '2026-10-26T15:00:00Z' };
+  const r = W.wheelReconcile({ mem: { opts: {}, shares: {}, done: { [P]: '2026-10-22' } }, positions: [{ symbol: P, qty: '-1', avg_entry_price: '1.1' }], hist: [sale, back, hand], today: '2026-10-26' });
+  assert.deepEqual(r.mem.opts, {});
+  const lost = W.wheelReconcile({ mem: null, positions: [{ symbol: P, qty: '-1', avg_entry_price: '1.1' }], hist: [sale, back, hand], today: '2026-10-26' });
+  assert.deepEqual(lost.mem.opts, {}, 'even with the memory lost');
+});
+test('wheel bookkeeping (review 2): a lost memory rebuilds the shares before an open covered call is measured against them', () => {
+  const P = 'KO261120P00065000', C = 'KO261218C00070000';
+  const putSale = { symbol: P, side: 'sell', client_order_id: 'sd-wp-' + P + '-20261019-a', filled_qty: '1', filled_avg_price: '0.9', filled_at: '2026-10-19T15:00:00Z' };
+  const callSale = { symbol: C, side: 'sell', client_order_id: 'sd-wc-' + C + '-20261123-b', filled_qty: '1', filled_avg_price: '0.5', filled_at: '2026-11-23T15:00:00Z' };
+  const ko = { symbol: 'KO', qty: '100', avg_entry_price: '65' }, callPos = { symbol: C, qty: '-1', avg_entry_price: '0.5' };
+  const a = W.wheelReconcile({ mem: null, positions: [ko, callPos], hist: [putSale, callSale], today: '2026-11-24', now: '2026-11-24T15:00:00Z' });
+  assert.equal(a.mem.opts[C].base, 0, 'its own 100 shares are not "held outside the wheel"'); assert.equal(a.mem.shares.KO.qty, 100);
+  const b = W.wheelReconcile({ mem: a.mem, positions: [ko], hist: [putSale, callSale], today: '2026-12-21', now: '2026-12-21T15:00:00Z' });
+  assert.deepEqual(b.events.map(e => e.type), ['expired'], 'the call expired worthless: not "called away"'); assert.equal(b.mem.shares.KO.qty, 100);
+  const onlyCall = W.wheelReconcile({ mem: null, positions: [{ ...ko, avg_entry_price: '63.2' }, callPos], hist: [callSale], today: '2026-11-24', now: '2026-11-24T15:00:00Z' });
+  assert.deepEqual(onlyCall.mem.shares.KO, { qty: 100, cost: 63.2, since: '2026-11-24' }, 'the put is older than the order history: the shares under its call are its, at the account\'s price');
+  const tpPart = { symbol: C, side: 'buy', client_order_id: 'sd-wb-' + C + '-t', status: 'partially_filled', qty: '2', filled_qty: '1', updated_at: '2026-11-30T15:00:00Z' };
+  const n4 = W.wheelReconcile({ mem: null, positions: [{ symbol: 'KO', qty: '200', avg_entry_price: '65' }, callPos], hist: [{ ...putSale, qty: '2', filled_qty: '2' }, { ...callSale, qty: '2', filled_qty: '2' }, tpPart], today: '2026-12-01' });
+  assert.ok(n4.mem.opts[C], 'its own call, partly bought back, is still its own');
+});
+test('wheel bookkeeping (review 2): a memory without "seen" (older) measures from the sale, so earlier stock orders are not netted', () => {
+  const P = 'KO261120P00065000', putSale = { symbol: P, side: 'sell', client_order_id: 'sd-wp-' + P + '-20261019-a', filled_qty: '1', filled_avg_price: '0.9', filled_at: '2026-10-19T15:00:00Z' };
+  const old = { opts: { [P]: { und: 'KO', kind: 'put', K: 65, exp: '2026-11-20', qty: 1, prem: 0.9, since: '2026-10-19', base: 0 } }, shares: {} };
+  const sellKO = { symbol: 'KO', side: 'sell', client_order_id: 'sd-x-KO-a', filled_qty: '100', filled_at: '2026-10-19T14:00:00Z' };
+  assert.deepEqual(W.wheelReconcile({ mem: old, positions: [], hist: [putSale, sellKO], today: '2026-11-23' }).events.map(e => e.type), ['expired']);
+  const up = W.wheelReconcile({ mem: old, positions: [{ symbol: P, qty: '-1', avg_entry_price: '0.9' }], hist: [putSale], today: '2026-10-30', now: '2026-10-30T15:00:00Z' });
+  assert.equal(up.mem.opts[P].seen, '2026-10-19T15:00:00Z');
 });
 
 console.log('India earnings calendar (earnings-in.mjs)');

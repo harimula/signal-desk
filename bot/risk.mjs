@@ -68,13 +68,15 @@ export function openRisk({ positions, orders, stopFor, optStopFor = () => 0.5 })
   return r;
 }
 
-// Today's profit or loss for each part of the money split (stocks / CALLs / PUTs; `opt` = CALLs + PUTs), from the positions held now and today's fills:
+// Today's profit or loss for each part of the money split (stocks / CALLs / PUTs / SPY / wheel; `opt` = CALLs + PUTs), from the positions held now and today's fills:
 // value now − value at yesterday's close + money from today's sells − money spent on today's buys, symbol by symbol.
 // It counts swing positions bought before today as well as same-day round trips. `lastDay` holds yesterday's closing price for
 // symbols that were sold out today (the bot remembers it from earlier checks); a missing one counts those shares at their sale price.
+// `wheel(sym)` marks the wheel's symbols (its sold options, and the shares a put delivered): a sold option is a negative
+// quantity, so yesterday's holding of it may be negative too (for every other symbol a negative one is a gap in the fills, read as 0).
 const OPT_SYM = /^[A-Z.]+\d{6}[CP]\d{8}$/, OPT_KIND = /^[A-Z.]+\d{6}([CP])\d{8}$/;
-export function sideDayPl({ positions = [], fills = [], lastDay = {}, spy = null } = {}) {
-  const per = {}, get = s => per[s] || (per[s] = { now: 0, qty: 0, last: null, buyQ: 0, sellQ: 0, cash: 0, sellAmt: 0, px: null });
+export function sideDayPl({ positions = [], fills = [], lastDay = {}, spy = null, wheel = null } = {}) {
+  const per = {}, get = s => per[s] || (per[s] = { now: 0, qty: 0, last: null, buyQ: 0, sellQ: 0, cash: 0, sellAmt: 0, buyAmt: 0, px: null });
   for (const p of positions) {
     const x = get(p.symbol), m = OPT_SYM.test(p.symbol) ? 100 : 1;
     x.qty = +p.qty || 0; x.now = x.qty * (+p.current_price || 0) * m; x.last = +p.lastday_price > 0 ? +p.lastday_price : null; x.px = +p.current_price || null;
@@ -82,16 +84,16 @@ export function sideDayPl({ positions = [], fills = [], lastDay = {}, spy = null
   for (const f of fills) {
     if (!f || !f.symbol) continue;
     const x = get(f.symbol), m = OPT_SYM.test(f.symbol) ? 100 : 1, q = Math.abs(+f.qty || 0), px = +f.price || 0;
-    if (/^buy/.test(f.side)) { x.buyQ += q; x.cash -= q * px * m; } else { x.sellQ += q; x.cash += q * px * m; x.sellAmt += q * px; }
+    if (/^buy/.test(f.side)) { x.buyQ += q; x.cash -= q * px * m; x.buyAmt += q * px; } else { x.sellQ += q; x.cash += q * px * m; x.sellAmt += q * px; }
   }
-  const out = { stock: 0, call: 0, put: 0, spy: 0 };
+  const out = { stock: 0, call: 0, put: 0, spy: 0, wheel: 0 };
   for (const [sym, x] of Object.entries(per)) {
-    const m = OPT_SYM.test(sym) ? 100 : 1, prevQ = Math.max(0, x.qty - x.buyQ + x.sellQ);
+    const m = OPT_SYM.test(sym) ? 100 : 1, isW = !!(wheel && wheel(sym)), raw = x.qty - x.buyQ + x.sellQ, prevQ = isW ? raw : Math.max(0, raw);
     let lp = x.last || (+lastDay[sym] > 0 ? +lastDay[sym] : null);
-    if (prevQ > 1e-9 && !lp) lp = x.sellQ > 0 ? x.sellAmt / x.sellQ : x.px || 0;
-    const kd = OPT_KIND.exec(sym); out[!kd ? 'stock' : spy && spy(sym) ? 'spy' : kd[1] === 'P' ? 'put' : 'call'] += x.now - prevQ * (lp || 0) * m + x.cash;
+    if (Math.abs(prevQ) > 1e-9 && !lp) lp = prevQ > 0 ? (x.sellQ > 0 ? x.sellAmt / x.sellQ : x.px || 0) : (x.buyQ > 0 ? x.buyAmt / x.buyQ : x.px || 0);
+    const kd = OPT_KIND.exec(sym); out[isW ? 'wheel' : !kd ? 'stock' : spy && spy(sym) ? 'spy' : kd[1] === 'P' ? 'put' : 'call'] += x.now - prevQ * (lp || 0) * m + x.cash;
   }
-  for (const k of ['stock', 'call', 'put', 'spy']) out[k] = Math.round(out[k] * 100) / 100;
+  for (const k of ['stock', 'call', 'put', 'spy', 'wheel']) out[k] = Math.round(out[k] * 100) / 100;
   out.opt = Math.round((out.call + out.put) * 100) / 100;
   return out;
 }

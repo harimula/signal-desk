@@ -1,4 +1,5 @@
 import { SPY_DEFAULTS } from './spyopt.mjs';
+import { WHEEL_DEFAULTS } from './wheel.mjs';
 // Bot configuration: presets, defaults, validation. The front-end Settings tab writes bot/config.json;
 // the bot re-reads it every minute. Secrets (API keys) are NEVER in this file.
 export const PRESETS = {
@@ -37,6 +38,9 @@ export const DEFAULTS = {
   split: true, callSharePct: 30, putSharePct: 10, optDayCap: 10,
   // SPY quick options sleeve (bot/spyopt.mjs): its own share of the stake, off the top of the stock share; experimental, not backtested
   ...SPY_DEFAULTS,
+  // The wheel (bot/wheel.mjs): cash-secured puts and covered calls on their own share of the stake, off the top of the stock
+  // share like SPY; OFF until switched on. Tested on real option prices since February 2024 (tools/wheel-study.mjs).
+  ...WHEEL_DEFAULTS,
   putPct: 1, stockUsd: 10000, callUsd: 2000, putUsd: 1000,
   stockCapPct: 0, callCapPct: 0, putCapPct: 0, stockCapUsd: 0, callCapUsd: 0, putCapUsd: 0,
 };
@@ -45,7 +49,7 @@ export const RANGES = {
   riskPct: [0.05, 3], optRiskPct: [0.05, 3], maxHeat: [0.5, 15], perSector: [1, 10], maxPositions: [1, 20], maxOptions: [0, 10],
   dayCap: [0.5, 20], weekCap: [1, 30], streak: [1, 10], stockPct: [1, 30], optPct: [0.5, 10],
   putPct: [0.5, 10], stockUsd: [0, 1e7], callUsd: [0, 1e7], putUsd: [0, 1e7],
-  callSharePct: [0, 100], putSharePct: [0, 100], optDayCap: [1, 50], spySharePct: [0, 50], spyTradePct: [10, 100], spyTp: [5, 100], spyStop: [5, 60], spyHoldMin: [2, 120], spyMaxTrades: [1, 20], spyMaxOpen: [1, 5], spyStreak: [1, 6], spyDayCap: [5, 100], spyDte: [1, 5], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
+  callSharePct: [0, 100], putSharePct: [0, 100], optDayCap: [1, 50], spySharePct: [0, 50], spyTradePct: [10, 100], spyTp: [5, 100], spyStop: [5, 60], spyHoldMin: [2, 120], spyMaxTrades: [1, 20], spyMaxOpen: [1, 5], spyStreak: [1, 6], spyDayCap: [5, 100], spyDte: [1, 5], wheelSharePct: [0, 50], wheelOtmPct: [0, 20], wheelTp: [0, 90], wheelStop: [0, 10], wheelMinPrice: [1, 1000], wheelMaxPrice: [5, 2000], wheelMaxPositions: [1, 10], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
   scanSize: [50, 400], scanMinPrice: [1, 500],
   liveSizePct: [5, 100], stakeUsd: [0, 1e8], dayOrMin: [5, 60], dayMaxTrades: [1, 10], dayStreak: [1, 5], dayRiskPct: [0.1, 2], dayTarget: [1, 4], dayRvol: [0.5, 3], dayTimeStop: [15, 180], dayOptTp: [10, 200], dayOptStop: [20, 80], dayOptDteMax: [1, 14],
   rsiThreshold: [2, 30], maxHold: [1, 30], exitProfitPct: [0.1, 5], optDays: [7, 60], optTakeProfit: [5, 300], optStop: [5, 90], holdFloor: [2, 60], stockTp: [0, 100], staleMin: [5, 240],
@@ -57,7 +61,7 @@ export function normalize(raw) {
   if (raw.preset && PRESETS[raw.preset]) { c.preset = raw.preset; Object.assign(c, PRESETS[raw.preset]); }
   else if (raw.preset === 'custom') c.preset = 'custom';
   for (const k of Object.keys(RANGES)) if (raw[k] != null && isFinite(+raw[k]) && (c.preset === 'custom' || !(k in PRESETS.balanced))) c[k] = clamp(+raw[k], RANGES[k]);
-  for (const k of ['spyOn', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts', 'marketFilter']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
+  for (const k of ['spyOn', 'wheelOn', 'wheelTrend', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts', 'marketFilter']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
   if (raw.exitRule === 'bounce' || raw.exitRule === 'profit') c.exitRule = raw.exitRule;
   if (raw.optExit === 'bounce' || raw.optExit === 'target') c.optExit = raw.optExit;
   if (raw.universe === 'scan' || raw.universe === 'list') c.universe = raw.universe;
@@ -67,6 +71,10 @@ export function normalize(raw) {
   const spyShare = c.spyOn ? c.spySharePct : 0;                                                      // the shares can never add up to more than the stake
   if (c.callSharePct + c.putSharePct + spyShare > 100) c.spySharePct = Math.max(0, 100 - c.callSharePct - c.putSharePct);
   if (c.callSharePct + c.putSharePct > 100) c.putSharePct = 100 - c.callSharePct;
+  const spyNow = c.spyOn ? c.spySharePct : 0;                                                        // the wheel gives way last
+  if (c.wheelOn && c.callSharePct + c.putSharePct + spyNow + c.wheelSharePct > 100) c.wheelSharePct = Math.max(0, 100 - c.callSharePct - c.putSharePct - spyNow);
+  if (c.wheelStop > 0 && c.wheelStop < 1.5) c.wheelStop = 1.5;                                        // a stop under 1.5× the premium would fire on the spread
+  if (c.wheelMinPrice > c.wheelMaxPrice) c.wheelMaxPrice = c.wheelMinPrice;
   c.mode = raw.mode === 'live' && raw.liveConfirm === 'I UNDERSTAND THE RISK' ? 'live' : 'paper';
   const tm = v => /^\d{1,2}:\d{2}$/.test(v || '') ? v.split(':').map(Number).reduce((h, m) => h * 60 + m) : null;
   if (tm(raw.dayStart) != null && tm(raw.dayStart) >= 575 && tm(raw.dayStart) <= 720) c.dayStart = raw.dayStart;      // 9:35–12:00
@@ -80,4 +88,4 @@ export function normalize(raw) {
 }
 export const entryEndMin = c => { const [h, m] = c.entryEnd.split(':').map(Number); return h * 60 + m; };
 const money = (c, unit, pct, usd) => c[unit] === 'usd' ? '$' + c[usd] : c[pct] + '%';
-export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''}${c.mode === 'live' ? ' · LIVE at ' + c.liveSizePct + '% size' : ''}${c.stakeUsd > 0 ? ' · stake $' + c.stakeUsd : ''}${c.split ? ' · split ' + (100 - c.callSharePct - c.putSharePct - (c.spyOn ? c.spySharePct : 0)) + '/' + c.callSharePct + '/' + c.putSharePct + (c.spyOn ? '/' + c.spySharePct : '') + ' stocks/CALLs/PUTs' + (c.spyOn ? '/SPY' : '') : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · sells ${c.exitRule === 'profit' ? 'at the first close +' + c.exitProfitPct + '% up' : 'on the bounce'} (max ${c.maxHold} days)${c.marketFilter ? ' · market filter on' : ''} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;
+export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''}${c.mode === 'live' ? ' · LIVE at ' + c.liveSizePct + '% size' : ''}${c.stakeUsd > 0 ? ' · stake $' + c.stakeUsd : ''}${c.split ? ' · split ' + (100 - c.callSharePct - c.putSharePct - (c.spyOn ? c.spySharePct : 0) - (c.wheelOn ? c.wheelSharePct : 0)) + '/' + c.callSharePct + '/' + c.putSharePct + (c.spyOn ? '/' + c.spySharePct : '') + (c.wheelOn ? '/' + c.wheelSharePct : '') + ' stocks/CALLs/PUTs' + (c.spyOn ? '/SPY' : '') + (c.wheelOn ? '/wheel' : '') : ''}${c.wheelOn ? ' · wheel: puts ' + c.wheelOtmPct + '% under, bought back at ' + (c.wheelTp > 0 ? (100 - c.wheelTp) + '% of the premium' : 'expiry') : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · sells ${c.exitRule === 'profit' ? 'at the first close +' + c.exitProfitPct + '% up' : 'on the bounce'} (max ${c.maxHold} days)${c.marketFilter ? ' · market filter on' : ''} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;

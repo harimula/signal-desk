@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { WHEEL_DEFAULTS } from '../bot/wheel.mjs';
 const { chromium } = await import('playwright');
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -103,6 +104,14 @@ async function session(label, prep, cfgPatch = {}) {                        // c
   const note1 = await page.evaluate(() => (document.querySelector('#st-split') || {}).checked === true && (document.querySelector('#stSplitNote') || {}).textContent || '');
   check('money split: with CALLs 30 / PUTs 10 / SPY 5 the note reads 55/30/10/5, and a share typed in updates it', /Stocks 55%.*CALLs 30%.*PUTs 10%.*SPY quick options 5%/.test(note0) && /Stocks 60%.*CALLs 25%.*PUTs 10%/.test(note1), note0 + ' → ' + note1);
   check('SPY sleeve: section 4c shows, on by default, with its nine settings and the time window', await page.evaluate(() => (document.querySelector('#st-spyOn') || {}).checked === true && ['spySharePct', 'spyTp', 'spyStop', 'spyHoldMin', 'spyMaxTrades', 'spyMaxOpen', 'spyStreak', 'spyDayCap', 'spyDte', 'spyStart', 'spyEnd'].every(k => document.getElementById('st-' + k)) && document.getElementById('st-spySharePct').value === '5'));
+  // the wheel (4d): switched on with a 10% share it takes its part of the stake (stocks 60% → 50%) and shows its seven settings
+  await page.evaluate(() => { const r = document.querySelector('#st-wheelOn'); if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } }); await page.waitForTimeout(250);
+  await page.fill('#st-wheelSharePct', '10'); await page.evaluate(() => document.querySelector('#st-wheelSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(250);
+  { const w = await page.evaluate(() => ({ note: (document.querySelector('#stSplitNote') || {}).textContent || '', sec: !!document.getElementById('sec-4d-cash-secured-puts-covered-calls'), f: ['wheelSharePct', 'wheelOtmPct', 'wheelTp', 'wheelStop', 'wheelMinPrice', 'wheelMaxPrice', 'wheelMaxPositions', 'wheelTrend'].every(k => document.getElementById('st-' + k)), read: (() => { const c = window.stRead(); return [c.wheelOn, c.wheelSharePct]; })() }));
+    check('wheel: section 4d shows its settings; switched on at 10% it takes its share (Stocks 60% → 50%) and is read for saving', w.sec && w.f && /Stocks 50%.*Wheel 10%/.test(w.note) && w.read[0] === true && w.read[1] === 10, JSON.stringify(w)); }
+  await page.fill('#st-callSharePct', '80'); await page.evaluate(() => document.querySelector('#st-callSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(250);
+  check('wheel: its share counts toward 100% (CALLs 80 + PUTs 10 + SPY 5 + wheel 10 = 105% is refused)', await page.evaluate(() => /\+ wheel 10% = 105%/.test([...document.querySelectorAll('[role="status"]')].map(e => e.textContent).join(' ')) && document.querySelector('[data-st="save"]').disabled));
+  await page.evaluate(() => { const r = document.querySelector('#st-wheelOn'); if (r && r.checked) { r.checked = false; r.dispatchEvent(new Event('change', { bubbles: true })); } }); await page.waitForTimeout(250);
   await page.fill('#st-callSharePct', '90'); await page.evaluate(() => document.querySelector('#st-callSharePct').dispatchEvent(new Event('change', { bubbles: true }))); await page.waitForTimeout(300);
   const overErr = await page.evaluate(() => ({ n: document.querySelectorAll('[role="status"]').length, txt: [...document.querySelectorAll('[role="status"]')].map(e => e.textContent).join(' | '), dis: document.querySelector('[data-st="save"]').disabled }));
   check('money shares over 100% (CALLs 90 + PUTs 10 + SPY 5): an error shows in sections 3 and 4c and on the save bar, and Save is disabled', overErr.n >= 3 && overErr.dis && /= 105% — 5% more than the whole stake/.test(overErr.txt), JSON.stringify(overErr));
@@ -299,12 +308,35 @@ const profitFx = path.join(os.tmpdir(), 'sd-journal-profit.json');            //
     held: (j.watch.held || []).map(h => h.kind === 'stock' ? { ...h, exitBy: 'profit', exitLevel: 412.05 } : { ...h, exitBy: 'target', exitLevel: null, tp: 430.5, stop: 41 })
       .concat([{ s: 'SPY261024C00502000', und: 'SPY', kind: 'call', qty: 20, avg: 205, cur: 210, pl: 100, plpc: 2.4, undPx: 502.7, exitLevel: null, exitSide: 'above', exitBy: 'spy', tp: 215.25, stop: 133.25, holdMin: 60 }]) };
   fs.writeFileSync(profitFx, JSON.stringify(j)); }
-for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT, SPY and day-trade rows)'], ['journal-old.json', 'older journal shape (no watch rows, no split, no spy, no day block)'], [profitFx, 'profit sell rule and market filter']]) {
+// the wheel (2026-10-29): a sold KO put with its buy-back order, PEP shares a put delivered, a put bought back earlier, its money part
+const wheelFx = path.join(os.tmpdir(), 'sd-journal-wheel.json');
+{ const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/journal-full.json'), 'utf8'));
+  j.settings = { ...j.settings, wheelOn: true, wheelSharePct: 10, callSharePct: 20, putSharePct: 0, spySharePct: 10 };
+  j.split = { ...j.split, shares: { call: 20, put: 0, spy: 10, wheel: 10, stock: 60 }, wheel: { money: 10000, used: 20620, today: 12, limitPct: 100, halted: null } };
+  j.wheel = { at: j.at, on: true, share: 10, money: 10000, used: 20620, free: -10620, idle: null, window: { open: false, days: ['2026-11-23', '2026-11-24', '2026-11-25'], expiry: '2026-12-18' },
+    opts: [{ s: 'KO261120P00065000', und: 'KO', kind: 'put', K: 65, exp: '2026-11-20', qty: 1, prem: 90, cur: 60, pl: 30, tp: 45, since: '2026-10-19' }],
+    shares: [{ und: 'PEP', qty: 100, cost: 138.5, px: 141.2, pl: 270, since: '2026-10-19' }], working: [], rules: { otm: 5, tp: 50, stop: 0, trend: true, minPx: 15, maxPx: 150, maxPos: 3 } };
+  j.open = j.open.concat([{ sym: 'KO261120P00065000', und: 'KO', kind: 'Put', exp: '2026-11-20', strike: 65, mult: 100, qty: -1, avg: 0.9, now: 0.6, pl: 30, plPct: 33.33, since: '2026-10-19T14:05:00Z', short: true, wheel: true },
+    { sym: 'PEP', und: 'PEP', kind: 'Stock', mult: 1, qty: 100, avg: 140, now: 141.2, pl: 120, plPct: 0.86, since: '2026-10-17T20:00:00Z', wheel: true }]);
+  j.closed = [{ sym: 'KO261016P00064000', und: 'KO', kind: 'Put', exp: '2026-10-16', strike: 64, mult: 100, qty: 1, inPx: 0.85, inT: '2026-09-21T14:05:00Z', outPx: 0.42, outT: '2026-10-02T15:00:00Z', pl: 43, plPct: 50.59, short: true, wheel: true }].concat(j.closed);
+  fs.writeFileSync(wheelFx, JSON.stringify(j)); }
+for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT, SPY and day-trade rows)'], ['journal-old.json', 'older journal shape (no watch rows, no split, no spy, no day block)'], [profitFx, 'profit sell rule and market filter'], [wheelFx, 'the wheel (sold put, delivered shares)']]) {
   journalFixture = fx;
   const { page, errors } = await session('bot trades · ' + label, () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); });
   await page.evaluate(() => document.querySelector('#tabs [data-t="BOT"]').click()); await page.waitForTimeout(1500);
   await page.evaluate(() => document.querySelectorAll('main details').forEach(d => { d.open = true; }));
   const txt = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  if (fx === wheelFx) {
+    check('wheel: its card lists the sold put (buy-back at $45.00 a contract, expiry) and the delivered shares (cost $138.50)', /Wheel — cash-secured puts & covered calls/.test(txt) && /KO PUT sold 65\.00 · 11-20/.test(txt) && /bought back at \$45\.00, else expires Fri, Nov 20 · \$6,500 set aside/.test(txt) && /PEP shares 100 \$138\.50/.test(txt) && /Next sale window: Mon, Nov 23, Tue, Nov 24, Wed, Nov 25/.test(txt), (txt.match(/Wheel — cash.{0,700}/) || [''])[0]);
+    check('wheel: Open now names a sold option and its shares as the wheel\'s, and money in trades counts what it set aside', /Option sold/.test(txt) && /Wheel — cash-secured put sold: a resting order buys it back at \$45\.00/.test(txt) && /Stock \(wheel\)/.test(txt) && /Wheel — shares a put delivered \(cost \$138\.50/.test(txt) && /wheel \$20,620 set aside/.test(txt), (txt.match(/Money in trades now.{0,300}/) || [''])[0]);
+    check('wheel: a put bought back shows when it was sold and bought back, at what prices, +$43.00', /KO PUT sold 64 · 10-16/.test(txt) && /bought back Oct 2/.test(txt) && /sold first Sep 21/.test(txt) && /\+\$43\.00/.test(txt), (txt.match(/KO PUT sold 64.{0,200}/) || [''])[0]);
+    check('wheel: the money split has a Wheel card with its $10,000 and no daily loss limit', /Wheel › .{0,40}\$10,000/.test(txt) && /No daily loss limit: its puts run for weeks/.test(txt), (txt.match(/Wheel ›.{0,200}/) || [''])[0]);
+    await page.evaluate(() => document.querySelector('main [data-drill="part"][data-arg="wheel"]').click()); await page.waitForTimeout(150);
+    const wd = await page.evaluate(() => (document.getElementById('drill') || {}).innerText.replace(/\s+/g, ' ') || ''); await page.keyboard.press('Escape'); await page.waitForTimeout(80);
+    check('wheel: its detail sheet shows what is set aside, the next window and its trades', /Wheel \(cash-secured puts & covered calls\)/.test(wd) && /Set aside now \$20,620\.00/.test(wd) && /Next sale window Mon, Nov 23/.test(wd) && /Daily loss limit none/.test(wd), wd.slice(0, 400));
+    { const thNoTip = await page.evaluate(() => [...document.querySelectorAll('main th')].filter(el => el.offsetParent && !el.hasAttribute('data-tip')).map(el => el.textContent.trim()));
+      check('wheel: every table heading of its card has an explanation', thNoTip.length === 0, thNoTip.join(' | ')); }
+  }
   if (fx === 'journal-full.json') {
     check('bot trades: the money-split cards show all four parts with their money', /Stocks.*\$55,000/.test(txt) && /CALLs.*\$30,000/.test(txt) && /PUTs.*\$10,000/.test(txt) && /SPY quick options.*\$5,000/.test(txt), txt.slice(0, 300));
     check('bot trades: the SPY card shows the open trade with its exits and the 3-mo-vs-market column exists', /SPY quick options/.test(txt) && /in a trade/.test(txt) && /\$235\.75/.test(txt) && /3-mo vs market/.test(txt), txt.slice(0, 200));
@@ -354,7 +386,7 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
     { await page.evaluate(() => document.querySelector('main [data-drill="part"][data-arg="put"]').click()); await page.waitForTimeout(150);
       const t = await page.evaluate(() => (document.getElementById('drill') || {}).innerText || ''); await page.keyboard.press('Escape');
       check('drill-down: the PUTs sheet says switched off and shows no daily loss limit', /switched off in Bot settings — no new PUTs/.test(t) && !/Stops for the day at/.test(t), t.slice(0, 200)); }
-  } else {
+  } else if (fx === 'journal-old.json') {
     check('bot trades: an older journal without watch rows / split / spy renders without a blank page', /Bot trades|Your bot/.test(txt) && txt.length > 500, txt.slice(0, 200));
     check('bot trades: an older journal shows its partial engine and risk figures without NaN (no “every NaN s”, no “undefined%”)', /engine/.test(txt) && /each stock trade risks at most 0\.5%/.test(txt) && /RSI-2 fell below 10/.test(txt), txt.match(/engine.{0,120}/)?.[0]);
   }
@@ -510,7 +542,7 @@ await browser.close(); srv.close();
 // 6. the settings guide's "yours:" values against bot/config.json. Printed as a warning, never a failure: the owner saves settings
 //    from the page (that push runs these tests) and the guide is brought up to date afterwards.
 {
-  const C = JSON.parse(fs.readFileSync(path.join(ROOT, 'bot/config.json'), 'utf8')), doc = fs.readFileSync(path.join(ROOT, 'docs/settings.html'), 'utf8');
+  const C = JSON.parse(fs.readFileSync(path.join(ROOT, 'bot/config.json'), 'utf8')), doc = fs.readFileSync(path.join(ROOT, 'docs/settings.html'), 'utf8'), W = { ...WHEEL_DEFAULTS, ...C };
   const t12 = s => { const [h, m] = String(s).split(':').map(Number); return `${(h + 11) % 12 + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
   const onOff = v => v ? 'on' : 'off', cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   const meta = h3 => { const m = new RegExp('<h3>' + h3.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + '</h3><div class="meta">(.*?)</div>').exec(doc); return m ? m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ') : null; };
@@ -518,7 +550,7 @@ await browser.close(); srv.close();
     ['Preset: Conservative / Balanced / Aggressive', `yours: ${cap(C.preset)}`], ['Risk per stock trade', `yours: ${C.riskPct}%`], ['Risk per option trade', `yours: ${C.optRiskPct}%`],
     ['Total risk cap', `yours: ${C.maxHeat}%`], ['Max positions per sector', `yours: ${C.perSector}`], ['Daily loss limit', `yours: ${C.dayCap}%`], ['Weekly loss limit', `yours: ${C.weekCap}%`], ['Losing streak limit', `yours: ${C.streak}`],
     ['Trade stocks / Trade CALL options / Trade PUT options', `yours: ${onOff(C.stocks)} / ${onOff(C.options)} / ${onOff(C.puts)}`],
-    ['Where the money goes (the four shares)', `yours: stocks ${100 - C.callSharePct - C.putSharePct - (C.spyOn ? C.spySharePct : 0)}% · CALLs ${C.callSharePct}% · PUTs ${C.putSharePct}% · SPY ${C.spyOn ? C.spySharePct : 0}%`],
+    ['Where the money goes (the five shares)', `yours: stocks ${100 - C.callSharePct - C.putSharePct - (C.spyOn ? C.spySharePct : 0) - (W.wheelOn ? W.wheelSharePct : 0)}% · CALLs ${C.callSharePct}% · PUTs ${C.putSharePct}% · SPY ${C.spyOn ? C.spySharePct : 0}% · wheel ${W.wheelOn ? W.wheelSharePct : 0}%`],
     ['CALLs share / PUTs share', `yours: ${C.callSharePct} / ${C.putSharePct}%`], ['SPY quick-options share', `yours: ${C.spySharePct}%`], ['SPY money per trade', `yours: ${C.spyTradePct}%`], ['Options daily loss limit', `yours: ${C.optDayCap}%`],
     ['Per trade — stocks / CALLs / PUTs', `yours: ${C.stockPct}% / ${C.optPct}% / ${C.putPct}%`], ['Max stock positions / Max option positions', `yours: ${C.maxPositions} / ${C.maxOptions}`],
     ['When to sell a stock', `yours: ${C.exitRule === 'profit' ? 'First profitable close' : 'On the bounce'}`], ['Profit needed to sell', `yours: ${C.exitProfitPct}%`], ['Market filter', `yours: ${onOff(C.marketFilter)}`], ['Intraday signals', `yours: ${onOff(C.intraday)}`],
@@ -527,6 +559,8 @@ await browser.close(); srv.close();
     ['Entry window closes at', `yours: ${t12(C.entryEnd)}`], ['Day-trade (on/off)', `yours: ${onOff(C.dayTrade)}`],
     ['SPY quick options (on/off)', `yours: ${onOff(C.spyOn)}`], ['SPY take-profit / SPY stop', `yours: +${C.spyTp}% / −${C.spyStop}%`], ['SPY time stop', `yours: ${C.spyHoldMin} min`], ['SPY trades open at once', `yours: ${C.spyMaxOpen}`],
     ['SPY max trades per day · SPY losses in a row · SPY daily loss limit', `yours: ${C.spyMaxTrades} · ${C.spyStreak} · ${C.spyDayCap}%`], ['Trades from / until', `yours: ${t12(C.spyStart)} – ${t12(C.spyEnd)}`],
+    ['Wheel share', `yours: ${W.wheelSharePct}%`], ['The wheel (on/off)', `yours: ${onOff(W.wheelOn)}`], ['Trend filter', `yours: ${onOff(W.wheelTrend)}`], ['Strike distance', `yours: ${W.wheelOtmPct}%`], ['Buy back at', `yours: ${W.wheelTp}%`],
+    ['Wheel stop', `yours: ${W.wheelStop > 0 ? W.wheelStop + '×' : 'off'}`], ['Lowest share price / Highest share price', `yours: $${W.wheelMinPrice} / $${W.wheelMaxPrice}`], ['Stocks at once', `yours: ${W.wheelMaxPositions}`],
     ['Scan the whole market / Only my list', `yours: ${C.universe === 'scan' ? 'scan' : 'my list'}`], ['How many stocks to watch', `yours: ${C.scanSize}`], ['Minimum share price', `yours: $${C.scanMinPrice}`], ['Practice (paper) / Real money (live)', `yours: ${C.mode}`],
   ];
   const off = want.filter(([h3, w]) => !(meta(h3) || '').includes(w)).map(([h3, w]) => `${h3}: config.json says “${w}”, the guide says “${(meta(h3) || 'no such entry').slice(0, 100)}”`);

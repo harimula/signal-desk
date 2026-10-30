@@ -44,6 +44,14 @@ as an upper bound. Past results do not predict future results.
   expiry; and, by a setting, also when the stock bounces (default) or only at the take-profit, the
   stop or the max hold. On real option prices since March 2024, +5% / −90% with the second rule won
   83.5% of the bot's CALL signals (October 2026 check, `bot/winrate_report.md`).
+- **The wheel (off by default; Bot settings → 4d, with a share in 3):** cash-secured puts and covered
+  calls on its own share of the money. In the first three trading days after each monthly options
+  expiration it sells one put per stock 5% under the price, expiring at the next one, with 100 × the
+  strike set aside; a resting order buys it back at half the premium. Shares a put delivers get a call
+  each month at or above their cost until they are sold at its strike. New puts only while SPY and the
+  stock are above their 200-day averages. On real option prices since February 2024, 92% of its puts
+  made money and it earned about +7.9% a year on the large companies — less than holding them
+  (+15.7%) — and still lost 6.8% in April 2025 (`bot/wheel_report.md`).
 
 ## Professional risk controls
 - **Position sizing:** each stock trade is sized so a 3×-average-range move against it costs at

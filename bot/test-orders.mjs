@@ -42,6 +42,7 @@ if (process.argv[2] === 'child') {
     JUNK: series(2, 3, [-0.04, -0.04]),           // penny stock that also dipped: the scan must drop it (price < $5)
   };
   BARS.JUNK.forEach(b => b.v = 5e7); BARS.SPY.forEach(b => b.v = 5e6);
+  for (const [d, c] of Object.entries(FAKE.spyPatch || {})) { const b = BARS.SPY.find(x => x.t.startsWith(d)); if (b) Object.assign(b, { o: c, h: c * 1.004, l: c * 0.996, c }); }   // one SPY close moved (wheel trend tests)
   const lastC = s => BARS[s][BARS[s].length - 1].c;
   // intraday 5-minute bars for today (UTC times; 13:30Z = 9:30 ET on an EDT day)
   const m5 = (hm, o, h, l, c, v) => ({ t: '2026-10-23T' + hm + ':00Z', o, h, l, c, v, n: 100, vw: c });
@@ -67,7 +68,8 @@ if (process.argv[2] === 'child') {
       const send = o => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)); };
       if (p === '/bottest-token/getUpdates') { let q = {}; try { q = JSON.parse(body || '{}'); } catch (e) {} if (q.limit === 1) { tgConfirms.push(q.offset); return send({ ok: true, result: [] }); } return send({ ok: true, result: tgQueue.shift() || [] }); }   // limit 1 = the bot confirming what it handled
       if (p === '/bottest-token/sendMessage') { tgSent.push(JSON.parse(body)); return send({ ok: true, result: { message_id: tgSent.length } }); }
-      if (p === '/v2/calendar') { const d = u.searchParams.get('start'); return send([{ date: d, open: '09:30', close: FAKE.calClose || '16:00' }]); }
+      if (p === '/v2/calendar') { const d = u.searchParams.get('start'), e = u.searchParams.get('end') || d; if (e === d) return send([{ date: d, open: '09:30', close: FAKE.calClose || '16:00' }]);   // a range (the wheel's cycle): every weekday that is not a listed holiday
+        const out = []; for (let t = REAL.parse(d + 'T12:00:00Z'); t <= REAL.parse(e + 'T12:00:00Z'); t += 864e5) { const x = new REAL(t), ds = x.toISOString().slice(0, 10); if (x.getUTCDay() % 6 && !(FAKE.holidays || ['2026-11-26', '2026-12-25']).includes(ds)) out.push({ date: ds, open: '09:30', close: '16:00' }); } return send(out); }
       if (p === '/v2/clock' && FAKE.clockFail) { res.statusCode = 500; return send({ message: 'down' }); }
       if (p.startsWith('/v2/positions/') && req.method === 'GET') { const one = (FAKE.positions || []).find(x => x.symbol === decodeURIComponent(p.split('/').pop())); if (!one) { res.statusCode = 404; return send({ message: 'position does not exist' }); } return send(one); }
       if (p === '/v2/clock') return send({ is_open: !FAKE.closed, timestamp: new REAL(FIXED).toISOString(), next_open: '2026-10-26T09:30:00-04:00', next_close: FAKE.nextClose || '2026-10-23T16:00:00-04:00' });
@@ -76,6 +78,7 @@ if (process.argv[2] === 'child') {
       if (p === '/v2/assets' && FAKE.slowAssets) return setTimeout(() => send([]), FAKE.slowAssets);
       if (p === '/v2/assets') return send(Object.keys(BARS).map(s => ({ symbol: s, tradable: true, exchange: 'NASDAQ' })).concat([{ symbol: 'OTCX', tradable: true, exchange: 'OTC' }, { symbol: 'WARR.WS', tradable: true, exchange: 'NYSE' }]));
       if (p === '/v2/account/activities/FILL') return send(FAKE.fills || []);
+      if (p === '/v2/account/activities') return send(FAKE.nta || []);                                                  // option expiries / assignments (non-trade activities)
       if (p === '/v2/account/portfolio/history') return send({ equity: [100000, 100000], timestamp: [1, 2], base_value: 100000 });
       if (p === '/v2/orders' && req.method === 'DELETE') { deletes.push('all-orders'); return send([]); }
       if (p.startsWith('/v2/positions') && req.method === 'DELETE') { deletes.push('all-positions'); return send([]); }
@@ -88,6 +91,13 @@ if (process.argv[2] === 'child') {
       if (p === '/v2/stocks/bars') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (BARS[s]) out[s] = BARS[s]; return send({ bars: out }); }
       if (p === '/v2/stocks/trades/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) if (LIVE[s] != null) out[s] = { p: LIVE[s], t: '2026-10-23T14:00:00Z' }; else if (BARS[s]) out[s] = { p: s === 'FALL' ? lastC(s) * 0.9 : lastC(s), t: '2026-10-23T14:00:00Z' }; return send({ trades: out }); }
       if (p === '/v1beta1/news') return send({ news: [] });
+      if (p === '/v2/options/contracts' && u.searchParams.get('expiration_date')) {   // the wheel: a chain of strikes at one monthly expiry
+        contractQs.push(u.search);
+        const und = u.searchParams.get('underlying_symbols'), type = u.searchParams.get('type'), ex = u.searchParams.get('expiration_date'), px = (LIVE[und] != null ? LIVE[und] : lastC(und));
+        const step = px < 50 ? 1 : px < 200 ? 2.5 : 5, lo = +u.searchParams.get('strike_price_gte') || 0, hi = +u.searchParams.get('strike_price_lte') || 1e9, out = [];
+        for (let K = Math.floor(px * 0.6 / step) * step; K <= px * 1.6; K += step) if (K >= lo - 1e-9 && K <= hi + 1e-9) out.push({ symbol: und + ex.slice(2, 4) + ex.slice(5, 7) + ex.slice(8, 10) + type[0].toUpperCase() + String(Math.round(K * 1000)).padStart(8, '0'), expiration_date: ex, strike_price: String(K), tradable: true, type });
+        return send({ option_contracts: out });
+      }
       if (p === '/v2/options/contracts') {
         contractQs.push(u.search);
         const und = u.searchParams.get('underlying_symbols'), type = u.searchParams.get('type'), px = lastC(und);
@@ -114,7 +124,7 @@ if (process.argv[2] === 'child') {
   if (FAKE.prevJournal) fs.writeFileSync('bot/journal.json', JSON.stringify(FAKE.journalKey ? await bot.encryptJournal(FAKE.prevJournal, FAKE.prevKey || FAKE.journalKey, 1000) : FAKE.prevJournal));   // what the previous run left behind
   bot.applyConfig({ symbols: ['DIP', 'POP', 'FALL'], mode: 'paper', newsGuard: false, eventGuard: false, ...cfg });
   if (FAKE.tg) await bot.tgPollCycle();
-  const tc0 = REAL.now(); await bot.botCycle({ journal: !!FAKE.closed, manageOnly: !!FAKE.manageOnly }); const cycleMs = REAL.now() - tc0;
+  const tc0 = REAL.now(); await bot.botCycle({ journal: !!FAKE.closed || !!FAKE.journal, manageOnly: !!FAKE.manageOnly }); const cycleMs = REAL.now() - tc0;
   if (FAKE.tg) await bot.tgPollCycle();
   if (FAKE.positionsAfter) { FAKE.positions = FAKE.positionsAfter; if (FAKE.fillsAfter) FAKE.fills = FAKE.fillsAfter; if (FAKE.histAfter) FAKE.hist = FAKE.histAfter; if (FAKE.openAfter) FAKE.open = FAKE.openAfter; }
   if (FAKE.cycles > 1) for (let k = 1; k < FAKE.cycles; k++) { if (FAKE.stepMs) FIXED += FAKE.stepMs; await bot.botCycle({ journal: true }); }   // a longer session: the journal is rewritten several times
@@ -131,7 +141,7 @@ if (process.argv[2] === 'child') {
   let jj = null; try { jj = JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')); if (jj.enc) jj = { ...jj, ...(await bot.decryptJournal(jj, FAKE.journalKey)) }; } catch (e) {}
   let keptOld = false; if (FAKE.prevKey) try { await bot.decryptJournal(JSON.parse(fs.readFileSync('bot/journal.json', 'utf8')), FAKE.prevKey); keptOld = true; } catch (e) {}
   const watch = jj && jj.watch, day = jj && jj.day, env = jj && jj.env, acts = jj && jj.acts ? jj.acts.map(a => a.m) : null;
-  process.stdout.write('RESULT ' + JSON.stringify({ contractQs, since: jj && jj.since, keptOld, tgConfirms, tickEntry, quoteExit, fast, spyWatch: spyW, spy: jj && jj.spy, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }) + '\n');   // not console.log: privacy mode redacts that
+  process.stdout.write('RESULT ' + JSON.stringify({ contractQs, since: jj && jj.since, keptOld, tgConfirms, tickEntry, quoteExit, fast, spyWatch: spyW, spy: jj && jj.spy, wheel: jj && jj.wheel, mem: jj && jj.mem, open: jj && jj.open, split: jj && jj.split, cycleMs, tgSent, acts, watch, day, env, enc: !!(jj && jj.enc), deletes, patches, orders, unknown, options: orders.filter(o => /\d{6}[CP]\d{8}$/.test(o.symbol)).map(o => ({ symbol: o.symbol, id: o.client_order_id.split('-').slice(0, 2).join('-') })) }) + '\n');   // not console.log: privacy mode redacts that
   process.exit(0);
 }
 
@@ -278,7 +288,7 @@ check('split 60/30/10: CALLs already use their $30,000 → the CALL is skipped; 
   assert.ok(M1.options.some(o => /^POP\d{6}P/.test(o.symbol)), JSON.stringify(M1.acts));
   assert.ok((M1.acts || []).some(m => /CALL money \$30000, \$29900 already in use/.test(m)), JSON.stringify(M1.acts));
 });
-check('split: the journal publishes each part\'s money, use and today\'s result', () => { const S = M1.split; assert.ok(S && S.on); assert.deepEqual(S.shares, { call: 30, put: 10, spy: 5, stock: 55 }); assert.equal(S.stock.money, 55000); assert.equal(S.spy.money, 5000); assert.equal(S.call.money, 30000); assert.equal(S.put.money, 10000); assert.equal(S.call.used, 29900); assert.equal(S.call.today, 0); assert.equal(S.call.halted, null); });
+check('split: the journal publishes each part\'s money, use and today\'s result', () => { const S = M1.split; assert.ok(S && S.on); assert.deepEqual(S.shares, { call: 30, put: 10, spy: 5, wheel: 0, stock: 55 }); assert.equal(S.wheel.money, 0, 'the wheel is off: no money'); assert.equal(S.stock.money, 55000); assert.equal(S.spy.money, 5000); assert.equal(S.call.money, 30000); assert.equal(S.put.money, 10000); assert.equal(S.call.used, 29900); assert.equal(S.call.today, 0); assert.equal(S.call.halted, null); });
 const M1p = run(XS, { positions: [pos(putSym, 5, 19.9, 19.9, 19.9)] });
 check('split: PUTs already use their $10,000 → the PUT is skipped while the CALL goes through', () => { assert.ok(!M1p.options.some(o => /^POP\d{6}P/.test(o.symbol)), JSON.stringify(M1p.options)); assert.ok(M1p.options.some(o => /^DIP\d{6}C/.test(o.symbol)), JSON.stringify(M1p.acts)); });
 const M0 = run({ ...XS, split: false }, { positions: [pos(optSym, 10, 1, 29.9, 29.9)] });
@@ -653,5 +663,77 @@ check('SPY contracts: the search runs from the next trading day to the one after
 // read-only refresh
 const RO = run({ stocks: true, options: true, symbols: ['DIP'] }, { readonly: true, stop: true, positions: [oPos(4)], hist: oHist, open: [{ id: 'gtc2', symbol: 'DIP', side: 'buy', type: 'limit', limit_price: '100', qty: '10', client_order_id: 'sd-r-DIP-500-20261022-zz', submitted_at: '2026-10-22T19:40:00Z' }] });
 check('journal refresh (read-only): with the market open, a dip to buy, a stop to sell and even bot/STOP set, nothing is placed or cancelled', () => { assert.equal(RO.orders.length, 0, JSON.stringify(RO.orders)); assert.equal(RO.deletes.length, 0, JSON.stringify(RO.deletes)); });
+
+// ---- the wheel: cash-secured puts and covered calls (bot/wheel.mjs) ----
+// Mon 2026-10-19 10:00 ET is the first trading day after the October monthly expiration (Fri 10-16): the sale window.
+const WHO = { stocks: false, options: false, spyOn: false, symbols: ['DIP', 'FALL', 'QUIET'], wheelOn: true, wheelSharePct: 20, preset: 'custom' };
+const WIN = { time: '2026-10-19T14:00:00Z', quote: { bp: 1.0, ap: 1.1 }, journal: true };
+const WP = 'DIP261120P00105000', wSale = (sym, day8, prem, filled = '2026-10-19T14:05:00Z') => ({ id: 'ws-' + sym, symbol: sym, side: 'sell', type: 'limit', qty: '1', filled_qty: '1', filled_avg_price: String(prem), status: 'filled', filled_at: filled, submitted_at: filled, client_order_id: `sd-w${/\d{6}P/.test(sym) ? 'p' : 'c'}-${sym}-${day8}-ab` });
+const W1 = run(WHO, WIN);
+check('wheel: in the sale window one cash-secured put — 5% under the price, the next monthly expiry, a limit at the middle of the quote, sold to open', () => {
+  const o = W1.orders.find(x => x.side === 'sell'); assert.ok(o, JSON.stringify(W1.orders) + JSON.stringify(W1.wheel && W1.wheel.idle));
+  assert.equal(o.symbol, WP); assert.equal(o.qty, '1'); assert.equal(o.type, 'limit'); assert.equal(o.limit_price, '1.05'); assert.equal(o.time_in_force, 'day'); assert.equal(o.position_intent, 'sell_to_open'); assert.match(o.client_order_id, /^sd-wp-DIP261120P00105000-20261019-/);
+});
+check('wheel: one contract of each stock, never more than its money ($20,000 sets aside $10,500 for one; the next put would need $10,250)', () => assert.equal(W1.orders.filter(x => x.side === 'sell').length, 1, JSON.stringify(W1.orders)));
+check('wheel: the journal shows its money, the window and the expiry it sells', () => { const w = W1.wheel; assert.ok(w && w.on, JSON.stringify(w)); assert.equal(w.money, 20000); assert.equal(w.window.open, true); assert.equal(w.window.expiry, '2026-11-20'); assert.equal(W1.split.shares.wheel, 20); assert.equal(W1.split.wheel.money, 20000); });
+const W2 = run(WHO, { ...WIN, time: '2026-10-23T14:00:00Z' });
+check('wheel: outside the window nothing is sold, and it says when the next window opens', () => { assert.ok(!W2.orders.some(x => x.side === 'sell'), JSON.stringify(W2.orders)); assert.match(W2.wheel.idle, /next sale window Mon, Nov 23, Tue, Nov 24, Wed, Nov 25 \(puts expiring Fri, Dec 18\)/); });
+const W3 = run({ ...WHO, wheelOn: false }, WIN);
+check('wheel: switched off it sells nothing and has no money', () => { assert.equal(W3.orders.length, 0, JSON.stringify(W3.orders)); assert.equal(W3.wheel.on, false); assert.equal(W3.split.shares.wheel, 0); });
+const W4 = run(WHO, { ...WIN, time: '2026-10-28T15:00:00Z', positions: [{ symbol: WP, qty: '-1', avg_entry_price: '1.05', current_price: '0.6', market_value: '-60', unrealized_pl: '45', unrealized_plpc: '0.43', lastday_price: '0.7' }], hist: [wSale(WP, '20261019', 1.05)] });
+check('wheel: a sold put gets its take-profit — a good-till-cancelled buy-back at half the premium (rounded down to a valid price)', () => {
+  const b = W4.orders.find(x => x.symbol === WP); assert.ok(b, JSON.stringify(W4.orders)); assert.equal(b.side, 'buy'); assert.equal(b.type, 'limit'); assert.equal(b.limit_price, '0.5'); assert.equal(b.time_in_force, 'gtc'); assert.equal(b.position_intent, 'buy_to_close'); assert.match(b.client_order_id, /^sd-wb-/);
+  assert.ok(!W4.orders.some(x => x.symbol === WP && x.side === 'sell'), 'no other part ever sells it (a sale would add to it)');
+  assert.ok(W4.mem && W4.mem.wheel && W4.mem.wheel.opts[WP] && W4.mem.wheel.opts[WP].prem === 1.05, JSON.stringify(W4.mem && W4.mem.wheel));
+});
+check('wheel: its sold put is shown as the wheel\'s, with the buy-back level', () => { const r = W4.watch.held.find(x => x.s === WP); assert.equal(r.wheel, 'sold'); assert.equal(r.tp, 50); assert.equal(r.exitBy, 'wheel'); });
+const W5 = run({ ...WHO, stocks: true }, { ...WIN, positions: [{ symbol: 'DIP', qty: '100', avg_entry_price: '105', current_price: '110.6', market_value: '11060', unrealized_pl: '560', unrealized_plpc: '0.053', lastday_price: '110' }], hist: [wSale('DIP261016P00105000', '20260921', 1.2, '2026-09-21T14:05:00Z')] });
+check('wheel: shares a put delivered (adopted from the broker\'s picture) get a covered call at or above the cost and 5% over the price', () => {
+  const c = W5.orders.find(x => /^DIP\d{6}C/.test(x.symbol)); assert.ok(c, JSON.stringify(W5.orders) + JSON.stringify((W5.acts || []).filter(m => /Wheel/.test(m))));
+  assert.equal(c.symbol, 'DIP261120C00117500'); assert.equal(c.side, 'sell'); assert.equal(c.position_intent, 'sell_to_open'); assert.match(c.client_order_id, /^sd-wc-/);
+  assert.deepEqual(W5.mem.wheel.shares.DIP, { qty: 100, cost: 103.8, since: '2026-10-19' });
+});
+check('wheel: no other part sells or floors its shares, and no put goes on a stock it already holds', () => { assert.ok(!W5.orders.some(x => x.symbol === 'DIP'), JSON.stringify(W5.orders)); assert.ok(!W5.orders.some(x => /^DIP\d{6}P/.test(x.symbol))); });
+const W6 = run({ ...WHO, wheelOn: true }, { time: '2026-10-19T14:00:00Z', closed: true, open: [{ id: 'wb1', symbol: WP, side: 'buy', type: 'limit', limit_price: '0.5', qty: '1', status: 'new', time_in_force: 'gtc', client_order_id: 'sd-wb-' + WP + '-x', submitted_at: '2026-10-16T15:00:00Z' }, { id: 'rb1', symbol: 'QUIET', side: 'buy', type: 'limit', limit_price: '200', qty: '5', status: 'new', client_order_id: 'sd-r-QUIET-100-20261016-ab', submitted_at: '2026-10-16T15:00:00Z' }] });
+check('wheel: with the market closed its buy-back rests overnight (it only closes a sold put); an entry buy is still swept', () => { assert.ok(!W6.deletes.includes('wb1'), JSON.stringify(W6.deletes)); assert.ok(W6.deletes.includes('rb1'), JSON.stringify(W6.deletes)); });
+const W7 = run(WHO, { ...WIN, time: '2026-10-19T14:02:00Z', open: [{ id: 'ws1', symbol: WP, side: 'sell', type: 'limit', limit_price: '1.05', qty: '1', status: 'new', time_in_force: 'day', client_order_id: 'sd-wp-' + WP + '-20261019-x', submitted_at: '2026-10-19T13:55:00Z' }] });
+check('wheel: a working sale is not cancelled as "a sell for something not held", and its strike counts as money set aside', () => { assert.ok(!W7.deletes.includes('ws1'), JSON.stringify(W7.deletes)); assert.equal(W7.wheel.used, 10500); assert.ok(!W7.orders.some(x => x.symbol === WP), JSON.stringify(W7.orders)); });
+const W8 = run({ stocks: true, options: true, symbols: ['DIP', 'POP', 'FALL'], wheelOn: true, wheelSharePct: 10, preset: 'custom' }, { positions: [{ symbol: WP, qty: '-1', avg_entry_price: '1.05', current_price: '1.2', market_value: '-120', unrealized_pl: '-15', unrealized_plpc: '-0.14' }], hist: [wSale(WP, '20261019', 1.05)] });
+check('wheel: the dip-buy and CALL parts leave a wheel stock alone (DIP dipped, but the wheel has a put on it)', () => { assert.ok(!W8.orders.some(x => x.symbol === 'DIP' || /^DIP\d{6}C/.test(x.symbol)), JSON.stringify(W8.orders)); });
+const W9 = run(WHO, { ...WIN, time: '2026-11-23T15:00:00Z', positions: [], hist: [wSale(WP, '20261019', 1.05)], prevJournal: { at: '2026-11-20T21:00:00Z', mem: { day: '20261120', wheel: { opts: { [WP]: { und: 'DIP', kind: 'put', K: 105, exp: '2026-11-20', qty: 1, prem: 1.05, since: '2026-10-19', base: 0 } }, shares: {} } } } });
+check('wheel: a put that expired out of the money is noted (premium kept) and a new put goes out in the next window', () => { assert.ok((W9.acts || []).some(m => /Wheel: DIP put 105 expired worthless — the \$105 premium is kept/.test(m)), JSON.stringify(W9.acts)); assert.ok(W9.orders.some(x => x.side === 'sell' && /^DIP261218P/.test(x.symbol)), JSON.stringify(W9.orders)); });
+
+const W10 = run(WHO, { ...WIN, tg: true, tgBefore: [[42, '/pause']] });
+check('wheel: a Telegram /pause holds new puts and calls in the window too', () => { assert.ok(!W10.orders.some(x => x.side === 'sell'), JSON.stringify(W10.orders)); assert.equal(W10.wheel.idle, 'paused from Telegram'); });
+const W11 = run(WHO, { ...WIN, spyDaily: 'down' });
+check('wheel: with SPY under its 200-day average no new put (trend filter); switched off, the filter lets one through', () => { assert.ok(!W11.orders.some(x => x.side === 'sell'), JSON.stringify(W11.orders)); assert.match(W11.wheel.idle, /trend filter/); const W11b = run({ ...WHO, wheelTrend: false }, { ...WIN, spyDaily: 'down' }); assert.ok(W11b.orders.some(x => x.side === 'sell' && x.symbol === WP), JSON.stringify(W11b.orders)); });
+const W12 = run({ ...WHO, wheelStop: 3 }, { ...WIN, time: '2026-10-28T15:00:00Z', positions: [{ symbol: WP, qty: '-1', avg_entry_price: '1.05', current_price: '3.4', market_value: '-340', unrealized_pl: '-235', unrealized_plpc: '-2.2' }], hist: [wSale(WP, '20261019', 1.05)], open: [{ id: 'tp1', symbol: WP, side: 'buy', type: 'limit', limit_price: '0.5', qty: '1', status: 'new', time_in_force: 'gtc', client_order_id: 'sd-wb-' + WP + '-y', submitted_at: '2026-10-19T15:00:00Z' }] });
+check('wheel: with a stop set (3× the premium), a put that costs $3.40 after a $1.05 sale is bought back at market; its take-profit order goes first', () => { const b = W12.orders.find(x => x.symbol === WP); assert.ok(b && b.side === 'buy' && b.type === 'market' && b.position_intent === 'buy_to_close', JSON.stringify(W12.orders)); assert.ok(W12.deletes.includes('tp1'), JSON.stringify(W12.deletes)); });
+const W13 = run({ ...WHO, wheelOn: false }, { ...WIN, open: [{ id: 'ws2', symbol: WP, side: 'sell', type: 'limit', limit_price: '1.05', qty: '1', status: 'new', time_in_force: 'day', client_order_id: 'sd-wp-' + WP + '-20261019-z', submitted_at: '2026-10-19T13:59:00Z' }] });
+check('wheel: switched off, a working sale is cancelled at once', () => assert.ok(W13.deletes.includes('ws2'), JSON.stringify(W13.deletes)));
+const W14 = run({ ...WHO, wheelSharePct: 10 }, WIN);
+check('wheel: with $10,000 no put needs more than it has ($10,500 and $10,250 do): nothing sold, and the card says why', () => { assert.ok(!W14.orders.some(x => x.side === 'sell'), JSON.stringify(W14.orders)); assert.match(W14.wheel.idle, /no stock passes right now/); });
+// one sale per stock per cycle (as the study tested): a put bought back on the window's first day is not sold again on its
+// second; the money it freed may go to another stock
+const wBack = (sym, at = '2026-10-19T19:00:00Z') => ({ id: 'wb-' + sym, symbol: sym, side: 'buy', type: 'limit', qty: '1', filled_qty: '1', filled_avg_price: '0.5', status: 'filled', filled_at: at, submitted_at: at, client_order_id: 'sd-wb-' + sym + '-q' });
+const W15 = run(WHO, { ...WIN, time: '2026-10-20T14:00:00Z', positions: [], hist: [wSale(WP, '20261019', 1.05), wBack(WP)], prevJournal: { at: '2026-10-19T20:00:00Z', mem: { day: '20261019', wheel: { opts: { [WP]: { und: 'DIP', kind: 'put', K: 105, exp: '2026-11-20', qty: 1, prem: 1.05, since: '2026-10-19', base: 0 } }, shares: {} } } } });
+check('wheel: a put bought back early is not sold again in the same window (one sale per stock per cycle); another stock may use the money', () => {
+  assert.ok((W15.acts || []).some(m => /Wheel: DIP put 105 bought back/.test(m)), JSON.stringify(W15.acts));
+  assert.ok(!W15.orders.some(x => x.side === 'sell' && /^DIP\d{6}P/.test(x.symbol)), JSON.stringify(W15.orders));
+  assert.ok(W15.orders.some(x => x.side === 'sell' && /^FALL261120P/.test(x.symbol)), JSON.stringify(W15.orders) + JSON.stringify(W15.wheel && W15.wheel.idle));
+});
+const WC = 'DIP261120C00117500', wShares = { DIP: { qty: 100, cost: 103.8, since: '2026-09-21' } };
+const W16 = run(WHO, { ...WIN, time: '2026-10-20T14:00:00Z', positions: [{ symbol: 'DIP', qty: '100', avg_entry_price: '105', current_price: '110.6', market_value: '11060', unrealized_pl: '560', unrealized_plpc: '0.053' }], hist: [wSale(WC, '20261019', 0.6), wBack(WC)], prevJournal: { at: '2026-10-19T20:00:00Z', mem: { day: '20261019', wheel: { opts: { [WC]: { und: 'DIP', kind: 'call', K: 117.5, exp: '2026-11-20', qty: 1, prem: 0.6, since: '2026-10-19', base: 0 } }, shares: wShares } } } });
+check('wheel: a covered call bought back early is not sold again in the same window either', () => { assert.ok(!W16.orders.some(x => x.side === 'sell' && /^DIP\d{6}C/.test(x.symbol)), JSON.stringify(W16.orders)); assert.deepEqual(W16.mem.wheel.shares.DIP, wShares.DIP); });
+// the trend filter as the study applied it: the close before each window day so far must be above the 200-day average
+const W17 = run(WHO, { ...WIN, time: '2026-10-20T14:00:00Z', spyPatch: { '2026-10-16': 300 } });
+check('wheel: SPY closed under its 200-day average the day before the window opened → no new put on its second day, though SPY is back above', () => { assert.ok(!W17.orders.some(x => x.side === 'sell'), JSON.stringify(W17.orders)); assert.match(W17.wheel.idle, /SPY closed under its 200-day average on Fri, Oct 16 — no new puts until the next sale window \(trend filter\)/); });
+const W18 = run(WHO, { ...WIN, time: '2026-10-20T14:00:00Z', spyPatch: { '2026-10-19': 300 } });
+check('wheel: SPY closed under it on the window\'s first day → no new put on the second', () => { assert.ok(!W18.orders.some(x => x.side === 'sell'), JSON.stringify(W18.orders)); assert.match(W18.wheel.idle, /on Mon, Oct 19/); });
+const W19 = run(WHO, { ...WIN, time: '2026-10-20T14:00:00Z' });
+check('wheel: with every close above it, the second day of the window still sells', () => assert.ok(W19.orders.some(x => x.side === 'sell' && x.symbol === WP), JSON.stringify(W19.orders) + JSON.stringify(W19.wheel && W19.wheel.idle)));
+// the stop (off by default) buys back puts only, as tested: a covered call that tripled has shares under it that rose
+const W20 = run({ ...WHO, wheelStop: 3 }, { ...WIN, time: '2026-10-28T15:00:00Z', positions: [{ symbol: 'DIP', qty: '100', avg_entry_price: '105', current_price: '121', market_value: '12100', unrealized_pl: '1600', unrealized_plpc: '0.15' }, { symbol: WC, qty: '-1', avg_entry_price: '0.6', current_price: '3.9', market_value: '-390', unrealized_pl: '-330', unrealized_plpc: '-5.5' }], hist: [wSale(WC, '20261019', 0.6)], prevJournal: { at: '2026-10-27T20:00:00Z', mem: { day: '20261027', wheel: { opts: { [WC]: { und: 'DIP', kind: 'call', K: 117.5, exp: '2026-11-20', qty: 1, prem: 0.6, since: '2026-10-19', base: 0 } }, shares: wShares } } } });
+check('wheel: the stop never buys back a covered call at market; it keeps its take-profit order (half the premium)', () => { assert.ok(!W20.orders.some(x => x.symbol === WC && x.type === 'market'), JSON.stringify(W20.orders)); const b = W20.orders.find(x => x.symbol === WC); assert.ok(b && b.side === 'buy' && b.type === 'limit' && b.limit_price === '0.3', JSON.stringify(W20.orders)); });
 
 console.log(`\n${passed} order checks passed` + (process.exitCode ? ' (some FAILED)' : ''));

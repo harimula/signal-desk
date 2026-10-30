@@ -13,7 +13,7 @@
 // Safety: paper endpoint by default; bot/STOP file flattens and halts; daily loss cap.
 import fs from 'node:fs';
 import { sma, rsi2, liveSignal, rsi2Trigger, rsi2ExitLevel, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit, profitExit, profitExitLevel, marketAbove200 } from './strategy.mjs';
-import { buildJournal } from './journal.mjs';
+import { buildJournal, optionEvents } from './journal.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk, sideDayPl } from './risk.mjs';
 import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
@@ -21,6 +21,7 @@ import { tgOn, tgSend, tgPoll } from './telegram.mjs';
 import { scanUniverse } from './scan.mjs';
 import { daySetup, marketMode, dayShares, dayExit, dayTrail, encodeDayId, decodeDayId, SESSION_OPEN } from './daytrade.mjs';
 import { spySignal, spyExit, spyFresh, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
+import { wheelCycle as wheelCycleInfo, putStrike, callStrike, wheelTpPrice, wheelId, isWheelSell, isWheelBuy, isWheelId, parseOcc, wheelReconcile, trendThrough, soldFor } from './wheel.mjs';
 
 const PAPER = { key: process.env.ALPACA_KEY, secret: process.env.ALPACA_SECRET, url: process.env.ALPACA_URL || 'https://paper-api.alpaca.markets' };
 const LIVE = { key: process.env.ALPACA_LIVE_KEY, secret: process.env.ALPACA_LIVE_SECRET, url: 'https://api.alpaca.markets' };
@@ -136,7 +137,7 @@ async function load5m(syms) {
   return out;
 }
 async function dayTradeCycle(ctx) {
-  const { equity, acct, positions, hist, liveOrders, G, capHit, slBudget, sellsFor, cid } = ctx, halt = ctx.halt || { stock: capHit, call: capHit, put: capHit };
+  const { equity, acct, positions, hist, liveOrders, G, capHit, slBudget, sellsFor, cid } = ctx, halt = ctx.halt || { stock: capHit, call: capHit, put: capHit }, skip = ctx.skip || new Set();   // skip: the wheel's stocks
   const dayC = { start: hhmm(CFG.dayStart), end: Math.min(hhmm(CFG.dayEnd), CLOSE - 30), rvol: CFG.dayRvol, target: CFG.dayTarget, timeStop: CFG.dayTimeStop, orMin: CFG.dayOrMin };
   // open day trades: entry order id tells us side, stop, target and when it opened
   const dayPos = [];
@@ -192,7 +193,7 @@ async function dayTradeCycle(ctx) {
   }
 
   // ---- new day trades ----
-  const dayClosed = (fillsCache.closed || []).filter(c => c.inT && c.outT && c.inT.slice(0, 10) === c.outT.slice(0, 10));
+  const dayClosed = (fillsCache.closed || []).filter(c => c.inT && c.outT && c.inT.slice(0, 10) === c.outT.slice(0, 10) && !c.wheel);
   let streak = 0; for (const c of [...dayClosed].sort((a, b) => a.outT < b.outT ? 1 : -1)) { if (c.pl < 0) streak++; else break; }
   const pdtBlock = equity < 25000 && +acct.daytrade_count >= 3 && !acct.pattern_day_trader;
   const idle = !CFG.dayTrade ? 'day trading is off' : capHit ? 'daily loss limits hit' : userPause ? 'paused from Telegram' : G.block ? 'paused by the market check' : noNew ? noNew : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.dayMaxTrades ? `${tradesToday} day trades today — daily maximum reached` : streak >= CFG.dayStreak ? `${streak} day-trade losses in a row — done for the day` : MINS < dayC.start ? 'before the day-trade window' : MINS >= dayC.end ? 'day-trade window closed' : market === 'flat' ? 'market undecided (SPY on its VWAP) — waiting' : null;
@@ -211,7 +212,7 @@ async function dayTradeCycle(ctx) {
   let placed = 0;
   if (!idle) for (const sg of setups) {
     if (tradesToday + placed >= CFG.dayMaxTrades) break;
-    if (sg.held || positions.some(p => (isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol) === sg.sym) || liveOrders.some(o => (isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol) === sg.sym)) continue;
+    if (sg.held || skip.has(sg.sym) || positions.some(p => (isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol) === sg.sym) || liveOrders.some(o => (isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol) === sg.sym)) continue;
     if (CFG.newsGuard && symbolRisk(sg.sym, newsCache.syms)) { act(`${sg.sym} day setup skipped — ${symbolRisk(sg.sym, newsCache.syms)}`); continue; }
     const label = `${sg.sym} day trade: ${sg.setup} ${sg.side === 'long' ? 'long' : 'short'} — ${sg.why}; stop ${sg.stop}, target ${sg.target}`;
     if (sg.side === 'long' && CFG.dayStock && !halt.stock) {
@@ -419,6 +420,172 @@ async function pickDayContract(und, kind, px) {
   return { symbol: c.symbol, lim: tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02), c.symbol), exp: ex, strike: +c.strike_price };
 }
 export const scanInfo = () => scanCache.info;
+// ---- the wheel: cash-secured puts and covered calls (rules in bot/wheel.mjs, tested by tools/wheel-study.mjs) ----
+// Its own share of the stake (wheelSharePct, off the top of the stock share like SPY). The bookkeeping (wheelReconcile) runs
+// on every check from the broker's picture; orders go out at most every 20 seconds: the take-profit buy-back of each sold
+// option at any time, new puts and covered calls only in the first three trading days after a monthly expiration. Switched
+// off it sells nothing new and cancels its working sales; what is open keeps its take-profit and runs to expiry. The other
+// parts leave its stocks alone, and none of them ever sells one of its options (a sale would add to a sold option).
+let wheelMem = { opts: {}, shares: {}, done: {} }, lastWheel = null, wheelAt = 0, wheelDaysCache = { day: '', days: [], failAt: 0 };
+const wheelSkip = new Map(), wheelSent = new Map();                         // skip: 'p:SYM' / 'c:SYM' → until when a turned-down stock is left alone
+// sent: 'p:UND' / 'c:UND' (a sale) or 'b:CONTRACT' (a buy-back) → what went out in the last 90 s (the broker may not list it yet)
+const WHEEL_SENT_MS = 90000, wheelRecent = k => { const x = wheelSent.get(k); return x && Date.now() - x.at < WHEEL_SENT_MS ? x : null; };
+export const wheelHas = sym => !!(wheelMem.opts[sym] || wheelMem.shares[sym]);
+// What the wheel has set aside: strike × 100 of every sold put and every put sale still working, plus its shares at their price.
+function wheelSetAside(positions, orders) {
+  const px = new Map(positions.map(p => [p.symbol, +p.current_price])); let used = 0;
+  for (const x of Object.values(wheelMem.opts)) if (x.kind === 'put') used += x.K * 100 * x.qty;
+  for (const [und, s] of Object.entries(wheelMem.shares)) used += s.qty * (px.get(und) > 0 ? px.get(und) : s.cost);
+  for (const o of orders) { const q = parseOcc(o.symbol); if (q && q.kind === 'put' && isWheelSell(cidOf(o))) used += q.K * 100 * Math.max(0, (+o.qty || 0) - (+o.filled_qty || 0)); }
+  return used;
+}
+const tickDown = (p, sym = '') => { const st = tickStep(p, sym); return Math.round(Math.floor(p / st + 1e-9) * st * 100) / 100; };
+const usd0 = n => '$' + Math.round(n).toLocaleString('en-US');
+const dayLabel = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+async function wheelDays() {                                               // the broker's trading days, ~50 back and ~80 ahead (once a day)
+  if (wheelDaysCache.day === TODAY && wheelDaysCache.days.length) return wheelDaysCache.days;
+  if (Date.now() - (wheelDaysCache.failAt || 0) < 10 * 60000) return wheelDaysCache.days;   // after a failure, again in 10 minutes: no check waits on it
+  const cal = await T(`/v2/calendar?start=${ymdDash(Date.now() - 50 * 864e5)}&end=${ymdDash(Date.now() + 80 * 864e5)}`, { timeoutMs: 5000, retries: 0 }).catch(() => null);
+  wheelDaysCache = Array.isArray(cal) && cal.length ? { day: TODAY, days: cal.map(x => x.date).filter(Boolean).sort(), failAt: 0 } : { ...wheelDaysCache, failAt: Date.now() };
+  return wheelDaysCache.days;
+}
+function wheelEventText(e) {
+  const prem = e.prem * 100 * e.qty, n = e.qty * 100, kind = e.kind === 'put' ? 'put' : 'call';
+  if (e.type === 'expired') return `Wheel: ${e.und} ${kind} ${e.K} expired worthless — the ${usd0(prem)} premium is kept`;
+  if (e.type === 'assigned') return `Wheel: ${e.und} put ${e.K} ended in the money — ${n} shares bought at $${e.K}${e.prem > 0 ? ` (cost $${(e.K - e.prem).toFixed(2)} a share after the premium)` : ''}; covered calls are sold on them in the sale window after each monthly expiration`;
+  if (e.type === 'called away') return `Wheel: ${e.und} call ${e.K} ended in the money — ${n} shares sold at $${e.K}; cash-secured puts again from the next sale window`;
+  if (e.type === 'bought back') return `Wheel: ${e.und} ${kind} ${e.K} bought back`;
+  return `Wheel: ${e.und} ${kind} ${e.K} is no longer in the account`;
+}
+// The contract to sell: the monthly expiry of the window, the strike from the rules, a usable quote (bid ≥ $0.05, spread
+// under 15 % of the middle). The sale is priced at the middle (never under the bid).
+async function wheelContract(und, kind, expiry, px, cost = 0) {
+  const lo = kind === 'put' ? px * 0.7 : Math.max(px, cost), hi = kind === 'put' ? px : Math.max(px, cost) * 1.4;
+  const cj = await T(`/v2/options/contracts?underlying_symbols=${und}&type=${kind}&status=active&expiration_date=${expiry}&strike_price_gte=${r2d(lo)}&strike_price_lte=${r2d(hi)}&limit=500`).catch(() => null);
+  if (!cj) return { why: `${und}: contract list unavailable`, retry: 60000 };
+  const std = new RegExp('^' + und + '\\d{6}[CP]\\d{8}$'), cs = (cj.option_contracts || []).filter(c => c.tradable !== false && std.test(c.symbol));
+  const K = kind === 'put' ? putStrike(cs.map(c => +c.strike_price), px, CFG.wheelOtmPct) : callStrike(cs.map(c => +c.strike_price), px, CFG.wheelOtmPct, cost);
+  if (K == null) return { why: `${und}: no ${kind} expiring ${expiry} at the strike the rules ask for` };
+  const c = cs.find(x => +x.strike_price === K);
+  const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[c.symbol];
+  if (!q || !(q.bp >= 0.05) || !(q.ap > q.bp)) return { why: `${c.symbol}: no usable quote (bid ${q && q.bp != null ? q.bp : 'none'})`, retry: 10 * 60000 };
+  const mid = (q.ap + q.bp) / 2; if ((q.ap - q.bp) / mid > 0.15) return { why: `${c.symbol}: spread too wide (${q.bp}/${q.ap})`, retry: 10 * 60000 };
+  return { ok: true, sym: c.symbol, K, exp: expiry, bid: q.bp, ask: q.ap, lim: Math.max(q.bp, tick(mid, c.symbol)) };
+}
+async function wheelSell(kind, und, c, qty, why) {
+  const k = kind[0] + ':' + und; if (wheelRecent(k)) return null;          // one sale per stock at a time: the broker may not list one placed seconds ago
+  wheelSent.set(k, { at: Date.now(), sym: c.sym, und, K: c.K, qty });
+  return send({ symbol: c.sym, qty: String(qty), side: 'sell', type: 'limit', limit_price: String(c.lim), time_in_force: 'day', position_intent: 'sell_to_open', client_order_id: wheelId(kind, c.sym, TODAY, rid()) }, why);
+}
+// The stop: its take-profit order is cancelled first (confirmed, so the two cannot both fill), then what is still sold is
+// bought back at market.
+async function wheelBuyBack(sym, qty, legs, why) {
+  await cancelConfirmed(legs); forgetBuy(sym);
+  let have = qty;
+  if (!DRY) { const p = await T('/v2/positions/' + encodeURIComponent(sym), QUICK).catch(e => (e && e.status === 404 ? null : undefined)); if (p === null || (p && +p.qty >= 0)) have = 0; else if (p) have = Math.min(qty, -p.qty); }
+  if (!(have > 0)) { act(`${sym}: nothing left to buy back (${why})`); return null; }
+  return send({ symbol: sym, qty: String(have), side: 'buy', type: 'market', time_in_force: 'day', position_intent: 'buy_to_close', client_order_id: wheelId('buy', sym, null, rid()) }, why);
+}
+async function wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, claim }) {
+  const on = !!CFG.wheelOn, today = ymdDash(Date.now()), opts = Object.entries(wheelMem.opts), shares = Object.entries(wheelMem.shares);
+  const pos = sym => positions.find(p => p.symbol === sym);
+  const skipW = (k, why, ms = 30 * 60000) => { wheelSkip.set(k, Date.now() + ms); act(why + ' — the wheel looks again later', 'wskip:' + k); };
+  const act20 = Date.now() - wheelAt >= 20000; if (act20) wheelAt = Date.now();
+  // sales that did not fill in 15 minutes have missed their price (the next check prices again); switched off, at once
+  if (act20) for (const o of liveOrders) if (isWheelSell(cidOf(o)) && (!on || Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 15 * 60000)) {
+    act(`${o.symbol}: wheel sale at ${o.limit_price} ${on ? 'unfilled for 15 min' : 'still working while the wheel is switched off'} — cancelled`); if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
+  }
+  // a buy-back with nothing left to buy back (assigned or called away early) or with "buy back at" set to 0 is cancelled
+  if (act20) for (const o of liveOrders) if (isWheelBuy(cidOf(o)) && o.type === 'limit' && !tpCancelled.has(o.id)) {
+    const p = pos(o.symbol), gone = !wheelMem.opts[o.symbol] || (p && !(+p.qty < 0));   // memory drops it once it is assigned, called away or bought back
+    if (!gone && CFG.wheelTp > 0) continue;
+    tpCancelled.add(o.id); o._cancelled = true; forgetBuy(o.symbol); act(`${o.symbol}: wheel buy-back at ${o.limit_price} — ${gone ? 'nothing is sold any more' : '“buy back at” is 0 (hold to expiry)'} — cancelled`); if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
+  }
+  // what is working: a sale cancelled in this check still counts (it can fill until the cancel lands); a sale sent in the last
+  // 90 s that the broker does not list yet counts too
+  const live = liveOrders.filter(o => isWheelId(cidOf(o))), listed = new Set(live.map(o => o.symbol)), unds = new Set(), pending = [];
+  for (const [k, x] of wheelSent) if ((k[0] === 'p' || k[0] === 'c') && Date.now() - x.at < WHEEL_SENT_MS && !listed.has(x.sym) && !wheelMem.opts[x.sym]) pending.push({ kind: k[0], ...x });
+  for (const [, x] of opts) unds.add(x.und);
+  for (const [und] of shares) unds.add(und);
+  for (const o of live) { const q = parseOcc(o.symbol); if (q && isWheelSell(cidOf(o))) unds.add(q.und); }
+  for (const x of pending) { unds.add(x.und); if (claim) claim.add(x.und); }   // a sale the broker does not list yet: the other parts keep out of its stock too
+  let used = wheelSetAside(positions, live) + pending.filter(x => x.kind === 'p').reduce((t, x) => t + x.K * 100 * x.qty, 0);
+  const scale = CFG.mode === 'live' ? CFG.liveSizePct / 100 : 1;          // real money starts small, like every other part
+  const moneyW = on ? equity * CFG.wheelSharePct / 100 * scale : 0, free = moneyW - used;
+  const days = on ? await wheelDays() : wheelDaysCache.days, info = days.length ? wheelCycleInfo(today, days) : null;   // switched off it never waits on the calendar
+  let idle = !on ? 'switched off' : !info ? 'the market calendar is unavailable' : !info.window ? `next sale window ${info.windowDays.map(dayLabel).join(', ')} (puts expiring ${dayLabel(info.expiry)})` : null;
+  if (act20) {
+    // 1) every sold option: its take-profit buy-back rests at the broker; the stop (off by default) buys it back at market
+    for (const [sym, x] of opts) {
+      const p = pos(sym); if (!p) continue;
+      const buys = live.filter(o => o.symbol === sym && o.side === 'buy' && !o._cancelled), cur = +p.current_price;
+      if (CFG.wheelStop > 0 && x.kind === 'put' && cur > 0 && x.prem > 0 && cur >= x.prem * CFG.wheelStop) {   // puts only, as tested (a covered call's shares rose with it)
+        if (buys.some(o => o.type === 'market') || wheelRecent('b:' + sym)) continue;
+        wheelSent.set('b:' + sym, { at: Date.now(), sym });
+        await wheelBuyBack(sym, x.qty, buys, `Wheel: ${x.und} ${x.kind} ${x.K} costs ${(cur / x.prem).toFixed(1)}× its premium — stop, bought back`).catch(() => {});
+        continue;
+      }
+      if (!(CFG.wheelTp > 0) || (pdtNear && x.since === today)) continue;       // hold to expiry; or no same-day buy-back under the pattern-day-trader limit
+      const tp = tickDown(wheelTpPrice(x.prem, CFG.wheelTp), sym), leg = buys.find(o => o.type === 'limit');
+      if (!(tp > 0)) continue;
+      if (leg) {
+        const stale = Math.abs(+leg.limit_price - tp) > tickStep(tp, sym) + 0.005 || (+leg.qty || 0) - (+leg.filled_qty || 0) !== x.qty;
+        if (stale && isWheelBuy(cidOf(leg)) && !tpCancelled.has(leg.id)) { tpCancelled.add(leg.id); forgetBuy(sym); act(`${sym} wheel take-profit at ${leg.limit_price} does not match the setting or the position — cancelled; a new one at ${tp} follows`); if (!DRY) await T('/v2/orders/' + leg.id, { method: 'DELETE' }).catch(() => {}); }
+        continue;
+      }
+      if (wheelRecent('b:' + sym)) continue;
+      wheelSent.set('b:' + sym, { at: Date.now(), sym });
+      await send({ symbol: sym, qty: String(x.qty), side: 'buy', type: 'limit', limit_price: String(tp), time_in_force: 'gtc', position_intent: 'buy_to_close', client_order_id: wheelId('buy', sym, null, rid()) },
+        `Wheel: ${x.und} ${x.kind} ${x.K} take-profit order — buys it back at ${tp} (${100 - CFG.wheelTp}% of the ${x.prem} premium)`).catch(() => {});
+    }
+    // 2) in the sale window: covered calls on the shares a put delivered, then new cash-secured puts (nothing new while the
+    //    market check pauses entries — a Telegram /pause, a headline, the Fed hour, a loss limit — or a session is ending)
+    if (on && info && info.window && (noNew || G.block)) idle = noNew || (userPause ? 'paused from Telegram' : 'paused by the market check');
+    else if (on && info && info.window) {
+      const callsSold = soldFor(hist, info.expiry, 'call'), putsSold = soldFor(hist, info.expiry, 'put');
+      for (const [und, s] of shares) {
+        const isCall = o => (parseOcc(o.symbol) || {}).und === und && (parseOcc(o.symbol) || {}).kind === 'call';
+        const held = opts.filter(([, x]) => x.und === und && x.kind === 'call').reduce((t, [, x]) => t + x.qty, 0), working = live.filter(o => isWheelSell(cidOf(o)) && isCall(o)).reduce((t, o) => t + Math.max(0, (+o.qty || 0) - (+o.filled_qty || 0)), 0) + pending.filter(x => x.kind === 'c' && x.und === und).reduce((t, x) => t + x.qty, 0);
+        const n = Math.floor(s.qty / 100) - Math.max(held, callsSold.get(und) || 0) - working;   // one sale per cycle: a call bought back early is not sold again
+        if (n < 1 || (wheelSkip.get('c:' + und) || 0) > Date.now()) continue;
+        const px = ((await latestPrices([und]))[und] || {}).p; if (!(px > 0)) continue;
+        const c = await wheelContract(und, 'call', info.expiry, px, s.cost); if (!c.ok) { skipW('c:' + und, c.why, c.retry); continue; }
+        await wheelSell('call', und, c, n, `Wheel: ${und} covered call — ${n} × ${c.K} call expiring ${dayLabel(c.exp)} (cost $${s.cost.toFixed(2)} a share; ${CFG.wheelOtmPct}% over $${r2d(px)})`);
+      }
+      // the trend filter as the study applied it: SPY closed above its 200-day average before each day of the window so far
+      const spyT = CFG.wheelTrend ? trendThrough(spyPrev && spyPrev.days, spyPrev && spyPrev.closes, info.windowDays, today) : { ok: true };
+      if (spyT.ok !== true) idle = spyT.ok === false ? `SPY closed under its 200-day average on ${dayLabel(spyT.under)} — no new puts until the next sale window (trend filter)` : 'SPY\'s 200-day average is not known yet — no new puts (trend filter)';
+      else {
+        let slots = CFG.wheelMaxPositions - unds.size, left = free, looked = 0;
+        const busy = new Set(positions.map(p => isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol).concat(liveOrders.map(o => isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol)));
+        const cands = UNIVERSE.filter(x => x !== 'SPY' && !busy.has(x) && !unds.has(x) && !putsSold.has(x)), px = await latestPrices(cands), bars = CFG.wheelTrend ? await loadBars() : null;   // a put bought back this cycle waits for the next window
+        if (slots <= 0) idle = `${unds.size} stocks in the wheel — the most at once`;
+        else if (left < CFG.wheelMinPrice * 100) idle = `no money left for a put (${usd0(free)} free of ${usd0(moneyW)})`;
+        let sold = 0;
+        for (const x of cands) {
+          if (slots <= 0 || looked >= 6) break;
+          const p0 = (px[x] || {}).p; if (!(p0 >= CFG.wheelMinPrice && p0 <= CFG.wheelMaxPrice) || p0 * (1 - CFG.wheelOtmPct / 100) * 100 > left) continue;
+          if ((wheelSkip.get('p:' + x) || 0) > Date.now()) continue;
+          if (bars) { const C = completed(bars, x); if (trendThrough(C.map(b => b.d), C.map(b => b.c), info.windowDays, today).ok !== true) continue; }   // the stock too, before each day of the window so far
+          const risk = CFG.newsGuard ? symbolRisk(x, newsCache.syms) : null; if (risk) { skipW('p:' + x, `${x} — ${risk}`, 60 * 60000); continue; }
+          looked++;
+          const c = await wheelContract(x, 'put', info.expiry, p0); if (!c.ok) { skipW('p:' + x, c.why, c.retry); continue; }
+          if (c.K * 100 > left) continue;
+          const r = await wheelSell('put', x, c, 1, `Wheel: ${x} cash-secured put — 1 × ${c.K} put expiring ${dayLabel(c.exp)} (${CFG.wheelOtmPct}% under $${r2d(p0)}); ${usd0(c.K * 100)} set aside`);
+          if (r && r !== 'refused') { left -= c.K * 100; used += c.K * 100; slots--; sold++; unds.add(x); if (claim) claim.add(x); }   // the other parts keep out of it from this check on
+        }
+        if (!sold && !idle) idle = `no stock passes right now (price $${CFG.wheelMinPrice}–$${CFG.wheelMaxPrice}, one put within ${usd0(left)} free, above its 200-day average, a usable quote) — looked again every 20 s in the window`;
+      }
+    }
+  }
+  const tpOf = (x, sym) => CFG.wheelTp > 0 ? r2d(tickDown(wheelTpPrice(x.prem, CFG.wheelTp), sym) * 100) : null;   // the buy-back order's price, per contract
+  lastWheel = { at: new Date().toISOString(), on, share: on ? CFG.wheelSharePct : 0, scale, money: Math.round(moneyW), used: Math.round(used), free: Math.round(moneyW - used), idle,
+    window: info ? { open: info.window, days: info.windowDays, expiry: info.expiry, last: info.last, next: info.next } : null,
+    opts: opts.map(([sym, x]) => { const p = pos(sym); return { s: sym, und: x.und, kind: x.kind, K: x.K, exp: x.exp, qty: x.qty, prem: r2d(x.prem * 100), cur: p ? r2d(+p.current_price * 100) : null, pl: p ? r2d(+p.unrealized_pl) : null, tp: tpOf(x, sym), since: x.since }; }),
+    shares: shares.map(([und, s]) => { const p = pos(und); return { und, qty: s.qty, cost: s.cost, px: p ? r2d(+p.current_price) : null, pl: p ? r2d((+p.current_price - s.cost) * s.qty) : null, since: s.since || null }; }),
+    working: live.filter(o => !o._cancelled).map(o => ({ s: o.symbol, side: o.side, lim: +o.limit_price || null, qty: +o.qty })),
+    rules: { otm: CFG.wheelOtmPct, tp: CFG.wheelTp, stop: CFG.wheelStop, trend: !!CFG.wheelTrend, minPx: CFG.wheelMinPrice, maxPx: CFG.wheelMaxPrice, maxPos: CFG.wheelMaxPositions } };
+}
 // Every fill of today (all pages).
 async function todaysFills() {
   let f = [], token = '';
@@ -491,6 +658,7 @@ const T = (p, o) => call(BASE, p, o), D = (p, o) => call(DATA, p, o);
 export const httpCall = call;                               // for tests only
 // Idempotency: never send the same order twice, even if the broker is slow to list it.
 const placed = new Map();
+const forgetBuy = sym => placed.delete('buy:' + sym + ':limit');               // the wheel cancelled its own buy-back: a replacement is not a duplicate
 // Price and profit detail for phone alerts (setting alertDetail, on by default). Buys show size and limit price;
 // sells show the position's entry price, the current price and the open profit at the moment the sell is sent.
 let posBySym = {};
@@ -505,15 +673,15 @@ function alertDetail(body) {
   const unit = opt ? '/contract' : '';
   return ` \u00b7 bought $${(avg * mult).toFixed(2)}${unit}, selling \u2248$${(cur * mult).toFixed(2)}${unit} \u2192 ${pl >= 0 ? '+' : ''}${money(pl)} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(1)}%)`;
 }
-const send = async (body, why) => { why = why + alertDetail(body); const dk = /^sd-y/.test(body.client_order_id || '') && body.side === 'buy' ? body.client_order_id : body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); const line = (body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why; act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (DRY) { alerts.push(line); return { dry: true }; }
+const send = async (body, why) => { why = why + alertDetail(body); const dk = (/^sd-y/.test(body.client_order_id || '') || (/^sd-wb-/.test(body.client_order_id || '') && body.type === 'market')) && body.side === 'buy' ? body.client_order_id : body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); const line = (body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why; act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (DRY) { alerts.push(line); return { dry: true }; }
   return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }).then(r => { alerts.push(line); return r; }).catch(e => { const sure = e && e.status >= 400 && e.status < 500; if (sure) placed.delete(dk); act(`Order ${sure ? 'NOT accepted' : 'may not have arrived (no answer)'}: ${body.side} ${body.qty} ${body.symbol} — ${String(e.message || e).slice(0, 90)}`); if (body.side === 'sell') return 'refused'; throw e; }); };   // only a clear 4xx refusal frees the order for a retry: a timed-out POST may have reached the broker   // a refused sell must not stop the rest of the cycle (other positions still need managing); it is retried next check   // the phone alert goes out only for an accepted order; a rejected one must not block its own retry
 
 // Closing a position at market, safely: cancel its resting sell orders and wait until the broker confirms each one is
 // gone (a leg that filled meanwhile has already sold part of it), then re-read the position so the sale never exceeds
 // what is held — selling more than is held would open a short. Returns the order, or null when nothing was left to sell.
 const sleepShort = ms => new Promise(r => setTimeout(r, ms)), QUICK = { timeoutMs: 1500, retries: 0 };
-async function closeOut(symbol, qty, sells, why) {
-  if (!DRY) for (const o of sells) {
+async function cancelConfirmed(orders) {
+  if (!DRY) for (const o of orders) {
     try { await T('/v2/orders/' + o.id, { method: 'DELETE' }); } catch (e) { /* already gone or filled: the check below sees it */ }
     let id = o.id;
     for (let k = 0; k < 4; k++) {                                                        // confirm within ~2 s (quick calls, no retries); after that, the position re-read decides
@@ -523,6 +691,9 @@ async function closeOut(symbol, qty, sells, why) {
       await sleepShort(500);
     }
   }
+}
+async function closeOut(symbol, qty, sells, why) {
+  await cancelConfirmed(sells);
   let have = qty;
   if (!DRY) { const pos = await T('/v2/positions/' + encodeURIComponent(symbol), QUICK).catch(e => (e && e.status === 404 ? null : undefined)); if (pos === null) have = 0; else if (pos && Math.abs(+pos.qty) > 0) have = Math.abs(+pos.qty); }   // only a real 404 means flat; a timeout keeps the known quantity
   if (have <= 0) { act(`${symbol}: already flat — nothing to sell (${why})`); return null; }
@@ -648,9 +819,9 @@ const act = (m, key) => {                                   // same message (or 
 let noNew = '';
 let lastWatch = null, lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
 let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
-const NM = { stock: { one: 'stock', many: 'stocks', Cap: 'Stocks' }, call: { one: 'CALL', many: 'CALLs', Cap: 'CALLs' }, put: { one: 'PUT', many: 'PUTs', Cap: 'PUTs' }, spy: { one: 'SPY option', many: 'SPY options', Cap: 'SPY options' } };
-let lastSpy = null, memRestored = false, flooredSyms = new Set(), prevHeld = new Set(), spyPlacedAt = 0;
-const missingFill = new Map();                                            // symbol → when it vanished without a listed sell fill: no day-loss halt until it shows (at most 10 minutes)
+const NM = { stock: { one: 'stock', many: 'stocks', Cap: 'Stocks' }, call: { one: 'CALL', many: 'CALLs', Cap: 'CALLs' }, put: { one: 'PUT', many: 'PUTs', Cap: 'PUTs' }, spy: { one: 'SPY option', many: 'SPY options', Cap: 'SPY options' }, wheel: { one: 'wheel', many: 'wheel trades', Cap: 'Wheel' } };
+let lastSpy = null, memRestored = false, flooredSyms = new Set(), prevHeld = new Map(), spyPlacedAt = 0;
+const missingFill = new Map();                                            // symbol → { t0: when it vanished without a listed closing fill, short }: no day-loss halt until it shows (at most 10 minutes)
 let stopMoved = new Set();
 let lastSplit = null, lastDayPx = {}, haltSaid = new Set();      // money split panel, yesterday's closes, halt messages already sent today
 const alerts = [];
@@ -680,6 +851,7 @@ export async function fastCheck() {
   const sig = pos.map(p => p.symbol + ':' + p.qty).sort().join(',');
   if (sig !== lastPosSig) { lastPosSig = sig; return 'a fill happened'; }      // bought or sold: re-plan, maybe re-enter
   for (const p of pos) {
+    if (wheelHas(p.symbol)) continue;                                        // the wheel holds its options to the take-profit or expiry, and has no floor
     const pc = +p.unrealized_plpc * 100;
     if (isOpt(p.symbol) && pc <= -(isSpyOption(p.symbol) ? CFG.spyStop : CFG.optStop)) return p.symbol + ' option stop level';   // take-profits rest at the broker as limit orders
     if (!isOpt(p.symbol) && HOLD_FLOOR > 0 && pc <= -HOLD_FLOOR) return p.symbol + ' hard floor';
@@ -811,7 +983,7 @@ async function run() {
   }
   if (!memRestored) {                                                      // first cycle of this process: pick up today's day-state from the previous run's journal
     memRestored = true;
-    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.spyLevels && pv.mem.spyLevels.day === TODAY) spyLevels = pv.mem.spyLevels; if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
+    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.wheel && pv.mem.wheel.opts) wheelMem = pv.mem.wheel; if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.spyLevels && pv.mem.spyLevels.day === TODAY) spyLevels = pv.mem.spyLevels; if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
   }
   const clock = lastClock;
   if (READONLY) return;                                                    // journal only: nothing is placed, changed or cancelled
@@ -822,7 +994,7 @@ async function run() {
     if (Date.now() - sweepAt > 5 * 60000) {
       sweepAt = Date.now();
       try {
-        for (const o of (await T('/v2/orders?status=open&limit=500')) || []) if (o.side === 'buy' && /^sd-/.test(cidOf(o))) {
+        for (const o of (await T('/v2/orders?status=open&limit=500')) || []) if (o.side === 'buy' && /^sd-/.test(cidOf(o)) && !isWheelBuy(cidOf(o))) {   // a wheel buy-back only closes a sold option: it may rest overnight
           act(`${o.symbol} buy at ${o.limit_price} still resting while the market is closed — cancelled (no entry order is left to fill at the open)`);
           if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
         }
@@ -842,9 +1014,14 @@ async function run() {
   const stake = CFG.stakeUsd > 0 ? Math.min(CFG.stakeUsd, acctEq) : acctEq;
   const equity = stake, lastEq = CFG.stakeUsd > 0 ? stake - (acctEq - acctLast) : acctLast;    // today's change is the account's real change, applied to the stake
   posBySym = Object.fromEntries(positions.map(p => [p.symbol, p]));
+  // ---- the wheel's bookkeeping (bot/wheel.mjs): what it holds, and what changed since the last check (expired, assigned, called away) ----
+  { const R = wheelReconcile({ mem: wheelMem, positions, hist, today: ymdDash(Date.now()), now: new Date().toISOString() }); wheelMem = R.mem; for (const e of R.events) { const m = wheelEventText(e); act(m); alerts.push('\ud83d\udd01 ' + m); } }
+  const wheelOrderSyms = new Set(hist.concat(openOrders).filter(o => isWheelId(cidOf(o))).map(o => o.symbol));
+  const wheelUnds = new Set([...Object.values(wheelMem.opts).map(x => x.und), ...Object.keys(wheelMem.shares), ...openOrders.filter(o => isWheelSell(cidOf(o))).map(o => (parseOcc(o.symbol) || {}).und).filter(Boolean)]);
+  const isWheelPos = sym => wheelHas(sym) || (isOpt(sym) && !posBySym[sym] && wheelOrderSyms.has(sym));   // its sold options and the shares a put delivered; a contract it bought back today (no position left) for today's fills
   const stockPos = positions.filter(p => !isOpt(p.symbol)), optPos = positions.filter(p => isOpt(p.symbol));
   if (hooks.held) { hooks.held.clear(); positions.forEach(p => hooks.held.add(isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol)); }
-  if (hooks.floors) { const seenF = new Set(); for (const p of stockPos) { seenF.add(p.symbol); hooks.floors(p.symbol, HOLD_FLOOR > 0 ? +p.avg_entry_price * (1 - HOLD_FLOOR / 100) : null); } for (const sym of flooredSyms) if (!seenF.has(sym)) hooks.floors(sym, null); flooredSyms = seenF; }   // sold symbols lose their floor, or a stale level keeps waking the loop
+  if (hooks.floors) { const seenF = new Set(); for (const p of stockPos) { if (wheelHas(p.symbol)) continue; seenF.add(p.symbol); hooks.floors(p.symbol, HOLD_FLOOR > 0 ? +p.avg_entry_price * (1 - HOLD_FLOOR / 100) : null); } for (const sym of flooredSyms) if (!seenF.has(sym)) hooks.floors(sym, null); flooredSyms = seenF; }   // sold symbols lose their floor, or a stale level keeps waking the loop
 
   // ---- news & events guard (calendar + live headlines + SPY tone) ----
   if (Date.now() - newsCache.at > 60000) {
@@ -862,7 +1039,7 @@ async function run() {
       const sb = ((await D(`/v2/stocks/bars?symbols=SPY&timeframe=1Day&start=${new Date(Date.now() - 450 * 864e5).toISOString()}&limit=1000&adjustment=split&feed=iex&sort=asc`)).bars || {}).SPY || [];
       const done = sb.filter(b => b.t.slice(0, 10) < ymdDash(Date.now()));
       const prev = done[done.length - 1];
-      spyPrev = prev ? { day: TODAY, c: prev.c, closes: done.map(b => b.c) } : null;
+      spyPrev = prev ? { day: TODAY, c: prev.c, closes: done.map(b => b.c), days: done.map(b => b.t.slice(0, 10)) } : null;
     }
     const st = (await latestPrices(['SPY'])).SPY;
     if (spyPrev && st) spyPct = (st.p / spyPrev.c - 1) * 100;
@@ -893,11 +1070,11 @@ async function run() {
     }
     if (CFG.split) {                                                     // with the money split, a losing streak stops only its own side
       for (const [k, kind] of [['stock', 'Stock'], ['call', 'Call'], ['put', 'Put']]) {
-        const n = lossStreak(fillsCache.closed.filter(c => c.kind === kind && !isSpyOption(c.sym)));
+        const n = lossStreak(fillsCache.closed.filter(c => c.kind === kind && !isSpyOption(c.sym) && !c.wheel));   // the wheel's trades are its own
         if (n >= MAX_STREAK) sideStreak[k] = `${n} losing ${NM[k].one} trades in a row today`;
       }
     } else {
-      const streak = lossStreak(fillsCache.closed);
+      const streak = lossStreak(fillsCache.closed.filter(c => !c.wheel));
       if (streak >= MAX_STREAK) { G.block = true; G.halt = true; G.reasons.push(`${streak} losing trades in a row today \u2014 done for the day (protects against a bad tape)`); }
     }
     if (Date.now() - weekCache.at > 10 * 60000) {
@@ -925,40 +1102,44 @@ async function run() {
     call:  { per: amt('callUnit', 'optPct', 'callUsd'),     cap: amt('callUnit', 'callCapPct', 'callCapUsd'),     used: 0 },
     put:   { per: amt('putUnit', 'putPct', 'putUsd'),       cap: amt('putUnit', 'putCapPct', 'putCapUsd'),       used: 0 },
     spy:   { per: equity * (CFG.spyOn ? CFG.spySharePct : 0) / 100, cap: 0, used: 0 },     // the SPY sleeve spends its whole share on one trade at a time
+    wheel: { per: 0, cap: 0, used: 0 },                                                       // set from the wheel's own count (strikes set aside + shares), below
   };
-  const kindOf = sym => !isOpt(sym) ? 'stock' : isSpyOption(sym) ? 'spy' : (OPT_RE.exec(sym) || [])[3] === 'P' ? 'put' : 'call';
+  const kindOf = sym => isWheelPos(sym) ? 'wheel' : !isOpt(sym) ? 'stock' : isSpyOption(sym) ? 'spy' : (OPT_RE.exec(sym) || [])[3] === 'P' ? 'put' : 'call';
   for (const p of positions) SL[kindOf(p.symbol)].used += Math.abs(+p.market_value || 0);
   // ---- money split: stocks and options each own a share of the stake and have their own daily loss limit ----
-  const SPLIT = !!CFG.split, KINDS = ['stock', 'call', 'put', 'spy'], spyShare = CFG.spyOn ? CFG.spySharePct : 0;
-  const share = { call: CFG.callSharePct, put: CFG.putSharePct, spy: spyShare, stock: 100 - CFG.callSharePct - CFG.putSharePct - spyShare };
+  const wheelHeld = equity > 0 ? Math.round(wheelSetAside(positions, openOrders) / equity * 1000) / 10 : 0;   // % of the stake it has set aside now
+  const SPLIT = !!CFG.split, KINDS = ['stock', 'call', 'put', 'spy', 'wheel'], spyShare = CFG.spyOn ? CFG.spySharePct : 0, wheelShare = Math.max(CFG.wheelOn ? CFG.wheelSharePct : 0, wheelHeld);   // switched off (or above its share) it keeps what it holds until that is gone
+  const share = { call: CFG.callSharePct, put: CFG.putSharePct, spy: spyShare, wheel: wheelShare, stock: Math.max(0, 100 - CFG.callSharePct - CFG.putSharePct - spyShare - wheelShare) };
   // the SPY sleeve always lives on its own share (even with the split off): it is an experiment and must never spend the others' money
-  const SIDE = Object.fromEntries(KINDS.map(k => [k, { money: k === 'spy' ? equity * spyShare / 100 : SPLIT ? equity * share[k] / 100 : equity, capPct: k === 'spy' ? CFG.spyDayCap : !SPLIT ? LOSS_CAP : k === 'stock' ? LOSS_CAP : CFG.optDayCap }]));
+  // (the wheel too: its puts set strikes aside for weeks, so it has no daily loss limit — capPct 100 never stops it)
+  const SIDE = Object.fromEntries(KINDS.map(k => [k, { money: k === 'spy' ? equity * spyShare / 100 : k === 'wheel' ? equity * wheelShare / 100 : SPLIT ? equity * share[k] / 100 : equity, capPct: k === 'spy' ? CFG.spyDayCap : k === 'wheel' ? 100 : !SPLIT ? LOSS_CAP : k === 'stock' ? LOSS_CAP : CFG.optDayCap }]));
   const sideUsed = k => SL[k].used;
   const slBudget = k => Math.max(0, Math.min(SL[k].per * G.budget, SL[k].cap > 0 ? SL[k].cap - SL[k].used : Infinity, SPLIT ? SIDE[k].money - SL[k].used : Infinity));
   const capNote = k => SPLIT && SIDE[k].money - SL[k].used < SL[k].per ? ` (${NM[k].one} money $${Math.round(SIDE[k].money)}, $${Math.round(SL[k].used)} already in use)`
     : SL[k].cap > 0 && SL[k].cap - SL[k].used < SL[k].per ? ` (${k} money ceiling $${Math.round(SL[k].cap)}, $${Math.round(SL[k].used)} already in use)` : '';
   const capHit = dayPct <= -LOSS_CAP;
   for (const p of positions) if (+p.lastday_price > 0) lastDayPx[p.symbol] = +p.lastday_price;
-  const sideDay = sideDayPl({ positions, fills: fillsCache.fills || [], lastDay: lastDayPx, spy: isSpyOption });
+  const sideDay = sideDayPl({ positions, fills: fillsCache.fills || [], lastDay: lastDayPx, spy: isSpyOption, wheel: isWheelPos });
   // a position that disappeared since the last check must have its sell fill listed, or its whole cost would count as a loss
-  const heldNow = new Set(positions.map(p => p.symbol)), soldListed = sym => (fillsCache.fills || []).some(f => f.symbol === sym && !/^buy/.test(f.side));
-  for (const sym of prevHeld) if (!heldNow.has(sym) && !soldListed(sym) && !missingFill.has(sym)) missingFill.set(sym, Date.now());   // sticky: stays until the broker lists the sale (not just for one cycle)
-  for (const [sym, t0] of [...missingFill]) if (heldNow.has(sym) || soldListed(sym) || Date.now() - t0 > 10 * 60000) missingFill.delete(sym);   // 10 min: an exercise or symbol change never lists a sale
+  const heldNow = new Map(positions.map(p => [p.symbol, +p.qty || 0])), closeListed = (sym, short) => (fillsCache.fills || []).some(f => f.symbol === sym && (short ? /^buy/.test(f.side) : !/^buy/.test(f.side)));   // a sold option (the wheel) closes with a buy
+  for (const [sym, q] of prevHeld) if (!heldNow.has(sym) && !closeListed(sym, q < 0) && !missingFill.has(sym)) missingFill.set(sym, { t0: Date.now(), short: q < 0 });   // sticky: stays until the broker lists the closing fill (not just for one cycle)
+  for (const [sym, m] of [...missingFill]) if (heldNow.has(sym) || closeListed(sym, m.short) || Date.now() - m.t0 > 10 * 60000) missingFill.delete(sym);   // 10 min: an exercise, assignment or symbol change never lists a fill
   const fillsLag = missingFill.size > 0;
   prevHeld = heldNow;
-  const halt = { stock: null, call: null, put: null, spy: null }; spyCapHit = false;
+  const halt = { stock: null, call: null, put: null, spy: null, wheel: null }; spyCapHit = false;
   { const n = lossStreak(fillsCache.closed.filter(c => isSpyOption(c.sym))); if (n >= CFG.spyStreak) sideStreak.spy = `${n} losing SPY option trades in a row today`; }
   if (SPLIT) for (const k of KINDS) {
+    if (k === 'wheel') { SIDE.wheel.today = sideDay.wheel; SIDE.wheel.limit = SIDE.wheel.money; continue; }   // no daily loss limit (see above)
     const S = SIDE[k]; S.today = sideDay[k]; S.limit = S.money * S.capPct / 100;
     if (S.money > 0 && S.today <= -S.limit && !fillsLag) { halt[k] = `${NM[k].many} down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`; if (k === 'spy') spyCapHit = true; }
     else if (sideStreak[k]) halt[k] = sideStreak[k];
   } else { if (capHit) halt.stock = halt.call = halt.put = `daily loss cap ${LOSS_CAP}% hit`;
     const S = SIDE.spy; S.today = sideDay.spy; S.limit = S.money * S.capPct / 100;                        // the SPY sleeve keeps its own brakes either way
     if (S.money > 0 && S.today <= -S.limit && !fillsLag) { halt.spy = `SPY options down $${Math.round(-S.today)} today \u2014 past the ${S.capPct}% limit on its $${Math.round(S.money)}`; spyCapHit = true; } else if (sideStreak.spy) halt.spy = sideStreak.spy; }
-  for (const k of KINDS) if (halt[k] && !haltSaid.has(TODAY + k)) {
+  for (const k of KINDS) if (halt[k] && k !== 'wheel' && !haltSaid.has(TODAY + k)) {
     haltSaid.add(TODAY + k);
     if (!SPLIT && k !== 'spy') { if (k === 'stock') alerts.push(`\u26d4 ${halt[k]} \u2014 no new trades today`); continue; }
-    const others = KINDS.filter(x => x !== k && !halt[x]).map(x => NM[x].many);
+    const others = KINDS.filter(x => x !== k && !halt[x] && (x !== 'wheel' || CFG.wheelOn)).map(x => NM[x].many);   // the wheel is named only when it is switched on
     // what happens to what is open: SPY options are closed only by the money limit (a losing streak just stops new ones);
     // CALLs and PUTs are closed under the "bounce" sell rule, and kept to their own exits under "target" (the study held them)
     const closes = k === 'spy' ? spyCapHit : k !== 'stock' && CFG.optExit !== 'target';
@@ -980,7 +1161,7 @@ async function run() {
   // ---- resting sell orders for something no longer held (a leg whose cancel failed, a stop left after a take-profit) ----
   { const heldSyms = new Set(positions.map(p => p.symbol));
     const buying = new Set(openOrders.filter(o => o.side === 'buy').map(o => o.symbol));
-    for (const o of openOrders) if (o.side === 'sell' && !o._cancelled && !heldSyms.has(o.symbol) && !buying.has(o.symbol) && o.status !== 'held' && (/^sd-/.test(cid(o)) || /stop/.test(o.type)) && Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 90000) {
+    for (const o of openOrders) if (o.side === 'sell' && !o._cancelled && !isWheelSell(cid(o)) && !heldSyms.has(o.symbol) && !buying.has(o.symbol) && o.status !== 'held' && (/^sd-/.test(cid(o)) || /stop/.test(o.type)) && Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 90000) {
       act(`${o.symbol}: a ${o.type} sell order is resting for a position no longer held \u2014 cancelled (it could have opened a short)`);
       if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
     } }
@@ -989,6 +1170,9 @@ async function run() {
   // ---- SPY quick options: its own engine, every beat (manages its open trade even when switched off) ----
   try { await spyCycle({ equity, acct, positions, hist, liveOrders, G, halt, SIDE, sellsFor, cid, snapAt }); }
   catch (e) { act('SPY options engine error: ' + (e.message || e).slice(0, 120)); }
+  // ---- the wheel: cash-secured puts and covered calls on its own share (bot/wheel.mjs); manages what is open even when off ----
+  try { await wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, claim: wheelUnds }); if (lastWheel) SL.wheel.used = lastWheel.used; }
+  catch (e) { act('Wheel engine error: ' + (e.message || e).slice(0, 120)); }
   const r0 = x => Math.round(x);
   lastSplit = { at: new Date().toISOString(), on: SPLIT, shares: share, stake: r0(equity),
     ...Object.fromEntries(KINDS.map(k => [k, { money: r0(SIDE[k].money), used: r0(sideUsed(k)), today: SPLIT ? sideDay[k] : null, limitPct: SIDE[k].capPct, halted: halt[k] }])) };
@@ -1106,7 +1290,7 @@ async function run() {
   const PARTS = ['stock', 'call', 'put'], partOn = { stock: STK_ON, call: OPT_ON, put: PUT_ON };
   const partDone = k => !!halt[k] || !partOn[k] || (SPLIT && !(SIDE[k].money > 0));
   const bothHalted = PARTS.every(partDone) && PARTS.some(k => halt[k]);
-  try { await dayTradeCycle({ equity, acct, positions, hist, liveOrders, G, capHit: bothHalted, halt, slBudget, useSL: (k, amt) => { SL[k].used += amt; }, sellsFor, cid }); }
+  try { await dayTradeCycle({ equity, acct, positions, hist, liveOrders, G, capHit: bothHalted, halt, slBudget, useSL: (k, amt) => { SL[k].used += amt; }, sellsFor, cid, skip: wheelUnds }); }
   catch (e) { act('Day-trade engine error: ' + (e.message || e).slice(0, 120)); }
 
   // ---- what the bot is looking at (always, even when it cannot enter: the Bot trades tab shows it) ----
@@ -1154,6 +1338,10 @@ async function run() {
       else if (isSpyOption(p.symbol)) Object.assign(row, { exitBy: 'spy', exitLevel: null, tp: r2d(tickUp(avg * (1 + CFG.spyTp / 100), p.symbol) * mult), stop: r2d(avg * mult * (1 - CFG.spyStop / 100)), holdMin: CFG.spyHoldMin });   // SPY quick trades: their own take-profit, stop and minutes
       else { row.tp = r2d(tickUp(avg * (1 + OPT_TP / 100), p.symbol) * mult); row.stop = r2d(avg * mult * (1 - CFG.optStop / 100)); }
       if (opt) { const m2 = OPT_RE.exec(p.symbol); row.exp = '20' + m2[2].slice(0, 2) + '-' + m2[2].slice(2, 4) + '-' + m2[2].slice(4, 6); }
+      if (isWheelPos(p.symbol)) {                                         // the wheel's: a sold option (its buy-back price) or shares a put delivered (their cost)
+        const wx = wheelMem.opts[p.symbol], ws = wheelMem.shares[p.symbol];
+        Object.assign(row, { wheel: opt ? 'sold' : 'shares', exitBy: 'wheel', exitLevel: null, floor: null, stop: null, tp: opt && wx && CFG.wheelTp > 0 ? r2d(tickDown(wheelTpPrice(wx.prem, CFG.wheelTp), p.symbol) * 100) : null, cost: ws ? ws.cost : null });
+      }
       heldRows.push(row);
     }
     lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : userPause ? 'paused from Telegram' : G.block ? 'paused by the market check' : noNew ? noNew : G.mktBlock ? 'market filter: ' + G.mktBlock + ' \u2014 no new dip buys' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, exitRule: CFG.exitRule, exitPct: CFG.exitProfitPct, optExit: CFG.optExit, mktFilter: !!CFG.marketFilter, mkt: G.mkt || null, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
@@ -1173,11 +1361,11 @@ async function run() {
     const src = ord && /^sd-s-/.test(cid(ord)) ? ord : hist.find(o => o.side === 'buy' && cid(o).startsWith('sd-s-' + sym + '-'));
     return src ? +cid(src).split('-')[4] / 100 : null;
   };
-  let heat = openRisk({ positions, orders: liveOrders, stopFor, optStopFor: sym => (isSpyOption(sym) ? CFG.spyStop : CFG.optStop) / 100 });
+  let heat = openRisk({ positions: positions.filter(p => !isWheelPos(p.symbol)), orders: liveOrders.filter(o => !isWheelId(cid(o))), stopFor, optStopFor: sym => (isSpyOption(sym) ? CFG.spyStop : CFG.optStop) / 100 });   // the wheel's money is its own share, set aside in full
   const heatCap = equity * MAX_HEAT / 100;
   const undOf = s => isOpt(s) ? OPT_RE.exec(s)[1] : s;
   const sectorCount = {};
-  for (const s of positions.map(p => p.symbol).concat(liveOrders.filter(o => o.side === 'buy').map(o => o.symbol))) { const k = sectorOf(undOf(s)); sectorCount[k] = (sectorCount[k] || 0) + 1; }
+  for (const s of positions.filter(p => !isWheelPos(p.symbol)).map(p => p.symbol).concat(liveOrders.filter(o => o.side === 'buy' && !isWheelId(cid(o))).map(o => o.symbol))) { const k = sectorOf(undOf(s)); sectorCount[k] = (sectorCount[k] || 0) + 1; }
   const sectorFull = sym => sectorOf(sym) !== 'Other' && (sectorCount[sectorOf(sym)] || 0) >= MAX_PER_SECTOR;
   lastRisk = { heatPct: heat / equity * 100, capPct: MAX_HEAT, sectors: sectorCount, regime: G.regime };
 
@@ -1190,7 +1378,7 @@ async function run() {
     let slots = MAX_POS - stockPos.length - liveOrders.filter(o => o.side === 'buy' && !isOpt(o.symbol)).length;
     for (const s of sigs) {
       if (slots <= 0) break;
-      if (!s.px || stockPos.some(p => p.symbol === s.sym) || liveOrders.some(o => o.symbol === s.sym) || todays.some(o => cid(o).startsWith('sd-r-' + s.sym + '-'))) continue;
+      if (!s.px || wheelUnds.has(s.sym) || stockPos.some(p => p.symbol === s.sym) || liveOrders.some(o => o.symbol === s.sym) || todays.some(o => cid(o).startsWith('sd-r-' + s.sym + '-'))) continue;   // a wheel stock is the wheel's
       if (s.px > s.prevClose * 1.01) { act(`${s.sym} skipped \u2014 already bounced ${((s.px / s.prevClose - 1) * 100).toFixed(1)}% since yesterday's close`); continue; }
       const risk = CFG.newsGuard ? symbolRisk(s.sym, newsCache.syms) : null; if (risk) { act(`${s.sym} skipped \u2014 ${risk}`); continue; }
       if (sectorFull(s.sym)) { act(`${s.sym} skipped \u2014 already ${MAX_PER_SECTOR} positions in ${sectorOf(s.sym)}`); continue; }
@@ -1227,7 +1415,7 @@ async function run() {
       if (!(slBudget(kind) >= 1)) { act(`${K}: no money left for a new one today${capNote(kind)}`, 'optmoney:' + kind); break; }
       if (heat >= heatCap) { act(`${K}: total risk is at the ${MAX_HEAT}% cap — no new option trades until it falls`, 'optheat'); break; }
       // a call is skipped once the dip has bounced 1%+; a put once the pop has already fallen 1%+
-      if (!s.px || hasOptOn(s.sym) || (kind === 'call' ? s.px > s.prevClose * 1.01 : s.px < s.prevClose * 0.99) || (CFG.newsGuard && symbolRisk(s.sym, newsCache.syms)) || sectorFull(s.sym)) continue;
+      if (!s.px || wheelUnds.has(s.sym) || hasOptOn(s.sym) || (kind === 'call' ? s.px > s.prevClose * 1.01 : s.px < s.prevClose * 0.99) || (CFG.newsGuard && symbolRisk(s.sym, newsCache.syms)) || sectorFull(s.sym)) continue;
       if (todays.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym)) continue;
       // a candidate turned down after a broker call (no contract, no quote, spread too wide, over the budget or the risk cap)
       // is looked at again after 10 minutes, not on every check
@@ -1323,7 +1511,11 @@ async function writeJournal() {
     if (j.length < 100) break;
     token = j[j.length - 1].id;
   }
-  const { closed, open } = buildJournal(fills, positions);
+  let nta = [];                                                                                  // option expiries, assignments and the shares they move: no fill of their own
+  for (let k = 0, tok = ''; k < 10; k++) { const j = await T('/v2/account/activities?activity_types=OPEXP,OPASN,OPEXC,OPTRD&direction=asc&page_size=100&after=' + since + 'T00:00:00Z' + (tok ? '&page_token=' + tok : '')).catch(() => null); if (!Array.isArray(j) || !j.length) break; nta = nta.concat(j); if (j.length < 100) break; tok = j[j.length - 1].id; }
+  const optEv = optionEvents(nta);
+  const { closed, open } = buildJournal(fills.concat(optEv.fills), positions, optEv.events);
+  for (const o of open) if (wheelHas(o.sym)) o.wheel = true;                                     // the wheel's sold options and the shares a put delivered
   const prev = await previousJournal();
   if (journalLocked && process.env.JOURNAL_RESET !== '1') { const k = 'jlock'; if (!haltSaid.has(k)) { haltSaid.add(k); act('Journal NOT saved: ' + journalLocked + '. Trading is unaffected. Fix the JOURNAL_KEY secret (or set JOURNAL_RESET=1 once to start a new journal).'); } console.log('journal not written:', journalLocked); return; }
   if (!journalActs) journalActs = (prev.acts || []).filter(a => a && a.t && a.m);
@@ -1339,9 +1531,9 @@ async function writeJournal() {
     account: { equity: +acct.equity, last_equity: +acct.last_equity, cash: +acct.cash }, closed, open, acts: allActs, env,
     settings: { ...CFG, summary: cfgSummary(CFG), base: BASE.includes('paper') ? 'paper' : 'LIVE' }, stream: { ...streamStats, mode: streamStats.lastTick && Date.now() - streamStats.lastTick < 60000 ? 'streaming' : 'polling' }, engine: { cycleMs: engine.cycleMs, cycleMax: engine.cycleMax, cycles: engine.cycles, avgCallMs: engine.calls ? Math.round(engine.callMs / engine.calls) : 0, calls: engine.calls, errorsHour: engine.hourErrors.length, lastError: engine.lastError, symbols: UNIVERSE.length, beatMs: +process.env.BEAT_MS || 2000, scan: CFG.universe === 'scan' ? { ...scanStatus } : null },
     // panels the bot only computes while the market is open: a process that has not computed them yet keeps the previous ones
-    risk: lastRisk || prev.risk || null, split: lastSplit || prev.split || null, spy: lastSpy || prev.spy || null,
+    risk: lastRisk || prev.risk || null, split: lastSplit || prev.split || null, spy: lastSpy || prev.spy || null, wheel: lastWheel || prev.wheel || null,
     watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
-    mem: { day: TODAY, lastDayPx, userPause, haltSaid: [...haltSaid], spyLevels },
+    mem: { day: TODAY, lastDayPx, userPause, haltSaid: [...haltSaid], spyLevels, wheel: wheelMem },   // the wheel's memory carries across days (what it sold, the shares a put delivered)
     since: await sinceStart(prev.since, fills, acct).catch(() => prev.since || null),   // day-state a restart must not forget: yesterday's closes of sold-out symbols, a Telegram /pause, alerts already sent
     limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {
