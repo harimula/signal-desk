@@ -533,7 +533,12 @@ async function wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, clai
   const scale = CFG.mode === 'live' ? CFG.liveSizePct / 100 : 1;          // real money starts small, like every other part
   const moneyW = on ? equity * CFG.wheelSharePct / 100 * scale : 0, free = moneyW - used;
   const days = on ? await wheelDays() : wheelDaysCache.days, info = days.length ? wheelCycleInfo(today, days) : null;   // switched off it never waits on the calendar
-  let idle = !on ? 'switched off' : !info ? 'the market calendar is unavailable' : !info.window ? `next sale window ${info.windowDays.map(dayLabel).join(', ')} (puts expiring ${dayLabel(info.expiry)})` : null;
+  // Where a sale would sell: in the window, the window's expiry (the tested rhythm). Between windows, with "sell between
+  // windows" on, the nearest monthly expiration at least 7 days out — so the money works instead of waiting weeks.
+  const dayN = d => Math.round(Date.parse(d + 'T00:00:00Z') / 864e5);
+  const anyExp = info && CFG.wheelAnytime ? (info.next && dayN(info.next) - dayN(today) >= 7 ? info.next : info.after) : null;
+  const selling = !!(on && info && (info.window || (CFG.wheelAnytime && anyExp))), sellExp = info ? (info.window ? info.expiry : anyExp) : null;
+  let idle = !on ? 'switched off' : !info ? 'the market calendar is unavailable' : !info.window && !selling ? `next sale window ${info.windowDays.map(dayLabel).join(', ')} (puts expiring ${dayLabel(info.expiry)})` : null;
   if (act20) {
     // 1) every sold option: its take-profit buy-back rests at the broker; the stop (off by default) buys it back at market
     for (const [sym, x] of opts) {
@@ -561,21 +566,22 @@ async function wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, clai
     }
     // 2) in the sale window: covered calls on the shares a put delivered, then new cash-secured puts (nothing new while the
     //    market check pauses entries — a Telegram /pause, a headline, the Fed hour, a loss limit — or a session is ending)
-    if (on && info && info.window && (noNew || G.block)) idle = noNew || (userPause ? 'paused from Telegram' : 'paused by the market check');
-    else if (on && info && info.window) {
-      const callsSold = soldFor(hist, info.expiry, 'call'), putsSold = soldFor(hist, info.expiry, 'put');
+    if (selling && (noNew || G.block)) idle = noNew || (userPause ? 'paused from Telegram' : 'paused by the market check');
+    else if (selling) {
+      const callsSold = soldFor(hist, sellExp, 'call'), putsSold = soldFor(hist, sellExp, 'put');
       for (const [und, s] of shares) {
         const isCall = o => (parseOcc(o.symbol) || {}).und === und && (parseOcc(o.symbol) || {}).kind === 'call';
         const held = opts.filter(([, x]) => x.und === und && x.kind === 'call').reduce((t, [, x]) => t + x.qty, 0), working = live.filter(o => isWheelSell(cidOf(o)) && isCall(o)).reduce((t, o) => t + Math.max(0, (+o.qty || 0) - (+o.filled_qty || 0)), 0) + pending.filter(x => x.kind === 'c' && x.und === und).reduce((t, x) => t + x.qty, 0);
         const n = Math.floor(s.qty / 100) - Math.max(held, callsSold.get(und) || 0) - working;   // one sale per cycle: a call bought back early is not sold again
         if (n < 1 || (wheelSkip.get('c:' + und) || 0) > Date.now()) continue;
         const px = ((await latestPrices([und]))[und] || {}).p; if (!(px > 0)) continue;
-        const c = await wheelContract(und, 'call', info.expiry, px, s.cost); if (!c.ok) { skipW('c:' + und, c.why, c.retry); continue; }
+        const c = await wheelContract(und, 'call', sellExp, px, s.cost); if (!c.ok) { skipW('c:' + und, c.why, c.retry); continue; }
         await wheelSell('call', und, c, n, `Wheel: ${und} covered call — ${n} × ${c.K} call expiring ${dayLabel(c.exp)} (cost $${s.cost.toFixed(2)} a share; ${CFG.wheelOtmPct}% over $${r2d(px)})`);
       }
       // the trend filter as the study applied it: SPY closed above its 200-day average before each day of the window so far
-      const spyT = CFG.wheelTrend ? trendThrough(spyPrev && spyPrev.days, spyPrev && spyPrev.closes, info.windowDays, today) : { ok: true };
-      if (spyT.ok !== true) idle = spyT.ok === false ? `SPY closed under its 200-day average on ${dayLabel(spyT.under)} — no new puts until the next sale window (trend filter)` : 'SPY\'s 200-day average is not known yet — no new puts (trend filter)';
+      const tDays = info.window ? info.windowDays : [today];               // between windows the filter reads the close before today
+      const spyT = CFG.wheelTrend ? trendThrough(spyPrev && spyPrev.days, spyPrev && spyPrev.closes, tDays, today) : { ok: true };
+      if (spyT.ok !== true) idle = spyT.ok === false ? `SPY closed under its 200-day average on ${dayLabel(spyT.under)} — no new puts ${info.window ? 'until the next sale window ' : 'for now '}(trend filter)` : 'SPY\'s 200-day average is not known yet — no new puts (trend filter)';
       else {
         let slots = CFG.wheelMaxPositions - unds.size, left = free, looked = 0;
         const busy = new Set(positions.map(p => isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol).concat(liveOrders.map(o => isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol)));
@@ -588,10 +594,10 @@ async function wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, clai
           if (slots <= 0 || looked >= 6) break;
           const p0 = (px[x] || {}).p; if (!(p0 >= CFG.wheelMinPrice && p0 <= CFG.wheelMaxPrice) || p0 * (1 - CFG.wheelOtmPct / 100) * 100 > left) continue;
           if ((wheelSkip.get('p:' + x) || 0) > Date.now()) continue;
-          if (bars) { const C = completed(bars, x); if (trendThrough(C.map(b => b.d), C.map(b => b.c), info.windowDays, today).ok !== true) continue; }   // the stock too, before each day of the window so far
+          if (bars) { const C = completed(bars, x); if (trendThrough(C.map(b => b.d), C.map(b => b.c), tDays, today).ok !== true) continue; }   // the stock too, before each day of the window so far
           const risk = CFG.newsGuard ? symbolRisk(x, newsCache.syms) || symbolRisk(x, await wheelNews(x)) : null; if (risk) { skipW('p:' + x, `${x} — ${risk}`, 60 * 60000); continue; }
           looked++;
-          const c = await wheelContract(x, 'put', info.expiry, p0); if (!c.ok) { skipW('p:' + x, c.why, c.retry); continue; }
+          const c = await wheelContract(x, 'put', sellExp, p0); if (!c.ok) { skipW('p:' + x, c.why, c.retry); continue; }
           if (c.K * 100 > left) continue;
           const r = await wheelSell('put', x, c, 1, `Wheel: ${x} cash-secured put — 1 × ${c.K} put expiring ${dayLabel(c.exp)} (${CFG.wheelOtmPct}% under $${r2d(p0)}); ${usd0(c.K * 100)} set aside`);
           if (r && r !== 'refused') { left -= c.K * 100; used += c.K * 100; slots--; sold++; unds.add(x); if (claim) claim.add(x); }   // the other parts keep out of it from this check on

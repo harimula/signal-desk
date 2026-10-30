@@ -61,7 +61,7 @@ export function normalize(raw) {
   if (raw.preset && PRESETS[raw.preset]) { c.preset = raw.preset; Object.assign(c, PRESETS[raw.preset]); }
   else if (raw.preset === 'custom') c.preset = 'custom';
   for (const k of Object.keys(RANGES)) if (raw[k] != null && isFinite(+raw[k]) && (c.preset === 'custom' || !(k in PRESETS.balanced))) c[k] = clamp(+raw[k], RANGES[k]);
-  for (const k of ['spyOn', 'wheelOn', 'wheelTrend', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts', 'marketFilter']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
+  for (const k of ['spyOn', 'wheelOn', 'wheelTrend', 'wheelAnytime', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts', 'marketFilter']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
   if (raw.exitRule === 'bounce' || raw.exitRule === 'profit') c.exitRule = raw.exitRule;
   if (raw.optExit === 'bounce' || raw.optExit === 'target') c.optExit = raw.optExit;
   if (raw.universe === 'scan' || raw.universe === 'list') c.universe = raw.universe;

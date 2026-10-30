@@ -495,6 +495,7 @@ test('SPY sleeve: "armed" — a break counts only after a 5-minute bar closed in
 
 test('wheel settings: off by default; switched on, the shares never pass 100% (the wheel gives way last), a stop under 1.5× is raised, min ≤ max price', () => {
   const d = normalize({}); assert.equal(d.wheelOn, false); assert.equal(d.wheelOtmPct, 5); assert.equal(d.wheelTp, 50); assert.equal(d.wheelStop, 0); assert.equal(d.wheelTrend, true);
+  assert.equal(d.wheelAnytime, false, 'between-window sales are off by default (the study measured the windows)'); assert.equal(normalize({ wheelAnytime: true }).wheelAnytime, true);
   const c = normalize({ preset: 'custom', callSharePct: 40, putSharePct: 10, spyOn: true, spySharePct: 20, wheelOn: true, wheelSharePct: 45, wheelStop: 1.2, wheelMinPrice: 200, wheelMaxPrice: 100 });
   assert.equal(c.wheelSharePct, 30); assert.equal(c.wheelStop, 1.5); assert.equal(c.wheelMaxPrice, 200);
   assert.equal(normalize({ wheelOn: false, wheelSharePct: 45, callSharePct: 40, putSharePct: 10, spySharePct: 20 }).wheelSharePct, 45, 'switched off it takes nothing, so it is left as typed');

@@ -738,6 +738,26 @@ check('wheel: with every close above it, the second day of the window still sell
 const W20 = run({ ...WHO, wheelStop: 3 }, { ...WIN, time: '2026-10-28T15:00:00Z', positions: [{ symbol: 'DIP', qty: '100', avg_entry_price: '105', current_price: '121', market_value: '12100', unrealized_pl: '1600', unrealized_plpc: '0.15' }, { symbol: WC, qty: '-1', avg_entry_price: '0.6', current_price: '3.9', market_value: '-390', unrealized_pl: '-330', unrealized_plpc: '-5.5' }], hist: [wSale(WC, '20261019', 0.6)], prevJournal: { at: '2026-10-27T20:00:00Z', mem: { day: '20261027', wheel: { opts: { [WC]: { und: 'DIP', kind: 'call', K: 117.5, exp: '2026-11-20', qty: 1, prem: 0.6, since: '2026-10-19', base: 0 } }, shares: wShares } } } });
 check('wheel: the stop never buys back a covered call at market; it keeps its take-profit order (half the premium)', () => { assert.ok(!W20.orders.some(x => x.symbol === WC && x.type === 'market'), JSON.stringify(W20.orders)); const b = W20.orders.find(x => x.symbol === WC); assert.ok(b && b.side === 'buy' && b.type === 'limit' && b.limit_price === '0.3', JSON.stringify(W20.orders)); });
 
+// ---- wheel: sell between windows (owner, 2026-10-30 9:02 AM) ----
+// Fri Oct 23 is outside the October window (it closed Oct 21); Nov 20 is 28 days out, so with wheelAnytime the put sells
+// now at the November monthly instead of waiting for the Nov 23 window.
+const WA = { ...WHO, wheelAnytime: true };
+const WB1 = run(WA, { quote: { bp: 1.0, ap: 1.1 }, journal: true });
+check('wheel between windows: on an ordinary Friday the put sells at the nearest monthly ≥ 7 days out (Nov 20), one contract, cash-secured', () => {
+  const o = WB1.orders.find(x => x.side === 'sell'); assert.ok(o, JSON.stringify(WB1.orders) + JSON.stringify(WB1.wheel && WB1.wheel.idle));
+  assert.match(o.symbol, /^DIP261120P/); assert.equal(o.position_intent, 'sell_to_open'); assert.match(o.client_order_id, /^sd-wp-/);
+});
+const WB2 = run(WA, { quote: { bp: 1.0, ap: 1.1 }, time: '2026-11-16T15:00:00Z', live: { DIP: 110.5, FALL: 119.9, QUIET: 209 }, journal: true });
+check('wheel between windows: under 7 days to the November monthly it sells December\u2019s expiry instead', () => {
+  const o = WB2.orders.find(x => x.side === 'sell'); assert.ok(o, JSON.stringify(WB2.orders) + JSON.stringify(WB2.wheel && WB2.wheel.idle));
+  assert.match(o.symbol, /^DIP261218P/);
+});
+const WB3 = run(WHO, { quote: { bp: 1.0, ap: 1.1 }, journal: true });
+check('wheel between windows: with the setting off, the same Friday still waits for the window (nothing sold, the next window named)', () => {
+  assert.ok(!WB3.orders.some(x => x.side === 'sell'), JSON.stringify(WB3.orders));
+  assert.match(WB3.wheel.idle, /next sale window/);
+});
+
 // ---- SPY same-day expiry (owner, 2026-10-30): spyDte 0 picks today's contract; everything done by 3:20 PM ----
 const spyUpLate = spyUp.map(b => ({ ...b, t: b.t.replace('T13:30', 'T18:50').replace('T13:35', 'T18:55').replace('T13:40', 'T19:00').replace('T13:45', 'T19:05').replace('T13:50', 'T19:10').replace('T13:55', 'T19:15') }));
 const SD1 = run({ ...SO, spyDte: 0 }, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7, spyExp: '2026-10-23' });

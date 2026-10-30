@@ -14,7 +14,10 @@
 //   Filter      — new puts only while SPY and the stock closed above their 200-day averages before each day of the window
 //                 so far (wheelTrend, on by default): one close under it ends new puts until the next window, as in the study.
 //   Once        — one sale per stock per cycle: a put or call bought back early is not sold again until the next window.
-export const WHEEL_DEFAULTS = { wheelOn: false, wheelSharePct: 10, wheelOtmPct: 5, wheelTp: 50, wheelStop: 0, wheelTrend: true, wheelMinPrice: 15, wheelMaxPrice: 150, wheelMaxPositions: 3 };
+//   Anytime     — with wheelAnytime (off by default: the study measured the windows only), free money and uncovered shares
+//                 are put to work between windows too, at the nearest monthly expiration at least 7 days out; one sale per
+//                 stock per expiry still holds, so nothing is sold twice for the same month.
+export const WHEEL_DEFAULTS = { wheelOn: false, wheelSharePct: 10, wheelOtmPct: 5, wheelTp: 50, wheelStop: 0, wheelTrend: true, wheelMinPrice: 15, wheelMaxPrice: 150, wheelMaxPositions: 3, wheelAnytime: false };
 export const WHEEL_WINDOW_DAYS = 3;
 
 const ymd = d => d.toISOString().slice(0, 10);

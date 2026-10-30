@@ -59,6 +59,7 @@
  "wheelMinPrice": 50,
  "wheelMaxPrice": 300,
  "wheelMaxPositions": 3,
+ "wheelAnytime": true,
  "split": true,
  "callSharePct": 10,
  "putSharePct": 0,
@@ -126,8 +127,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-30T12:20:00.000Z",
- "updatedBy": "Claude (wheel spread across up to 3 companies, owner request 2026-10-30 8:14 AM)",
+ "updatedAt": "2026-10-30T13:15:00.000Z",
+ "updatedBy": "Claude (wheel sells between windows too, owner request 2026-10-30 9:02 AM)",
  "liveConfirm": "",
  "stakeUsd": 0
 }
