@@ -51,7 +51,7 @@
  "spyStart": "09:50",
  "spyEnd": "15:00",
  "wheelOn": true,
- "wheelSharePct": 10,
+ "wheelSharePct": 20,
  "wheelOtmPct": 5,
  "wheelTp": 50,
  "wheelStop": 0,
@@ -60,7 +60,7 @@
  "wheelMaxPrice": 150,
  "wheelMaxPositions": 3,
  "split": true,
- "callSharePct": 20,
+ "callSharePct": 10,
  "putSharePct": 0,
  "optDayCap": 10,
  "stockUnit": "pct",
@@ -126,7 +126,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-30T10:24:04.095Z",
+ "updatedAt": "2026-10-30T11:06:46.279Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
