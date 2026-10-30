@@ -50,6 +50,15 @@
  "spyDte": 1,
  "spyStart": "09:50",
  "spyEnd": "15:00",
+ "wheelOn": true,
+ "wheelSharePct": 10,
+ "wheelOtmPct": 5,
+ "wheelTp": 50,
+ "wheelStop": 0,
+ "wheelTrend": true,
+ "wheelMinPrice": 15,
+ "wheelMaxPrice": 150,
+ "wheelMaxPositions": 3,
  "split": true,
  "callSharePct": 20,
  "putSharePct": 0,
@@ -117,8 +126,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-27T21:13:32.964Z",
- "updatedBy": "Claude (80%+ win rate for stocks, CALLs and SPY, owner request 2026-10-27)",
+ "updatedAt": "2026-10-30T05:45:00.000Z",
+ "updatedBy": "Claude (wheel switched on at 10%, owner request 2026-10-30)",
  "liveConfirm": "",
  "stakeUsd": 0
 }

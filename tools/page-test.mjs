@@ -96,6 +96,7 @@ async function session(label, prep, cfgPatch = {}) {                        // c
       return [...document.querySelectorAll('main label, main [data-tipkey]')].filter(el => el.offsetParent && !el.hasAttribute('data-tip')).map(el => (el.dataset.tipkey || (part(el) || el).textContent).replace(/\s+/g, ' ').trim()).filter(t => t && t.length <= 80); });
     check('hover help: every label on Bot settings has an explanation, the sell-rule choices included', noTip.length === 0, noTip.join(' | ')); }
   // the owner's saved shares vary; set CALLs 30 / PUTs 10 / SPY 5 first so the checks below do not depend on config.json
+  await page.evaluate(() => { const r = document.querySelector('#st-wheelOn'); if (r && r.checked) { r.checked = false; r.dispatchEvent(new Event('change', { bubbles: true })); } }); await page.waitForTimeout(200);   // the saved settings may have the wheel on: this check reads the four classic shares
   for (const [id, v] of [['st-callSharePct', '30'], ['st-putSharePct', '10'], ['st-spySharePct', '5']]) { await page.fill('#' + id, v); await page.evaluate(id => document.getElementById(id).dispatchEvent(new Event('change', { bubbles: true })), id); await page.waitForTimeout(150); }
   await page.evaluate(() => { const r = document.querySelector('#st-spyOn'); if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } }); await page.waitForTimeout(200);
   const note0 = await page.evaluate(() => (document.querySelector('#stSplitNote') || {}).textContent || '');
