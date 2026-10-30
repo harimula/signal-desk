@@ -758,6 +758,19 @@ check('wheel between windows: with the setting off, the same Friday still waits 
   assert.match(WB3.wheel.idle, /next sale window/);
 });
 
+// ---- alerts only on fills (owner, 2026-10-30 10:36 AM): the placement stays off the phone, the fill arrives once ----
+const AFC = { ...WHO, wheelAnytime: true, alertOnFill: true };
+const AF = run(AFC, { quote: { bp: 1.0, ap: 1.1 }, tg: true, cycles: 2, stepMs: 300000, positionsAfter: [{ symbol: WP, qty: '-1', avg_entry_price: '1.05', current_price: '1.0', market_value: '-100', unrealized_pl: '5', unrealized_plpc: '0.05' }], histAfter: [wSale(WP, '20261019', 1.05, '2026-10-23T14:03:00Z')] });   // filled three minutes into THIS fake session: a fill from before the session must stay quiet
+check('alerts on fills: the put sale is not announced when placed; the fill is announced once, with size and price', () => {
+  const t = AF.tgSent.map(m => m.text).join('\n');
+  assert.ok(!/🔴 Wheel: DIP cash-secured put/.test(t), t.slice(0, 400));
+  assert.equal((t.match(/✅ Sold: SELL 1 DIP261120P00105000 @ 1.05 \(\$105\)/g) || []).length, 1, t);
+});
+const AF2 = run(WHO, { quote: { bp: 1.0, ap: 1.1 }, tg: true, time: '2026-10-19T14:00:00Z' });
+check('alerts on fills off (default): the placement is announced as before', () => {
+  assert.ok(AF2.tgSent.some(m => /🔴 Wheel: DIP cash-secured put/.test(m.text)), JSON.stringify(AF2.tgSent.map(m => m.text).slice(0, 6)));
+});
+
 // ---- SPY same-day expiry (owner, 2026-10-30): spyDte 0 picks today's contract; everything done by 3:20 PM ----
 const spyUpLate = spyUp.map(b => ({ ...b, t: b.t.replace('T13:30', 'T18:50').replace('T13:35', 'T18:55').replace('T13:40', 'T19:00').replace('T13:45', 'T19:05').replace('T13:50', 'T19:10').replace('T13:55', 'T19:15') }));
 const SD1 = run({ ...SO, spyDte: 0 }, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7, spyExp: '2026-10-23' });

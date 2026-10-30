@@ -637,6 +637,10 @@ test('SPY same-day expiry setting (2026-10-30): 0 allowed and clamped into 0–5
   assert.equal(normalize({ preset: 'custom', spyDte: -1 }).spyDte, 0);
   assert.equal(normalize({ preset: 'custom', spyDte: 7 }).spyDte, 5);
 });
+test('alerts only on fills (2026-10-30): the setting exists, off by default', () => {
+  assert.equal(normalize({}).alertOnFill, false);
+  assert.equal(normalize({ alertOnFill: true }).alertOnFill, true);
+});
 
 console.log('India earnings calendar (earnings-in.mjs)');
 const EI = await import('../earnings-in.mjs');

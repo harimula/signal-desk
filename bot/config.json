@@ -94,6 +94,7 @@
  "eventGuard": true,
  "alerts": true,
  "alertDetail": true,
+ "alertOnFill": true,
  "symbols": [
   "AAPL",
   "MSFT",
@@ -127,8 +128,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-30T13:15:00.000Z",
- "updatedBy": "Claude (wheel sells between windows too, owner request 2026-10-30 9:02 AM)",
+ "updatedAt": "2026-10-30T14:55:00.000Z",
+ "updatedBy": "Claude (Telegram messages only on fills, owner request 2026-10-30 10:36 AM)",
  "liveConfirm": "",
  "stakeUsd": 0
 }

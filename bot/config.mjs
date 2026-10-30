@@ -20,7 +20,7 @@ export const DEFAULTS = {
   // only at the take-profit, the stop, the max hold or 3 days before expiry. optDays = the shortest time to expiry a new one may
   // have (the nearest expiry from optDays to optDays + 21 days out is bought; 14 = the original 14–35-day window).
   optExit: 'bounce', optDays: 14,
-  newsGuard: true, eventGuard: true, alerts: true, alertDetail: true,
+  newsGuard: true, eventGuard: true, alerts: true, alertDetail: true, alertOnFill: false,
   symbols: DEFAULT_SYMBOLS,
   universe: 'list', scanSize: 200, scanMinPrice: 5,
   pickBy: 'leaders',   // which dips to buy first when there are more than slots: 'leaders' = strongest 3-month return vs the market; 'dip' = deepest dip
@@ -61,7 +61,7 @@ export function normalize(raw) {
   if (raw.preset && PRESETS[raw.preset]) { c.preset = raw.preset; Object.assign(c, PRESETS[raw.preset]); }
   else if (raw.preset === 'custom') c.preset = 'custom';
   for (const k of Object.keys(RANGES)) if (raw[k] != null && isFinite(+raw[k]) && (c.preset === 'custom' || !(k in PRESETS.balanced))) c[k] = clamp(+raw[k], RANGES[k]);
-  for (const k of ['spyOn', 'wheelOn', 'wheelTrend', 'wheelAnytime', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts', 'marketFilter']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
+  for (const k of ['spyOn', 'wheelOn', 'wheelTrend', 'wheelAnytime', 'split', 'stocks', 'options', 'puts', 'intraday', 'newsGuard', 'eventGuard', 'alerts', 'alertDetail', 'alertOnFill', 'dayTrade', 'dayStock', 'dayCalls', 'dayPuts', 'marketFilter']) if (typeof raw[k] === 'boolean') c[k] = raw[k];
   if (raw.exitRule === 'bounce' || raw.exitRule === 'profit') c.exitRule = raw.exitRule;
   if (raw.optExit === 'bounce' || raw.optExit === 'target') c.optExit = raw.optExit;
   if (raw.universe === 'scan' || raw.universe === 'list') c.universe = raw.universe;

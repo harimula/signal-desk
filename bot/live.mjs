@@ -7,7 +7,7 @@
 // Entries and take-profits are resting limit orders at the broker, so they execute at exchange speed anyway.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { HAVE_KEYS, closeMins, loadCalendar, setPublishing, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols, setSessionEnd, sessionEndFor } from './bot.mjs';
+import { noteFill, HAVE_KEYS, closeMins, loadCalendar, setPublishing, botCycle, fastCheck, setNow, clockInfo, applyConfig, CFG, pushPrice, endpoints, streamStats, redact, eodReport, heartbeat, journalStamp, morningHello, tgPollCycle, spyFast, spyHasOpen, spyWatch, spyEnter, spyOnQuote, spyOpenSymbols, setSessionEnd, sessionEndFor } from './bot.mjs';
 import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { summary } from './config.mjs';
 
@@ -159,7 +159,7 @@ function connectStreams(which = 'both') {
     if (m.stream === 'authorization') { tradeOk = m.data && m.data.status === 'authorized'; if (tradeOk) tradeWs.send(JSON.stringify({ action: 'listen', data: { streams: ['trade_updates'] } })); else console.log('trade-stream auth failed'); }
     if (m.stream === 'trade_updates' && m.data) {
       const ev = m.data.event, o = m.data.order || {};
-      if (['fill', 'partial_fill', 'canceled', 'expired', 'rejected'].includes(ev)) { streamStats.fills++; console.log('\u26a1', redact(ev + ' ' + o.side + ' ' + o.qty + ' ' + o.symbol + (m.data.price ? ' @ ' + m.data.price : ''))); wake(ev + ' ' + o.symbol); }
+      if (['fill', 'partial_fill', 'canceled', 'expired', 'rejected'].includes(ev)) { streamStats.fills++; try { noteFill(ev, o, m.data.price); } catch (e) { console.log('fill alert', e.message); } console.log('\u26a1', redact(ev + ' ' + o.side + ' ' + o.qty + ' ' + o.symbol + (m.data.price ? ' @ ' + m.data.price : ''))); wake(ev + ' ' + o.symbol); }
     }
   }, 'trade-stream');
   if (which === 'both' || which === 'data-stream') dataWs = openWs(DATA_WS, ws => ws.send(JSON.stringify({ action: 'auth', key: EP.key, secret: EP.secret })), arr => {

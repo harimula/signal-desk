@@ -702,7 +702,7 @@ function alertDetail(body) {
   return ` \u00b7 bought $${(avg * mult).toFixed(2)}${unit}, selling \u2248$${(cur * mult).toFixed(2)}${unit} \u2192 ${pl >= 0 ? '+' : ''}${money(pl)} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(1)}%)`;
 }
 const send = async (body, why) => { why = why + alertDetail(body); const dk = (/^sd-y/.test(body.client_order_id || '') || (/^sd-wb-/.test(body.client_order_id || '') && body.type === 'market')) && body.side === 'buy' ? body.client_order_id : body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); const line = (body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why; act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (DRY) { alerts.push(line); return { dry: true }; }
-  return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }).then(r => { alerts.push(line); return r; }).catch(e => { const sure = e && e.status >= 400 && e.status < 500; if (sure) placed.delete(dk); act(`Order ${sure ? 'NOT accepted' : 'may not have arrived (no answer)'}: ${body.side} ${body.qty} ${body.symbol} — ${String(e.message || e).slice(0, 90)}`); if (body.side === 'sell') return 'refused'; throw e; }); };   // only a clear 4xx refusal frees the order for a retry: a timed-out POST may have reached the broker   // a refused sell must not stop the rest of the cycle (other positions still need managing); it is retried next check   // the phone alert goes out only for an accepted order; a rejected one must not block its own retry
+  return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }).then(r => { if (CFG.alertOnFill) fillWhy.set(body.client_order_id, line); else alerts.push(line); return r; }).catch(e => { const sure = e && e.status >= 400 && e.status < 500; if (sure) placed.delete(dk); act(`Order ${sure ? 'NOT accepted' : 'may not have arrived (no answer)'}: ${body.side} ${body.qty} ${body.symbol} — ${String(e.message || e).slice(0, 90)}`); if (body.side === 'sell') return 'refused'; throw e; }); };   // only a clear 4xx refusal frees the order for a retry: a timed-out POST may have reached the broker   // a refused sell must not stop the rest of the cycle (other positions still need managing); it is retried next check   // the phone alert goes out only for an accepted order; a rejected one must not block its own retry
 
 // Closing a position at market, safely: cancel its resting sell orders and wait until the broker confirms each one is
 // gone (a leg that filled meanwhile has already sold part of it), then re-read the position so the sale never exceeds
@@ -853,6 +853,24 @@ const missingFill = new Map();                                            // sym
 let stopMoved = new Set();
 let lastSplit = null, lastDayPx = {}, haltSaid = new Set();      // money split panel, yesterday's closes, halt messages already sent today
 const alerts = [];
+// "Message only when an order fills" (alertOnFill): the 🟢/🔴 placement lines wait here by client_order_id, and the phone
+// hears ✅ when the broker reports the order filled — an attempt that dies unfilled stays quiet (the page's log keeps it).
+const fillWhy = new Map(), fillSeen = new Set(), BORN_MS = Date.now();
+export function noteFill(ev, o, price) {
+  if (!CFG.alertOnFill || !o || !o.id) return;
+  const cid = o.client_order_id || ''; if (!/^sd-/.test(cid)) return;      // only the bot's own orders; hand orders stay quiet
+  const filled = +o.filled_qty || 0, qty = +o.qty || 0, px = +o.filled_avg_price || +price || 0;
+  if (ev === 'fill' && !fillSeen.has(o.id + ':fill')) {
+    fillSeen.add(o.id + ':fill');
+    const opt = isOpt(o.symbol), tot = px * filled * (opt ? 100 : 1), base = fillWhy.get(cid); fillWhy.delete(cid);
+    alerts.push(`✅ ${o.side === 'buy' ? 'Filled' : 'Sold'}: ${o.side.toUpperCase()} ${filled} ${o.symbol} @ ${r2d(px)} ($${Math.round(tot).toLocaleString('en-US')})${base ? '\n— ' + base.replace(/^[🟢🔴] /, '') : ''}`);
+  } else if (['canceled', 'expired', 'rejected'].includes(ev)) {
+    if (filled > 0 && filled < qty && !fillSeen.has(o.id + ':part')) { fillSeen.add(o.id + ':part'); alerts.push(`⚠️ Partly filled, then ${ev}: ${o.side.toUpperCase()} ${filled} of ${qty} ${o.symbol}${px ? ' @ ' + r2d(px) : ''}`); }
+    fillWhy.delete(cid);                                                   // died: the placement line is dropped quietly
+  }
+  if (fillSeen.size > 800) { let n = 0; for (const k of fillSeen) { fillSeen.delete(k); if (++n >= 300) break; } }
+  if (fillWhy.size > 400) { let n = 0; for (const k of fillWhy.keys()) { fillWhy.delete(k); if (++n >= 100) break; } }
+}
 
 // One full decision cycle: manage every position, then look for new entries.
 let hooks = {};
@@ -1044,6 +1062,9 @@ async function run() {
   posBySym = Object.fromEntries(positions.map(p => [p.symbol, p]));
   // ---- the wheel's bookkeeping (bot/wheel.mjs): what it holds, and what changed since the last check (expired, assigned, called away) ----
   { const R = wheelReconcile({ mem: wheelMem, positions, hist, today: ymdDash(Date.now()), now: new Date().toISOString() }); wheelMem = R.mem; for (const e of R.events) { const m = wheelEventText(e); act(m); alerts.push('\ud83d\udd01 ' + m); } }
+  // fills the stream missed (or arrived while it was down): announced from the order history, never twice and never
+  // from before this session started (a restart must not repeat the previous session's phone messages)
+  if (CFG.alertOnFill) for (const o of hist) if (o.status === 'filled' && /^sd-/.test(cidOf(o)) && Date.parse(o.filled_at || 0) > Math.max(BORN_MS, Date.now() - 15 * 60000)) noteFill('fill', o);
   const wheelOrderSyms = new Set(hist.concat(openOrders).filter(o => isWheelId(cidOf(o)) && (String(o.filled_at || o.updated_at || o.submitted_at || '').slice(0, 10) === ymdDash(Date.now()) || ['new', 'accepted', 'partially_filled', 'held', 'pending_new'].includes(o.status))).map(o => o.symbol));   // its working orders and contracts it traded today — an old trade in a contract another part holds now does not make that position the wheel's
   const wheelUnds = new Set([...Object.values(wheelMem.opts).map(x => x.und), ...Object.keys(wheelMem.shares), ...openOrders.filter(o => isWheelSell(cidOf(o))).map(o => (parseOcc(o.symbol) || {}).und).filter(Boolean)]);
   const isWheelPos = sym => wheelHas(sym) || (isOpt(sym) && !posBySym[sym] && wheelOrderSyms.has(sym));   // its sold options and the shares a put delivered; a contract it bought back today (no position left) for today's fills
