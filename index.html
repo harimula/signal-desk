@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-q9LZYTIug4vDURfuGajUnTUh67LnPQE3ClgHWcpUEV8=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-76eOJfhqoBzz2dODZnzWokN9LejH33UzAKMGXzfnCQw=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -999,7 +999,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793365543';
+const BUILD_V = '1793370336';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2997,7 +2997,8 @@ ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins 
     const side = (k, nm, kd) => {
       const sp = J.split && J.split[k], money = sp ? sp.money : base * sh[k] / 100;
       const is = o => partOfRow(o) === k;
-      const used = k === 'wheel' ? (sp ? sp.used : inWheel) : open.filter(is).reduce((t, o) => t + valOf(o), 0), pct = money > 0 ? Math.min(100, used / money * 100) : 0;
+      const posUsed = open.filter(is).reduce((t, o) => t + valOf(o), 0);   // filled positions; the SPY panel also counts a buy order still working, so the two "in use" figures must agree
+      const used = k === 'wheel' ? (sp ? sp.used : inWheel) : k === 'spy' && fresh && J.spy && J.spy.used != null ? Math.max(posUsed, J.spy.used) : posUsed, pct = money > 0 ? Math.min(100, used / money * 100) : 0;
       const cl = closed.filter(is), w = cl.filter(c => c.pl > 0).length, real = cl.reduce((t, c) => t + c.pl, 0);
       const todayPl = fresh && sp && sp.today != null ? sp.today : null, lim = sp ? sp.limitPct : (k === 'stock' ? (S0.dayCap ?? 3) : k === 'spy' ? (S0.spyDayCap ?? 25) : k === 'wheel' ? 100 : (S0.optDayCap ?? 10));
       const halted = fresh && sp && sp.halted, off = !partOn(J, k);
