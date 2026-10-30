@@ -40,7 +40,7 @@
  "spyOn": true,
  "spySharePct": 10,
  "spyTradePct": 20,
- "spyTp": 5,
+ "spyTp": 25,
  "spyStop": 35,
  "spyHoldMin": 60,
  "spyMaxTrades": 20,
@@ -129,8 +129,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-30T15:10:00.000Z",
- "updatedBy": "Claude (pay up to get in quickly on SPY entries, owner request 2026-10-30 11:01 AM)",
+ "updatedAt": "2026-10-30T17:10:43.193Z",
+ "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
 }
