@@ -126,13 +126,8 @@
   "F"
  ],
  "version": 1,
-<<<<<<< Updated upstream
  "updatedAt": "2026-10-30T11:19:40.106Z",
  "updatedBy": "settings page",
-=======
- "updatedAt": "2026-10-30T11:58:00.000Z",
- "updatedBy": "Claude (re-applied SPY same-day expiry after the 7:10 AM save from a not-yet-reloaded page returned it to 1; every other value is the owner\u2019s 7:06\u20137:10 AM save)",
->>>>>>> Stashed changes
  "liveConfirm": "",
  "stakeUsd": 0
 }
