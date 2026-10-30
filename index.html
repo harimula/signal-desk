@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-bGFHPxe3pQa5aHQJNoVbKnq/0qGVCaKkeuxLM11tdC0=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-AUEkB/NQUHgJI0qqDbR0GPUPvg2E5JZP3GbIxD21/o0=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -999,7 +999,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793357916';
+const BUILD_V = '1793359639';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -3464,7 +3464,7 @@ document.addEventListener('mouseup', stMouseUp, true); document.addEventListener
 // A typed number just updates the draft (no re-render, so the cursor and scroll stay put). Controls that show or hide other
 // parts of the form — checkboxes, radios, dropdowns, a profile flipping to Custom — and the numbers other text repeats redraw it.
 const ST_NOT_FORM = ['st-tok', 'st-repo', 'st-akey', 'st-asec', 'st-jkey', 'st-lkey', 'st-lsec', 'st-liveConfirm', 'st-tgtok'];
-const ST_REDRAW = ['st-exitProfitPct', 'st-callSharePct', 'st-putSharePct', 'st-spySharePct', 'st-spyTradePct'];
+const ST_REDRAW = ['st-exitProfitPct', 'st-callSharePct', 'st-putSharePct', 'st-spySharePct', 'st-spyTradePct', 'st-wheelSharePct'];
 document.addEventListener('change', e => { const el = e.target, key = el && (el.type === 'radio' ? el.name : el.id); if (!key || !key.startsWith('st-') || ST_NOT_FORM.includes(key)) return;
   const c = stRead(), was = stCfg && stCfg.preset;
   if (key !== 'st-preset' && Object.keys(ST_PRESETS.balanced).includes(key.slice(3))) { c.preset = 'custom'; const p = document.getElementById('st-preset'); if (p) p.value = 'custom'; }   // at once: a Save pressed before the redraw reads the form
