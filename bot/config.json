@@ -47,9 +47,9 @@
  "spyMaxOpen": 3,
  "spyStreak": 2,
  "spyDayCap": 25,
- "spyDte": 1,
+ "spyDte": 0,
  "spyStart": "09:50",
- "spyEnd": "15:00",
+ "spyEnd": "14:00",
  "wheelOn": true,
  "wheelSharePct": 40,
  "wheelOtmPct": 5,
@@ -126,7 +126,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-30T11:10:30.672Z",
+ "updatedAt": "2026-10-30T11:19:40.106Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
