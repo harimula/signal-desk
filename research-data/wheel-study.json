@@ -1,0 +1,3725 @@
+{
+ "at": "2026-10-30T02:19:12.454Z",
+ "feed": "iex",
+ "assumptions": {
+  "spreadPct": 4,
+  "minPremium": 0.05,
+  "scanPriceRange": [
+   15,
+   150
+  ],
+  "cycles": 32,
+  "from": "2024-02-20",
+  "to": "2026-10-16"
+ },
+ "lists": {
+  "base": {
+   "stocks": 39,
+   "symbols": [
+    "AAPL",
+    "MSFT",
+    "KO",
+    "JNJ",
+    "PG",
+    "XOM",
+    "CVX",
+    "JPM",
+    "WMT",
+    "MCD",
+    "DIS",
+    "IBM",
+    "GE",
+    "CAT",
+    "BA",
+    "MMM",
+    "HD",
+    "INTC",
+    "ORCL",
+    "T",
+    "VZ",
+    "PFE",
+    "MRK",
+    "PEP",
+    "NKE",
+    "AXP",
+    "GS",
+    "UNH",
+    "LOW",
+    "TXN",
+    "AMD",
+    "ADBE",
+    "COST",
+    "SBUX",
+    "CSCO",
+    "QCOM",
+    "AMGN",
+    "GD",
+    "LMT"
+   ],
+   "variants": {
+    "otm0-hold": {
+     "puts": {
+      "n": 425,
+      "winPct": 68,
+      "avgPct": -0.09,
+      "avgWinPct": 2.07,
+      "avgLossPct": -4.67,
+      "worstPct": -21.1,
+      "worst": "INTC 2026-06-22→2026-07-17 strike 133 (stock 133.8)",
+      "why": {
+       "assigned": 190,
+       "expired": 235
+      }
+     },
+     "calls": {
+      "n": 655,
+      "winPct": 80.31,
+      "avgPct": -0.37,
+      "avgWinPct": 0.84,
+      "avgLossPct": -5.31,
+      "worstPct": -48.34,
+      "worst": "INTC 2026-03-23→2026-04-17 strike 44.5 (stock 43.94)",
+      "why": {
+       "expired": 497,
+       "called": 158
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 26.54,
+      "perYearPct": 9.37,
+      "worstMonthPct": -6.32,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -8.44,
+      "upMonthsPct": 68.75,
+      "byYearPct": {
+       "2024": 3.64,
+       "2025": 13.36,
+       "2026": 7.71
+      },
+      "avgStocks": 39
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 212,
+       "winPct": 71.7,
+       "avgPct": 0.09,
+       "avgWinPct": 1.71,
+       "avgLossPct": -4.01,
+       "worstPct": -17.74,
+       "worst": "AMD 2024-03-18→2024-04-19 strike 190 (stock 191.05)",
+       "why": {
+        "assigned": 83,
+        "expired": 129
+       }
+      },
+      "2025": {
+       "n": 121,
+       "winPct": 70.25,
+       "avgPct": 0.03,
+       "avgWinPct": 2.14,
+       "avgLossPct": -4.97,
+       "worstPct": -14.08,
+       "worst": "CVX 2025-03-24→2025-04-17 strike 162.5 (stock 164.64)",
+       "why": {
+        "assigned": 54,
+        "expired": 67
+       }
+      },
+      "2026": {
+       "n": 92,
+       "winPct": 56.52,
+       "avgPct": -0.65,
+       "avgWinPct": 3,
+       "avgLossPct": -5.4,
+       "worstPct": -21.1,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 133 (stock 133.8)",
+       "why": {
+        "assigned": 53,
+        "expired": 39
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 6,
+      "winPct": 33.33,
+      "avgPct": -5.31,
+      "avgWinPct": 2.2,
+      "avgLossPct": -9.07,
+      "worstPct": -14.08,
+      "worst": "CVX 2025-03-24→2025-04-17 strike 162.5 (stock 164.64)",
+      "why": {
+       "assigned": 4,
+       "expired": 2
+      }
+     }
+    },
+    "otm0-hold-trend": {
+     "puts": {
+      "n": 406,
+      "winPct": 68.97,
+      "avgPct": -0.02,
+      "avgWinPct": 2.06,
+      "avgLossPct": -4.65,
+      "worstPct": -21.1,
+      "worst": "INTC 2026-06-22→2026-07-17 strike 133 (stock 133.8)",
+      "why": {
+       "expired": 228,
+       "assigned": 178
+      }
+     },
+     "calls": {
+      "n": 595,
+      "winPct": 80.17,
+      "avgPct": -0.41,
+      "avgWinPct": 0.86,
+      "avgLossPct": -5.54,
+      "worstPct": -48.34,
+      "worst": "INTC 2026-03-23→2026-04-17 strike 44.5 (stock 43.94)",
+      "why": {
+       "called": 146,
+       "expired": 449
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 29.11,
+      "perYearPct": 10.21,
+      "worstMonthPct": -6.17,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -8.18,
+      "upMonthsPct": 68.75,
+      "byYearPct": {
+       "2024": 3.44,
+       "2025": 15.17,
+       "2026": 8.37
+      },
+      "avgStocks": 36
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 193,
+       "winPct": 73.06,
+       "avgPct": 0.13,
+       "avgWinPct": 1.71,
+       "avgLossPct": -4.16,
+       "worstPct": -17.74,
+       "worst": "AMD 2024-03-18→2024-04-19 strike 190 (stock 191.05)",
+       "why": {
+        "expired": 120,
+        "assigned": 73
+       }
+      },
+      "2025": {
+       "n": 117,
+       "winPct": 70.09,
+       "avgPct": 0.13,
+       "avgWinPct": 2.05,
+       "avgLossPct": -4.35,
+       "worstPct": -12.25,
+       "worst": "IBM 2025-07-21→2025-08-15 strike 285 (stock 285.91)",
+       "why": {
+        "assigned": 52,
+        "expired": 65
+       }
+      },
+      "2026": {
+       "n": 96,
+       "winPct": 59.38,
+       "avgPct": -0.52,
+       "avgWinPct": 2.94,
+       "avgLossPct": -5.57,
+       "worstPct": -21.1,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 133 (stock 133.8)",
+       "why": {
+        "assigned": 53,
+        "expired": 43
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm0-tp50": {
+     "puts": {
+      "n": 553,
+      "winPct": 83.54,
+      "avgPct": 0.11,
+      "avgWinPct": 1.33,
+      "avgLossPct": -6.13,
+      "worstPct": -29.31,
+      "worst": "UNH 2025-04-21→2025-05-16 strike 450 (stock 454.17)",
+      "why": {
+       "tp": 456,
+       "assigned": 97
+      }
+     },
+     "calls": {
+      "n": 576,
+      "winPct": 88.72,
+      "avgPct": -0.28,
+      "avgWinPct": 0.61,
+      "avgLossPct": -7.26,
+      "worstPct": -31.94,
+      "worst": "AMD 2026-03-23→2026-04-17 strike 202.5 (stock 201.36)",
+      "why": {
+       "called": 65,
+       "tp": 506,
+       "expired": 5
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 26.63,
+      "perYearPct": 9.4,
+      "worstMonthPct": -6.24,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -7.65,
+      "upMonthsPct": 71.88,
+      "byYearPct": {
+       "2024": 4.07,
+       "2025": 12.12,
+       "2026": 8.53
+      },
+      "avgStocks": 39
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 251,
+       "winPct": 85.66,
+       "avgPct": 0.38,
+       "avgWinPct": 1.11,
+       "avgLossPct": -3.97,
+       "worstPct": -17.74,
+       "worst": "AMD 2024-03-18→2024-04-19 strike 190 (stock 191.05)",
+       "why": {
+        "tp": 214,
+        "assigned": 37
+       }
+      },
+      "2025": {
+       "n": 163,
+       "winPct": 85.28,
+       "avgPct": -0.08,
+       "avgWinPct": 1.32,
+       "avgLossPct": -8.17,
+       "worstPct": -29.31,
+       "worst": "UNH 2025-04-21→2025-05-16 strike 450 (stock 454.17)",
+       "why": {
+        "assigned": 26,
+        "tp": 137
+       }
+      },
+      "2026": {
+       "n": 139,
+       "winPct": 77.7,
+       "avgPct": -0.17,
+       "avgWinPct": 1.81,
+       "avgLossPct": -7.06,
+       "worstPct": -21.1,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 133 (stock 133.8)",
+       "why": {
+        "tp": 105,
+        "assigned": 34
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 9,
+      "winPct": 55.56,
+      "avgPct": -4.6,
+      "avgWinPct": 0.95,
+      "avgLossPct": -11.53,
+      "worstPct": -13.33,
+      "worst": "SBUX 2025-03-24→2025-04-17 strike 97 (stock 97.05)",
+      "why": {
+       "tp": 5,
+       "assigned": 4
+      }
+     }
+    },
+    "otm0-tp50-trend": {
+     "puts": {
+      "n": 498,
+      "winPct": 84.34,
+      "avgPct": 0.23,
+      "avgWinPct": 1.35,
+      "avgLossPct": -5.81,
+      "worstPct": -24.4,
+      "worst": "ORCL 2025-10-20→2025-11-21 strike 290 (stock 291.24)",
+      "why": {
+       "tp": 414,
+       "assigned": 84
+      }
+     },
+     "calls": {
+      "n": 462,
+      "winPct": 88.74,
+      "avgPct": -0.29,
+      "avgWinPct": 0.62,
+      "avgLossPct": -7.48,
+      "worstPct": -31.94,
+      "worst": "AMD 2026-03-23→2026-04-17 strike 202.5 (stock 201.36)",
+      "why": {
+       "called": 53,
+       "tp": 406,
+       "expired": 3
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 30.49,
+      "perYearPct": 10.65,
+      "worstMonthPct": -5.93,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -7.02,
+      "upMonthsPct": 68.75,
+      "byYearPct": {
+       "2024": 4.33,
+       "2025": 13.7,
+       "2026": 10
+      },
+      "avgStocks": 33
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 220,
+       "winPct": 87.27,
+       "avgPct": 0.44,
+       "avgWinPct": 1.11,
+       "avgLossPct": -4.18,
+       "worstPct": -17.74,
+       "worst": "AMD 2024-03-18→2024-04-19 strike 190 (stock 191.05)",
+       "why": {
+        "tp": 191,
+        "assigned": 29
+       }
+      },
+      "2025": {
+       "n": 144,
+       "winPct": 86.81,
+       "avgPct": 0.34,
+       "avgWinPct": 1.36,
+       "avgLossPct": -6.43,
+       "worstPct": -24.4,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 290 (stock 291.24)",
+       "why": {
+        "assigned": 20,
+        "tp": 124
+       }
+      },
+      "2026": {
+       "n": 134,
+       "winPct": 76.87,
+       "avgPct": -0.24,
+       "avgWinPct": 1.76,
+       "avgLossPct": -6.91,
+       "worstPct": -21.1,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 133 (stock 133.8)",
+       "why": {
+        "tp": 99,
+        "assigned": 35
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm0-tp50-stop3x": {
+     "puts": {
+      "n": 993,
+      "winPct": 79.66,
+      "avgPct": 0.08,
+      "avgWinPct": 1.44,
+      "avgLossPct": -5.23,
+      "worstPct": -33.93,
+      "worst": "INTC 2024-07-22→2024-08-16 strike 33 (stock 33.01)",
+      "why": {
+       "tp": 786,
+       "stop": 161,
+       "assigned": 46
+      }
+     },
+     "calls": {
+      "n": 208,
+      "winPct": 87.98,
+      "avgPct": -0.35,
+      "avgWinPct": 0.7,
+      "avgLossPct": -8.02,
+      "worstPct": -36.24,
+      "worst": "QCOM 2026-04-20→2026-05-15 strike 150 (stock 136.18)",
+      "why": {
+       "called": 26,
+       "tp": 181,
+       "expired": 1
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 8.19,
+      "perYearPct": 3.04,
+      "worstMonthPct": -3.85,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -5.69,
+      "upMonthsPct": 65.63,
+      "byYearPct": {
+       "2024": 0.54,
+       "2025": 4.12,
+       "2026": 3.35
+      },
+      "avgStocks": 39
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 359,
+       "winPct": 78.27,
+       "avgPct": -0.08,
+       "avgWinPct": 1.2,
+       "avgLossPct": -4.72,
+       "worstPct": -33.93,
+       "worst": "INTC 2024-07-22→2024-08-16 strike 33 (stock 33.01)",
+       "why": {
+        "tp": 281,
+        "stop": 71,
+        "assigned": 7
+       }
+      },
+      "2025": {
+       "n": 374,
+       "winPct": 81.82,
+       "avgPct": 0.22,
+       "avgWinPct": 1.41,
+       "avgLossPct": -5.11,
+       "worstPct": -21.63,
+       "worst": "UNH 2025-04-21→2025-05-16 strike 450 (stock 454.17)",
+       "why": {
+        "stop": 55,
+        "tp": 304,
+        "assigned": 15
+       }
+      },
+      "2026": {
+       "n": 260,
+       "winPct": 78.46,
+       "avgPct": 0.12,
+       "avgWinPct": 1.82,
+       "avgLossPct": -6.1,
+       "worstPct": -16.25,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 133 (stock 133.8)",
+       "why": {
+        "tp": 201,
+        "assigned": 24,
+        "stop": 35
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 31,
+      "winPct": 38.71,
+      "avgPct": -2.2,
+      "avgWinPct": 0.92,
+      "avgLossPct": -4.16,
+      "worstPct": -8.4,
+      "worst": "INTC 2025-03-24→2025-04-17 strike 24 (stock 24.25)",
+      "why": {
+       "stop": 19,
+       "tp": 12
+      }
+     }
+    },
+    "otm0-tp50-stop3x-trend": {
+     "puts": {
+      "n": 679,
+      "winPct": 80.71,
+      "avgPct": 0.14,
+      "avgWinPct": 1.37,
+      "avgLossPct": -5.01,
+      "worstPct": -16.25,
+      "worst": "INTC 2026-06-22→2026-07-17 strike 133 (stock 133.8)",
+      "why": {
+       "tp": 543,
+       "stop": 105,
+       "assigned": 31
+      }
+     },
+     "calls": {
+      "n": 112,
+      "winPct": 87.5,
+      "avgPct": -0.27,
+      "avgWinPct": 0.72,
+      "avgLossPct": -7.21,
+      "worstPct": -19.88,
+      "worst": "BA 2025-04-21→2025-05-16 strike 170 (stock 161.83)",
+      "why": {
+       "tp": 96,
+       "called": 15,
+       "expired": 1
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 15.92,
+      "perYearPct": 5.78,
+      "worstMonthPct": -7.84,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -9.7,
+      "upMonthsPct": 65.63,
+      "byYearPct": {
+       "2024": 2.15,
+       "2025": 6.43,
+       "2026": 6.62
+      },
+      "avgStocks": 25
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 269,
+       "winPct": 80.3,
+       "avgPct": 0.12,
+       "avgWinPct": 1.16,
+       "avgLossPct": -4.13,
+       "worstPct": -11.72,
+       "worst": "PFE 2024-10-21→2024-11-15 strike 29 (stock 29.22)",
+       "why": {
+        "tp": 216,
+        "stop": 50,
+        "assigned": 3
+       }
+      },
+      "2025": {
+       "n": 216,
+       "winPct": 84.72,
+       "avgPct": 0.26,
+       "avgWinPct": 1.3,
+       "avgLossPct": -5.5,
+       "worstPct": -14.13,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 290 (stock 291.24)",
+       "why": {
+        "stop": 26,
+        "tp": 182,
+        "assigned": 8
+       }
+      },
+      "2026": {
+       "n": 194,
+       "winPct": 76.8,
+       "avgPct": 0.04,
+       "avgWinPct": 1.76,
+       "avgLossPct": -5.68,
+       "worstPct": -16.25,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 133 (stock 133.8)",
+       "why": {
+        "tp": 145,
+        "assigned": 20,
+        "stop": 29
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm5-hold": {
+     "puts": {
+      "n": 656,
+      "winPct": 85.52,
+      "avgPct": 0.1,
+      "avgWinPct": 0.88,
+      "avgLossPct": -4.5,
+      "worstPct": -19.59,
+      "worst": "INTC 2026-06-22→2026-07-17 strike 127 (stock 133.8)",
+      "why": {
+       "expired": 541,
+       "assigned": 115
+      }
+     },
+     "calls": {
+      "n": 465,
+      "winPct": 83.01,
+      "avgPct": -0.5,
+      "avgWinPct": 0.74,
+      "avgLossPct": -6.58,
+      "worstPct": -45.33,
+      "worst": "INTC 2026-03-23→2026-04-17 strike 46.5 (stock 43.94)",
+      "why": {
+       "called": 88,
+       "expired": 377
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 22.29,
+      "perYearPct": 7.95,
+      "worstMonthPct": -5.97,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -7.58,
+      "upMonthsPct": 71.88,
+      "byYearPct": {
+       "2024": 1.18,
+       "2025": 11.77,
+       "2026": 8.14
+      },
+      "avgStocks": 39
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 290,
+       "winPct": 88.97,
+       "avgPct": 0.1,
+       "avgWinPct": 0.7,
+       "avgLossPct": -4.7,
+       "worstPct": -19.14,
+       "worst": "NKE 2024-06-24→2024-07-19 strike 92 (stock 97.16)",
+       "why": {
+        "expired": 255,
+        "assigned": 35
+       }
+      },
+      "2025": {
+       "n": 209,
+       "winPct": 85.65,
+       "avgPct": 0.2,
+       "avgWinPct": 0.87,
+       "avgLossPct": -3.84,
+       "worstPct": -10.75,
+       "worst": "CVX 2025-03-24→2025-04-17 strike 155 (stock 164.64)",
+       "why": {
+        "assigned": 34,
+        "expired": 175
+       }
+      },
+      "2026": {
+       "n": 157,
+       "winPct": 78.98,
+       "avgPct": -0.04,
+       "avgWinPct": 1.26,
+       "avgLossPct": -4.92,
+       "worstPct": -19.59,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 127 (stock 133.8)",
+       "why": {
+        "assigned": 46,
+        "expired": 111
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 12,
+      "winPct": 50,
+      "avgPct": -2.53,
+      "avgWinPct": 0.43,
+      "avgLossPct": -5.49,
+      "worstPct": -10.75,
+      "worst": "CVX 2025-03-24→2025-04-17 strike 155 (stock 164.64)",
+      "why": {
+       "assigned": 6,
+       "expired": 6
+      }
+     }
+    },
+    "otm5-hold-trend": {
+     "puts": {
+      "n": 575,
+      "winPct": 85.22,
+      "avgPct": 0.12,
+      "avgWinPct": 0.89,
+      "avgLossPct": -4.38,
+      "worstPct": -19.59,
+      "worst": "INTC 2026-06-22→2026-07-17 strike 127 (stock 133.8)",
+      "why": {
+       "expired": 473,
+       "assigned": 102
+      }
+     },
+     "calls": {
+      "n": 404,
+      "winPct": 83.66,
+      "avgPct": -0.41,
+      "avgWinPct": 0.77,
+      "avgLossPct": -6.45,
+      "worstPct": -45.33,
+      "worst": "INTC 2026-03-23→2026-04-17 strike 46.5 (stock 43.94)",
+      "why": {
+       "called": 75,
+       "expired": 329
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 22.91,
+      "perYearPct": 8.16,
+      "worstMonthPct": -7.15,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -8.86,
+      "upMonthsPct": 68.75,
+      "byYearPct": {
+       "2024": 0.68,
+       "2025": 11.92,
+       "2026": 9.08
+      },
+      "avgStocks": 34
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 250,
+       "winPct": 88.8,
+       "avgPct": 0.14,
+       "avgWinPct": 0.7,
+       "avgLossPct": -4.33,
+       "worstPct": -15.45,
+       "worst": "AMD 2024-03-18→2024-04-19 strike 180 (stock 191.05)",
+       "why": {
+        "expired": 219,
+        "assigned": 31
+       }
+      },
+      "2025": {
+       "n": 179,
+       "winPct": 86.03,
+       "avgPct": 0.29,
+       "avgWinPct": 0.88,
+       "avgLossPct": -3.35,
+       "worstPct": -9.43,
+       "worst": "IBM 2025-07-21→2025-08-15 strike 270 (stock 285.91)",
+       "why": {
+        "assigned": 29,
+        "expired": 150
+       }
+      },
+      "2026": {
+       "n": 146,
+       "winPct": 78.08,
+       "avgPct": -0.13,
+       "avgWinPct": 1.29,
+       "avgLossPct": -5.22,
+       "worstPct": -19.59,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 127 (stock 133.8)",
+       "why": {
+        "assigned": 42,
+        "expired": 104
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm5-tp50": {
+     "puts": {
+      "n": 757,
+      "winPct": 91.55,
+      "avgPct": 0,
+      "avgWinPct": 0.57,
+      "avgLossPct": -6.23,
+      "worstPct": -29.84,
+      "worst": "INTC 2024-07-22→2024-08-16 strike 31 (stock 33.01)",
+      "why": {
+       "tp": 691,
+       "assigned": 66
+      }
+     },
+     "calls": {
+      "n": 412,
+      "winPct": 90.29,
+      "avgPct": -0.34,
+      "avgWinPct": 0.45,
+      "avgLossPct": -7.76,
+      "worstPct": -38.66,
+      "worst": "QCOM 2026-04-20→2026-05-15 strike 146 (stock 136.18)",
+      "why": {
+       "tp": 367,
+       "called": 41,
+       "expired": 4
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 17.31,
+      "perYearPct": 6.26,
+      "worstMonthPct": -4.94,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -6.24,
+      "upMonthsPct": 68.75,
+      "byYearPct": {
+       "2024": 1,
+       "2025": 9.6,
+       "2026": 5.97
+      },
+      "avgStocks": 39
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 327,
+       "winPct": 94.8,
+       "avgPct": 0.03,
+       "avgWinPct": 0.42,
+       "avgLossPct": -6.97,
+       "worstPct": -29.84,
+       "worst": "INTC 2024-07-22→2024-08-16 strike 31 (stock 33.01)",
+       "why": {
+        "tp": 309,
+        "assigned": 18
+       }
+      },
+      "2025": {
+       "n": 250,
+       "winPct": 91.2,
+       "avgPct": -0.02,
+       "avgWinPct": 0.58,
+       "avgLossPct": -6.21,
+       "worstPct": -28.02,
+       "worst": "UNH 2025-04-21→2025-05-16 strike 430 (stock 454.17)",
+       "why": {
+        "assigned": 23,
+        "tp": 227
+       }
+      },
+      "2026": {
+       "n": 180,
+       "winPct": 86.11,
+       "avgPct": -0.04,
+       "avgWinPct": 0.87,
+       "avgLossPct": -5.74,
+       "worstPct": -19.59,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 127 (stock 133.8)",
+       "why": {
+        "tp": 155,
+        "assigned": 25
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 17,
+      "winPct": 70.59,
+      "avgPct": -1.62,
+      "avgWinPct": 0.31,
+      "avgLossPct": -6.25,
+      "worstPct": -9.14,
+      "worst": "DIS 2025-03-24→2025-04-17 strike 94 (stock 99.46)",
+      "why": {
+       "tp": 12,
+       "assigned": 5
+      }
+     }
+    },
+    "otm5-tp50-trend": {
+     "puts": {
+      "n": 597,
+      "winPct": 91.79,
+      "avgPct": 0.1,
+      "avgWinPct": 0.58,
+      "avgLossPct": -5.28,
+      "worstPct": -22.87,
+      "worst": "ORCL 2025-10-20→2025-11-21 strike 275 (stock 291.24)",
+      "why": {
+       "tp": 546,
+       "assigned": 51
+      }
+     },
+     "calls": {
+      "n": 312,
+      "winPct": 91.35,
+      "avgPct": -0.11,
+      "avgWinPct": 0.45,
+      "avgLossPct": -6.07,
+      "worstPct": -35.1,
+      "worst": "AMD 2025-09-22→2025-10-17 strike 175 (stock 157.4)",
+      "why": {
+       "tp": 281,
+       "called": 28,
+       "expired": 3
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 22.09,
+      "perYearPct": 7.89,
+      "worstMonthPct": -6.8,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -8.73,
+      "upMonthsPct": 68.75,
+      "byYearPct": {
+       "2024": 1.13,
+       "2025": 9,
+       "2026": 10.75
+      },
+      "avgStocks": 30
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 258,
+       "winPct": 95.35,
+       "avgPct": 0.17,
+       "avgWinPct": 0.4,
+       "avgLossPct": -4.57,
+       "worstPct": -15.45,
+       "worst": "AMD 2024-03-18→2024-04-19 strike 180 (stock 191.05)",
+       "why": {
+        "tp": 245,
+        "assigned": 13
+       }
+      },
+      "2025": {
+       "n": 182,
+       "winPct": 92.86,
+       "avgPct": 0.16,
+       "avgWinPct": 0.58,
+       "avgLossPct": -5.3,
+       "worstPct": -22.87,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 275 (stock 291.24)",
+       "why": {
+        "assigned": 14,
+        "tp": 168
+       }
+      },
+      "2026": {
+       "n": 157,
+       "winPct": 84.71,
+       "avgPct": -0.07,
+       "avgWinPct": 0.93,
+       "avgLossPct": -5.62,
+       "worstPct": -19.59,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 127 (stock 133.8)",
+       "why": {
+        "tp": 133,
+        "assigned": 24
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm5-tp50-stop3x": {
+     "puts": {
+      "n": 1218,
+      "winPct": 81.36,
+      "avgPct": 0.1,
+      "avgWinPct": 0.7,
+      "avgLossPct": -2.52,
+      "worstPct": -13.91,
+      "worst": "NKE 2024-06-24→2024-07-19 strike 92 (stock 97.16)",
+      "why": {
+       "tp": 990,
+       "stop": 224,
+       "assigned": 4
+      }
+     },
+     "calls": {
+      "n": 19,
+      "winPct": 89.47,
+      "avgPct": 0.3,
+      "avgWinPct": 0.73,
+      "avgLossPct": -3.41,
+      "worstPct": -5.28,
+      "worst": "MRK 2026-06-22→2026-07-17 strike 120 (stock 113.9)",
+      "why": {
+       "tp": 17,
+       "called": 2
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 4.42,
+      "perYearPct": 1.66,
+      "worstMonthPct": -1.2,
+      "worstMonth": "2025-03-21",
+      "maxDrawdownPct": -2.83,
+      "upMonthsPct": 65.63,
+      "byYearPct": {
+       "2024": -0.66,
+       "2025": 2.29,
+       "2026": 2.75
+      },
+      "avgStocks": 39
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 380,
+       "winPct": 78.68,
+       "avgPct": -0.06,
+       "avgWinPct": 0.48,
+       "avgLossPct": -2.08,
+       "worstPct": -13.91,
+       "worst": "NKE 2024-06-24→2024-07-19 strike 92 (stock 97.16)",
+       "why": {
+        "tp": 299,
+        "stop": 81
+       }
+      },
+      "2025": {
+       "n": 462,
+       "winPct": 82.9,
+       "avgPct": 0.16,
+       "avgWinPct": 0.7,
+       "avgLossPct": -2.47,
+       "worstPct": -9.83,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 275 (stock 291.24)",
+       "why": {
+        "stop": 79,
+        "tp": 382,
+        "assigned": 1
+       }
+      },
+      "2026": {
+       "n": 376,
+       "winPct": 82.18,
+       "avgPct": 0.19,
+       "avgWinPct": 0.91,
+       "avgLossPct": -3.11,
+       "worstPct": -12.79,
+       "worst": "QCOM 2026-06-22→2026-07-17 strike 212.5 (stock 226.09)",
+       "why": {
+        "tp": 309,
+        "stop": 64,
+        "assigned": 3
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 39,
+      "winPct": 41.03,
+      "avgPct": -0.84,
+      "avgWinPct": 0.32,
+      "avgLossPct": -1.65,
+      "worstPct": -4.82,
+      "worst": "INTC 2025-03-24→2025-04-17 strike 23 (stock 24.25)",
+      "why": {
+       "tp": 16,
+       "stop": 23
+      }
+     }
+    },
+    "otm5-tp50-stop3x-trend": {
+     "puts": {
+      "n": 720,
+      "winPct": 82.36,
+      "avgPct": 0.08,
+      "avgWinPct": 0.62,
+      "avgLossPct": -2.41,
+      "worstPct": -12.79,
+      "worst": "QCOM 2026-06-22→2026-07-17 strike 212.5 (stock 226.09)",
+      "why": {
+       "tp": 592,
+       "stop": 124,
+       "assigned": 4
+      }
+     },
+     "calls": {
+      "n": 19,
+      "winPct": 89.47,
+      "avgPct": 0.3,
+      "avgWinPct": 0.73,
+      "avgLossPct": -3.41,
+      "worstPct": -5.28,
+      "worst": "MRK 2026-06-22→2026-07-17 strike 120 (stock 113.9)",
+      "why": {
+       "tp": 17,
+       "called": 2
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 11.7,
+      "perYearPct": 4.3,
+      "worstMonthPct": -1.27,
+      "worstMonth": "2025-03-21",
+      "maxDrawdownPct": -1.27,
+      "upMonthsPct": 65.63,
+      "byYearPct": {
+       "2024": 0.46,
+       "2025": 1.43,
+       "2026": 9.63
+      },
+      "avgStocks": 23
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 275,
+       "winPct": 80.73,
+       "avgPct": 0.03,
+       "avgWinPct": 0.43,
+       "avgLossPct": -1.66,
+       "worstPct": -9.58,
+       "worst": "AAPL 2024-07-22→2024-08-16 strike 210 (stock 224.44)",
+       "why": {
+        "tp": 222,
+        "stop": 53
+       }
+      },
+      "2025": {
+       "n": 227,
+       "winPct": 84.58,
+       "avgPct": 0.06,
+       "avgWinPct": 0.56,
+       "avgLossPct": -2.7,
+       "worstPct": -9.83,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 275 (stock 291.24)",
+       "why": {
+        "stop": 35,
+        "tp": 191,
+        "assigned": 1
+       }
+      },
+      "2026": {
+       "n": 218,
+       "winPct": 82.11,
+       "avgPct": 0.18,
+       "avgWinPct": 0.91,
+       "avgLossPct": -3.15,
+       "worstPct": -12.79,
+       "worst": "QCOM 2026-06-22→2026-07-17 strike 212.5 (stock 226.09)",
+       "why": {
+        "tp": 179,
+        "stop": 36,
+        "assigned": 3
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm10-hold": {
+     "puts": {
+      "n": 808,
+      "winPct": 94.18,
+      "avgPct": 0.15,
+      "avgWinPct": 0.43,
+      "avgLossPct": -4.43,
+      "worstPct": -20.75,
+      "worst": "ORCL 2025-10-20→2025-11-21 strike 260 (stock 291.24)",
+      "why": {
+       "expired": 754,
+       "assigned": 54
+      }
+     },
+     "calls": {
+      "n": 307,
+      "winPct": 89.25,
+      "avgPct": -0.32,
+      "avgWinPct": 0.53,
+      "avgLossPct": -7.37,
+      "worstPct": -35.1,
+      "worst": "AMD 2025-09-22→2025-10-17 strike 175 (stock 157.4)",
+      "why": {
+       "expired": 268,
+       "called": 39
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 19.88,
+      "perYearPct": 7.14,
+      "worstMonthPct": -4.8,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -5.03,
+      "upMonthsPct": 62.5,
+      "byYearPct": {
+       "2024": 0.46,
+       "2025": 9.84,
+       "2026": 8.63
+      },
+      "avgStocks": 37
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 311,
+       "winPct": 95.5,
+       "avgPct": 0.07,
+       "avgWinPct": 0.28,
+       "avgLossPct": -4.38,
+       "worstPct": -15.71,
+       "worst": "NKE 2024-06-24→2024-07-19 strike 87 (stock 97.16)",
+       "why": {
+        "expired": 293,
+        "assigned": 18
+       }
+      },
+      "2025": {
+       "n": 268,
+       "winPct": 94.78,
+       "avgPct": 0.17,
+       "avgWinPct": 0.43,
+       "avgLossPct": -4.65,
+       "worstPct": -20.75,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 260 (stock 291.24)",
+       "why": {
+        "expired": 252,
+        "assigned": 16
+       }
+      },
+      "2026": {
+       "n": 229,
+       "winPct": 91.7,
+       "avgPct": 0.23,
+       "avgWinPct": 0.64,
+       "avgLossPct": -4.3,
+       "worstPct": -16.81,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 120 (stock 133.8)",
+       "why": {
+        "expired": 209,
+        "assigned": 20
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 23,
+      "winPct": 78.26,
+      "avgPct": -0.88,
+      "avgWinPct": 0.21,
+      "avgLossPct": -4.81,
+      "worstPct": -7.99,
+      "worst": "CVX 2025-03-26→2025-04-17 strike 150 (stock 165.93)",
+      "why": {
+       "expired": 18,
+       "assigned": 5
+      }
+     }
+    },
+    "otm10-hold-trend": {
+     "puts": {
+      "n": 606,
+      "winPct": 93.73,
+      "avgPct": 0.14,
+      "avgWinPct": 0.43,
+      "avgLossPct": -4.25,
+      "worstPct": -20.75,
+      "worst": "ORCL 2025-10-20→2025-11-21 strike 260 (stock 291.24)",
+      "why": {
+       "expired": 563,
+       "assigned": 43
+      }
+     },
+     "calls": {
+      "n": 236,
+      "winPct": 89.83,
+      "avgPct": -0.19,
+      "avgWinPct": 0.58,
+      "avgLossPct": -7.01,
+      "worstPct": -35.1,
+      "worst": "AMD 2025-09-22→2025-10-17 strike 175 (stock 157.4)",
+      "why": {
+       "expired": 206,
+       "called": 30
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 24.07,
+      "perYearPct": 8.55,
+      "worstMonthPct": -10,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -10,
+      "upMonthsPct": 68.75,
+      "byYearPct": {
+       "2024": -0.52,
+       "2025": 7.82,
+       "2026": 15.66
+      },
+      "avgStocks": 28
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 242,
+       "winPct": 95.45,
+       "avgPct": 0.09,
+       "avgWinPct": 0.28,
+       "avgLossPct": -3.73,
+       "worstPct": -12.07,
+       "worst": "AMD 2024-03-18→2024-04-19 strike 170 (stock 191.05)",
+       "why": {
+        "expired": 229,
+        "assigned": 13
+       }
+      },
+      "2025": {
+       "n": 189,
+       "winPct": 95.24,
+       "avgPct": 0.16,
+       "avgWinPct": 0.39,
+       "avgLossPct": -4.56,
+       "worstPct": -20.75,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 260 (stock 291.24)",
+       "why": {
+        "expired": 178,
+        "assigned": 11
+       }
+      },
+      "2026": {
+       "n": 175,
+       "winPct": 89.71,
+       "avgPct": 0.17,
+       "avgWinPct": 0.7,
+       "avgLossPct": -4.41,
+       "worstPct": -16.81,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 120 (stock 133.8)",
+       "why": {
+        "expired": 156,
+        "assigned": 19
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm10-tp50": {
+     "puts": {
+      "n": 938,
+      "winPct": 96.91,
+      "avgPct": 0.06,
+      "avgWinPct": 0.28,
+      "avgLossPct": -6.56,
+      "worstPct": -26.81,
+      "worst": "INTC 2024-07-22→2024-08-16 strike 29 (stock 33.01)",
+      "why": {
+       "tp": 904,
+       "assigned": 29,
+       "expired": 5
+      }
+     },
+     "calls": {
+      "n": 209,
+      "winPct": 93.3,
+      "avgPct": -0.59,
+      "avgWinPct": 0.32,
+      "avgLossPct": -13.31,
+      "worstPct": -36.24,
+      "worst": "QCOM 2026-04-20→2026-05-15 strike 150 (stock 136.18)",
+      "why": {
+       "tp": 193,
+       "called": 16
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 11.02,
+      "perYearPct": 4.06,
+      "worstMonthPct": -2.89,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -3.22,
+      "upMonthsPct": 62.5,
+      "byYearPct": {
+       "2024": 0.63,
+       "2025": 7.75,
+       "2026": 2.39
+      },
+      "avgStocks": 37
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 325,
+       "winPct": 98.15,
+       "avgPct": -0.01,
+       "avgWinPct": 0.18,
+       "avgLossPct": -10.11,
+       "worstPct": -26.81,
+       "worst": "INTC 2024-07-22→2024-08-16 strike 29 (stock 33.01)",
+       "why": {
+        "tp": 318,
+        "assigned": 6,
+        "expired": 1
+       }
+      },
+      "2025": {
+       "n": 352,
+       "winPct": 96.31,
+       "avgPct": 0.09,
+       "avgWinPct": 0.28,
+       "avgLossPct": -4.97,
+       "worstPct": -20.75,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 260 (stock 291.24)",
+       "why": {
+        "tp": 337,
+        "assigned": 13,
+        "expired": 2
+       }
+      },
+      "2026": {
+       "n": 261,
+       "winPct": 96.17,
+       "avgPct": 0.13,
+       "avgWinPct": 0.39,
+       "avgLossPct": -6.49,
+       "worstPct": -16.81,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 120 (stock 133.8)",
+       "why": {
+        "tp": 249,
+        "assigned": 10,
+        "expired": 2
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 31,
+      "winPct": 80.65,
+      "avgPct": -0.87,
+      "avgWinPct": 0.15,
+      "avgLossPct": -5.14,
+      "worstPct": -7.99,
+      "worst": "CVX 2025-03-26→2025-04-17 strike 150 (stock 165.93)",
+      "why": {
+       "tp": 24,
+       "assigned": 6,
+       "expired": 1
+      }
+     }
+    },
+    "otm10-tp50-trend": {
+     "puts": {
+      "n": 636,
+      "winPct": 97.01,
+      "avgPct": 0.09,
+      "avgWinPct": 0.27,
+      "avgLossPct": -5.58,
+      "worstPct": -20.75,
+      "worst": "ORCL 2025-10-20→2025-11-21 strike 260 (stock 291.24)",
+      "why": {
+       "tp": 615,
+       "assigned": 19,
+       "expired": 2
+      }
+     },
+     "calls": {
+      "n": 140,
+      "winPct": 95,
+      "avgPct": -0.28,
+      "avgWinPct": 0.33,
+      "avgLossPct": -11.86,
+      "worstPct": -35.1,
+      "worst": "AMD 2025-09-22→2025-10-17 strike 175 (stock 157.4)",
+      "why": {
+       "tp": 131,
+       "called": 9
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 25.4,
+      "perYearPct": 8.99,
+      "worstMonthPct": -8.92,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -9.03,
+      "upMonthsPct": 62.5,
+      "byYearPct": {
+       "2024": 1.43,
+       "2025": 11.96,
+       "2026": 10.42
+      },
+      "avgStocks": 25
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 243,
+       "winPct": 98.77,
+       "avgPct": 0.1,
+       "avgWinPct": 0.16,
+       "avgLossPct": -4.88,
+       "worstPct": -12.07,
+       "worst": "AMD 2024-03-18→2024-04-19 strike 170 (stock 191.05)",
+       "why": {
+        "tp": 239,
+        "assigned": 3,
+        "expired": 1
+       }
+      },
+      "2025": {
+       "n": 203,
+       "winPct": 96.55,
+       "avgPct": 0.08,
+       "avgWinPct": 0.26,
+       "avgLossPct": -4.82,
+       "worstPct": -20.75,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 260 (stock 291.24)",
+       "why": {
+        "tp": 196,
+        "assigned": 7
+       }
+      },
+      "2026": {
+       "n": 190,
+       "winPct": 95.26,
+       "avgPct": 0.1,
+       "avgWinPct": 0.42,
+       "avgLossPct": -6.41,
+       "worstPct": -16.81,
+       "worst": "INTC 2026-06-22→2026-07-17 strike 120 (stock 133.8)",
+       "why": {
+        "tp": 180,
+        "assigned": 9,
+        "expired": 1
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm10-tp50-stop3x": {
+     "puts": {
+      "n": 1176,
+      "winPct": 84.78,
+      "avgPct": 0.09,
+      "avgWinPct": 0.34,
+      "avgLossPct": -1.28,
+      "worstPct": -10.12,
+      "worst": "NKE 2024-06-24→2024-07-19 strike 87 (stock 97.16)",
+      "why": {
+       "tp": 992,
+       "stop": 179,
+       "expired": 5
+      }
+     },
+     "calls": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 2.84,
+      "perYearPct": 1.07,
+      "worstMonthPct": -0.63,
+      "worstMonth": "2026-07-17",
+      "maxDrawdownPct": -1.12,
+      "upMonthsPct": 65.63,
+      "byYearPct": {
+       "2024": -0.06,
+       "2025": 1.19,
+       "2026": 1.69
+      },
+      "avgStocks": 37
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 350,
+       "winPct": 82.86,
+       "avgPct": -0.01,
+       "avgWinPct": 0.2,
+       "avgLossPct": -1.02,
+       "worstPct": -10.12,
+       "worst": "NKE 2024-06-24→2024-07-19 strike 87 (stock 97.16)",
+       "why": {
+        "tp": 289,
+        "stop": 60,
+        "expired": 1
+       }
+      },
+      "2025": {
+       "n": 449,
+       "winPct": 84.41,
+       "avgPct": 0.1,
+       "avgWinPct": 0.35,
+       "avgLossPct": -1.22,
+       "worstPct": -5.6,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 260 (stock 291.24)",
+       "why": {
+        "tp": 378,
+        "stop": 70,
+        "expired": 1
+       }
+      },
+      "2026": {
+       "n": 377,
+       "winPct": 87,
+       "avgPct": 0.17,
+       "avgWinPct": 0.45,
+       "avgLossPct": -1.7,
+       "worstPct": -9.59,
+       "worst": "QCOM 2026-06-22→2026-07-17 strike 202.5 (stock 226.09)",
+       "why": {
+        "tp": 325,
+        "stop": 49,
+        "expired": 3
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 38,
+      "winPct": 36.84,
+      "avgPct": -0.42,
+      "avgWinPct": 0.17,
+      "avgLossPct": -0.77,
+      "worstPct": -2.52,
+      "worst": "AXP 2025-03-24→2025-04-17 strike 242.5 (stock 270.37)",
+      "why": {
+       "stop": 24,
+       "tp": 14
+      }
+     }
+    },
+    "otm10-tp50-stop3x-trend": {
+     "puts": {
+      "n": 692,
+      "winPct": 86.42,
+      "avgPct": 0.08,
+      "avgWinPct": 0.29,
+      "avgLossPct": -1.24,
+      "worstPct": -9.59,
+      "worst": "QCOM 2026-06-22→2026-07-17 strike 202.5 (stock 226.09)",
+      "why": {
+       "tp": 596,
+       "stop": 94,
+       "expired": 2
+      }
+     },
+     "calls": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 2.53,
+      "perYearPct": 0.96,
+      "worstMonthPct": -0.79,
+      "worstMonth": "2026-07-17",
+      "maxDrawdownPct": -0.79,
+      "upMonthsPct": 68.75,
+      "byYearPct": {
+       "2024": 0.6,
+       "2025": 0.24,
+       "2026": 1.68
+      },
+      "avgStocks": 22
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 250,
+       "winPct": 84.8,
+       "avgPct": 0.05,
+       "avgWinPct": 0.18,
+       "avgLossPct": -0.66,
+       "worstPct": -3.46,
+       "worst": "AMD 2024-03-18→2024-04-19 strike 170 (stock 191.05)",
+       "why": {
+        "tp": 211,
+        "stop": 38,
+        "expired": 1
+       }
+      },
+      "2025": {
+       "n": 221,
+       "winPct": 87.33,
+       "avgPct": 0.02,
+       "avgWinPct": 0.25,
+       "avgLossPct": -1.56,
+       "worstPct": -5.6,
+       "worst": "ORCL 2025-10-20→2025-11-21 strike 260 (stock 291.24)",
+       "why": {
+        "tp": 193,
+        "stop": 28
+       }
+      },
+      "2026": {
+       "n": 221,
+       "winPct": 87.33,
+       "avgPct": 0.18,
+       "avgWinPct": 0.45,
+       "avgLossPct": -1.73,
+       "worstPct": -9.59,
+       "worst": "QCOM 2026-06-22→2026-07-17 strike 202.5 (stock 226.09)",
+       "why": {
+        "tp": 192,
+        "stop": 28,
+        "expired": 1
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    }
+   }
+  },
+  "scan": {
+   "stocks": 60,
+   "symbols": [
+    "NVDA",
+    "MU",
+    "SNDK",
+    "LITE",
+    "STX",
+    "NFLX",
+    "BAC",
+    "WDC",
+    "MRVL",
+    "MDT",
+    "MRNA",
+    "LRCX",
+    "NBIS",
+    "DELL",
+    "BE",
+    "PLTR",
+    "WFC",
+    "CRWV",
+    "NOW",
+    "COHR",
+    "SNOW",
+    "SHOP",
+    "NEE",
+    "HPE",
+    "VRT",
+    "SHEL",
+    "MS",
+    "CRDO",
+    "UBER",
+    "MSTR",
+    "CIEN",
+    "HOOD",
+    "ANET",
+    "VLO",
+    "ALAB",
+    "GLW",
+    "NET",
+    "ABT",
+    "BMY",
+    "TJX",
+    "C",
+    "VST",
+    "PTC",
+    "SLB",
+    "APP",
+    "APH",
+    "HWM",
+    "PSX",
+    "RTX",
+    "ARM",
+    "NTRA",
+    "ILMN",
+    "CLS",
+    "TWLO",
+    "OXY",
+    "TER",
+    "SCHW",
+    "PM",
+    "CVS",
+    "DDOG"
+   ],
+   "variants": {
+    "otm0-hold": {
+     "puts": {
+      "n": 547,
+      "winPct": 75.5,
+      "avgPct": 1.48,
+      "avgWinPct": 3.81,
+      "avgLossPct": -5.71,
+      "worstPct": -34.91,
+      "worst": "CRWV 2025-10-20→2025-11-21 strike 135 (stock 136.75)",
+      "why": {
+       "assigned": 195,
+       "expired": 352
+      }
+     },
+     "calls": {
+      "n": 599,
+      "winPct": 76.13,
+      "avgPct": -1.41,
+      "avgWinPct": 1.7,
+      "avgLossPct": -11.33,
+      "worstPct": -114.89,
+      "worst": "SNDK 2025-08-18→2025-09-19 strike 50 (stock 44.55)",
+      "why": {
+       "called": 179,
+       "expired": 420
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 106.79,
+      "perYearPct": 31.83,
+      "worstMonthPct": -10.54,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -16.08,
+      "upMonthsPct": 81.25,
+      "byYearPct": {
+       "2024": 17.75,
+       "2025": 34.11,
+       "2026": 30.95
+      },
+      "avgStocks": 41
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 263,
+       "winPct": 79.85,
+       "avgPct": 1.94,
+       "avgWinPct": 3.34,
+       "avgLossPct": -3.6,
+       "worstPct": -24.5,
+       "worst": "ARM 2024-03-18→2024-04-19 strike 126 (stock 126.94)",
+       "why": {
+        "assigned": 86,
+        "expired": 177
+       }
+      },
+      "2025": {
+       "n": 203,
+       "winPct": 74.88,
+       "avgPct": 1.26,
+       "avgWinPct": 4.31,
+       "avgLossPct": -7.81,
+       "worstPct": -34.91,
+       "worst": "CRWV 2025-10-20→2025-11-21 strike 135 (stock 136.75)",
+       "why": {
+        "assigned": 73,
+        "expired": 130
+       }
+      },
+      "2026": {
+       "n": 81,
+       "winPct": 62.96,
+       "avgPct": 0.52,
+       "avgWinPct": 4.28,
+       "avgLossPct": -5.89,
+       "worstPct": -16.18,
+       "worst": "SHOP 2026-04-20→2026-05-15 strike 131 (stock 131.13)",
+       "why": {
+        "assigned": 36,
+        "expired": 45
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 6,
+      "winPct": 0,
+      "avgPct": -11.99,
+      "avgWinPct": null,
+      "avgLossPct": -11.99,
+      "worstPct": -34.54,
+      "worst": "SNDK 2025-03-24→2025-04-17 strike 50 (stock 53.96)",
+      "why": {
+       "assigned": 6
+      }
+     }
+    },
+    "otm0-hold-trend": {
+     "puts": {
+      "n": 478,
+      "winPct": 76.57,
+      "avgPct": 1.54,
+      "avgWinPct": 3.5,
+      "avgLossPct": -4.89,
+      "worstPct": -24.57,
+      "worst": "CRWV 2026-06-22→2026-07-17 strike 117 (stock 117.97)",
+      "why": {
+       "assigned": 169,
+       "expired": 309
+      }
+     },
+     "calls": {
+      "n": 509,
+      "winPct": 75.44,
+      "avgPct": -1.07,
+      "avgWinPct": 1.7,
+      "avgLossPct": -9.6,
+      "worstPct": -55.52,
+      "worst": "ALAB 2025-07-21→2025-08-15 strike 115 (stock 102.08)",
+      "why": {
+       "called": 154,
+       "expired": 355
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 108.57,
+      "perYearPct": 32.26,
+      "worstMonthPct": -10.19,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -15.67,
+      "upMonthsPct": 78.13,
+      "byYearPct": {
+       "2024": 17.01,
+       "2025": 38.06,
+       "2026": 29.12
+      },
+      "avgStocks": 35
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 242,
+       "winPct": 80.58,
+       "avgPct": 2.04,
+       "avgWinPct": 3.25,
+       "avgLossPct": -2.99,
+       "worstPct": -10.71,
+       "worst": "MU 2024-06-24→2024-07-19 strike 139 (stock 139.44)",
+       "why": {
+        "assigned": 77,
+        "expired": 165
+       }
+      },
+      "2025": {
+       "n": 173,
+       "winPct": 76.88,
+       "avgPct": 1.43,
+       "avgWinPct": 3.8,
+       "avgLossPct": -6.46,
+       "worstPct": -23.82,
+       "worst": "VRT 2025-01-21→2025-02-21 strike 135 (stock 135.88)",
+       "why": {
+        "assigned": 62,
+        "expired": 111
+       }
+      },
+      "2026": {
+       "n": 63,
+       "winPct": 60.32,
+       "avgPct": -0.1,
+       "avgWinPct": 3.75,
+       "avgLossPct": -5.96,
+       "worstPct": -24.57,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 117 (stock 117.97)",
+       "why": {
+        "assigned": 30,
+        "expired": 33
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm0-tp50": {
+     "puts": {
+      "n": 702,
+      "winPct": 86.04,
+      "avgPct": 0.92,
+      "avgWinPct": 2.27,
+      "avgLossPct": -7.37,
+      "worstPct": -34.91,
+      "worst": "CRWV 2025-10-20→2025-11-21 strike 135 (stock 136.75)",
+      "why": {
+       "tp": 591,
+       "assigned": 111
+      }
+     },
+     "calls": {
+      "n": 485,
+      "winPct": 81.24,
+      "avgPct": -1.41,
+      "avgWinPct": 1.17,
+      "avgLossPct": -12.56,
+      "worstPct": -114.89,
+      "worst": "SNDK 2025-08-18→2025-09-19 strike 50 (stock 44.55)",
+      "why": {
+       "called": 96,
+       "tp": 379,
+       "expired": 10
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 97.29,
+      "perYearPct": 29.49,
+      "worstMonthPct": -11.08,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -16.31,
+      "upMonthsPct": 81.25,
+      "byYearPct": {
+       "2024": 12.86,
+       "2025": 30.59,
+       "2026": 33.86
+      },
+      "avgStocks": 41
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 344,
+       "winPct": 89.53,
+       "avgPct": 1.37,
+       "avgWinPct": 2.11,
+       "avgLossPct": -4.97,
+       "worstPct": -14,
+       "worst": "CVS 2024-04-22→2024-05-17 strike 69 (stock 69.75)",
+       "why": {
+        "tp": 304,
+        "assigned": 40
+       }
+      },
+      "2025": {
+       "n": 235,
+       "winPct": 83.83,
+       "avgPct": 0.38,
+       "avgWinPct": 2.41,
+       "avgLossPct": -10.13,
+       "worstPct": -34.91,
+       "worst": "CRWV 2025-10-20→2025-11-21 strike 135 (stock 136.75)",
+       "why": {
+        "tp": 191,
+        "assigned": 44
+       }
+      },
+      "2026": {
+       "n": 123,
+       "winPct": 80.49,
+       "avgPct": 0.71,
+       "avgWinPct": 2.49,
+       "avgLossPct": -6.63,
+       "worstPct": -21.76,
+       "worst": "HOOD 2026-01-20→2026-02-20 strike 108 (stock 108.77)",
+       "why": {
+        "assigned": 27,
+        "tp": 96
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 12,
+      "winPct": 25,
+      "avgPct": -9.54,
+      "avgWinPct": 0.86,
+      "avgLossPct": -13.01,
+      "worstPct": -34.54,
+      "worst": "SNDK 2025-03-24→2025-04-17 strike 50 (stock 53.96)",
+      "why": {
+       "assigned": 9,
+       "tp": 3
+      }
+     }
+    },
+    "otm0-tp50-trend": {
+     "puts": {
+      "n": 591,
+      "winPct": 86.97,
+      "avgPct": 1.03,
+      "avgWinPct": 2.16,
+      "avgLossPct": -6.47,
+      "worstPct": -27.28,
+      "worst": "ILMN 2025-01-21→2025-02-21 strike 135 (stock 136.55)",
+      "why": {
+       "tp": 503,
+       "assigned": 88
+      }
+     },
+     "calls": {
+      "n": 370,
+      "winPct": 80.54,
+      "avgPct": -1.3,
+      "avgWinPct": 1.1,
+      "avgLossPct": -11.23,
+      "worstPct": -55.52,
+      "worst": "ALAB 2025-07-21→2025-08-15 strike 115 (stock 102.08)",
+      "why": {
+       "called": 75,
+       "tp": 286,
+       "expired": 9
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 94.79,
+      "perYearPct": 28.86,
+      "worstMonthPct": -11.85,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -17.69,
+      "upMonthsPct": 78.13,
+      "byYearPct": {
+       "2024": 13.16,
+       "2025": 30.92,
+       "2026": 31.48
+      },
+      "avgStocks": 33
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 301,
+       "winPct": 89.7,
+       "avgPct": 1.43,
+       "avgWinPct": 2.08,
+       "avgLossPct": -4.25,
+       "worstPct": -10.71,
+       "worst": "MU 2024-06-24→2024-07-19 strike 139 (stock 139.44)",
+       "why": {
+        "tp": 267,
+        "assigned": 34
+       }
+      },
+      "2025": {
+       "n": 208,
+       "winPct": 86.54,
+       "avgPct": 0.85,
+       "avgWinPct": 2.25,
+       "avgLossPct": -8.16,
+       "worstPct": -27.28,
+       "worst": "ILMN 2025-01-21→2025-02-21 strike 135 (stock 136.55)",
+       "why": {
+        "tp": 175,
+        "assigned": 33
+       }
+      },
+      "2026": {
+       "n": 82,
+       "winPct": 78.05,
+       "avgPct": 0.06,
+       "avgWinPct": 2.22,
+       "avgLossPct": -7.65,
+       "worstPct": -24.57,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 117 (stock 117.97)",
+       "why": {
+        "tp": 61,
+        "assigned": 21
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm0-tp50-stop3x": {
+     "puts": {
+      "n": 989,
+      "winPct": 82.2,
+      "avgPct": 0.49,
+      "avgWinPct": 2.36,
+      "avgLossPct": -8.17,
+      "worstPct": -25.29,
+      "worst": "HOOD 2024-07-22→2024-08-16 strike 23 (stock 23.41)",
+      "why": {
+       "tp": 802,
+       "stop": 132,
+       "assigned": 54,
+       "expired": 1
+      }
+     },
+     "calls": {
+      "n": 234,
+      "winPct": 81.62,
+      "avgPct": -1.33,
+      "avgWinPct": 1.05,
+      "avgLossPct": -11.89,
+      "worstPct": -48.53,
+      "worst": "MRVL 2026-03-23→2026-04-17 strike 94 (stock 87.94)",
+      "why": {
+       "tp": 184,
+       "called": 46,
+       "expired": 4
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 45.15,
+      "perYearPct": 15.22,
+      "worstMonthPct": -9.4,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -16.38,
+      "upMonthsPct": 75,
+      "byYearPct": {
+       "2024": 6.23,
+       "2025": 11.69,
+       "2026": 22.34
+      },
+      "avgStocks": 41
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 413,
+       "winPct": 86.2,
+       "avgPct": 0.82,
+       "avgWinPct": 2.06,
+       "avgLossPct": -6.89,
+       "worstPct": -25.29,
+       "worst": "HOOD 2024-07-22→2024-08-16 strike 23 (stock 23.41)",
+       "why": {
+        "tp": 353,
+        "stop": 43,
+        "assigned": 17
+       }
+      },
+      "2025": {
+       "n": 395,
+       "winPct": 79.49,
+       "avgPct": 0.07,
+       "avgWinPct": 2.55,
+       "avgLossPct": -9.51,
+       "worstPct": -24.01,
+       "worst": "CRWV 2025-10-20→2025-11-21 strike 135 (stock 136.75)",
+       "why": {
+        "tp": 308,
+        "stop": 64,
+        "assigned": 22,
+        "expired": 1
+       }
+      },
+      "2026": {
+       "n": 181,
+       "winPct": 79.01,
+       "avgPct": 0.64,
+       "avgWinPct": 2.73,
+       "avgLossPct": -7.22,
+       "worstPct": -24.57,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 117 (stock 117.97)",
+       "why": {
+        "assigned": 15,
+        "stop": 25,
+        "tp": 141
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 32,
+      "winPct": 9.38,
+      "avgPct": -7.11,
+      "avgWinPct": 0.71,
+      "avgLossPct": -7.92,
+      "worstPct": -23.62,
+      "worst": "BE 2025-03-24→2025-04-17 strike 23.5 (stock 23.93)",
+      "why": {
+       "stop": 29,
+       "tp": 3
+      }
+     }
+    },
+    "otm0-tp50-stop3x-trend": {
+     "puts": {
+      "n": 715,
+      "winPct": 84.48,
+      "avgPct": 0.57,
+      "avgWinPct": 2.17,
+      "avgLossPct": -8.15,
+      "worstPct": -25.29,
+      "worst": "HOOD 2024-07-22→2024-08-16 strike 23 (stock 23.41)",
+      "why": {
+       "tp": 596,
+       "stop": 76,
+       "assigned": 43
+      }
+     },
+     "calls": {
+      "n": 189,
+      "winPct": 82.54,
+      "avgPct": -1.19,
+      "avgWinPct": 0.92,
+      "avgLossPct": -11.18,
+      "worstPct": -48.53,
+      "worst": "MRVL 2026-03-23→2026-04-17 strike 94 (stock 87.94)",
+      "why": {
+       "tp": 150,
+       "called": 35,
+       "expired": 4
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 50.17,
+      "perYearPct": 16.72,
+      "worstMonthPct": -13.19,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -20.17,
+      "upMonthsPct": 75,
+      "byYearPct": {
+       "2024": 5.92,
+       "2025": 16.62,
+       "2026": 21.57
+      },
+      "avgStocks": 30
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 345,
+       "winPct": 86.67,
+       "avgPct": 0.87,
+       "avgWinPct": 2.06,
+       "avgLossPct": -6.86,
+       "worstPct": -25.29,
+       "worst": "HOOD 2024-07-22→2024-08-16 strike 23 (stock 23.41)",
+       "why": {
+        "tp": 297,
+        "stop": 34,
+        "assigned": 14
+       }
+      },
+      "2025": {
+       "n": 267,
+       "winPct": 83.9,
+       "avgPct": 0.27,
+       "avgWinPct": 2.25,
+       "avgLossPct": -10.04,
+       "worstPct": -22.95,
+       "worst": "HPE 2025-02-24→2025-03-21 strike 21 (stock 21.15)",
+       "why": {
+        "tp": 220,
+        "stop": 29,
+        "assigned": 18
+       }
+      },
+      "2026": {
+       "n": 103,
+       "winPct": 78.64,
+       "avgPct": 0.33,
+       "avgWinPct": 2.35,
+       "avgLossPct": -7.13,
+       "worstPct": -24.57,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 117 (stock 117.97)",
+       "why": {
+        "tp": 79,
+        "stop": 13,
+        "assigned": 11
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm5-hold": {
+     "puts": {
+      "n": 696,
+      "winPct": 84.91,
+      "avgPct": 0.98,
+      "avgWinPct": 2.19,
+      "avgLossPct": -5.81,
+      "worstPct": -34.54,
+      "worst": "SNDK 2025-03-24→2025-04-17 strike 50 (stock 53.96)",
+      "why": {
+       "assigned": 145,
+       "expired": 551
+      }
+     },
+     "calls": {
+      "n": 481,
+      "winPct": 76.09,
+      "avgPct": -1.37,
+      "avgWinPct": 1.59,
+      "avgLossPct": -10.79,
+      "worstPct": -114.89,
+      "worst": "SNDK 2025-08-18→2025-09-19 strike 50 (stock 44.55)",
+      "why": {
+       "called": 134,
+       "expired": 347
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 100.37,
+      "perYearPct": 30.25,
+      "worstMonthPct": -10.05,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -14.66,
+      "upMonthsPct": 78.13,
+      "byYearPct": {
+       "2024": 14.04,
+       "2025": 31.98,
+       "2026": 33.13
+      },
+      "avgStocks": 41
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 327,
+       "winPct": 90.21,
+       "avgPct": 1.35,
+       "avgWinPct": 1.86,
+       "avgLossPct": -3.3,
+       "worstPct": -22.72,
+       "worst": "ARM 2024-03-18→2024-04-19 strike 120 (stock 126.94)",
+       "why": {
+        "assigned": 52,
+        "expired": 275
+       }
+      },
+      "2025": {
+       "n": 250,
+       "winPct": 82,
+       "avgPct": 0.73,
+       "avgWinPct": 2.57,
+       "avgLossPct": -7.65,
+       "worstPct": -34.54,
+       "worst": "SNDK 2025-03-24→2025-04-17 strike 50 (stock 53.96)",
+       "why": {
+        "expired": 194,
+        "assigned": 56
+       }
+      },
+      "2026": {
+       "n": 119,
+       "winPct": 76.47,
+       "avgPct": 0.49,
+       "avgWinPct": 2.4,
+       "avgLossPct": -5.73,
+       "worstPct": -25.96,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 112 (stock 117.97)",
+       "why": {
+        "expired": 82,
+        "assigned": 37
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 12,
+      "winPct": 33.33,
+      "avgPct": -7.12,
+      "avgWinPct": 0.59,
+      "avgLossPct": -10.97,
+      "worstPct": -34.54,
+      "worst": "SNDK 2025-03-24→2025-04-17 strike 50 (stock 53.96)",
+      "why": {
+       "assigned": 9,
+       "expired": 3
+      }
+     }
+    },
+    "otm5-hold-trend": {
+     "puts": {
+      "n": 604,
+      "winPct": 86.92,
+      "avgPct": 1.15,
+      "avgWinPct": 2.01,
+      "avgLossPct": -4.59,
+      "worstPct": -25.96,
+      "worst": "CRWV 2026-06-22→2026-07-17 strike 112 (stock 117.97)",
+      "why": {
+       "assigned": 113,
+       "expired": 491
+      }
+     },
+     "calls": {
+      "n": 386,
+      "winPct": 76.94,
+      "avgPct": -1.07,
+      "avgWinPct": 1.58,
+      "avgLossPct": -9.9,
+      "worstPct": -55.52,
+      "worst": "ALAB 2025-07-21→2025-08-15 strike 115 (stock 102.08)",
+      "why": {
+       "called": 103,
+       "expired": 283
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 104.41,
+      "perYearPct": 31.25,
+      "worstMonthPct": -10.82,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -15.21,
+      "upMonthsPct": 81.25,
+      "byYearPct": {
+       "2024": 12.82,
+       "2025": 34.35,
+       "2026": 34.86
+      },
+      "avgStocks": 34
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 294,
+       "winPct": 90.82,
+       "avgPct": 1.43,
+       "avgWinPct": 1.82,
+       "avgLossPct": -2.46,
+       "worstPct": -8.36,
+       "worst": "MU 2024-06-24→2024-07-19 strike 132 (stock 139.44)",
+       "why": {
+        "assigned": 44,
+        "expired": 250
+       }
+      },
+      "2025": {
+       "n": 216,
+       "winPct": 86.11,
+       "avgPct": 1.05,
+       "avgWinPct": 2.22,
+       "avgLossPct": -6.18,
+       "worstPct": -21.59,
+       "worst": "VRT 2025-01-21→2025-02-21 strike 129 (stock 135.88)",
+       "why": {
+        "expired": 176,
+        "assigned": 40
+       }
+      },
+      "2026": {
+       "n": 94,
+       "winPct": 76.6,
+       "avgPct": 0.48,
+       "avgWinPct": 2.16,
+       "avgLossPct": -5.01,
+       "worstPct": -25.96,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 112 (stock 117.97)",
+       "why": {
+        "expired": 65,
+        "assigned": 29
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm5-tp50": {
+     "puts": {
+      "n": 830,
+      "winPct": 91.45,
+      "avgPct": 0.65,
+      "avgWinPct": 1.36,
+      "avgLossPct": -6.95,
+      "worstPct": -34.54,
+      "worst": "SNDK 2025-03-24→2025-04-17 strike 50 (stock 53.96)",
+      "why": {
+       "tp": 750,
+       "assigned": 76,
+       "expired": 4
+      }
+     },
+     "calls": {
+      "n": 389,
+      "winPct": 84.58,
+      "avgPct": -1.22,
+      "avgWinPct": 1.06,
+      "avgLossPct": -13.69,
+      "worstPct": -114.89,
+      "worst": "SNDK 2025-08-18→2025-09-19 strike 50 (stock 44.55)",
+      "why": {
+       "tp": 323,
+       "called": 64,
+       "expired": 2
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 86,
+      "perYearPct": 26.62,
+      "worstMonthPct": -10.55,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -14.69,
+      "upMonthsPct": 90.63,
+      "byYearPct": {
+       "2024": 10.25,
+       "2025": 28.26,
+       "2026": 31.53
+      },
+      "avgStocks": 41
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 394,
+       "winPct": 93.65,
+       "avgPct": 0.92,
+       "avgWinPct": 1.18,
+       "avgLossPct": -3,
+       "worstPct": -11.49,
+       "worst": "CVS 2024-04-22→2024-05-17 strike 66 (stock 69.75)",
+       "why": {
+        "tp": 366,
+        "assigned": 26,
+        "expired": 2
+       }
+      },
+      "2025": {
+       "n": 278,
+       "winPct": 88.85,
+       "avgPct": 0.19,
+       "avgWinPct": 1.53,
+       "avgLossPct": -10.46,
+       "worstPct": -34.54,
+       "worst": "SNDK 2025-03-24→2025-04-17 strike 50 (stock 53.96)",
+       "why": {
+        "tp": 242,
+        "assigned": 34,
+        "expired": 2
+       }
+      },
+      "2026": {
+       "n": 158,
+       "winPct": 90.51,
+       "avgPct": 0.78,
+       "avgWinPct": 1.52,
+       "avgLossPct": -6.3,
+       "worstPct": -20.03,
+       "worst": "HOOD 2026-01-20→2026-02-20 strike 103 (stock 108.77)",
+       "why": {
+        "tp": 142,
+        "assigned": 16
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 16,
+      "winPct": 37.5,
+      "avgPct": -7.61,
+      "avgWinPct": 0.37,
+      "avgLossPct": -12.4,
+      "worstPct": -34.54,
+      "worst": "SNDK 2025-03-24→2025-04-17 strike 50 (stock 53.96)",
+      "why": {
+       "assigned": 11,
+       "tp": 5
+      }
+     }
+    },
+    "otm5-tp50-trend": {
+     "puts": {
+      "n": 679,
+      "winPct": 93.23,
+      "avgPct": 0.82,
+      "avgWinPct": 1.29,
+      "avgLossPct": -5.71,
+      "worstPct": -25.96,
+      "worst": "CRWV 2026-06-22→2026-07-17 strike 112 (stock 117.97)",
+      "why": {
+       "tp": 627,
+       "assigned": 49,
+       "expired": 3
+      }
+     },
+     "calls": {
+      "n": 264,
+      "winPct": 85.98,
+      "avgPct": -0.84,
+      "avgWinPct": 0.93,
+      "avgLossPct": -11.71,
+      "worstPct": -55.52,
+      "worst": "ALAB 2025-07-21→2025-08-15 strike 115 (stock 102.08)",
+      "why": {
+       "tp": 223,
+       "called": 40,
+       "expired": 1
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 82.87,
+      "perYearPct": 25.8,
+      "worstMonthPct": -12.1,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -16.55,
+      "upMonthsPct": 84.38,
+      "byYearPct": {
+       "2024": 9.14,
+       "2025": 25.71,
+       "2026": 33.28
+      },
+      "avgStocks": 32
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 336,
+       "winPct": 94.35,
+       "avgPct": 0.98,
+       "avgWinPct": 1.17,
+       "avgLossPct": -2.25,
+       "worstPct": -7.66,
+       "worst": "MU 2024-08-19→2024-09-20 strike 102 (stock 108.01)",
+       "why": {
+        "tp": 314,
+        "assigned": 20,
+        "expired": 2
+       }
+      },
+      "2025": {
+       "n": 238,
+       "winPct": 93.28,
+       "avgPct": 0.76,
+       "avgWinPct": 1.43,
+       "avgLossPct": -8.51,
+       "worstPct": -25.29,
+       "worst": "ILMN 2025-01-21→2025-02-21 strike 130 (stock 136.55)",
+       "why": {
+        "tp": 219,
+        "assigned": 18,
+        "expired": 1
+       }
+      },
+      "2026": {
+       "n": 105,
+       "winPct": 89.52,
+       "avgPct": 0.44,
+       "avgWinPct": 1.39,
+       "avgLossPct": -7.6,
+       "worstPct": -25.96,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 112 (stock 117.97)",
+       "why": {
+        "tp": 94,
+        "assigned": 11
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm5-tp50-stop3x": {
+     "puts": {
+      "n": 1241,
+      "winPct": 82.76,
+      "avgPct": 0.37,
+      "avgWinPct": 1.5,
+      "avgLossPct": -5.01,
+      "worstPct": -25.54,
+      "worst": "WDC 2025-03-25→2025-04-17 strike 42 (stock 44.29)",
+      "why": {
+       "tp": 1019,
+       "stop": 208,
+       "assigned": 9,
+       "expired": 5
+      }
+     },
+     "calls": {
+      "n": 61,
+      "winPct": 88.52,
+      "avgPct": -0.54,
+      "avgWinPct": 1.16,
+      "avgLossPct": -13.64,
+      "worstPct": -26.51,
+      "worst": "PLTR 2025-04-21→2025-05-16 strike 99 (stock 93.73)",
+      "why": {
+       "tp": 53,
+       "called": 8
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 24.09,
+      "perYearPct": 8.55,
+      "worstMonthPct": -4.85,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -9.35,
+      "upMonthsPct": 78.13,
+      "byYearPct": {
+       "2024": 4.96,
+       "2025": 8.53,
+       "2026": 8.94
+      },
+      "avgStocks": 41
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 462,
+       "winPct": 84.85,
+       "avgPct": 0.39,
+       "avgWinPct": 1.21,
+       "avgLossPct": -4.19,
+       "worstPct": -17.1,
+       "worst": "PLTR 2024-07-22→2024-08-16 strike 27 (stock 28.57)",
+       "why": {
+        "tp": 388,
+        "stop": 68,
+        "assigned": 3,
+        "expired": 3
+       }
+      },
+      "2025": {
+       "n": 512,
+       "winPct": 80.08,
+       "avgPct": 0.19,
+       "avgWinPct": 1.67,
+       "avgLossPct": -5.74,
+       "worstPct": -25.54,
+       "worst": "WDC 2025-03-25→2025-04-17 strike 42 (stock 44.29)",
+       "why": {
+        "tp": 407,
+        "stop": 98,
+        "assigned": 5,
+        "expired": 2
+       }
+      },
+      "2026": {
+       "n": 267,
+       "winPct": 84.27,
+       "avgPct": 0.69,
+       "avgWinPct": 1.67,
+       "avgLossPct": -4.61,
+       "worstPct": -19.41,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 112 (stock 117.97)",
+       "why": {
+        "tp": 224,
+        "stop": 42,
+        "assigned": 1
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 46,
+      "winPct": 10.87,
+      "avgPct": -4.19,
+      "avgWinPct": 0.43,
+      "avgLossPct": -4.75,
+      "worstPct": -25.54,
+      "worst": "WDC 2025-03-25→2025-04-17 strike 42 (stock 44.29)",
+      "why": {
+       "stop": 41,
+       "tp": 5
+      }
+     }
+    },
+    "otm5-tp50-stop3x-trend": {
+     "puts": {
+      "n": 801,
+      "winPct": 85.77,
+      "avgPct": 0.42,
+      "avgWinPct": 1.34,
+      "avgLossPct": -5.09,
+      "worstPct": -20.09,
+      "worst": "ALAB 2025-01-21→2025-02-21 strike 125 (stock 133.27)",
+      "why": {
+       "tp": 681,
+       "stop": 110,
+       "assigned": 6,
+       "expired": 4
+      }
+     },
+     "calls": {
+      "n": 46,
+      "winPct": 86.96,
+      "avgPct": -0.98,
+      "avgWinPct": 0.75,
+      "avgLossPct": -12.51,
+      "worstPct": -26.51,
+      "worst": "PLTR 2025-04-21→2025-05-16 strike 99 (stock 93.73)",
+      "why": {
+       "tp": 40,
+       "called": 6
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 39.27,
+      "perYearPct": 13.43,
+      "worstMonthPct": -9.85,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -14.52,
+      "upMonthsPct": 78.13,
+      "byYearPct": {
+       "2024": 4.7,
+       "2025": 20.21,
+       "2026": 10.65
+      },
+      "avgStocks": 26
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 363,
+       "winPct": 86.23,
+       "avgPct": 0.41,
+       "avgWinPct": 1.19,
+       "avgLossPct": -4.49,
+       "worstPct": -17.1,
+       "worst": "PLTR 2024-07-22→2024-08-16 strike 27 (stock 28.57)",
+       "why": {
+        "tp": 309,
+        "stop": 49,
+        "expired": 3,
+        "assigned": 2
+       }
+      },
+      "2025": {
+       "n": 298,
+       "winPct": 85.23,
+       "avgPct": 0.32,
+       "avgWinPct": 1.45,
+       "avgLossPct": -6.18,
+       "worstPct": -20.09,
+       "worst": "ALAB 2025-01-21→2025-02-21 strike 125 (stock 133.27)",
+       "why": {
+        "tp": 252,
+        "stop": 41,
+        "assigned": 4,
+        "expired": 1
+       }
+      },
+      "2026": {
+       "n": 140,
+       "winPct": 85.71,
+       "avgPct": 0.69,
+       "avgWinPct": 1.5,
+       "avgLossPct": -4.2,
+       "worstPct": -19.41,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 112 (stock 117.97)",
+       "why": {
+        "tp": 120,
+        "stop": 20
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm10-hold": {
+     "puts": {
+      "n": 906,
+      "winPct": 92.16,
+      "avgPct": 0.6,
+      "avgWinPct": 1.21,
+      "avgLossPct": -6.58,
+      "worstPct": -33.57,
+      "worst": "CRWV 2025-10-20→2025-11-21 strike 123 (stock 136.75)",
+      "why": {
+       "expired": 815,
+       "assigned": 91
+      }
+     },
+     "calls": {
+      "n": 308,
+      "winPct": 75.97,
+      "avgPct": -1.52,
+      "avgWinPct": 1.42,
+      "avgLossPct": -10.79,
+      "worstPct": -55.52,
+      "worst": "ALAB 2025-07-21→2025-08-15 strike 115 (stock 102.08)",
+      "why": {
+       "expired": 224,
+       "called": 84
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 95.04,
+      "perYearPct": 28.93,
+      "worstMonthPct": -9.01,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -13.5,
+      "upMonthsPct": 87.5,
+      "byYearPct": {
+       "2024": 12.16,
+       "2025": 25.63,
+       "2026": 38.42
+      },
+      "avgStocks": 40
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 391,
+       "winPct": 95.14,
+       "avgPct": 0.75,
+       "avgWinPct": 1.04,
+       "avgLossPct": -4.89,
+       "worstPct": -20.89,
+       "worst": "ARM 2024-03-18→2024-04-19 strike 115 (stock 126.94)",
+       "why": {
+        "expired": 367,
+        "assigned": 24
+       }
+      },
+      "2025": {
+       "n": 348,
+       "winPct": 89.94,
+       "avgPct": 0.34,
+       "avgWinPct": 1.33,
+       "avgLossPct": -8.48,
+       "worstPct": -33.57,
+       "worst": "CRWV 2025-10-20→2025-11-21 strike 123 (stock 136.75)",
+       "why": {
+        "expired": 306,
+        "assigned": 42
+       }
+      },
+      "2026": {
+       "n": 167,
+       "winPct": 89.82,
+       "avgPct": 0.79,
+       "avgWinPct": 1.4,
+       "avgLossPct": -4.53,
+       "worstPct": -22.96,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 106 (stock 117.97)",
+       "why": {
+        "expired": 142,
+        "assigned": 25
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 24,
+      "winPct": 58.33,
+      "avgPct": -3.19,
+      "avgWinPct": 0.45,
+      "avgLossPct": -8.28,
+      "worstPct": -29.49,
+      "worst": "SNDK 2025-03-24→2025-04-17 strike 45 (stock 53.96)",
+      "why": {
+       "assigned": 11,
+       "expired": 13
+      }
+     }
+    },
+    "otm10-hold-trend": {
+     "puts": {
+      "n": 697,
+      "winPct": 93.4,
+      "avgPct": 0.69,
+      "avgWinPct": 1.14,
+      "avgLossPct": -5.67,
+      "worstPct": -23.25,
+      "worst": "VRT 2025-01-22→2025-02-21 strike 128 (stock 143.1)",
+      "why": {
+       "expired": 637,
+       "assigned": 60
+      }
+     },
+     "calls": {
+      "n": 201,
+      "winPct": 77.61,
+      "avgPct": -1.6,
+      "avgWinPct": 1.47,
+      "avgLossPct": -12.27,
+      "worstPct": -55.52,
+      "worst": "ALAB 2025-07-21→2025-08-15 strike 115 (stock 102.08)",
+      "why": {
+       "expired": 147,
+       "called": 54
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 118.9,
+      "perYearPct": 34.71,
+      "worstMonthPct": -14.45,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -19.82,
+      "upMonthsPct": 87.5,
+      "byYearPct": {
+       "2024": 11.63,
+       "2025": 28.82,
+       "2026": 52.22
+      },
+      "avgStocks": 30
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 330,
+       "winPct": 96.06,
+       "avgPct": 0.86,
+       "avgWinPct": 1.06,
+       "avgLossPct": -3.9,
+       "worstPct": -18.11,
+       "worst": "MRNA 2024-07-22→2024-08-16 strike 109 (stock 121.18)",
+       "why": {
+        "expired": 314,
+        "assigned": 16
+       }
+      },
+      "2025": {
+       "n": 264,
+       "winPct": 91.67,
+       "avgPct": 0.46,
+       "avgWinPct": 1.19,
+       "avgLossPct": -7.63,
+       "worstPct": -23.25,
+       "worst": "VRT 2025-01-22→2025-02-21 strike 128 (stock 143.1)",
+       "why": {
+        "expired": 236,
+        "assigned": 28
+       }
+      },
+      "2026": {
+       "n": 103,
+       "winPct": 89.32,
+       "avgPct": 0.74,
+       "avgWinPct": 1.29,
+       "avgLossPct": -3.84,
+       "worstPct": -22.96,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 106 (stock 117.97)",
+       "why": {
+        "expired": 87,
+        "assigned": 16
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm10-tp50": {
+     "puts": {
+      "n": 946,
+      "winPct": 94.61,
+      "avgPct": 0.27,
+      "avgWinPct": 0.73,
+      "avgLossPct": -7.89,
+      "worstPct": -33.57,
+      "worst": "CRWV 2025-10-20→2025-11-21 strike 123 (stock 136.75)",
+      "why": {
+       "tp": 865,
+       "assigned": 52,
+       "expired": 29
+      }
+     },
+     "calls": {
+      "n": 288,
+      "winPct": 85.76,
+      "avgPct": -1.56,
+      "avgWinPct": 1.07,
+      "avgLossPct": -17.38,
+      "worstPct": -114.89,
+      "worst": "SNDK 2025-08-18→2025-09-19 strike 50 (stock 44.55)",
+      "why": {
+       "called": 42,
+       "tp": 242,
+       "expired": 4
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 79.01,
+      "perYearPct": 24.79,
+      "worstMonthPct": -8.55,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -12.21,
+      "upMonthsPct": 81.25,
+      "byYearPct": {
+       "2024": 6.74,
+       "2025": 22.97,
+       "2026": 36.38
+      },
+      "avgStocks": 40
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 431,
+       "winPct": 97.68,
+       "avgPct": 0.53,
+       "avgWinPct": 0.66,
+       "avgLossPct": -5.21,
+       "worstPct": -18.11,
+       "worst": "MRNA 2024-07-22→2024-08-16 strike 109 (stock 121.18)",
+       "why": {
+        "tp": 398,
+        "assigned": 11,
+        "expired": 22
+       }
+      },
+      "2025": {
+       "n": 351,
+       "winPct": 91.45,
+       "avgPct": -0.11,
+       "avgWinPct": 0.81,
+       "avgLossPct": -9.91,
+       "worstPct": -33.57,
+       "worst": "CRWV 2025-10-20→2025-11-21 strike 123 (stock 136.75)",
+       "why": {
+        "tp": 316,
+        "assigned": 30,
+        "expired": 5
+       }
+      },
+      "2026": {
+       "n": 164,
+       "winPct": 93.29,
+       "avgPct": 0.4,
+       "avgWinPct": 0.77,
+       "avgLossPct": -4.81,
+       "worstPct": -17.37,
+       "worst": "HOOD 2026-01-20→2026-02-20 strike 97 (stock 108.77)",
+       "why": {
+        "tp": 151,
+        "assigned": 11,
+        "expired": 2
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 26,
+      "winPct": 57.69,
+      "avgPct": -3.6,
+      "avgWinPct": 0.3,
+      "avgLossPct": -8.91,
+      "worstPct": -29.49,
+      "worst": "SNDK 2025-03-24→2025-04-17 strike 45 (stock 53.96)",
+      "why": {
+       "tp": 15,
+       "assigned": 11
+      }
+     }
+    },
+    "otm10-tp50-trend": {
+     "puts": {
+      "n": 731,
+      "winPct": 96.31,
+      "avgPct": 0.39,
+      "avgWinPct": 0.71,
+      "avgLossPct": -7.98,
+      "worstPct": -23.25,
+      "worst": "VRT 2025-01-22→2025-02-21 strike 128 (stock 143.1)",
+      "why": {
+       "tp": 680,
+       "assigned": 27,
+       "expired": 24
+      }
+     },
+     "calls": {
+      "n": 139,
+      "winPct": 84.89,
+      "avgPct": -1.7,
+      "avgWinPct": 1.05,
+      "avgLossPct": -17.16,
+      "worstPct": -55.52,
+      "worst": "ALAB 2025-07-21→2025-08-15 strike 115 (stock 102.08)",
+      "why": {
+       "called": 21,
+       "tp": 115,
+       "expired": 3
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 86.91,
+      "perYearPct": 26.86,
+      "worstMonthPct": -14.36,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -18.98,
+      "upMonthsPct": 84.38,
+      "byYearPct": {
+       "2024": 6.92,
+       "2025": 20.29,
+       "2026": 45.33
+      },
+      "avgStocks": 29
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 345,
+       "winPct": 98.55,
+       "avgPct": 0.56,
+       "avgWinPct": 0.65,
+       "avgLossPct": -5.69,
+       "worstPct": -18.11,
+       "worst": "MRNA 2024-07-22→2024-08-16 strike 109 (stock 121.18)",
+       "why": {
+        "tp": 322,
+        "assigned": 5,
+        "expired": 18
+       }
+      },
+      "2025": {
+       "n": 273,
+       "winPct": 94.14,
+       "avgPct": 0.21,
+       "avgWinPct": 0.77,
+       "avgLossPct": -8.83,
+       "worstPct": -23.25,
+       "worst": "VRT 2025-01-22→2025-02-21 strike 128 (stock 143.1)",
+       "why": {
+        "tp": 253,
+        "assigned": 16,
+        "expired": 4
+       }
+      },
+      "2026": {
+       "n": 113,
+       "winPct": 94.69,
+       "avgPct": 0.28,
+       "avgWinPct": 0.72,
+       "avgLossPct": -7.62,
+       "worstPct": -22.96,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 106 (stock 117.97)",
+       "why": {
+        "tp": 105,
+        "assigned": 6,
+        "expired": 2
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    },
+    "otm10-tp50-stop3x": {
+     "puts": {
+      "n": 1250,
+      "winPct": 82.72,
+      "avgPct": 0.22,
+      "avgWinPct": 0.91,
+      "avgLossPct": -3.07,
+      "worstPct": -17.67,
+      "worst": "COHR 2025-01-22→2025-02-21 strike 91 (stock 103.24)",
+      "why": {
+       "tp": 1003,
+       "stop": 212,
+       "expired": 31,
+       "assigned": 4
+      }
+     },
+     "calls": {
+      "n": 25,
+      "winPct": 92,
+      "avgPct": 1.21,
+      "avgWinPct": 3.01,
+      "avgLossPct": -19.48,
+      "worstPct": -25.28,
+      "worst": "ALAB 2025-04-21→2025-05-16 strike 75 (stock 59.03)",
+      "why": {
+       "tp": 23,
+       "called": 2
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 16.04,
+      "perYearPct": 5.82,
+      "worstMonthPct": -2.48,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -6.32,
+      "upMonthsPct": 78.13,
+      "byYearPct": {
+       "2024": 2.16,
+       "2025": 5.27,
+       "2026": 7.9
+      },
+      "avgStocks": 40
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 461,
+       "winPct": 84.6,
+       "avgPct": 0.21,
+       "avgWinPct": 0.71,
+       "avgLossPct": -2.49,
+       "worstPct": -9.98,
+       "worst": "CVS 2024-04-22→2024-05-17 strike 62.5 (stock 69.75)",
+       "why": {
+        "tp": 369,
+        "stop": 71,
+        "expired": 21
+       }
+      },
+      "2025": {
+       "n": 523,
+       "winPct": 78.78,
+       "avgPct": 0.1,
+       "avgWinPct": 1.05,
+       "avgLossPct": -3.43,
+       "worstPct": -17.67,
+       "worst": "COHR 2025-01-22→2025-02-21 strike 91 (stock 103.24)",
+       "why": {
+        "tp": 408,
+        "stop": 108,
+        "assigned": 3,
+        "expired": 4
+       }
+      },
+      "2026": {
+       "n": 266,
+       "winPct": 87.22,
+       "avgPct": 0.47,
+       "avgWinPct": 1,
+       "avgLossPct": -3.14,
+       "worstPct": -16.06,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 106 (stock 117.97)",
+       "why": {
+        "tp": 226,
+        "stop": 33,
+        "expired": 6,
+        "assigned": 1
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 45,
+      "winPct": 8.89,
+      "avgPct": -1.64,
+      "avgWinPct": 0.16,
+      "avgLossPct": -1.82,
+      "worstPct": -7.89,
+      "worst": "MRNA 2025-03-24→2025-04-17 strike 29 (stock 32.65)",
+      "why": {
+       "stop": 41,
+       "tp": 4
+      }
+     }
+    },
+    "otm10-tp50-stop3x-trend": {
+     "puts": {
+      "n": 800,
+      "winPct": 85.88,
+      "avgPct": 0.18,
+      "avgWinPct": 0.79,
+      "avgLossPct": -3.55,
+      "worstPct": -17.67,
+      "worst": "COHR 2025-01-22→2025-02-21 strike 91 (stock 103.24)",
+      "why": {
+       "tp": 665,
+       "stop": 110,
+       "expired": 22,
+       "assigned": 3
+      }
+     },
+     "calls": {
+      "n": 6,
+      "winPct": 66.67,
+      "avgPct": -5.83,
+      "avgWinPct": 1,
+      "avgLossPct": -19.48,
+      "worstPct": -25.28,
+      "worst": "ALAB 2025-04-21→2025-05-16 strike 75 (stock 59.03)",
+      "why": {
+       "tp": 4,
+       "called": 2
+      }
+     },
+     "wheel": {
+      "months": 32,
+      "totalPct": 21.03,
+      "perYearPct": 7.53,
+      "worstMonthPct": -15.3,
+      "worstMonth": "2025-04-17",
+      "maxDrawdownPct": -19.34,
+      "upMonthsPct": 78.13,
+      "byYearPct": {
+       "2024": 2.26,
+       "2025": 12.94,
+       "2026": 4.8
+      },
+      "avgStocks": 25
+     },
+     "putsByYear": {
+      "2024": {
+       "n": 353,
+       "winPct": 86.69,
+       "avgPct": 0.22,
+       "avgWinPct": 0.68,
+       "avgLossPct": -2.75,
+       "worstPct": -9.49,
+       "worst": "VRT 2024-07-22→2024-08-16 strike 75 (stock 85.29)",
+       "why": {
+        "tp": 289,
+        "stop": 47,
+        "expired": 17
+       }
+      },
+      "2025": {
+       "n": 309,
+       "winPct": 83.82,
+       "avgPct": -0.04,
+       "avgWinPct": 0.85,
+       "avgLossPct": -4.63,
+       "worstPct": -17.67,
+       "worst": "COHR 2025-01-22→2025-02-21 strike 91 (stock 103.24)",
+       "why": {
+        "tp": 256,
+        "stop": 48,
+        "expired": 3,
+        "assigned": 2
+       }
+      },
+      "2026": {
+       "n": 138,
+       "winPct": 88.41,
+       "avgPct": 0.55,
+       "avgWinPct": 0.95,
+       "avgLossPct": -2.5,
+       "worstPct": -16.06,
+       "worst": "CRWV 2026-06-22→2026-07-17 strike 106 (stock 117.97)",
+       "why": {
+        "tp": 120,
+        "stop": 15,
+        "expired": 2,
+        "assigned": 1
+       }
+      }
+     },
+     "april2025Puts": {
+      "n": 0,
+      "winPct": null,
+      "avgPct": null,
+      "avgWinPct": null,
+      "avgLossPct": null,
+      "worstPct": null,
+      "worst": null,
+      "why": {}
+     }
+    }
+   }
+  }
+ },
+ "bench": {
+  "base": {
+   "holdSameStocks": {
+    "months": 32,
+    "totalPct": 46.76,
+    "perYearPct": 15.71,
+    "worstMonthPct": -7.3,
+    "worstMonth": "2025-04-17",
+    "maxDrawdownPct": -10.83,
+    "upMonthsPct": 71.88,
+    "byYearPct": {
+     "2024": 8.61,
+     "2025": 16.84,
+     "2026": 15.64
+    },
+    "avgStocks": 39
+   },
+   "spy": {
+    "months": 32,
+    "totalPct": 52.8,
+    "perYearPct": 17.5,
+    "worstMonthPct": -6.66,
+    "worstMonth": "2025-04-17",
+    "maxDrawdownPct": -12.26,
+    "upMonthsPct": 75,
+    "byYearPct": {
+     "2024": 18.35,
+     "2025": 15.13,
+     "2026": 12.15
+    },
+    "avgStocks": 1
+   }
+  },
+  "scan": {
+   "holdSameStocks": {
+    "months": 32,
+    "totalPct": 310.55,
+    "perYearPct": 71.11,
+    "worstMonthPct": -12.17,
+    "worstMonth": "2025-04-17",
+    "maxDrawdownPct": -20.68,
+    "upMonthsPct": 71.88,
+    "byYearPct": {
+     "2024": 51.93,
+     "2025": 69.12,
+     "2026": 59.79
+    },
+    "avgStocks": 59
+   },
+   "spy": {
+    "months": 32,
+    "totalPct": 52.8,
+    "perYearPct": 17.5,
+    "worstMonthPct": -6.66,
+    "worstMonth": "2025-04-17",
+    "maxDrawdownPct": -12.26,
+    "upMonthsPct": 75,
+    "byYearPct": {
+     "2024": 18.35,
+     "2025": 15.13,
+     "2026": 12.15
+    },
+    "avgStocks": 1
+   }
+  }
+ },
+ "examples": {
+  "april2025_scan_otm5_tp50_trend": []
+ },
+ "apiCalls": 3009
+}
