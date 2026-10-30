@@ -212,7 +212,7 @@ async function dayTradeCycle(ctx) {
   let placed = 0;
   if (!idle) for (const sg of setups) {
     if (tradesToday + placed >= CFG.dayMaxTrades) break;
-    if (sg.held || skip.has(sg.sym) || positions.some(p => (isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol) === sg.sym) || liveOrders.some(o => (isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol) === sg.sym)) continue;
+    if (sg.held || skip.has(sg.sym) || laneRecent('day:' + sg.sym) || positions.some(p => (isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol) === sg.sym) || liveOrders.some(o => (isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol) === sg.sym)) continue;
     if (CFG.newsGuard && symbolRisk(sg.sym, newsCache.syms)) { act(`${sg.sym} day setup skipped — ${symbolRisk(sg.sym, newsCache.syms)}`); continue; }
     const label = `${sg.sym} day trade: ${sg.setup} ${sg.side === 'long' ? 'long' : 'short'} — ${sg.why}; stop ${sg.stop}, target ${sg.target}`;
     if (sg.side === 'long' && CFG.dayStock && !halt.stock) {
@@ -222,7 +222,7 @@ async function dayTradeCycle(ctx) {
         order_class: 'bracket', take_profit: { limit_price: String(tick(sg.target)) }, stop_loss: { stop_price: String(tick(sg.stop)) },
         client_order_id: encodeDayId('sd-d-', sg.sym, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label + ' · stop and target placed at the broker');
       if (ctx.useSL) ctx.useSL('stock', qty * lim);                            // the next entry this check sees the money as spent
-      placed++; continue;
+      laneSent.set('day:' + sg.sym, Date.now()); placed++; continue;
     }
     if ((sg.side === 'long' && CFG.dayCalls && !halt.call) || (sg.side === 'short' && CFG.dayPuts && !halt.put)) {
       const kind = sg.side === 'long' ? 'call' : 'put', c = await pickDayContract(sg.sym, kind, sg.entry); if (!c) { act(`${sg.sym} ${kind.toUpperCase()}: no liquid contract 1–${CFG.dayOptDteMax} days out — skipped`); continue; }
@@ -231,7 +231,7 @@ async function dayTradeCycle(ctx) {
       await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(c.lim), time_in_force: 'day', client_order_id: encodeDayId(kind === 'put' ? 'sd-dp-' : 'sd-dc-', c.symbol, sg.entry, sg.stop, sg.target, TODAY, MINS, rid()) }, label.replace('day trade:', `day trade ${kind.toUpperCase()}:`));
       dayState[c.symbol] = { stop: sg.stop };
       if (ctx.useSL) ctx.useSL(kind, qty * c.lim * 100);
-      placed++;
+      laneSent.set('day:' + sg.sym, Date.now()); placed++;
     }
   }
   lastDay = { at: new Date().toISOString(), on: CFG.dayTrade, market, spyVwap: bars5.SPY && bars5.SPY.length ? r2d(vwapOf(bars5.SPY)) : null, tradesToday: tradesToday + placed, max: CFG.dayMaxTrades, streak, idle,
@@ -428,8 +428,14 @@ export const scanInfo = () => scanCache.info;
 // parts leave its stocks alone, and none of them ever sells one of its options (a sale would add to a sold option).
 let wheelMem = { opts: {}, shares: {}, done: {} }, lastWheel = null, wheelAt = 0, wheelDaysCache = { day: '', days: [], failAt: 0 };
 const wheelSkip = new Map(), wheelSent = new Map();                         // skip: 'p:SYM' / 'c:SYM' → until when a turned-down stock is left alone
+const wheelNewsCache = new Map();                                           // sym → { at, arts }: wheel candidates are rarely on the RSI-2 watch list, so the shared symbol-news cache does not cover them under a market scan — their headlines are read here (kept 10 minutes)
 // sent: 'p:UND' / 'c:UND' (a sale) or 'b:CONTRACT' (a buy-back) → what went out in the last 90 s (the broker may not list it yet)
 const WHEEL_SENT_MS = 90000, wheelRecent = k => { const x = wheelSent.get(k); return x && Date.now() - x.at < WHEEL_SENT_MS ? x : null; };
+// 'stock:SYM' / 'call:SYM' / 'put:SYM' / 'day:SYM' → when that lane last sent a buy for the stock. The broker may not list
+// an order placed seconds ago, and a moved price then picks a *different* contract — the snapshot guards (positions, open
+// orders, today's history) all miss it, so the same signal would buy twice. For 90 s the lane does not buy that stock
+// again, and the wheel treats it as busy.
+const laneSent = new Map(), laneRecent = k => (laneSent.get(k) || 0) > Date.now() - 90000;
 export const wheelHas = sym => !!(wheelMem.opts[sym] || wheelMem.shares[sym]);
 // What the wheel has set aside: strike × 100 of every sold put and every put sale still working, plus its shares at their price.
 function wheelSetAside(positions, orders) {
@@ -448,6 +454,13 @@ async function wheelDays() {                                               // th
   const cal = await T(`/v2/calendar?start=${ymdDash(Date.now() - 50 * 864e5)}&end=${ymdDash(Date.now() + 80 * 864e5)}`, { timeoutMs: 5000, retries: 0 }).catch(() => null);
   wheelDaysCache = Array.isArray(cal) && cal.length ? { day: TODAY, days: cal.map(x => x.date).filter(Boolean).sort(), failAt: 0 } : { ...wheelDaysCache, failAt: Date.now() };
   return wheelDaysCache.days;
+}
+async function wheelNews(sym) {
+  const c = wheelNewsCache.get(sym); if (c && Date.now() - c.at < 10 * 60000) return c.arts;
+  const j = await D(`/v1beta1/news?symbols=${sym}&limit=10&sort=desc&start=${new Date(Date.now() - 72 * 3600e3).toISOString()}`).catch(() => null);
+  const arts = j && Array.isArray(j.news) ? j.news : null;
+  wheelNewsCache.set(sym, { at: arts ? Date.now() : Date.now() - 8 * 60000, arts: arts || [] });   // a failed read is tried again in 2 minutes
+  return arts || [];
 }
 function wheelEventText(e) {
   const prem = e.prem * 100 * e.qty, n = e.qty * 100, kind = e.kind === 'put' ? 'put' : 'call';
@@ -535,6 +548,7 @@ async function wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, clai
       }
       if (wheelRecent('b:' + sym)) continue;
       wheelSent.set('b:' + sym, { at: Date.now(), sym });
+      forgetBuy(sym);                                                       // a buy-back cancelled at the broker (by hand) must come back now, not after send()'s six-hour guard
       await send({ symbol: sym, qty: String(x.qty), side: 'buy', type: 'limit', limit_price: String(tp), time_in_force: 'gtc', position_intent: 'buy_to_close', client_order_id: wheelId('buy', sym, null, rid()) },
         `Wheel: ${x.und} ${x.kind} ${x.K} take-profit order — buys it back at ${tp} (${100 - CFG.wheelTp}% of the ${x.prem} premium)`).catch(() => {});
     }
@@ -558,6 +572,7 @@ async function wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, clai
       else {
         let slots = CFG.wheelMaxPositions - unds.size, left = free, looked = 0;
         const busy = new Set(positions.map(p => isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol).concat(liveOrders.map(o => isOpt(o.symbol) ? OPT_RE.exec(o.symbol)[1] : o.symbol)));
+        for (const [k, t0] of laneSent) if (t0 > Date.now() - 90000) busy.add(k.slice(k.indexOf(':') + 1));   // a buy another lane sent seconds ago may not be listed yet
         const cands = UNIVERSE.filter(x => x !== 'SPY' && !busy.has(x) && !unds.has(x) && !putsSold.has(x)), px = await latestPrices(cands), bars = CFG.wheelTrend ? await loadBars() : null;   // a put bought back this cycle waits for the next window
         if (slots <= 0) idle = `${unds.size} stocks in the wheel — the most at once`;
         else if (left < CFG.wheelMinPrice * 100) idle = `no money left for a put (${usd0(free)} free of ${usd0(moneyW)})`;
@@ -567,7 +582,7 @@ async function wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, clai
           const p0 = (px[x] || {}).p; if (!(p0 >= CFG.wheelMinPrice && p0 <= CFG.wheelMaxPrice) || p0 * (1 - CFG.wheelOtmPct / 100) * 100 > left) continue;
           if ((wheelSkip.get('p:' + x) || 0) > Date.now()) continue;
           if (bars) { const C = completed(bars, x); if (trendThrough(C.map(b => b.d), C.map(b => b.c), info.windowDays, today).ok !== true) continue; }   // the stock too, before each day of the window so far
-          const risk = CFG.newsGuard ? symbolRisk(x, newsCache.syms) : null; if (risk) { skipW('p:' + x, `${x} — ${risk}`, 60 * 60000); continue; }
+          const risk = CFG.newsGuard ? symbolRisk(x, newsCache.syms) || symbolRisk(x, await wheelNews(x)) : null; if (risk) { skipW('p:' + x, `${x} — ${risk}`, 60 * 60000); continue; }
           looked++;
           const c = await wheelContract(x, 'put', info.expiry, p0); if (!c.ok) { skipW('p:' + x, c.why, c.retry); continue; }
           if (c.K * 100 > left) continue;
@@ -1016,7 +1031,7 @@ async function run() {
   posBySym = Object.fromEntries(positions.map(p => [p.symbol, p]));
   // ---- the wheel's bookkeeping (bot/wheel.mjs): what it holds, and what changed since the last check (expired, assigned, called away) ----
   { const R = wheelReconcile({ mem: wheelMem, positions, hist, today: ymdDash(Date.now()), now: new Date().toISOString() }); wheelMem = R.mem; for (const e of R.events) { const m = wheelEventText(e); act(m); alerts.push('\ud83d\udd01 ' + m); } }
-  const wheelOrderSyms = new Set(hist.concat(openOrders).filter(o => isWheelId(cidOf(o))).map(o => o.symbol));
+  const wheelOrderSyms = new Set(hist.concat(openOrders).filter(o => isWheelId(cidOf(o)) && (String(o.filled_at || o.updated_at || o.submitted_at || '').slice(0, 10) === ymdDash(Date.now()) || ['new', 'accepted', 'partially_filled', 'held', 'pending_new'].includes(o.status))).map(o => o.symbol));   // its working orders and contracts it traded today — an old trade in a contract another part holds now does not make that position the wheel's
   const wheelUnds = new Set([...Object.values(wheelMem.opts).map(x => x.und), ...Object.keys(wheelMem.shares), ...openOrders.filter(o => isWheelSell(cidOf(o))).map(o => (parseOcc(o.symbol) || {}).und).filter(Boolean)]);
   const isWheelPos = sym => wheelHas(sym) || (isOpt(sym) && !posBySym[sym] && wheelOrderSyms.has(sym));   // its sold options and the shares a put delivered; a contract it bought back today (no position left) for today's fills
   const stockPos = positions.filter(p => !isOpt(p.symbol)), optPos = positions.filter(p => isOpt(p.symbol));
@@ -1028,7 +1043,7 @@ async function run() {
     try {
       const since = h => new Date(Date.now() - h * 3600e3).toISOString();
       const mk = (await D(`/v1beta1/news?limit=50&sort=desc&start=${since(3)}`)).news || [];
-      const newsSyms = CFG.universe === 'scan' ? [...new Set((lastWatch ? lastWatch.buy.concat(lastWatch.put) : []).concat(positions.map(p => isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol)))] : UNIVERSE;
+      const newsSyms = CFG.universe === 'scan' ? [...new Set((lastWatch ? lastWatch.buy.concat(lastWatch.put) : []).concat(positions.map(p => isOpt(p.symbol) ? OPT_RE.exec(p.symbol)[1] : p.symbol), lastDay && lastDay.setups ? lastDay.setups.map(x => x.sym) : []))] : UNIVERSE;   // day setups found last check are covered from the next refresh
       const sy = newsSyms.length ? (await D(`/v1beta1/news?symbols=${newsSyms.join(',')}&limit=50&sort=desc&start=${since(72)}`)).news || [] : [];
       newsCache = { at: Date.now(), market: mk, syms: sy, ok: true };
     } catch (e) { newsCache = { ...newsCache, at: Date.now(), ok: false }; act('News feed unavailable (' + e.message.slice(0, 60) + ') \u2014 calendar rules still apply'); }
@@ -1109,10 +1124,14 @@ async function run() {
   // ---- money split: stocks and options each own a share of the stake and have their own daily loss limit ----
   const wheelHeld = equity > 0 ? Math.round(wheelSetAside(positions, openOrders) / equity * 1000) / 10 : 0;   // % of the stake it has set aside now
   const SPLIT = !!CFG.split, KINDS = ['stock', 'call', 'put', 'spy', 'wheel'], spyShare = CFG.spyOn ? CFG.spySharePct : 0, wheelShare = Math.max(CFG.wheelOn ? CFG.wheelSharePct : 0, wheelHeld);   // switched off (or above its share) it keeps what it holds until that is gone
-  const share = { call: CFG.callSharePct, put: CFG.putSharePct, spy: spyShare, wheel: wheelShare, stock: Math.max(0, 100 - CFG.callSharePct - CFG.putSharePct - spyShare - wheelShare) };
+  // When what the wheel holds outgrows the room the other shares leave (its share was cut while a put was open, or equity
+  // fell hard), the stake must still not be promised twice: stocks give way first, then CALLs, PUTs and SPY shrink together,
+  // so the five budgets never add up to more than 100 % of the stake.
+  const base3 = CFG.callSharePct + CFG.putSharePct + spyShare, f3 = SPLIT && base3 > 0 && base3 + wheelShare > 100 ? Math.max(0, 100 - wheelShare) / base3 : 1, r10 = v => Math.round(v * 10) / 10;
+  const share = { call: r10(CFG.callSharePct * f3), put: r10(CFG.putSharePct * f3), spy: r10(spyShare * f3), wheel: wheelShare, stock: Math.max(0, r10(100 - base3 * f3 - wheelShare)) };
   // the SPY sleeve always lives on its own share (even with the split off): it is an experiment and must never spend the others' money
   // (the wheel too: its puts set strikes aside for weeks, so it has no daily loss limit — capPct 100 never stops it)
-  const SIDE = Object.fromEntries(KINDS.map(k => [k, { money: k === 'spy' ? equity * spyShare / 100 : k === 'wheel' ? equity * wheelShare / 100 : SPLIT ? equity * share[k] / 100 : equity, capPct: k === 'spy' ? CFG.spyDayCap : k === 'wheel' ? 100 : !SPLIT ? LOSS_CAP : k === 'stock' ? LOSS_CAP : CFG.optDayCap }]));
+  const SIDE = Object.fromEntries(KINDS.map(k => [k, { money: k === 'spy' ? equity * share.spy / 100 : k === 'wheel' ? equity * wheelShare / 100 : SPLIT ? equity * share[k] / 100 : equity, capPct: k === 'spy' ? CFG.spyDayCap : k === 'wheel' ? 100 : !SPLIT ? LOSS_CAP : k === 'stock' ? LOSS_CAP : CFG.optDayCap }]));
   const sideUsed = k => SL[k].used;
   const slBudget = k => Math.max(0, Math.min(SL[k].per * G.budget, SL[k].cap > 0 ? SL[k].cap - SL[k].used : Infinity, SPLIT ? SIDE[k].money - SL[k].used : Infinity));
   const capNote = k => SPLIT && SIDE[k].money - SL[k].used < SL[k].per ? ` (${NM[k].one} money $${Math.round(SIDE[k].money)}, $${Math.round(SL[k].used)} already in use)`
@@ -1392,6 +1411,7 @@ async function run() {
       await send({ symbol: s.sym, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: floorPx ? 'gtc' : 'day',
         ...(floorPx ? { order_class: 'oto', stop_loss: { stop_price: String(floorPx) } } : {}),
         client_order_id: `sd-r-${s.sym}-${Math.round(s.riskUnit * 100)}-${TODAY}-${rid()}` }, `${s.sym} RSI-2 dip buy (RSI-2 ${s.r2}, above 200-day ${s.s200})${floorPx ? ' · broker stop at ' + floorPx : ''}`);
+      laneSent.set('stock:' + s.sym, Date.now());
       SL.stock.used += qty * lim; heat += add; sectorCount[sectorOf(s.sym)] = (sectorCount[sectorOf(s.sym)] || 0) + 1; slots--;
     }
   }
@@ -1415,7 +1435,7 @@ async function run() {
       if (!(slBudget(kind) >= 1)) { act(`${K}: no money left for a new one today${capNote(kind)}`, 'optmoney:' + kind); break; }
       if (heat >= heatCap) { act(`${K}: total risk is at the ${MAX_HEAT}% cap — no new option trades until it falls`, 'optheat'); break; }
       // a call is skipped once the dip has bounced 1%+; a put once the pop has already fallen 1%+
-      if (!s.px || wheelUnds.has(s.sym) || hasOptOn(s.sym) || (kind === 'call' ? s.px > s.prevClose * 1.01 : s.px < s.prevClose * 0.99) || (CFG.newsGuard && symbolRisk(s.sym, newsCache.syms)) || sectorFull(s.sym)) continue;
+      if (!s.px || wheelUnds.has(s.sym) || hasOptOn(s.sym) || laneRecent(kind + ':' + s.sym) || (kind === 'call' ? s.px > s.prevClose * 1.01 : s.px < s.prevClose * 0.99) || (CFG.newsGuard && symbolRisk(s.sym, newsCache.syms)) || sectorFull(s.sym)) continue;
       if (todays.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym)) continue;
       // a candidate turned down after a broker call (no contract, no quote, spread too wide, over the budget or the risk cap)
       // is looked at again after 10 minutes, not on every check
@@ -1438,6 +1458,7 @@ async function run() {
       if (heat + addO > heatCap) { skip(`${c.symbol} skipped — total risk would exceed ${MAX_HEAT}% of the account`); continue; }
       await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
         client_order_id: `${kind === 'put' ? 'sd-p-' : 'sd-q-'}${c.symbol}-${TODAY}-${qty}-${rid()}` }, kind === 'put' ? `${s.sym} PUT on RSI-2 pop (RSI-2 ${s.r2}, below 200-day ${s.s200})` : `${s.sym} CALL on RSI-2 dip (RSI-2 ${s.r2})`);
+      laneSent.set(kind + ':' + s.sym, Date.now());
       SL[kind].used += qty * lim * 100; heat += addO; sectorCount[sectorOf(s.sym)] = (sectorCount[sectorOf(s.sym)] || 0) + 1; slots--;
     }
   }

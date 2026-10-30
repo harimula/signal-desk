@@ -35,7 +35,9 @@ async function pollConfig() {
   if (cfgBusy || Date.now() - lastCfg < (+process.env.CONFIG_POLL_MS || 60000)) return; lastCfg = Date.now(); cfgBusy = true;
   try {
     const r = await fetch(CONFIG_URL + '?t=' + Date.now(), { cache: 'no-store', signal: AbortSignal.timeout(5000) }); if (!r.ok) return;
-    cfgPending = await r.json();
+    const js = await r.json();
+    if (js && typeof js === 'object' && typeof js.preset === 'string' && Array.isArray(js.symbols)) cfgPending = js;
+    else console.log('config poll: not a settings file (ignored)');     // a GitHub error body or a half-written file must never reset every setting to its default
   } catch (e) { console.log('config poll failed', e.message); }
   finally { cfgBusy = false; }
 }
@@ -263,7 +265,7 @@ while (Date.now() < END && !stopping) {
       resubscribe(); resubscribeOptions();
     } catch (e) { console.log('cycle error', e.message); }
     lastFull = Date.now(); cycling = false;
-  }
+  } else if (why && why !== 'beat') queue.unshift(why);                  // gated by the SPY fast lane or the 250 ms spacing: the reason (a floor, a fill) waits for the next pass instead of being dropped
   if (Date.now() - lastSpyFast >= 1000 && !cycling && !spyBusy && spyHasOpen()) { spyBusy = true; lastSpyFast = Date.now(); spyFast().catch(e => console.log('spy fast lane', e.message)).finally(() => { spyBusy = false; resubscribeOptions(); }); }   // 1-second exits while a SPY trade is open (fallback to the quote stream)
   if (Date.now() - lastPrices >= PRICES_EVERY && !pricesBusy) refreshPrices();
   if (Date.now() - lastTg >= 3000 && !tgBusy) { tgBusy = true; lastTg = Date.now(); tgPollCycle().finally(() => { tgBusy = false; }); }   // Telegram commands, off the decision path

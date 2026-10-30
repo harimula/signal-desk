@@ -622,6 +622,15 @@ test('wheel bookkeeping (review 2): a memory without "seen" (older) measures fro
   const up = W.wheelReconcile({ mem: old, positions: [{ symbol: P, qty: '-1', avg_entry_price: '0.9' }], hist: [putSale], today: '2026-10-30', now: '2026-10-30T15:00:00Z' });
   assert.equal(up.mem.opts[P].seen, '2026-10-19T15:00:00Z');
 });
+test('war words that double as business words need a conflict word next to them (2026-10-30 audit)', () => {
+  assert.deepEqual(classify('Boeing strike escalates as union rejects offer'), []);
+  assert.deepEqual(classify("Short seller's attack on Palantir intensifies"), []);
+  assert.deepEqual(classify('Chip rivalry between Nvidia and AMD escalates'), []);
+  assert.ok(classify('Russia escalates attacks on Kyiv power grid').includes('war'));
+  assert.ok(classify('Attack on Saudi oil tanker closes shipping lane').includes('war'));
+  assert.ok(classify('Israel-Iran conflict escalates after missile barrage').includes('war'));
+  assert.ok(classify('Ceasefire talks collapse').includes('war'), 'a real war word still stands on its own');
+});
 
 console.log('India earnings calendar (earnings-in.mjs)');
 const EI = await import('../earnings-in.mjs');

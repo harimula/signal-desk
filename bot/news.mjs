@@ -11,6 +11,11 @@ export const KEYWORDS = {
   single: ['circuit breaker', 'trading halt', 'halted', 'bankrupt*', 'chapter 11', 'default*', 'delisted'],
 };
 const HIGH = ['war', 'policy', 'crisis'];                      // categories that pause new trades on their own
+// 'escalat*' and 'attack on' also live in everyday business headlines ("Boeing strike escalates", "short seller's attack
+// on Palantir", "chip rivalry escalates") — they paused all new trades for 30 minutes each. They count as war only next
+// to a word that places them in a conflict; the rest of the war list stands on its own.
+const WAR_IF = ['escalat*', 'attack on'];
+export const WAR_CONTEXT = /\b(militar\w*|missile\w*|drone\w*|troops|army|navy|air force|nuclear|iran\w*|israel\w*|gaza|hamas|hezbollah|houthi\w*|russia\w*|ukrain\w*|kyiv|moscow|nato|pentagon|taiwan|north korea\w*|pyongyang|warship\w*|shelling|bombard\w*|airspace|embassy|oil (facilit|field|tanker|pipeline|terminal)\w*|refinery|front line\w*)\b/i;
 // 'single' is deliberately NOT high-impact: one company halting is news for that ticker
 // (symbolRisk skips it), not a reason to stop trading everything else.
 
@@ -28,7 +33,7 @@ export const IDIOMS = /\b(war chests?|war rooms?|bidding wars?|price wars?|strea
 export function classify(text) {
   const t = ' ' + String(text || '').replace(IDIOMS, ' ') + ' ';
   const hits = [];
-  for (const [cat, words] of Object.entries(KEYWORDS)) if (words.some(w => rxFor(w).test(t))) hits.push(cat);
+  for (const [cat, words] of Object.entries(KEYWORDS)) if (words.some(w => rxFor(w).test(t) && (cat !== 'war' || !WAR_IF.includes(w) || WAR_CONTEXT.test(t)))) hits.push(cat);
   return hits;
 }
 
