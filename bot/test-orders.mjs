@@ -56,7 +56,6 @@ if (process.argv[2] === 'child') {
   const tgMsg = (id, chat, text) => ({ update_id: id, message: { chat: { id: chat }, date: Math.floor(FIXED / 1000), text } });
   const tgConfirms = [];
   const tgQueue = [(FAKE.tgBefore || []).map((t, i) => tgMsg(100 + i, t[0], t[1])), (FAKE.tgAfter || []).map((t, i) => tgMsg(200 + i, t[0], t[1]))];
-  const occ = (und, type, px) => und + '261113' + type[0].toUpperCase() + String(Math.round(px) * 1000).padStart(8, '0');
 
   const TRADING_ONLY = /^\/v2\/(account|positions|orders|clock|assets|calendar|options\/contracts)/, DATA_ONLY = /^\/v2\/stocks\/|^\/v1beta1\//;
   const handler = isData => (req, res) => {
@@ -101,7 +100,9 @@ if (process.argv[2] === 'child') {
       if (p === '/v2/options/contracts') {
         contractQs.push(u.search);
         const und = u.searchParams.get('underlying_symbols'), type = u.searchParams.get('type'), px = lastC(und);
-        return send({ option_contracts: [{ symbol: occ(und, type, px), expiration_date: '2026-11-13', strike_price: String(Math.round(px)), tradable: true, type }] });
+        const exp = und === 'SPY' && FAKE.spyExp ? FAKE.spyExp : '2026-11-13';   // same-day-expiry tests pick today's
+        const sym = und + exp.slice(2).split('-').join('') + (type === 'put' ? 'P' : 'C') + String(Math.round(px) * 1000).padStart(8, '0');
+        return send({ option_contracts: [{ symbol: sym, expiration_date: exp, strike_price: String(Math.round(px)), tradable: true, type }] });
       }
       if (p === '/v1beta1/options/quotes/latest') { const out = {}; for (const s of (u.searchParams.get('symbols') || '').split(',')) out[s] = FAKE.quote || { ap: 2.05, bp: 2.0 }; return send({ quotes: out }); }
       unknown.push(req.method + ' ' + p); send({});
@@ -736,6 +737,27 @@ check('wheel: with every close above it, the second day of the window still sell
 // the stop (off by default) buys back puts only, as tested: a covered call that tripled has shares under it that rose
 const W20 = run({ ...WHO, wheelStop: 3 }, { ...WIN, time: '2026-10-28T15:00:00Z', positions: [{ symbol: 'DIP', qty: '100', avg_entry_price: '105', current_price: '121', market_value: '12100', unrealized_pl: '1600', unrealized_plpc: '0.15' }, { symbol: WC, qty: '-1', avg_entry_price: '0.6', current_price: '3.9', market_value: '-390', unrealized_pl: '-330', unrealized_plpc: '-5.5' }], hist: [wSale(WC, '20261019', 0.6)], prevJournal: { at: '2026-10-27T20:00:00Z', mem: { day: '20261027', wheel: { opts: { [WC]: { und: 'DIP', kind: 'call', K: 117.5, exp: '2026-11-20', qty: 1, prem: 0.6, since: '2026-10-19', base: 0 } }, shares: wShares } } } });
 check('wheel: the stop never buys back a covered call at market; it keeps its take-profit order (half the premium)', () => { assert.ok(!W20.orders.some(x => x.symbol === WC && x.type === 'market'), JSON.stringify(W20.orders)); const b = W20.orders.find(x => x.symbol === WC); assert.ok(b && b.side === 'buy' && b.type === 'limit' && b.limit_price === '0.3', JSON.stringify(W20.orders)); });
+
+// ---- SPY same-day expiry (owner, 2026-10-30): spyDte 0 picks today's contract; everything done by 3:20 PM ----
+const spyUpLate = spyUp.map(b => ({ ...b, t: b.t.replace('T13:30', 'T18:50').replace('T13:35', 'T18:55').replace('T13:40', 'T19:00').replace('T13:45', 'T19:05').replace('T13:50', 'T19:10').replace('T13:55', 'T19:15') }));
+const SD1 = run({ ...SO, spyDte: 0 }, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7, spyExp: '2026-10-23' });
+check('SPY expiry 0: the search starts today and the trade buys the contract that expires today', () => {
+  assert.ok(SD1.tickEntry && SD1.tickEntry.ok, JSON.stringify(SD1.tickEntry));
+  assert.match(SD1.tickEntry.placed[0].symbol, /^SPY261023C/, JSON.stringify(SD1.tickEntry.placed));
+  assert.ok(SD1.contractQs.some(q => /underlying_symbols=SPY/.test(q) && /expiration_date_gte=2026-10-23/.test(q)), JSON.stringify(SD1.contractQs.filter(q => /SPY/.test(q))));
+});
+const SD2 = run({ ...SO, spyDte: 0 }, { time: '2026-10-23T19:21:00Z', bars5: { SPY: spyUpLate }, live: { SPY: 502.4 }, tick: 502.7, spyExp: '2026-10-23' });
+check('SPY expiry 0: after 3:20 PM no new same-day trade (the broker takes no orders on it after 3:30)', () => {
+  assert.ok(SD2.tickEntry && SD2.tickEntry.ok === false && !SD2.tickEntry.placed.length, JSON.stringify(SD2.tickEntry));
+  assert.ok(SD2.contractQs.some(q => /underlying_symbols=SPY/.test(q) && /expiration_date_gte=2026-10-23/.test(q)), 'it reached the contract search and the cutoff turned it down: ' + JSON.stringify(SD2.contractQs));
+  assert.ok(SD2.spyWatch && SD2.spyWatch.level === 502.5, JSON.stringify(SD2.spyWatch));
+});
+const sdPos = { symbol: 'SPY261023C00502000', qty: '20', avg_entry_price: '2.05', current_price: '2.05', lastday_price: '2.05', market_value: '4100', unrealized_pl: '0', unrealized_plpc: '0' };
+const SD3 = run(SO, { time: '2026-10-23T19:21:00Z', positions: [sdPos], hist: [{ symbol: sdPos.symbol, side: 'buy', status: 'filled', qty: '20', filled_qty: '20', filled_avg_price: '2.05', limit_price: '2.05', client_order_id: 'sd-yc-SPY261023C00502000-205-20261023-900-q1', filled_at: '2026-10-23T19:00:00Z', submitted_at: '2026-10-23T19:00:00Z' }], bars5: { SPY: spyUpLate }, live: { SPY: 502.4 } });
+check('SPY contract that expires today, still open at 3:21 PM: sold flat at market even though the 60-minute clock has time left', () => {
+  const o = SD3.orders.find(x => x.symbol === sdPos.symbol && x.side === 'sell' && x.type === 'market'); assert.ok(o, JSON.stringify(SD3.orders));
+  assert.ok((SD3.acts || []).some(m => /expires today: flat by 3:20 PM/.test(m)), JSON.stringify((SD3.acts || []).filter(m => /SPY/.test(m)).slice(-4)));
+});
 
 // ---- 2026-10-30 audit: doubled entries across the broker's listing lag, the share floor, hand-cancelled buy-backs, wheel news ----
 // A buy sent seconds ago may not be listed yet; a moved price then picks a different contract. The lane must not buy again.

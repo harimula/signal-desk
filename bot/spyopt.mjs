@@ -6,7 +6,9 @@
 //   Trigger    — the live price breaks the high of the last 3 completed 5-minute bars (CALL) or their low (PUT), and the last
 //                completed bar closed in that direction on at least average volume for the day so far ("armed"). The same
 //                test runs on every streamed tick (bot.mjs spyEnter), on bars read after the last 5-minute mark.
-//   Contract   — nearest-the-money, expiring 1..spyDte days out (default 1 = the next trading day; never same-day), spread ≤ 5%.
+//   Contract   — nearest-the-money, expiring spyDte trading days out (default 1 = the next trading day; 0 = the same day,
+//                allowed since 2026-10-30: fastest time decay, and the broker takes no orders on it after 3:30 PM ET, so
+//                the bot neither buys after 3:20 nor holds past 3:20 — bot.mjs enforces both), spread ≤ 5%.
 //   Exits      — take-profit +spyTp% (resting limit order at the broker), stop −spyStop%, time stop after spyHoldMin minutes,
 //                flat by spyFlat (3:45 PM). Whichever comes first.
 //   Size       — one trade uses spyTradePct % of the sleeve's money (default 100 = all of it), never more than is free.

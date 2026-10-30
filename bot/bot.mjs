@@ -257,7 +257,8 @@ async function spyManage({ open, sellsFor, halt }) {
       catch (err) { spySelling.delete(p.symbol); act('SPY exit failed: ' + String(err.message || err).slice(0, 80)); }
     };
     if (d && d.day8 && d.day8 < TODAY) { await out(`— bought on ${dash8(d.day8)} and still open; SPY quick trades never stay overnight — closing`); continue; }   // the session that should have closed it at 3:45 died
-    const x = spyExit({ entryPx: entry, optPx: +p.current_price, openedMins, mins: MINS, cfg: { ...CFG, spyFlat: CFG.spyFlat - EARLY() } });
+    const x = spyExit({ entryPx: entry, optPx: +p.current_price, openedMins, mins: MINS, cfg: { ...CFG, spyFlat: Math.min(CFG.spyFlat - EARLY(), expiresToday(p.symbol) ? SPY0_CUTOFF : 9999) } });
+    if (x && x.kind === 'flat' && expiresToday(p.symbol) && MINS < CFG.spyFlat - EARLY()) x.why = `\u2014 expires today: flat by 3:20 PM (the broker takes no orders on it after 3:30 PM)`;
     const tpPx = tickUp(entry * (1 + CFG.spyTp / 100), p.symbol);
     if (x && x.kind === 'tp' && sells.some(o => o.type === 'limit' && +o.limit_price <= tpPx + Math.max(0.015, entry * 0.005))) continue;   // the resting take-profit at today's setting (give or take rounding) handles it; one left at an older, higher setting does not make the trade wait (sold at market)
     if (x) { await out(x.why); continue; }
@@ -343,13 +344,18 @@ async function spyPlace(kind, px, why, budget, level) {
 }
 // B14: expiry window in trading days (weekends skipped), so a Thursday or Friday trade still finds a next-session contract
 const addTradingDays = (ms, n) => { let d = new Date(ms); while (n > 0) { d = new Date(d.getTime() + 864e5); const wd = new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay(); if (wd !== 0 && wd !== 6) n--; } return d; };
+// A contract that expires today (spyDte 0): Alpaca takes NO orders on a same-day SPY contract after 3:30 PM ET — neither
+// opening nor closing — so the sleeve neither buys one after 3:20 nor holds one past 3:20 (ten minutes of room to get out).
+const SPY0_CUTOFF = 15 * 60 + 20;
+const expiresToday = sym => { const m = OPT_RE.exec(sym || ''); return !!m && '20' + m[2].slice(0, 2) + '-' + m[2].slice(2, 4) + '-' + m[2].slice(4, 6) === ymdDash(Date.now()); };
 async function spyPlaceInner(kind, px, why, budget, level) {
   // the window reaches one trading day further than spyDte: the earliest expiry in it is taken, so on a normal day nothing
   // changes, and on the day before a market holiday (no expiry on the holiday) the next expiry after it is found
-  const from = addTradingDays(Date.now(), 1), to = addTradingDays(Date.now(), CFG.spyDte + 1);
+  const from = CFG.spyDte > 0 ? addTradingDays(Date.now(), 1) : new Date(), to = addTradingDays(Date.now(), CFG.spyDte + 1);
   const cj = await T(`/v2/options/contracts?underlying_symbols=SPY&type=${kind}&status=active&expiration_date_gte=${ymdDash(+from)}&expiration_date_lte=${ymdDash(+to)}&strike_price_gte=${r2d(px * 0.99)}&strike_price_lte=${r2d(px * 1.01)}&limit=200`).catch(() => ({}));
-  const cs = (cj.option_contracts || []).filter(c => c.tradable !== false); if (!cs.length) { act(`SPY ${kind.toUpperCase()}: no contract 1\u2013${CFG.spyDte + 1} trading days out near ${px} \u2014 skipped`); return null; }
+  const cs = (cj.option_contracts || []).filter(c => c.tradable !== false); if (!cs.length) { act(`SPY ${kind.toUpperCase()}: no contract ${CFG.spyDte > 0 ? 1 : 'today'}\u2013${CFG.spyDte + 1} trading days out near ${px} \u2014 skipped`); return null; }
   const ex = [...new Set(cs.map(c => c.expiration_date))].sort()[0];
+  if (ex === ymdDash(Date.now()) && MINS >= SPY0_CUTOFF) { act(`SPY ${kind.toUpperCase()}: the contract expires today and the broker takes no orders on it after 3:30 PM \u2014 no new trade after 3:20 PM`); return null; }
   const mine = new Set([...(lastSpy && lastSpy.open || []).map(o => o.s), ...spyHeld]);       // a new trade is its own contract: never one already held (by the bot or by hand) or being bought
   const c = cs.filter(x => x.expiration_date === ex && !mine.has(x.symbol)).sort((a, b) => Math.abs(+a.strike_price - px) - Math.abs(+b.strike_price - px))[0];
   if (!c) { act(`SPY ${kind.toUpperCase()}: every nearby contract is already one of its open trades \u2014 skipped`); return null; }
@@ -392,8 +398,9 @@ export async function spyOnQuote(sym, bp, ap) {
   const row = lastSpy.open.find(o => o.s === sym); if (!row || row.pending || spySelling.has(sym)) return;
   const mid = (bp + ap) / 2; setNow();
   row.cur = r2d(mid * 100); row.pl = r2d((mid - row.entry) * 100 * (row.qty || 0)); row.plpc = Math.round((mid / row.entry - 1) * 1000) / 10;
-  const x = spyExit({ entryPx: row.entry, optPx: mid, openedMins: row.opened, mins: MINS, cfg: { ...CFG, spyFlat: CFG.spyFlat - EARLY() } });
+  const x = spyExit({ entryPx: row.entry, optPx: mid, openedMins: row.opened, mins: MINS, cfg: { ...CFG, spyFlat: Math.min(CFG.spyFlat - EARLY(), expiresToday(sym) ? SPY0_CUTOFF : 9999) } });
   if (!x || x.kind === 'tp') return;
+  if (x.kind === 'flat' && expiresToday(sym) && MINS < CFG.spyFlat - EARLY()) x.why = `\u2014 expires today: flat by 3:20 PM (the broker takes no orders on it after 3:30 PM)`;
   spySelling.add(sym); setTimeout(() => spySelling.delete(sym), 60000);
   try {
     const pos = await T('/v2/positions/' + encodeURIComponent(sym), QUICK).catch(e => (e && e.status === 404 ? null : undefined));   // already sold (e.g. the take-profit filled)? then there is nothing to sell

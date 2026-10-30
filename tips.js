@@ -208,7 +208,7 @@
     'spy max trades per day': 'The most SPY quick trades in one day. After that the sleeve waits for tomorrow.',
     'spy losses in a row that end its day': 'After this many losing SPY trades in a row, the sleeve stops for the day. The other parts of the bot carry on.',
     'spy daily loss limit': 'If the SPY sleeve loses this % of its own money in a day, it stops for the day and closes its open trade. Example: $5,000 share, 25% → stops after $1,250 lost.',
-    'spy expiry, max days out': 'How far out the SPY option may expire, in trading days. 1 = the next trading day. Same-day options are never bought: they lose value fastest.',
+    'spy expiry, max days out': 'How far out the SPY option may expire, in trading days. 1 = the next trading day. 0 = the same day: premiums are smaller and lose value fastest, the studies never tested it, and the broker takes no orders on a same-day SPY contract after 3:30 PM — so the bot neither buys one after 3:20 PM nor holds one past it.',
     'spy trades from': 'The SPY sleeve opens trades only from this time (ET). Earlier, the 15-minute levels do not exist yet.',
     'spy trades until': 'No new SPY trades after this time (ET). Anything open is closed by its own exits or by 3:45 PM.',
     'day trades from': 'The day-trade engine opens trades only from this time (ET).',

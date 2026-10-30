@@ -560,6 +560,7 @@ await browser.close(); srv.close();
     ['Entry window closes at', `yours: ${t12(C.entryEnd)}`], ['Day-trade (on/off)', `yours: ${onOff(C.dayTrade)}`],
     ['SPY quick options (on/off)', `yours: ${onOff(C.spyOn)}`], ['SPY take-profit / SPY stop', `yours: +${C.spyTp}% / −${C.spyStop}%`], ['SPY time stop', `yours: ${C.spyHoldMin} min`], ['SPY trades open at once', `yours: ${C.spyMaxOpen}`],
     ['SPY max trades per day · SPY losses in a row · SPY daily loss limit', `yours: ${C.spyMaxTrades} · ${C.spyStreak} · ${C.spyDayCap}%`], ['Trades from / until', `yours: ${t12(C.spyStart)} – ${t12(C.spyEnd)}`],
+    ['SPY expiry, max days out', `yours: ${C.spyDte}`],
     ['Wheel share', `yours: ${W.wheelSharePct}%`], ['The wheel (on/off)', `yours: ${onOff(W.wheelOn)}`], ['Trend filter', `yours: ${onOff(W.wheelTrend)}`], ['Strike distance', `yours: ${W.wheelOtmPct}%`], ['Buy back at', `yours: ${W.wheelTp}%`],
     ['Wheel stop', `yours: ${W.wheelStop > 0 ? W.wheelStop + '×' : 'off'}`], ['Lowest share price / Highest share price', `yours: $${W.wheelMinPrice} / $${W.wheelMaxPrice}`], ['Stocks at once', `yours: ${W.wheelMaxPositions}`],
     ['Scan the whole market / Only my list', `yours: ${C.universe === 'scan' ? 'scan' : 'my list'}`], ['How many stocks to watch', `yours: ${C.scanSize}`], ['Minimum share price', `yours: $${C.scanMinPrice}`], ['Practice (paper) / Real money (live)', `yours: ${C.mode}`],

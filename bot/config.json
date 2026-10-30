@@ -47,7 +47,7 @@
  "spyMaxOpen": 3,
  "spyStreak": 2,
  "spyDayCap": 25,
- "spyDte": 1,
+ "spyDte": 0,
  "spyStart": "09:50",
  "spyEnd": "15:00",
  "wheelOn": true,
@@ -126,8 +126,13 @@
   "F"
  ],
  "version": 1,
+<<<<<<< Updated upstream
  "updatedAt": "2026-10-30T11:07:49.626Z",
  "updatedBy": "settings page",
+=======
+ "updatedAt": "2026-10-30T11:05:00.000Z",
+ "updatedBy": "Claude (SPY same-day expiry, owner request 2026-10-30)",
+>>>>>>> Stashed changes
  "liveConfirm": "",
  "stakeUsd": 0
 }

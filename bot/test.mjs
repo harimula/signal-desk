@@ -370,7 +370,7 @@ test('quick exits: the tighter exit settings are accepted and validated', () => 
 test('leaders first: the setting defaults to leaders and accepts only leaders or dip', () => { assert.equal(normalize({}).pickBy, 'leaders'); assert.equal(normalize({ pickBy: 'dip' }).pickBy, 'dip'); assert.equal(normalize({ pickBy: 'x' }).pickBy, 'leaders'); });
 test('SPY sleeve: settings default to on, 5%, +15/−15, 10 min, 6 trades, 2 losses, 25% day cap, next-day expiry — and are validated', () => {
   const c = normalize({}); assert.deepEqual([c.spyOn, c.spySharePct, c.spyTp, c.spyStop, c.spyHoldMin, c.spyMaxTrades, c.spyStreak, c.spyDayCap, c.spyDte], [true, 5, 15, 15, 10, 6, 2, 25, 1]);
-  const d = normalize({ preset: 'custom', spySharePct: 80, spyDte: 0, spyHoldMin: 1, spyStart: '09:30', spyEnd: '15:59' }); assert.equal(d.spySharePct, 50); assert.equal(d.spyDte, 1, 'never same-day'); assert.equal(d.spyHoldMin, 2); assert.equal(d.spyStart, '09:50'); assert.equal(d.spyEnd, '15:30');
+  const d = normalize({ preset: 'custom', spySharePct: 80, spyDte: 0, spyHoldMin: 1, spyStart: '09:30', spyEnd: '15:59' }); assert.equal(d.spySharePct, 50); assert.equal(d.spyDte, 0, 'same-day allowed since 2026-10-30'); assert.equal(d.spyHoldMin, 2); assert.equal(d.spyStart, '09:50'); assert.equal(d.spyEnd, '15:30');
   const e = normalize({ preset: 'custom', callSharePct: 60, putSharePct: 35, spySharePct: 20 }); assert.equal(e.spySharePct, 5, 'the SPY share is cut so the four shares fit the stake');
 });
 const b5 = (m, o, h, l, c, v = 1e6) => ({ m, o, h, l, c, v });
@@ -630,6 +630,11 @@ test('war words that double as business words need a conflict word next to them 
   assert.ok(classify('Attack on Saudi oil tanker closes shipping lane').includes('war'));
   assert.ok(classify('Israel-Iran conflict escalates after missile barrage').includes('war'));
   assert.ok(classify('Ceasefire talks collapse').includes('war'), 'a real war word still stands on its own');
+});
+test('SPY same-day expiry setting (2026-10-30): 0 allowed and clamped into 0–5', () => {
+  assert.equal(normalize({ preset: 'custom', spyDte: 0 }).spyDte, 0);
+  assert.equal(normalize({ preset: 'custom', spyDte: -1 }).spyDte, 0);
+  assert.equal(normalize({ preset: 'custom', spyDte: 7 }).spyDte, 5);
 });
 
 console.log('India earnings calendar (earnings-in.mjs)');
