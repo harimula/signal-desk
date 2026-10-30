@@ -48,6 +48,7 @@
  "spyStreak": 2,
  "spyDayCap": 25,
  "spyDte": 0,
+ "spyFastFill": true,
  "spyStart": "09:50",
  "spyEnd": "14:00",
  "wheelOn": true,
@@ -128,8 +129,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-10-30T14:55:00.000Z",
- "updatedBy": "Claude (Telegram messages only on fills, owner request 2026-10-30 10:36 AM)",
+ "updatedAt": "2026-10-30T15:10:00.000Z",
+ "updatedBy": "Claude (pay up to get in quickly on SPY entries, owner request 2026-10-30 11:01 AM)",
  "liveConfirm": "",
  "stakeUsd": 0
 }

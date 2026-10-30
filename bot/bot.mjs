@@ -241,6 +241,7 @@ async function dayTradeCycle(ctx) {
 }
 // ---- SPY quick options sleeve (rules in bot/spyopt.mjs) ----
 let spyState = {}, spyCapHit = false;                                   // spyState: per open symbol, the take-profit order placed for which buy { key, at }; spyCapHit: today's SPY money limit was passed (closes what is open)
+const spyRepriced = new Set();                                           // contract+day that already had its one re-offer (spyFastFill)
 const spySelling = new Set();                                            // symbols a lane is selling right now (60 s): the other lanes keep their hands off
 // Exits on the open SPY option: take-profit (resting at the broker), stop, time stop, 3:45 flat, or the sleeve's halt.
 // Called from the full cycle and, while a trade is open, from the 1-second fast lane (spyFast) so a stop reacts within ~1 s.
@@ -309,8 +310,12 @@ async function spyCycle(ctx) {
   const todayIds = hist.filter(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && cid(o).includes('-' + TODAY + '-') && (bought(o) || !['canceled', 'expired', 'rejected'].includes(o.status)));   // a cancelled buy that filled in part still counts
   const tradesToday = todayIds.length;
   // unfilled entries older than 3 minutes have missed their moment; with the sleeve switched off, a working buy goes at once
-  for (const o of liveOrders) if (o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)) && (!CFG.spyOn || Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now()) > 3 * 60000)) {
-    act(`${o.symbol} SPY option buy at ${o.limit_price} ${CFG.spyOn ? 'unfilled for 3 min' : 'still working while SPY quick trades are switched off'} — cancelled`); if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
+  for (const o of liveOrders) {
+    if (o.side !== 'buy' || !/^sd-y[cp]-/.test(cid(o))) continue;
+    const age = Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now());
+    if (!CFG.spyOn || age > 3 * 60000) {
+      act(`${o.symbol} SPY option buy at ${o.limit_price} ${CFG.spyOn ? 'unfilled for 3 min' : 'still working while SPY quick trades are switched off'} — cancelled`); if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
+    } else if (CFG.spyFastFill && age > 45000 && !DRY && !spyRepriced.has(o.symbol + TODAY) && !(expiresToday(o.symbol) && MINS >= SPY0_CUTOFF)) await spyReprice(o, cid(o));
   }
   if (!CFG.spyOn && !open.length) { lastSpy = { at: new Date().toISOString(), on: false, money: 0, used: 0, today: null, halted: null, idle: 'switched off', tradesToday, max: CFG.spyMaxTrades, open: [] }; return; }
   const live = liveOrders.filter(o => !o._cancelled);
@@ -348,6 +353,9 @@ const addTradingDays = (ms, n) => { let d = new Date(ms); while (n > 0) { d = ne
 // opening nor closing — so the sleeve neither buys one after 3:20 nor holds one past 3:20 (ten minutes of room to get out).
 const SPY0_CUTOFF = 15 * 60 + 20;
 const expiresToday = sym => { const m = OPT_RE.exec(sym || ''); return !!m && '20' + m[2].slice(0, 2) + '-' + m[2].slice(2, 4) + '-' + m[2].slice(4, 6) === ymdDash(Date.now()); };
+// The entry's limit price. Plain: the asking price at most (mid + 2%, capped at the ask). "Pay up to get in quickly"
+// (spyFastFill): two price steps OVER the ask, so a one-tick move while the order is in flight cannot make it miss.
+const spyLim = (q, sym) => CFG.spyFastFill ? tickUp(Math.min(q.ap + 2 * tickStep(q.ap, sym), (q.ap + q.bp) / 2 * 1.05), sym) : tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02), sym);
 async function spyPlaceInner(kind, px, why, budget, level) {
   // the window reaches one trading day further than spyDte: the earliest expiry in it is taken, so on a normal day nothing
   // changes, and on the day before a market holiday (no expiry on the holiday) the next expiry after it is found
@@ -362,7 +370,7 @@ async function spyPlaceInner(kind, px, why, budget, level) {
   const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[c.symbol];
   if (!q || !(q.ap > 0) || !(q.bp > 0)) { act(`${c.symbol}: no live quote \u2014 skipped`); return null; }
   if ((q.ap - q.bp) / q.ap > 0.05) { act(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over 5%) \u2014 skipped`); return null; }
-  const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.02), c.symbol), qty = Math.floor(Math.max(0, budget) / (lim * 100));
+  const lim = spyLim(q, c.symbol), qty = Math.floor(Math.max(0, budget) / (lim * 100));
   if (qty < 1) { act(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's SPY money ($${Math.round(budget)}, ${CFG.spyTradePct}% of the SPY share) \u2014 skipped`); return null; }
   const id = encodeSpyId(kind, c.symbol, lim, TODAY, MINS, rid());
   const placedOrder = await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: id },
@@ -372,6 +380,33 @@ async function spyPlaceInner(kind, px, why, budget, level) {
   if (spyLevels.day !== TODAY) spyLevels = { day: TODAY, call: 0, put: 0 }; if (level > 0) spyLevels[kind] = level;   // this break is used up
   if (lastSpy) { lastSpy.idle = 'buy order working'; lastSpy.blocked = true; lastSpy.used = (lastSpy.used || 0) + qty * lim * 100; lastSpy.tradesToday = (lastSpy.tradesToday || 0) + 1; lastSpy.open = (lastSpy.open || []).concat([{ s: c.symbol, id, entry: lim, kind, qty, opened: MINS, avg: r2d(lim * 100), cur: r2d(lim * 100), pl: 0, plpc: 0, tp: r2d(lim * (1 + CFG.spyTp / 100) * 100), stop: r2d(lim * (1 - CFG.spyStop / 100) * 100), pending: true }]); }
   return c.symbol;
+}
+// One polite chase ("Pay up to get in quickly"): an entry still unfilled after 45 seconds is re-offered once at the price
+// now asked (plus the same two-step cushion), never more than 4% over the first offer. A price sprinting harder than that
+// is let go on purpose — chasing it is how you buy the top; the 3-minute rule then bins the order. One re-offer per
+// contract per day; never after the 3:20 PM same-day cutoff; the cancel is confirmed first, so a buy that filled in the
+// same instant is never bought twice.
+async function spyReprice(o, id) {
+  const d = decodeSpyId(id); if (!d) return;
+  const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${o.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[o.symbol];
+  if (!q || !(q.ap > 0) || !(q.bp > 0) || (q.ap - q.bp) / q.ap > 0.05) return;
+  const lim = spyLim(q, o.symbol), first = +o.limit_price || d.entry;
+  if (!(lim > first)) return;                                                                  // the price came back to our offer: the resting order fills on its own
+  if (lim > tick(first * 1.04, o.symbol) + 1e-9) return;                                       // sprinting: let it go (checked again next pass in case it comes back)
+  if (spyRepriced.size > 300) spyRepriced.clear();
+  spyRepriced.add(o.symbol + TODAY);
+  await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
+  const fo = await T('/v2/orders/' + o.id).catch(() => null);                                  // it may have filled in the same instant — then there is nothing to re-offer
+  if (!fo || !['canceled', 'expired'].includes(fo.status)) return;
+  const rem = Math.floor((+(fo.qty ?? o.qty) || 0) - (+(fo.filled_qty ?? o.filled_qty) || 0)); if (rem < 1) return;
+  o._cancelled = true;
+  act(`${o.symbol} SPY option buy at ${o.limit_price} unfilled for 45 s — re-offered at ${lim} (one re-try, never more than 4% over the first offer)`);
+  const nid = encodeSpyId(d.kind, o.symbol, lim, TODAY, MINS, rid());
+  const ok = await send({ symbol: o.symbol, qty: String(rem), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: nid },
+    `SPY ${d.kind.toUpperCase()} quick trade re-offered at ${lim} to catch the fill`);
+  if (!ok) return;
+  spyPendingUntil = Date.now() + 3 * 60000; spyPlacedAt = Date.now();
+  if (lastSpy && lastSpy.open) { const row = lastSpy.open.find(r => r.s === o.symbol && r.pending); if (row) { row.id = nid; row.entry = lim; row.avg = r2d(lim * 100); row.cur = r2d(lim * 100); row.tp = r2d(lim * (1 + CFG.spyTp / 100) * 100); row.stop = r2d(lim * (1 - CFG.spyStop / 100) * 100); } }
 }
 // Tick-driven entry (live.mjs → onTick for SPY): the streamed price crossed the level the last full check was waiting for.
 // Everything else (window, brakes, one-at-a-time) was decided by that check seconds ago and is re-read from lastSpy.

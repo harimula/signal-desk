@@ -82,7 +82,7 @@ if (process.argv[2] === 'child') {
       if (p === '/v2/orders' && req.method === 'DELETE') { deletes.push('all-orders'); return send([]); }
       if (p.startsWith('/v2/positions') && req.method === 'DELETE') { deletes.push('all-positions'); return send([]); }
       if (p.startsWith('/v2/orders/') && req.method === 'DELETE') { deletes.push(p.split('/').pop()); return send(null); }
-      if (p.startsWith('/v2/orders/') && req.method === 'GET') { const id = p.split('/').pop(); return send({ id, status: deletes.includes(id) ? 'canceled' : 'new' }); }   // single order: the bot confirms a cancel went through
+      if (p.startsWith('/v2/orders/') && req.method === 'GET') { const id = p.split('/').pop(), od = (FAKE.open || []).find(x => x.id === id); return send({ ...(od || {}), id, status: deletes.includes(id) ? 'canceled' : (od && od.status) || 'new' }); }   // single order: the bot confirms a cancel went through (a known open order answers with its own quantities)
       if (p.startsWith('/v2/orders/') && req.method === 'PATCH') { patches.push({ id: p.split('/').pop(), ...JSON.parse(body || '{}') }); return send({ id: 'r' + patches.length, status: 'replaced' }); }
       if (p === '/v2/orders' && req.method === 'POST') { const o = JSON.parse(body); orders.push(o); return send({ id: 'o' + orders.length, status: 'accepted', ...o }); }
       if (p === '/v2/orders') return send(u.searchParams.get('status') === 'open' ? (FAKE.open || []) : (FAKE.hist || []));
@@ -790,6 +790,29 @@ const SD3 = run(SO, { time: '2026-10-23T19:21:00Z', positions: [sdPos], hist: [{
 check('SPY contract that expires today, still open at 3:21 PM: sold flat at market even though the 60-minute clock has time left', () => {
   const o = SD3.orders.find(x => x.symbol === sdPos.symbol && x.side === 'sell' && x.type === 'market'); assert.ok(o, JSON.stringify(SD3.orders));
   assert.ok((SD3.acts || []).some(m => /expires today: flat by 3:20 PM/.test(m)), JSON.stringify((SD3.acts || []).filter(m => /SPY/.test(m)).slice(-4)));
+});
+
+// FF — “Pay up to get in quickly” (spyFastFill): the cushion over the ask, the one 45-second re-offer, the 4% cap
+const FFC = { ...SO, spyFastFill: true };
+const FF1 = run(FFC, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7 });
+check('pay up to get in quickly: the entry offers 2 price steps over the ask (quote 2.00/2.05 → 2.07); off, the same entry offers the plain 2.05', () => {
+  assert.ok(FF1.tickEntry && FF1.tickEntry.ok, JSON.stringify(FF1.tickEntry));
+  assert.equal(FF1.tickEntry.placed[0].limit_price, '2.07', JSON.stringify(FF1.tickEntry.placed));
+  assert.equal(SD1.tickEntry.placed[0].limit_price, '2.05', 'without the setting the ask is the most it offers');
+});
+const ffOrd = { id: 'yb9', symbol: 'SPY261113C00502000', side: 'buy', type: 'limit', status: 'new', limit_price: '2.05', qty: '4', filled_qty: '0', client_order_id: 'sd-yc-SPY261113C00502000-205-20261023-595-zz', submitted_at: '2026-10-23T13:58:30Z' };
+const FF2 = run(FFC, { open: [ffOrd], quote: { bp: 2.07, ap: 2.09 } });
+check('pay up: an entry unfilled for 45 s is re-offered once at the new ask plus the cushion (2.05 → 2.11), for the unfilled quantity, after the cancel is confirmed', () => {
+  assert.ok(FF2.deletes.includes('yb9'), JSON.stringify(FF2.deletes));
+  const o = FF2.orders.find(x => x.side === 'buy' && /^sd-yc-SPY261113C00502000/.test(x.client_order_id));
+  assert.ok(o, JSON.stringify(FF2.orders)); assert.equal(o.limit_price, '2.11', JSON.stringify(o)); assert.equal(o.qty, '4');
+  assert.ok((FF2.acts || []).some(m => /re-offered at 2.11/.test(m)), JSON.stringify((FF2.acts || []).filter(m => /SPY/.test(m))));
+});
+const FF3 = run(FFC, { open: [ffOrd], quote: { bp: 2.2, ap: 2.25 } });
+check('pay up: a price sprinting more than 4% over the first offer is let go — no cancel, no chase, the order rests until the 3-minute rule', () => {
+  assert.ok(!FF3.deletes.includes('yb9'), JSON.stringify(FF3.deletes));
+  assert.ok(!FF3.orders.some(x => x.side === 'buy' && /^SPY\d{6}/.test(x.symbol)), JSON.stringify(FF3.orders));
+  assert.ok(!(FF3.acts || []).some(m => /re-offered/.test(m)), JSON.stringify((FF3.acts || []).filter(m => /SPY/.test(m))));
 });
 
 // ---- 2026-10-30 audit: doubled entries across the broker's listing lag, the share floor, hand-cancelled buy-backs, wheel news ----

@@ -18,7 +18,7 @@
 //                sleeve lost today ends the day (bot.mjs applies it like the other money-split parts).
 import { vwap } from './daytrade.mjs';
 
-export const SPY_DEFAULTS = { spyOn: true, spySharePct: 5, spyTradePct: 100, spyTp: 15, spyStop: 15, spyHoldMin: 10, spyMaxTrades: 6, spyMaxOpen: 3, spyStreak: 2, spyDayCap: 25, spyDte: 1, spyStart: '09:50', spyEnd: '15:30', spyFlat: 945 };
+export const SPY_DEFAULTS = { spyOn: true, spySharePct: 5, spyTradePct: 100, spyTp: 15, spyStop: 15, spyHoldMin: 10, spyMaxTrades: 6, spyMaxOpen: 3, spyStreak: 2, spyDayCap: 25, spyDte: 1, spyFastFill: false, spyStart: '09:50', spyEnd: '15:30', spyFlat: 945 };
 
 // Entry signal from completed 5-minute SPY bars (each {o,h,l,c,v,m}) and the live price. mins = minutes past midnight ET.
 export function spySignal({ bars, px, mins, cfg = {} }) {

@@ -373,6 +373,11 @@ test('SPY sleeve: settings default to on, 5%, +15/−15, 10 min, 6 trades, 2 los
   const d = normalize({ preset: 'custom', spySharePct: 80, spyDte: 0, spyHoldMin: 1, spyStart: '09:30', spyEnd: '15:59' }); assert.equal(d.spySharePct, 50); assert.equal(d.spyDte, 0, 'same-day allowed since 2026-10-30'); assert.equal(d.spyHoldMin, 2); assert.equal(d.spyStart, '09:50'); assert.equal(d.spyEnd, '15:30');
   const e = normalize({ preset: 'custom', callSharePct: 60, putSharePct: 35, spySharePct: 20 }); assert.equal(e.spySharePct, 5, 'the SPY share is cut so the four shares fit the stake');
 });
+test('SPY "pay up to get in quickly": off by default (the studies offered the asking price at most); a boolean, kept when set', () => {
+  assert.equal(normalize({}).spyFastFill, false);
+  assert.equal(normalize({ preset: 'custom', spyFastFill: true }).spyFastFill, true);
+  assert.equal(normalize({ preset: 'custom', spyFastFill: 'yes' }).spyFastFill, false, 'only a real true/false is taken');
+});
 const b5 = (m, o, h, l, c, v = 1e6) => ({ m, o, h, l, c, v });
 const up = [b5(570, 500, 501, 499.5, 500.6), b5(575, 500.6, 501.2, 500.4, 501), b5(580, 501, 501.8, 500.9, 501.6), b5(585, 501.6, 502, 501.4, 501.9), b5(590, 501.9, 502.5, 501.8, 502.3, 1.2e6)];
 test('SPY sleeve: a break above the 15-minute high with SPY above VWAP is a CALL signal; no break = waiting; flat on VWAP = nothing', () => {
