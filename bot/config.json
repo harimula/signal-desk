@@ -47,7 +47,7 @@
  "spyMaxOpen": 3,
  "spyStreak": 2,
  "spyDayCap": 25,
- "spyDte": 0,
+ "spyDte": 1,
  "spyStart": "09:50",
  "spyEnd": "15:00",
  "wheelOn": true,
@@ -56,9 +56,9 @@
  "wheelTp": 50,
  "wheelStop": 0,
  "wheelTrend": true,
- "wheelMinPrice": 15,
- "wheelMaxPrice": 150,
- "wheelMaxPositions": 3,
+ "wheelMinPrice": 50,
+ "wheelMaxPrice": 300,
+ "wheelMaxPositions": 1,
  "split": true,
  "callSharePct": 10,
  "putSharePct": 0,
@@ -126,13 +126,8 @@
   "F"
  ],
  "version": 1,
-<<<<<<< Updated upstream
- "updatedAt": "2026-10-30T11:07:49.626Z",
+ "updatedAt": "2026-10-30T11:10:00.198Z",
  "updatedBy": "settings page",
-=======
- "updatedAt": "2026-10-30T11:05:00.000Z",
- "updatedBy": "Claude (SPY same-day expiry, owner request 2026-10-30)",
->>>>>>> Stashed changes
  "liveConfirm": "",
  "stakeUsd": 0
 }
