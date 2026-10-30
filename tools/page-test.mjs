@@ -359,6 +359,37 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
       const t2 = await page.evaluate(() => (document.getElementById('drill') || {}).innerText || '');
       await page.click('#drill [data-drillclose="1"].btn'); await page.waitForTimeout(100);
       check('drill-down: a symbol inside a sheet opens that symbol’s own history; ✕ closes it', /— every trade/.test(t2) && !(await page.$('#drill')), t2.slice(0, 120)); }
+    // column sorting (sort.js, owner 2026-10-30: "I need to have sorting when I click on the name of the column across all the screens
+    // and all the tabs and all the tables"): every heading sorts; numbers/dates biggest first, then the other way, then the page's order;
+    // a background redraw keeps the order without mixing up rows; the choice is remembered; the Stocks board keeps its own sorter
+    { const parse = await page.evaluate(() => { const S = window.SD_SORT; return S ? [S.numOf('−$2,681.28'), S.numOf('+5.66%'), S.numOf('$5.30 received'), S.numOf('₹1.20 cr'), S.numOf('₹45.3 lakh'), S.numOf('$12k'), S.numOf('45 min'), S.numOf('1.5 h'), S.numOf('3.0 days'), S.numOf('10:15 AM'), S.numOf('2:00 PM'), S.numOf('at the high'), S.dateOf('Oct 29, 10:03 AM') < S.dateOf('sold Oct 30, 9:32 AM'), S.dateOf('Fri 30 Oct') === S.dateOf('2026-10-30') - 0 || S.dateOf('Fri 30 Oct') != null, S.dateOf('Market 5'), S.kindOf(['MSTR PUT sold 120 · 11-20', 'NVDA CALL 207.5 · 11-13', 'DVN'])] : null; });
+      check('sorting: cells are read as money (−$2,681.28, +5.66%, ₹1.20 cr, ₹45.3 lakh, $12k), durations, clock times and dates — and words stay words', !!parse && JSON.stringify(parse.slice(0, 12)) === JSON.stringify([-2681.28, 5.66, 5.3, 12000000, 4530000, 12000, 45, 90, 4320, 615, 840, null]) && parse[12] === true && parse[13] === true && parse[14] === null && parse[15] === 'text', JSON.stringify(parse));
+      const unsorted = await page.evaluate(() => [...document.querySelectorAll('main th')].filter(th => th.offsetParent && th.textContent.trim() && !th.closest('#tb') && !th.hasAttribute('data-sdsort')).map(th => th.textContent.trim()));
+      check('sorting: every table heading on Bot trades can be clicked to sort', unsorted.length === 0, unsorted.join(' | '));
+      const read = col => page.evaluate(([c]) => { const t = [...document.querySelectorAll('main table')].find(x => [...x.querySelectorAll('th')].some(th => th.textContent.trim() === 'P/L $') && [...x.querySelectorAll('th')].some(th => th.textContent.trim() === 'Status')); const i = [...t.tHead.rows[0].cells].findIndex(th => th.textContent.trim() === c); return [...t.tBodies[0].rows].map(r => r.innerText.replace(/\s+/g, ' ').trim() + '¦' + r.cells[i].textContent.trim()); }, [col]);
+      const clickH = col => page.evaluate(([c]) => { const t = [...document.querySelectorAll('main table')].find(x => [...x.querySelectorAll('th')].some(th => th.textContent.trim() === 'P/L $') && [...x.querySelectorAll('th')].some(th => th.textContent.trim() === 'Status')); [...t.tHead.rows[0].cells].find(th => th.textContent.trim() === c).click(); }, [col]);
+      const orig = await read('P/L $');
+      const val = async rows => page.evaluate(([xs]) => xs.map(x => window.SD_SORT.numOf(x.split('¦')[1])), [rows]);
+      await clickH('P/L $'); const d1 = await read('P/L $'), v1 = await val(d1);
+      const aria1 = await page.evaluate(() => { const th = [...document.querySelectorAll('main th')].find(x => x.textContent.trim() === 'P/L $' && x.getAttribute('aria-sort') !== 'none'); return th ? th.getAttribute('aria-sort') + th.getAttribute('data-sddir') : ''; });
+      check('sorting: one click on “P/L $” puts the biggest gain first, marked ▼ (descending)', orig.length >= 3 && v1.every((x, i) => i === 0 || x <= v1[i - 1]) && aria1 === 'descending ▼', JSON.stringify(v1) + ' ' + aria1);
+      await clickH('P/L $'); const d2 = await read('P/L $'), v2 = await val(d2);
+      check('sorting: a second click turns it around (biggest loss first)', v2.every((x, i) => i === 0 || x >= v2[i - 1]), JSON.stringify(v2));
+      const saved = await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('sd-sort') || '{}')));
+      check('sorting: the choice is remembered on this device', /P\/L \$/.test(saved) && /"d":1/.test(saved), saved);
+      await page.evaluate(() => window.renderAll(true)); await page.waitForTimeout(150);
+      const d3 = await read('P/L $');
+      check('sorting: a background redraw of the numbers keeps the order, and every row keeps its own figures (nothing mixed up)', JSON.stringify(d3) === JSON.stringify(d2) && [...d3].sort().join('|') === [...orig].sort().join('|'), JSON.stringify(d3.map(r => r.slice(0, 40))));
+      await clickH('P/L $'); const d4 = await read('P/L $');
+      const aria4 = await page.evaluate(() => [...document.querySelectorAll('main th')].filter(x => x.textContent.trim() === 'P/L $').map(x => x.getAttribute('aria-sort')).join(','));
+      check('sorting: a third click puts the table back in the page’s own order, without the arrow', JSON.stringify(d4) === JSON.stringify(orig) && !/descending|ascending/.test(aria4), JSON.stringify(d4.map(r => r.slice(0, 30))) + ' vs ' + JSON.stringify(orig.map(r => r.slice(0, 30))));
+      await clickH('What'); const w1 = (await read('What')).map(r => r.split('¦')[1]);
+      check('sorting: words sort A→Z on the first click', w1.every((x, i) => i === 0 || x.localeCompare(w1[i - 1], undefined, { numeric: true, sensitivity: 'base' }) >= 0), JSON.stringify(w1));
+      await clickH('What'); await clickH('What');
+      await page.evaluate(() => { const th = [...document.querySelectorAll('main th')].find(x => x.textContent.trim() === 'Bought' && x.closest('table').querySelector('th') && [...x.closest('table').querySelectorAll('th')].some(y => y.textContent.trim() === 'Status')); th.focus(); });
+      await page.keyboard.press('Enter'); const b1 = await page.evaluate(() => { const t = [...document.querySelectorAll('main table')].find(x => [...x.querySelectorAll('th')].some(th => th.textContent.trim() === 'Status') && [...x.querySelectorAll('th')].some(th => th.textContent.trim() === 'P/L $')); const i = [...t.tHead.rows[0].cells].findIndex(th => th.textContent.trim() === 'Bought'); return [...t.tBodies[0].rows].map(r => window.SD_SORT.dateOf(r.cells[i].textContent.trim())); });
+      check('sorting: by keyboard too (Enter on a heading) — “Bought” sorts newest first', b1.filter(x => x != null).every((x, i, a) => i === 0 || x <= a[i - 1]) && b1.some(x => x != null), JSON.stringify(b1));
+      await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); }
     // the results row (owner, 2026-10-29): won and lost trades and where the bot stands, in dollars and % of the account before
     // its trades (equity $100,000 − closed +$260 − open +$348.80 = $99,391.20); the day card names the journal's session
     { const res = await page.evaluate(() => [...document.querySelectorAll('.lv.lvres > div')].map(d => d.innerText.replace(/\s+/g, ' ').trim()));
@@ -533,6 +564,19 @@ journalFixture = null;
   check('earnings: no script errors and no Content-Security-Policy violations', errors.length === 0 && csp.length === 0, errors.concat(csp).join(' | '));
   await page.close();
 }
+// sorting on the calculators and the docs pages (sort.js loads there too)
+  { const pg = await browser.newPage({ viewport: { width: 1280, height: 900 } }); const errs = []; pg.on('pageerror', e => errs.push(e.message.slice(0, 160)));
+    const res = [];
+    for (const f of ['retire.html', 'rentemi.html', 'docs/index.html', 'docs/settings.html']) {
+      await pg.goto(base + f, { waitUntil: 'load' }); await pg.waitForTimeout(400);
+      res.push(await pg.evaluate(f2 => { const hr = t => t.tHead && t.tHead.rows.length ? t.tHead.rows[t.tHead.rows.length - 1] : t.rows[0]; const ths = [...document.querySelectorAll('th')].filter(th => th.offsetParent && th.textContent.trim() && th.parentElement === hr(th.closest('table'))); const tables = new Set(ths.map(th => th.closest('table'))); return f2 + ': ' + ths.filter(th => th.hasAttribute('data-sdsort')).length + '/' + ths.length + ' headings in ' + tables.size + ' tables'; }, f));
+    }
+    const ok = res.every(r => { const m = / (\d+)\/(\d+) headings/.exec(r); return m && +m[2] > 0 && m[1] === m[2]; });
+    check('sorting: the calculators and the docs pages sort their tables too (every heading clickable)', ok && !errs.length, res.join(' · ') + ' ' + errs.join(' | '));
+    await pg.goto(base + 'docs/index.html', { waitUntil: 'load' }); await pg.waitForTimeout(300);
+    const cl = await pg.evaluate(() => { const t = [...document.querySelectorAll('table')].find(x => /^Date$/i.test((x.querySelector('th') || {}).textContent || '')); if (!t) return null; const th = t.querySelector('th'); const before = [...t.querySelectorAll('tbody tr, tr')].filter(r => r.cells[0] && r.cells[0].tagName === 'TD').map(r => r.cells[0].textContent.trim()); th.click(); th.click(); const after = [...t.querySelectorAll('tr')].filter(r => r.cells[0] && r.cells[0].tagName === 'TD').map(r => r.cells[0].textContent.trim()); return { n: before.length, asc: after.every((x, i) => i === 0 || x >= after[i - 1]) }; });
+    check('sorting: the docs change log sorts by date (oldest first after two clicks)', !!cl && cl.n > 10 && cl.asc, JSON.stringify(cl));
+    await pg.close(); }
 await browser.close(); srv.close();
 // 5. documentation pages: a way back to the app, opened in the same window (the site runs as a home-screen app)
 {

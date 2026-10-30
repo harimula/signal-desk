@@ -10,6 +10,7 @@ export default [
     },
   },
   { files: ['tools/page-test.mjs'], languageOptions: { globals: { document: 'readonly', window: 'readonly', localStorage: 'readonly', Event: 'readonly' } } },
+  { files: ['sort.js'], languageOptions: { sourceType: 'script', globals: { document: 'readonly', window: 'readonly', localStorage: 'readonly', location: 'readonly', MutationObserver: 'readonly' } } },
   { files: ['tips.js'], languageOptions: { sourceType: 'script', globals: { document: 'readonly', window: 'readonly', requestAnimationFrame: 'readonly', MutationObserver: 'readonly', addEventListener: 'readonly', innerWidth: 'readonly' } } },
   { files: ['worker.js'], languageOptions: { globals: { Response: 'readonly', fetch: 'readonly', URL: 'readonly' } } },
 ];

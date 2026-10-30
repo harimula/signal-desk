@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-oGaStJWabRYbmJN3xf09gHCHtxE2MGW4gvuOmi2pOH4=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-r9VXeL6fnj6lR+K852EaeZcU2I9LqatueX4LPFtKeO4=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -330,6 +330,7 @@ tr.ernbig td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 </style>
 <script src="tips.js" defer></script>
+<script src="sort.js" defer></script>
 </head>
 <body>
 <div class="wrap">
@@ -999,7 +1000,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793372959';
+const BUILD_V = '1793374699';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2154,7 +2155,7 @@ function renderAppBar() {
 }
 function morphEl(t, f) {
   for (const at of Array.from(t.attributes)) { if (at.name === 'open') continue; if (f.getAttribute(at.name) !== at.value) f.setAttribute(at.name, at.value); }
-  for (const at of Array.from(f.attributes)) { if (at.name === 'open' || at.name.startsWith('data-tip') || at.name === 'aria-describedby') continue; if (!t.hasAttribute(at.name)) f.removeAttribute(at.name); }   // hover help (tips.js) lives on top of the redraw
+  for (const at of Array.from(f.attributes)) { if (at.name === 'open' || at.name.startsWith('data-tip') || at.name === 'aria-describedby' || at.name.startsWith('data-sd') || (f.tagName === 'TH' && (at.name === 'aria-sort' || at.name === 'tabindex'))) continue; if (!t.hasAttribute(at.name)) f.removeAttribute(at.name); }   // hover help (tips.js) and column sorting (sort.js) live on top of the redraw
   morphKids(t, f);
 }
 function morphKids(t, f) {
@@ -2184,7 +2185,7 @@ function morphKids(t, f) {
   }
   while (f.childNodes.length > tc.length) f.removeChild(f.lastChild);
 }
-function morphSet(el, html) { const tpl = document.createElement('template'); tpl.innerHTML = html; morphKids(tpl.content, el); }
+function morphSet(el, html) { const tpl = document.createElement('template'); tpl.innerHTML = html; const S = window.SD_SORT; if (S) S.before(el); morphKids(tpl.content, el); if (S) S.after(el); }   // sort.js: patch in the page's own row order, then sort again
 // ---------- market events & headlines (events.json + Finnhub general news when a key is saved) ----------
 let evList = null, evHeads = [], evAt = 0, evBusy = false;
 const EV_KEYS = {war: ['war', 'wars', 'warfare', 'missile attack*', 'missile strike*', 'missile launch*', 'missiles fired', 'invasion', 'invade', 'invaded', 'airstrike*', 'air strike*', 'military strike*', 'troops deployed', 'troops enter*', 'nuclear strike*', 'nuclear weapon*', 'nuclear threat*', 'attack on', 'terror*', 'escalat*', 'blockade', 'ceasefire'], policy: ['white house', 'tariff*', 'executive order', 'trade war', 'export control*', 'sanction*', 'government shutdown', 'debt ceiling', 'impeach*'], fed: ['fomc', 'federal reserve', 'fed chair', 'powell', 'rate hike', 'rate cut', 'fed minutes'], macro: ['cpi', 'inflation', 'jobs report', 'payrolls', 'unemployment rate', 'gdp', 'recession', 'pce'], crisis: ['bank failure', 'bank run', 'market crash', 'flash crash', 'contagion', 'systemic risk'], single: ['circuit breaker', 'trading halt', 'halted', 'bankrupt*', 'chapter 11', 'delisted']};
