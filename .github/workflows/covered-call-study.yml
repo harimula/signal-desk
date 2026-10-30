@@ -1,0 +1,49 @@
+name: covered-call-study
+# What changes when the bot's own dip buys also sell a covered call, replayed trade by trade on real option prices since
+# February 2024 (tools/covered-call-study.mjs): the owner's stock rule on 100 shares against the same buy with a call 5 %
+# or 10 % over the price, held to expiry or bought back at half. Pushes research-data/covered-call-study.json to the
+# separate research-data branch (main is untouched). Market data only: no orders, no account data. Manual, and once on a
+# change to the script or this file.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['tools/covered-call-study.mjs', '.github/workflows/covered-call-study.yml']
+permissions:
+  contents: write
+concurrency:
+  group: covered-call-study
+  cancel-in-progress: false
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version-file: .nvmrc }
+      - run: |
+          git fetch -q origin +research-data:refs/remotes/origin/research-data
+          mkdir -p research-data
+          git show origin/research-data:research-data/daily.json.gz > research-data/daily.json.gz
+      - run: node tools/covered-call-study.mjs
+        env:
+          ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+          ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+      - run: |
+          git config user.name "signal-desk-bot"
+          git config user.email "bot@users.noreply.github.com"
+          cp research-data/covered-call-study.json /tmp/covered-call-study.json
+          rm -rf research-data
+          git checkout -q -B research-data origin/research-data
+          mkdir -p research-data
+          cp /tmp/covered-call-study.json research-data/covered-call-study.json
+          git add -f research-data/covered-call-study.json
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Covered-call study: the dip-buy rule with and without a covered call, on real option prices"
+          for i in 1 2 3; do
+            git push -q origin research-data && exit 0
+            git pull -q --rebase origin research-data || git rebase --abort
+            sleep 3
+          done
+          git push -q origin research-data
