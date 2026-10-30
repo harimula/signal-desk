@@ -1,0 +1,49 @@
+name: wheel-study
+# Cash-secured puts and covered calls ("the wheel") replayed on real option prices since February 2024
+# (tools/wheel-study.mjs): monthly cycles on the research list's large companies and the bot's scan stocks priced $15-$150,
+# several strike distances and buy-back rules, with and without the trend filter. Pushes research-data/wheel-study.json to
+# the separate research-data branch (main is untouched). Market data only: no orders, no account data. Manual, and once
+# on a change to the script or this file.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['tools/wheel-study.mjs', '.github/workflows/wheel-study.yml']
+permissions:
+  contents: write
+concurrency:
+  group: wheel-study
+  cancel-in-progress: false
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version-file: .nvmrc }
+      - run: |
+          git fetch -q origin +research-data:refs/remotes/origin/research-data
+          mkdir -p research-data
+          git show origin/research-data:research-data/daily.json.gz > research-data/daily.json.gz
+      - run: node tools/wheel-study.mjs
+        env:
+          ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+          ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+      - run: |
+          git config user.name "signal-desk-bot"
+          git config user.email "bot@users.noreply.github.com"
+          cp research-data/wheel-study.json /tmp/wheel-study.json
+          rm -rf research-data
+          git checkout -q -B research-data origin/research-data
+          mkdir -p research-data
+          cp /tmp/wheel-study.json research-data/wheel-study.json
+          git add -f research-data/wheel-study.json
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Wheel study: cash-secured puts and covered calls on real option prices"
+          for i in 1 2 3; do
+            git push -q origin research-data && exit 0
+            git pull -q --rebase origin research-data || git rebase --abort
+            sleep 3
+          done
+          git push -q origin research-data
