@@ -564,6 +564,15 @@ journalFixture = null;
   check('earnings: no script errors and no Content-Security-Policy violations', errors.length === 0 && csp.length === 0, errors.concat(csp).join(' | '));
   await page.close();
 }
+// retirement calculator (owner 2026-11-01: "Bedroom and community is disabled"): with no area chosen, bedrooms and community
+// still work — they scale the lifestyle's own housing by Bangalore-wide rent ratios; the defaults change nothing
+{ const pg = await browser.newPage({ viewport: { width: 420, height: 1400 } }); const errs = []; pg.on('pageerror', e => errs.push(e.message.slice(0, 160)));
+  await pg.goto(base + 'retire.html', { waitUntil: 'load' }); await pg.waitForTimeout(300);
+  const rd = () => pg.evaluate(() => [document.getElementById('beds').disabled || document.getElementById('comm').disabled, +document.getElementById('c_housing').value]);
+  const [dis0, h0] = await rd(); await pg.selectOption('#beds', '4'); await pg.waitForTimeout(100); const [, h4] = await rd();
+  await pg.selectOption('#beds', 'auto'); await pg.waitForTimeout(100); const [, hb] = await rd();
+  check('retirement: Bedrooms and Community work without an area — 4 bedrooms on Premium is 1.5× its housing, back to the lifestyle’s own at the defaults', !dis0 && h0 > 0 && Math.abs(h4 / h0 - 1.5) < 0.01 && hb === h0 && !errs.length, JSON.stringify({ dis0, h0, h4, hb, errs }));
+  await pg.close(); }
 // sorting on the calculators and the docs pages (sort.js loads there too)
   { const pg = await browser.newPage({ viewport: { width: 1280, height: 900 } }); const errs = []; pg.on('pageerror', e => errs.push(e.message.slice(0, 160)));
     const res = [];
