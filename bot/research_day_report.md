@@ -1,24 +1,24 @@
-# Day-trading research — 2016-01-01 → 2026-10-22
+# Day-trading research — 2016-01-01 → 2026-11-01
 
-30 stocks + SPY, 3,582,575 five-minute bars, 477,754 raw signals. Entry at the close of the signal bar + slippage; stop assumed hit before target inside a bar; flat at the 15:45 bar close; 1 trade per stock per day, max per day and 2-loss streak applied in time order. Shorts are simulated as stock shorts (a proxy for PUTs: no option spread or time decay included). IEX volume is a slice of the market but consistent across the test.
+30 stocks + SPY, 3,596,600 five-minute bars, 479,467 raw signals. Entry at the close of the signal bar + slippage; stop assumed hit before target inside a bar; flat at the 15:45 bar close; 1 trade per stock per day, max per day and 2-loss streak applied in time order. Shorts are simulated as stock shorts (a proxy for PUTs: no option spread or time decay included). IEX volume is a slice of the market but consistent across the test.
 
-**Verdict: marginal — positive but thin.**
+**Verdict: no edge found.**
 
 | Settings | Trades | Win | Avg R | Per trade ($500 risk) | Profit factor | Worst drawdown (R) | Years positive |
 |---|---|---|---|---|---|---|---|
-| Bot defaults: OR 15 min · rel. vol ≥ 1.2× · target 2R · time stop 60 min · entries until 15:30 · market filter on | 4430 | 36% | -0.029 | $-14 | 0.93 | 173.94 | 2/7 |
-| Best found: OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4337 | 33% | 0.006 | $3 | 1.01 | 92.62 | 4/7 |
+| Bot defaults: OR 15 min · rel. vol ≥ 1.2× · target 2R · time stop 60 min · entries until 15:30 · market filter on | 4448 | 36% | -0.028 | $-14 | 0.94 | 167.06 | 2/7 |
+| Best found: OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4355 | 33% | 0.006 | $3 | 1.01 | 148.84 | 4/7 |
 
 ## Variants of the best
 
 | Variant | Trades | Win | Avg R | Per trade | Profit factor | Worst drawdown (R) | Years positive |
 |---|---|---|---|---|---|---|---|
-| ORB only | 4074 | 32% | -0.001 | $0 | 1 | 117.1 | 4/7 |
-| VWAP pullback only | 3553 | 31% | -0.033 | $-16 | 0.93 | 142.85 | 2/7 |
-| Longs only (shares / CALLs) | 3008 | 32% | -0.04 | $-20 | 0.92 | 194.72 | 1/7 |
-| Shorts only (PUT proxy: stock short) | 2799 | 31% | 0.03 | $15 | 1.06 | 100.34 | 5/7 |
-| Without the market filter | 4611 | 32% | -0.019 | $-9 | 0.96 | 180.33 | 3/7 |
-| Morning only (entries until 11:30) | 4337 | 33% | 0.006 | $3 | 1.01 | 92.62 | 4/7 |
+| ORB only | 4091 | 32% | -0.001 | $0 | 1 | 105.47 | 4/7 |
+| VWAP pullback only | 3566 | 31% | -0.032 | $-16 | 0.93 | 167.37 | 2/7 |
+| Longs only (shares / CALLs) | 3022 | 32% | -0.039 | $-19 | 0.92 | 141.21 | 1/7 |
+| Shorts only (PUT proxy: stock short) | 2810 | 31% | 0.03 | $15 | 1.06 | 80.26 | 5/7 |
+| Without the market filter | 4629 | 32% | -0.019 | $-9 | 0.96 | 135.24 | 3/7 |
+| Morning only (entries until 11:30) | 4355 | 33% | 0.006 | $3 | 1.01 | 148.84 | 4/7 |
 
 ## Best settings, year by year
 
@@ -30,21 +30,21 @@
 | 2023 | 695 | 33% | 13.78 |
 | 2024 | 684 | 31% | -19.98 |
 | 2025 | 692 | 28% | -64.66 |
-| 2026 | 556 | 34% | -22.78 |
+| 2026 | 574 | 35% | -22.44 |
 
 ## Top 12 parameter sets
 
 | Settings | Trades | Win | Avg R | Per trade | Profit factor | Worst drawdown (R) | Years positive |
 |---|---|---|---|---|---|---|---|
-| OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4337 | 33% | 0.006 | $3 | 1.01 | 92.62 | 4/7 |
-| OR 15 min · rel. vol ≥ 1× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4558 | 32% | 0.003 | $2 | 1.01 | 118.49 | 4/7 |
-| OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 90 min · entries until 15:30 · market filter on | 4436 | 32% | 0.002 | $1 | 1 | 90.81 | 4/7 |
-| OR 15 min · rel. vol ≥ 1× · target 3R · time stop 90 min · entries until 15:30 · market filter on | 4612 | 32% | -0.001 | $0 | 1 | 165.33 | 4/7 |
-| OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 60 min · entries until 11:30 · market filter on | 4333 | 33% | -0.005 | $-3 | 0.99 | 107.05 | 4/7 |
-| OR 15 min · rel. vol ≥ 1× · target 3R · time stop 60 min · entries until 11:30 · market filter on | 4553 | 33% | -0.005 | $-2 | 0.99 | 135.61 | 3/7 |
-| OR 30 min · rel. vol ≥ 2× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 2410 | 33% | -0.009 | $-4 | 0.98 | 68.6 | 3/7 |
-| OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 60 min · entries until 15:30 · market filter on | 4430 | 33% | -0.009 | $-5 | 0.98 | 123.01 | 4/7 |
-| OR 30 min · rel. vol ≥ 1× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4560 | 33% | -0.009 | $-4 | 0.98 | 196.48 | 4/7 |
-| OR 15 min · rel. vol ≥ 1× · target 3R · time stop 60 min · entries until 15:30 · market filter on | 4605 | 33% | -0.01 | $-5 | 0.98 | 189.63 | 3/7 |
-| OR 30 min · rel. vol ≥ 2× · target 3R · time stop 60 min · entries until 11:30 · market filter on | 2401 | 33% | -0.016 | $-8 | 0.96 | 81.94 | 4/7 |
-| OR 30 min · rel. vol ≥ 1.2× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4316 | 33% | -0.012 | $-6 | 0.97 | 150.39 | 3/7 |
+| OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4355 | 33% | 0.006 | $3 | 1.01 | 148.84 | 4/7 |
+| OR 15 min · rel. vol ≥ 1× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4576 | 32% | 0.002 | $1 | 1 | 133.57 | 4/7 |
+| OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 90 min · entries until 15:30 · market filter on | 4454 | 32% | 0.002 | $1 | 1 | 157.57 | 4/7 |
+| OR 15 min · rel. vol ≥ 1× · target 3R · time stop 90 min · entries until 15:30 · market filter on | 4630 | 32% | -0.003 | $-1 | 0.99 | 151.78 | 4/7 |
+| OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 60 min · entries until 11:30 · market filter on | 4351 | 33% | -0.005 | $-2 | 0.99 | 159.36 | 4/7 |
+| OR 30 min · rel. vol ≥ 2× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 2420 | 33% | -0.008 | $-4 | 0.98 | 88.03 | 3/7 |
+| OR 15 min · rel. vol ≥ 1× · target 3R · time stop 60 min · entries until 11:30 · market filter on | 4571 | 33% | -0.006 | $-3 | 0.99 | 135.86 | 3/7 |
+| OR 15 min · rel. vol ≥ 1.2× · target 3R · time stop 60 min · entries until 15:30 · market filter on | 4448 | 33% | -0.009 | $-5 | 0.98 | 168.72 | 4/7 |
+| OR 30 min · rel. vol ≥ 1× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4578 | 33% | -0.009 | $-5 | 0.98 | 142.44 | 4/7 |
+| OR 15 min · rel. vol ≥ 1× · target 3R · time stop 60 min · entries until 15:30 · market filter on | 4623 | 33% | -0.011 | $-6 | 0.97 | 154.96 | 3/7 |
+| OR 30 min · rel. vol ≥ 1.2× · target 3R · time stop 90 min · entries until 11:30 · market filter on | 4333 | 33% | -0.012 | $-6 | 0.97 | 183.96 | 3/7 |
+| OR 30 min · rel. vol ≥ 2× · target 3R · time stop 60 min · entries until 11:30 · market filter on | 2411 | 33% | -0.017 | $-8 | 0.96 | 91.52 | 4/7 |
