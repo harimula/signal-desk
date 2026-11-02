@@ -571,6 +571,11 @@ journalFixture = null;
   const rd = () => pg.evaluate(() => [document.getElementById('beds').disabled || document.getElementById('comm').disabled, +document.getElementById('c_housing').value]);
   const [dis0, h0] = await rd(); await pg.selectOption('#beds', '4'); await pg.waitForTimeout(100); const [, h4] = await rd();
   await pg.selectOption('#beds', 'auto'); await pg.waitForTimeout(100); const [, hb] = await rd();
+  await pg.fill('#usp', '8000000'); await pg.dispatchEvent('#usp', 'input'); await pg.waitForTimeout(150);
+  const left = await pg.evaluate(() => (document.querySelector('.advice') || {}).innerText || '');
+  await pg.fill('#usp', '3000000'); await pg.dispatchEvent('#usp', 'input'); await pg.waitForTimeout(150);
+  const runs = await pg.evaluate(() => (document.querySelector('.advice') || {}).innerText || '');
+  check('retirement: the result says what the plan leaves at the end (or the age the money runs out) — the “Amount left” box is the goal you set', /about \$[\d,]+ \(today’s money\) is left at age \d+/.test(left) && /runs out at age \d+/.test(runs), left.slice(-200) + ' / ' + runs.slice(-120));
   check('retirement: Bedrooms and Community work without an area — 4 bedrooms on Premium is 1.5× its housing, back to the lifestyle’s own at the defaults', !dis0 && h0 > 0 && Math.abs(h4 / h0 - 1.5) < 0.01 && hb === h0 && !errs.length, JSON.stringify({ dis0, h0, h4, hb, errs }));
   await pg.close(); }
 // sorting on the calculators and the docs pages (sort.js loads there too)

@@ -291,7 +291,7 @@
     '529 plan': 'Education savings for the children.', 'custodial account': 'Investments held in the children’s names (UTMA/UGMA).',
     'you add each year': 'New savings added every year until you retire.', 'school for each child': 'Yearly school fees per child.',
     'child 1 age now': 'Used to time school and college costs.', 'child 2 age now': 'Used to time school and college costs.',
-    'college per child per year': 'Yearly college cost per child in today’s money.', 'amount left at the end': 'Money you want left at the end of the plan (for heirs or safety).',
+    'college per child per year': 'Yearly college cost per child in today’s money.', 'amount left at the end': 'Your goal: money you want left at the end of the plan (for your kids, or as a safety margin), in today’s money. You type it; it is not calculated — the plan then needs this much more. What your plan actually leaves is in the result box.',
     'withdrawal rate': 'Share of savings spent each year in retirement. 4% is the classic sustainable rate.', 'plan to age': 'How long the money must last.',
     'first use of 401(k) and roth': 'The age you begin drawing from retirement accounts (penalty-free from 59½).',
     'us accounts grow': 'Expected yearly return on US investments before retirement.', 'indian portfolio grows': 'Expected yearly return on Indian investments.',

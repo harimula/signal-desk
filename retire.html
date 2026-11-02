@@ -316,7 +316,7 @@ const FIELDS = [
     { id: 'k2', label: 'Child 2 age now', def: 1, unit: 'yrs', step: 1, hint: 'Leave blank if none.' },
     { id: 'col', label: 'College per child per year', def: 80000, pre: '$', step: 5000, hint: 'US college is about $80,000. Use 0 for India.' } ] },
   { sec: 'Leave to your kids', items: [
-    { id: 'legacy', label: 'Amount left at the end', def: 0, pre: '$', step: 10000, my: true, hint: 'In today’s money.' } ] },
+    { id: 'legacy', label: 'Amount left at the end', def: 0, pre: '$', step: 10000, my: true, hint: 'Your goal, in today’s money: what you want left for your kids. The plan then needs this much more. What your plan actually leaves is shown in the result.' } ] },
   { sec: 'Advanced settings', adv: true, items: [
     { id: 'swr', label: 'Withdrawal rate', def: 4, unit: '% / yr', step: 0.25, hint: 'Used for everyday costs. Planners use 3-3.5% for 40+ years.' },
     { id: 'planAge', label: 'Plan to age', def: 90, unit: 'yrs', step: 1 },
@@ -567,6 +567,12 @@ function render() {
   if (R > 0 && inc > 0 && Math.max(req, plan0) > inc) advice += ' <b>Heads up:</b> ' + usdFull(Math.max(req, plan0)) + ' a year is more than the ' + usdFull(inc) + ' you earn now, so it is not a realistic saving. A later retirement age or a smaller lifestyle is the way to close this.';
   else if (R > 0 && inc > 0 && Math.max(req, plan0) > inc * 0.5) advice += ' That is ' + Math.round(Math.max(req, plan0) / inc * 100) + '% of your ' + usdFull(inc) + ' income, which is a very high savings rate.';
   if (R > 0) advice += ' This assumes your money grows ' + gtxt + ' a year until then.';
+  {   // what your own plan leaves at the end (owner 2026-11-02: "Why Amount left is 0, even if I increase the money" — that box is the goal you set; this is the result)
+    const endB = path.pts.length ? path.pts[path.pts.length - 1].b : 0, endToday = endB / Math.pow(1 + p.inf, N) / p.fx;
+    advice += path.out !== null
+      ? ' With what you have and plan to add, the money <b>runs out at age ' + path.out + '</b>' + (p.legacy > 0 ? ', so nothing is left for the ' + usdFull(p.legacy) + ' you want to leave' : '') + '.'
+      : ' With what you have and plan to add, about <b>' + usdFull(endToday) + '</b> (today’s money) is <b>left at age ' + p.planAge + '</b>' + (p.legacy > 0 ? ' — your goal in “Amount left at the end” is ' + usdFull(p.legacy) : ' (to plan for leaving some, type it in “Amount left at the end”)') + '.';
+  }
   if (noMoney) advice += ' Enter what you have on the left to personalise this.';
 
   out.innerHTML =
