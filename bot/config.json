@@ -38,7 +38,7 @@
  "liveSizePct": 25,
  "pickBy": "leaders",
  "spyOn": true,
- "spySharePct": 10,
+ "spySharePct": 5,
  "spyTradePct": 20,
  "spyTp": 5,
  "spyStop": 35,
@@ -131,8 +131,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-11-03T19:25:00.000Z",
- "updatedBy": "Claude (SPY strategy from the 2026-11-03 study: next-day expiry, morning entries, 0.15% past VWAP, beyond yesterday\u2019s range; owner request)",
+ "updatedAt": "2026-11-03T20:45:00.000Z",
+ "updatedBy": "Claude (SPY share 10% -> 5% while the new rule proves itself; owner accepted the recommendation 2026-11-03 3:39 PM)",
  "liveConfirm": "",
  "stakeUsd": 0
 }

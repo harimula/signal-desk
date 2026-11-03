@@ -259,7 +259,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const D = loadDaily(), grid = process.argv[2] || 'quick';
   const dn = s => Math.round(Date.parse(s + 'T00:00:00Z') / 864e5);
   const U = { base: prepare(D.bars, D.base), scan: prepare(D.bars, D.scan) };
-  const OWN = { thr: 25, entry: 'intraday', lim: 0, exit: 'sma5', m: 0, hold: 10, stop: 0.25, tp: 0.10, mkt: false, rank: 'leaders', pos: 0.12, maxPos: 8 };
+  const OWN = { thr: 25, entry: 'intraday', lim: 0, exit: 'profit', m: 0.005, hold: 15, stop: 0.25, tp: 0.10, mkt: true, rank: 'first', pos: 0.12, maxPos: 8 };   // “your settings now”: the owner's stock lane as of 2026-11-03 (first-profitable-close exits since 2026-10-27)
   const periods = [['all', 0, Infinity], ['oos', dn('2016-01-01'), Infinity], ['5y', dn('2021-10-27'), Infinity]];
   const row = (name, p) => {
     const out = { name };
