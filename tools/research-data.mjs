@@ -100,3 +100,24 @@ for (let i = Math.max(0, days.length - N - 1); i < days.length - 1; i++) {
 }
 console.log('option days', got, 'of', tried, 'contracts', Object.keys(opt).length);
 save('spyopt.json.gz', { at: new Date().toISOString(), days: got, bars: opt });
+
+// the same sample for SAME-day expiry (0DTE): for each of the last OPT_DAYS trading days, the contracts expiring that
+// very day, 11 strikes around the open — real prices for the same-day-expiry study (the bot's spyDte 0, owner 2026-10-30)
+const opt0 = {};
+let got0 = 0, tried0 = 0;
+for (let i = Math.max(0, days.length - N); i < days.length; i++) {
+  const { d, open } = days[i], k0 = Math.round(open), syms = [];
+  for (let k = k0 - 5; k <= k0 + 5; k++) for (const cp of ['C', 'P']) syms.push(occ(d, cp, k));
+  let tok = null, pg = 0; tried0++;
+  try {
+    do {
+      const j = await data(`/v1beta1/options/bars?symbols=${syms.join(',')}&timeframe=1Min&start=${d}T13:00:00Z&end=${d}T21:00:00Z&limit=10000${tok ? '&page_token=' + tok : ''}`);
+      for (const [s, bars] of Object.entries(j.bars || {})) { const o = opt0[s] || (opt0[s] = { day: d, t: [], o: [], h: [], l: [], c: [], v: [] }); for (const b of bars) { o.t.push(Math.round(Date.parse(b.t) / 60000)); o.o.push(b.o); o.h.push(b.h); o.l.push(b.l); o.c.push(b.c); o.v.push(b.v); } }
+      tok = j.next_page_token; pg++;
+    } while (tok && pg < 20);
+    got0++;
+  } catch (e) { console.log('0dte bars', d, e.message); if (tried0 > 3 && !got0) break; }
+  await sleep(150);
+}
+console.log('0dte option days', got0, 'of', tried0, 'contracts', Object.keys(opt0).length);
+save('spyopt0.json.gz', { at: new Date().toISOString(), days: got0, bars: opt0 });
