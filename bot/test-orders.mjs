@@ -792,6 +792,24 @@ check('SPY contract that expires today, still open at 3:21 PM: sold flat at mark
   assert.ok((SD3.acts || []).some(m => /expires today: flat by 3:20 PM/.test(m)), JSON.stringify((SD3.acts || []).filter(m => /SPY/.test(m)).slice(-4)));
 });
 
+// FV — the 2026-11-03 entry filters: the VWAP gap and “beyond yesterday’s range”
+const FV1 = run({ ...SO, spyVwapGap: 0.5 }, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7 });
+const FV2 = run({ ...SO, spyBeyondPrev: true }, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7, spyPatch: { '2026-10-22': 510 } });
+const FV3 = run({ ...SO, spyBeyondPrev: true }, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7, spyPatch: { '2026-10-22': 495 } });
+check('SPY VWAP gap 0.5%: the 502.7 break (~0.3% past the VWAP) places nothing and the card calls it flat', () => {
+  assert.ok(FV1.tickEntry && !FV1.tickEntry.ok && !FV1.tickEntry.placed.length, JSON.stringify(FV1.tickEntry));
+  assert.match(FV1.spy.idle || '', /within 0.5% of its VWAP/, JSON.stringify(FV1.spy && FV1.spy.idle));
+});
+check('beyond yesterday’s range: a break under yesterday’s high (≈512) places nothing and the card names the level it waits for', () => {
+  assert.ok(FV2.tickEntry && !FV2.tickEntry.ok && !FV2.tickEntry.placed.length, JSON.stringify(FV2.tickEntry));
+  assert.match((FV2.spy && FV2.spy.idle) || '', /past yesterday/, JSON.stringify(FV2.spy && FV2.spy.idle));
+});
+check('beyond yesterday’s range: the same break above yesterday’s high (≈497) buys a SPY CALL (the reason text is locked by the unit tests)', () => {
+  assert.ok(FV3.tickEntry && FV3.tickEntry.ok === true, JSON.stringify([FV3.tickEntry, FV3.spy && FV3.spy.idle]));
+  const o = FV3.tickEntry.placed.find(x => x.side === 'buy');
+  assert.ok(o && /^SPY\d{6}C/.test(o.symbol) && /^sd-yc-/.test(o.client_order_id), JSON.stringify(FV3.tickEntry.placed));
+});
+
 // FF — “Pay up to get in quickly” (spyFastFill): the cushion over the ask, the one 45-second re-offer, the 4% cap
 const FFC = { ...SO, spyFastFill: true };
 const FF1 = run(FFC, { bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7 });

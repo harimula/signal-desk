@@ -389,6 +389,27 @@ test('SPY sleeve: the mirror is a PUT; a quiet last bar (below-average volume) d
   const dn = up.map(b => ({ ...b, o: 1000 - b.o, h: 1000 - b.l, l: 1000 - b.h, c: 1000 - b.c })); assert.equal(spySignal({ bars: dn, px: 497.3, mins: 600 }).side, 'put');
   const quiet = up.map((b, i) => i === 4 ? { ...b, v: 5e5 } : b); assert.equal(spySignal({ bars: quiet, px: 502.7, mins: 600 }).side, undefined);
 });
+test('SPY entry filters (2026-11-03 study): a wider VWAP gap holds weak pushes back; “beyond yesterday’s range” needs new ground, and waits when yesterday is unknown', () => {
+  // the fixture's break at 502.7 is ~0.27% above its VWAP: a 0.15% gap lets it through, a 0.5% gap calls it flat
+  assert.equal(spySignal({ bars: up, px: 502.7, mins: 600, cfg: { spyVwapGap: 0.15 } }).side, 'call');
+  assert.match(spySignal({ bars: up, px: 502.7, mins: 600, cfg: { spyVwapGap: 0.5 } }).idle, /within 0\.5% of its VWAP/);
+  // beyond yesterday's range: blocked under yesterday's high, allowed above it, waiting without yesterday's bar
+  const cfg = { spyBeyondPrev: true };
+  assert.equal(spySignal({ bars: up, px: 502.7, mins: 600, cfg, prev: { hi: 505, lo: 495 } }).side, undefined);
+  assert.match(spySignal({ bars: up, px: 502.7, mins: 600, cfg, prev: { hi: 505, lo: 495 } }).idle, /waiting for a break above 505 \(that is past yesterday's high\)/);
+  const go = spySignal({ bars: up, px: 502.7, mins: 600, cfg, prev: { hi: 502.6, lo: 495 } });
+  assert.equal(go.side, 'call'); assert.match(go.why, /above yesterday's high 502\.6/);
+  assert.match(spySignal({ bars: up, px: 502.7, mins: 600, cfg }).idle, /yesterday.s high and low are not loaded yet/);
+  const dn = up.map(b => ({ ...b, o: 1000 - b.o, h: 1000 - b.l, l: 1000 - b.h, c: 1000 - b.c }));
+  assert.equal(spySignal({ bars: dn, px: 497.3, mins: 600, cfg, prev: { hi: 505, lo: 497.5 } }).side, 'put', 'a PUT needs the break below yesterday\'s low');
+  assert.equal(spySignal({ bars: dn, px: 497.3, mins: 600, cfg, prev: { hi: 505, lo: 497.2 } }).side, undefined);
+});
+test('SPY entry filters: defaults are the old behaviour (gap 0.05, beyond-yesterday off) and the settings are validated', () => {
+  const c = normalize({}); assert.equal(c.spyVwapGap, 0.05); assert.equal(c.spyBeyondPrev, false);
+  assert.equal(normalize({ preset: 'custom', spyVwapGap: 5 }).spyVwapGap, 2, 'clamped to at most 2%');
+  assert.equal(normalize({ preset: 'custom', spyVwapGap: 0.15 }).spyVwapGap, 0.15);
+  assert.equal(normalize({ preset: 'custom', spyBeyondPrev: true }).spyBeyondPrev, true);
+});
 test('SPY sleeve: outside the window it stays out; bars still forming are not used', () => {
   assert.match(spySignal({ bars: up, px: 502.7, mins: 585 }).idle, /before the window/); assert.match(spySignal({ bars: up, px: 502.7, mins: 931 }).idle, /closed/);
   const early = spySignal({ bars: up, px: 502.7, mins: 592 }); assert.equal(early.level, 502, 'the 9:50 bar is not complete at 9:52, so the level is the earlier 15-minute high'); assert.equal(early.side, 'call');

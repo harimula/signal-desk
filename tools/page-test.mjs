@@ -619,6 +619,8 @@ await browser.close(); srv.close();
     ['SPY quick options (on/off)', `yours: ${onOff(C.spyOn)}`], ['SPY take-profit / SPY stop', `yours: +${C.spyTp}% / −${C.spyStop}%`], ['SPY time stop', `yours: ${C.spyHoldMin} min`], ['SPY trades open at once', `yours: ${C.spyMaxOpen}`],
     ['SPY max trades per day · SPY losses in a row · SPY daily loss limit', `yours: ${C.spyMaxTrades} · ${C.spyStreak} · ${C.spyDayCap}%`], ['Trades from / until', `yours: ${t12(C.spyStart)} – ${t12(C.spyEnd)}`],
     ['SPY expiry, max days out', `yours: ${C.spyDte}`],
+    ['SPY gap from VWAP, at least', `yours: ${C.spyVwapGap}%`],
+    ['Only beyond yesterday’s range', `yours: ${onOff(C.spyBeyondPrev)}`],
     ['Pay up to get in quickly', `yours: ${onOff(C.spyFastFill)}`],
     ['Message only when an order fills', `yours: ${onOff(C.alertOnFill)}`],
     ['Wheel share', `yours: ${W.wheelSharePct}%`], ['The wheel (on/off)', `yours: ${onOff(W.wheelOn)}`], ['Trend filter', `yours: ${onOff(W.wheelTrend)}`], ['Strike distance', `yours: ${W.wheelOtmPct}%`], ['Buy back at', `yours: ${W.wheelTp}%`],

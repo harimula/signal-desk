@@ -323,7 +323,7 @@ async function spyCycle(ctx) {
   // A SPY buy placed after this cycle's account picture was taken (by the live tick) is not in that picture: rebuilding
   // the sleeve's state from it would forget that order and its money. Keep the live state and decide again next cycle.
   const bars5 = await load5m([]), spyBars = bars5.SPY || [], px = ((await latestPrices(['SPY'])).SPY || {}).p;
-  const sig = CFG.spyOn ? spySignal({ bars: spyBars, px, mins: MINS, cfg: spyCfgToday() }) : null;   // no new SPY trades in the last 30 minutes of an early-close day
+  const sig = CFG.spyOn ? spySignal({ bars: spyBars, px, mins: MINS, cfg: spyCfgToday(), prev: spyPrev && spyPrev.hi > 0 ? { hi: spyPrev.hi, lo: spyPrev.lo } : null }) : null;   // no new SPY trades in the last 30 minutes of an early-close day
   const dayClosed = (fillsCache.closed || []).filter(c => isSpyOption(c.sym) && c.outT && c.outT.slice(0, 10) === ymdDash(Date.now()));
   const pdtBlock = equity < 25000 && +acct.daytrade_count >= 3 && !acct.pattern_day_trader;
   const pending = live.some(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)));
@@ -418,7 +418,7 @@ export async function spyEnter(px) {
   // side of its VWAP, and the last completed 5-minute bar closed in that direction on at least average volume. The bars must
   // include the bar that completed at the last 5-minute mark; until they do, the next full check decides.
   const bars = spyBarsNow(); if (!bars) return false;
-  const sig = spySignal({ bars, px, mins: MINS, cfg: spyCfgToday() });
+  const sig = spySignal({ bars, px, mins: MINS, cfg: spyCfgToday(), prev: spyPrev && spyPrev.hi > 0 ? { hi: spyPrev.hi, lo: spyPrev.lo } : null });
   if (!sig || !sig.side || !spyFresh(sig.side, sig.level, spyLvl(sig.side))) return false;
   const kind = sig.side;
   const sym = await spyPlace(kind, px, `${sig.why} (live tick)`, Math.min(lastSpy.money * (CFG.spyTradePct ?? 100) / 100, lastSpy.money - (lastSpy.used || 0)) * (lastSpy.budget || 1), sig.level);
@@ -1123,7 +1123,7 @@ async function run() {
       const sb = ((await D(`/v2/stocks/bars?symbols=SPY&timeframe=1Day&start=${new Date(Date.now() - 450 * 864e5).toISOString()}&limit=1000&adjustment=split&feed=iex&sort=asc`)).bars || {}).SPY || [];
       const done = sb.filter(b => b.t.slice(0, 10) < ymdDash(Date.now()));
       const prev = done[done.length - 1];
-      spyPrev = prev ? { day: TODAY, c: prev.c, closes: done.map(b => b.c), days: done.map(b => b.t.slice(0, 10)) } : null;
+      spyPrev = prev ? { day: TODAY, c: prev.c, hi: +prev.h || 0, lo: +prev.l || 0, closes: done.map(b => b.c), days: done.map(b => b.t.slice(0, 10)) } : null;
     }
     const st = (await latestPrices(['SPY'])).SPY;
     if (spyPrev && st) spyPct = (st.p / spyPrev.c - 1) * 100;

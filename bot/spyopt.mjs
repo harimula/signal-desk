@@ -2,10 +2,11 @@
 // stake (default 5%). The rules are the bot's own — simple, inspectable, and NOT backtested: minute-level options history
 // is a paid dataset the project does not have. Every number is a setting (bot/config.mjs, prefix spy*).
 //
-//   Direction  — SPY above its day's VWAP → CALLs only; below → PUTs only; on it → nothing (marketMode in daytrade.mjs).
+//   Direction  — SPY at least spyVwapGap % above its day's VWAP → CALLs only; below by the gap → PUTs only; between → nothing.
 //   Trigger    — the live price breaks the high of the last 3 completed 5-minute bars (CALL) or their low (PUT), and the last
-//                completed bar closed in that direction on at least average volume for the day so far ("armed"). The same
-//                test runs on every streamed tick (bot.mjs spyEnter), on bars read after the last 5-minute mark.
+//                completed bar closed in that direction on at least average volume for the day so far ("armed"). With
+//                spyBeyondPrev the break must also clear yesterday's high (CALL) or low (PUT) — the 2026-11-03 study. The
+//                same test runs on every streamed tick (bot.mjs spyEnter), on bars read after the last 5-minute mark.
 //   Contract   — nearest-the-money, expiring spyDte trading days out (default 1 = the next trading day; 0 = the same day,
 //                allowed since 2026-10-30: fastest time decay, and the broker takes no orders on it after 3:30 PM ET, so
 //                the bot neither buys after 3:20 nor holds past 3:20 — bot.mjs enforces both), spread ≤ 5%.
@@ -18,10 +19,11 @@
 //                sleeve lost today ends the day (bot.mjs applies it like the other money-split parts).
 import { vwap } from './daytrade.mjs';
 
-export const SPY_DEFAULTS = { spyOn: true, spySharePct: 5, spyTradePct: 100, spyTp: 15, spyStop: 15, spyHoldMin: 10, spyMaxTrades: 6, spyMaxOpen: 3, spyStreak: 2, spyDayCap: 25, spyDte: 1, spyFastFill: false, spyStart: '09:50', spyEnd: '15:30', spyFlat: 945 };
+export const SPY_DEFAULTS = { spyOn: true, spySharePct: 5, spyTradePct: 100, spyTp: 15, spyStop: 15, spyHoldMin: 10, spyMaxTrades: 6, spyMaxOpen: 3, spyStreak: 2, spyDayCap: 25, spyDte: 1, spyFastFill: false, spyVwapGap: 0.05, spyBeyondPrev: false, spyStart: '09:50', spyEnd: '15:30', spyFlat: 945 };
 
 // Entry signal from completed 5-minute SPY bars (each {o,h,l,c,v,m}) and the live price. mins = minutes past midnight ET.
-export function spySignal({ bars, px, mins, cfg = {} }) {
+// prev = yesterday's { hi, lo } (its daily bar) — needed only while spyBeyondPrev is on.
+export function spySignal({ bars, px, mins, cfg = {}, prev = null }) {
   const C = { ...SPY_DEFAULTS, ...cfg }, start = hhmm(C.spyStart), end = hhmm(C.spyEnd);
   if (!(px > 0) || !bars || bars.length < 4) return null;
   if (mins < start) return { idle: 'before the window' };
@@ -29,18 +31,25 @@ export function spySignal({ bars, px, mins, cfg = {} }) {
   const done = bars.filter(b => b.m + 5 <= mins);                              // completed bars only
   if (done.length < 4) return { idle: 'waiting for the first bars' };
   const vw = vwap(done); if (!(vw > 0)) return null;
-  const d = px / vw - 1, market = d > 0.0005 ? 'up' : d < -0.0005 ? 'down' : 'flat';
-  if (market === 'flat') return { idle: 'SPY sitting on its VWAP — no direction', market, vwap: r2(vw) };
+  const gap = Math.max(0.0001, (C.spyVwapGap ?? 0.05) / 100);                  // the least distance from the VWAP (the 2026-11-03 study measured 0.15% beating the old 0.05%)
+  const d = px / vw - 1, market = d > gap ? 'up' : d < -gap ? 'down' : 'flat';
+  if (market === 'flat') return { idle: `SPY within ${(gap * 100).toFixed(2).replace(/0$/, '').replace(/\.$/, '')}% of its VWAP — no clear direction`, market, vwap: r2(vw) };
   const last3 = done.slice(-3), lastBar = done[done.length - 1];
   const hi = Math.max(...last3.map(b => b.h)), lo = Math.min(...last3.map(b => b.l));
   const avgV = done.reduce((t, b) => t + (b.v || 0), 0) / done.length, busy = (lastBar.v || 0) >= avgV;
   // armed: the last completed bar closed in the market's direction on at least average volume — a break of the level now
   // would be a signal. The live tick path (bot.mjs spyWatch / spyEnter) only listens while armed, like this check.
   const armed = (market === 'up' ? lastBar.c > lastBar.o : lastBar.c < lastBar.o) && busy;
-  if (market === 'up' && px > hi && armed) return { side: 'call', market, vwap: r2(vw), level: r2(hi), armed, why: `SPY ${px} broke above the 15-minute high ${r2(hi)} with SPY above its VWAP ${r2(vw)}` };
-  if (market === 'down' && px < lo && armed) return { side: 'put', market, vwap: r2(vw), level: r2(lo), armed, why: `SPY ${px} broke below the 15-minute low ${r2(lo)} with SPY below its VWAP ${r2(vw)}` };
-  const lvl = market === 'up' ? r2(hi) : r2(lo), dir = market === 'up' ? 'above' : 'below';
-  return { idle: armed ? `SPY ${dir} VWAP ${r2(vw)} \u2014 waiting for a break ${dir} ${lvl}` : `SPY ${dir} VWAP ${r2(vw)} \u2014 waiting for a 5-minute bar to close ${market} on busy volume, then a break ${dir} ${lvl}`, market, vwap: r2(vw), level: lvl, armed };
+  // beyond yesterday's range (2026-11-03 study): the break must also clear yesterday's high (CALLs) or low (PUTs) \u2014
+  // a push into new ground, not a wiggle inside yesterday's range. Until yesterday's bar is loaded, the sleeve waits.
+  if (C.spyBeyondPrev && !(prev && prev.hi > 0 && prev.lo > 0)) return { idle: 'yesterday\u2019s high and low are not loaded yet \u2014 no trade until they are (\u201cOnly beyond yesterday\u2019s range\u201d is on)', market, vwap: r2(vw) };
+  const beyond = side => !C.spyBeyondPrev || (side === 'call' ? px > prev.hi : px < prev.lo);
+  if (market === 'up' && px > hi && armed && beyond('call')) return { side: 'call', market, vwap: r2(vw), level: r2(hi), armed, why: `SPY ${px} broke above the 15-minute high ${r2(hi)} with SPY ${(d * 100).toFixed(2)}% above its VWAP ${r2(vw)}${C.spyBeyondPrev ? ` and above yesterday's high ${r2(prev.hi)}` : ''}` };
+  if (market === 'down' && px < lo && armed && beyond('put')) return { side: 'put', market, vwap: r2(vw), level: r2(lo), armed, why: `SPY ${px} broke below the 15-minute low ${r2(lo)} with SPY ${(-d * 100).toFixed(2)}% below its VWAP ${r2(vw)}${C.spyBeyondPrev ? ` and below yesterday's low ${r2(prev.lo)}` : ''}` };
+  const up = market === 'up', dir = up ? 'above' : 'below';
+  const lvl = up ? r2(C.spyBeyondPrev ? Math.max(hi, prev.hi) : hi) : r2(C.spyBeyondPrev ? Math.min(lo, prev.lo) : lo);
+  const past = C.spyBeyondPrev && (up ? prev.hi > hi : prev.lo < lo) ? ` (that is past yesterday's ${up ? 'high' : 'low'})` : '';
+  return { idle: armed ? `SPY ${dir} VWAP ${r2(vw)} \u2014 waiting for a break ${dir} ${lvl}${past}` : `SPY ${dir} VWAP ${r2(vw)} \u2014 waiting for a 5-minute bar to close ${market} on busy volume, then a break ${dir} ${lvl}${past}`, market, vwap: r2(vw), level: up ? r2(hi) : r2(lo), armed };
 }
 
 // Exit decision on an open SPY option. optPx = the option's own price now, entryPx = its fill price.
