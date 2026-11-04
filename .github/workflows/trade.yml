@@ -39,7 +39,8 @@ jobs:
           JOURNAL_KEY: ${{ secrets.JOURNAL_KEY }}
           JOURNAL_RESET: ${{ vars.JOURNAL_RESET }}   # set the repository variable to 1 for one session to start a new journal after a passphrase change
           GITHUB_TOKEN: ${{ github.token }}   # lets a running session see the page's Pause (bot/STOP) within seconds
-      - run: |
+      - if: always()   # a cancelled run still pushes its last journal write (mem: pause, fill watermark) for the successor
+        run: |
           [ -f bot/journal.json ] || exit 0
           git config user.name "signal-desk-bot"
           git config user.email "bot@users.noreply.github.com"

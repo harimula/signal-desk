@@ -388,7 +388,7 @@ check('SPY sleeve (default on): SPY breaks the 15-minute high above its VWAP →
   const o = Y1.orders.find(x => /^SPY\d{6}C/.test(x.symbol) && x.side === 'buy'); assert.ok(o, JSON.stringify(Y1.orders) + JSON.stringify(Y1.acts)); assert.match(o.client_order_id, /^sd-yc-SPY/);
   assert.ok(+o.qty * +o.limit_price * 100 <= 5000 && +o.qty >= 1, 'spent ' + (+o.qty * +o.limit_price * 100)); assert.equal(o.time_in_force, 'day');
 });
-check('SPY sleeve: the journal carries the sleeve\'s money, use, window and rules', () => { const S = Y1.spy; assert.ok(S && S.on, JSON.stringify(S)); assert.equal(S.money, 5000); assert.equal(S.max, 6); assert.deepEqual(S.rules, { tp: 15, stop: 15, holdMin: 10, dte: 1, tradePct: 100, maxOpen: 3 }); assert.equal(S.market, 'up'); });
+check('SPY sleeve: the journal carries the sleeve\'s money, use, window and rules', () => { const S = Y1.spy; assert.ok(S && S.on, JSON.stringify(S)); assert.equal(S.money, 5000); assert.equal(S.max, 6); assert.deepEqual(S.rules, { tp: 15, stop: 15, holdMin: 10, dte: 1, tradePct: 100, maxOpen: 3, vwapGap: 0.05, beyondPrev: false }); assert.equal(S.market, 'up'); });
 const Y2 = run(SO, { bars5: { SPY: spyDn }, live: { SPY: 497.3 }, spy: 'down' });
 check('SPY sleeve: SPY breaks the 15-minute low below its VWAP → a SPY PUT (sd-yp-)', () => assert.ok(Y2.orders.some(x => /^SPY\d{6}P/.test(x.symbol) && /^sd-yp-/.test(x.client_order_id)), JSON.stringify(Y2.orders) + JSON.stringify(Y2.acts)));
 const Y3 = run(SO, { bars5: { SPY: spyUp }, live: { SPY: 502.2 } });
@@ -808,6 +808,45 @@ check('beyond yesterday’s range: the same break above yesterday’s high (≈4
   assert.ok(FV3.tickEntry && FV3.tickEntry.ok === true, JSON.stringify([FV3.tickEntry, FV3.spy && FV3.spy.idle]));
   const o = FV3.tickEntry.placed.find(x => x.side === 'buy');
   assert.ok(o && /^SPY\d{6}C/.test(o.symbol) && /^sd-yc-/.test(o.client_order_id), JSON.stringify(FV3.tickEntry.placed));
+});
+
+// AU — 2026-11-04 audit: the re-offer is one order, never two; gated like any new trade; fills-only alerts hold up
+const auOrd = { id: 'yb9', symbol: 'SPY261113C00502000', side: 'buy', type: 'limit', status: 'new', limit_price: '2.05', qty: '4', filled_qty: '0', client_order_id: 'sd-yc-SPY261113C00502000-205-20261023-595-zz', submitted_at: '2026-10-23T13:58:30Z' };
+const AU1 = run({ ...SO, spyFastFill: true }, { open: [auOrd], quote: { bp: 2.07, ap: 2.09 }, bars5: { SPY: spyUp }, live: { SPY: 502.2 }, tick: 502.7 });
+check('audit: a re-offer on a fresh session blocks the tick path — one working buy, never a second full-size entry', () => {
+  assert.ok(AU1.deletes.includes('yb9'), JSON.stringify(AU1.deletes));
+  const buys = AU1.orders.filter(x => x.side === 'buy' && /^SPY\d{6}/.test(x.symbol));
+  assert.equal(buys.length, 1, JSON.stringify(buys.map(b => b.client_order_id)));
+  assert.ok(AU1.tickEntry && AU1.tickEntry.ok === false && !AU1.tickEntry.placed.length, JSON.stringify(AU1.tickEntry));
+});
+const AU2 = run({ ...SO, spyFastFill: true }, { open: [{ ...auOrd, filled_qty: '1' }], quote: { bp: 2.07, ap: 2.09 } });
+check('audit: a partly filled entry is never re-offered (a second buy of the same contract would hide the first from the exits)', () => {
+  assert.ok(!AU2.deletes.includes('yb9'), JSON.stringify(AU2.deletes));
+  assert.ok(!AU2.orders.some(x => x.side === 'buy' && /^SPY\d{6}/.test(x.symbol)), JSON.stringify(AU2.orders));
+});
+const AU3 = run({ ...SO, spyFastFill: true }, { open: [auOrd], quote: { bp: 2.07, ap: 2.09 }, sessionEndIn: 5 });
+const AU3b = run({ ...SO, spyFastFill: true }, { open: [auOrd], quote: { bp: 2.07, ap: 2.09 }, manageOnly: true });
+check('audit: no re-offer while the session is ending or in a manage-only cycle — a fresh buy must never go out as the session dies', () => {
+  for (const [R, n] of [[AU3, 'sessionEnd'], [AU3b, 'manageOnly']]) {
+    assert.ok(!R.deletes.includes('yb9'), n + ' ' + JSON.stringify(R.deletes));
+    assert.ok(!R.orders.some(x => x.side === 'buy' && /^SPY\d{6}/.test(x.symbol)), n + ' ' + JSON.stringify(R.orders));
+  }
+});
+const auFill = (sym, cid, at, qty = '1', px = '2.1') => ({ id: 'f' + at.slice(14, 16) + sym.slice(-3), symbol: sym, side: 'buy', status: 'filled', qty, filled_qty: qty, filled_avg_price: px, limit_price: px, client_order_id: cid, filled_at: at, submitted_at: at });
+const AU4 = run({ ...SO, alertOnFill: true, spyOn: false }, { tg: true, cycles: 2, stepMs: 120000, positionsAfter: [], histAfter: [auFill('SPY261113C00502000', 'sd-yc-SPY261113C00502000-205-20261023-600-a1', '2026-10-23T14:00:30Z'), auFill('SPY261113C00503000', 'sd-yc-SPY261113C00503000-205-20261023-601-a2', '2026-10-23T14:01:30Z', '2', '1.95')] });
+check('audit: two fills that differ only in their numbers both reach the phone (✅ lines are trade lines, not number-masked)', () => {
+  const t = AU4.tgSent.map(m => m.text).join('\n');
+  assert.ok(/✅ Filled: BUY 1 SPY261113C00502000/.test(t), t.slice(0, 300));
+  assert.ok(/✅ Filled: BUY 2 SPY261113C00503000/.test(t), t.slice(0, 300));
+});
+const AU5 = run({ ...SO, alertOnFill: true, spyOn: false }, { tg: true, prevJournal: { mem: { day: '20261023', fillMark: '2026-10-23T13:30:00Z' } },
+  hist: [auFill('SPY261113C00502000', 'sd-yc-SPY261113C00502000-205-20261023-590-b1', '2026-10-23T13:50:00Z'),
+    { id: 'par1', symbol: 'ORB', side: 'buy', status: 'filled', qty: '5', filled_qty: '5', filled_avg_price: '101', client_order_id: 'sd-d-ORB-1', filled_at: '2026-10-23T13:40:00Z', submitted_at: '2026-10-23T13:39:00Z', legs: [{ id: 'lg1', symbol: 'ORB', side: 'sell', status: 'filled', qty: '5', filled_qty: '5', filled_avg_price: '103', filled_at: '2026-10-23T13:55:00Z', client_order_id: 'brokerleg1' }] }] });
+check('audit: a fill from the gap before this session started is announced once (the fill watermark carries over), and a bracket leg’s exit speaks under its parent', () => {
+  const t = AU5.tgSent.map(m => m.text).join('\n');
+  assert.ok(/✅ Filled: BUY 1 SPY261113C00502000/.test(t), t.slice(0, 400));
+  assert.ok(/✅ Sold: SELL 5 ORB @ 103/.test(t), t.slice(0, 400));
+  assert.equal((t.match(/✅ Filled: BUY 1 SPY261113C00502000/g) || []).length, 1, 'announced exactly once');
 });
 
 // FF — “Pay up to get in quickly” (spyFastFill): the cushion over the ask, the one 45-second re-offer, the 4% cap

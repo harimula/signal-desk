@@ -41,8 +41,12 @@ async function pollConfig() {
   } catch (e) { console.log('config poll failed', e.message); }
   finally { cfgBusy = false; }
 }
+let cfgAppliedAt = 0;                                                      // the updatedAt of the save in force: GitHub Pages can lag the checkout at session start, and an older save must never overwrite a newer one (audit 2026-11-04)
 function applyPendingConfig() {
   if (!cfgPending) return; const raw = cfgPending; cfgPending = null;
+  const at = raw && raw.updatedAt ? Date.parse(raw.updatedAt) || 0 : 0;
+  if (at && cfgAppliedAt && at < cfgAppliedAt) { console.log('config poll: older save than the one in force (ignored)'); return; }
+  if (at) cfgAppliedAt = at;
   const c = applyConfig(raw), s = JSON.stringify(c);
   if (s !== cfgSeen) {
     cfgSeen = s; console.log('⚙️ settings applied:', summary(c)); lastJournal = 0; wake('settings changed');
@@ -235,6 +239,7 @@ if (m1 >= closeMins()) {
 const firstToday = (() => { const js = journalStamp(); const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).replace(/-/g, ''); return !js || js.day !== d || js.mins < 9 * 60 + 30; })();
 let helloSent = !firstToday || m1 >= closeMins();
 connectStreams();
+try { cfgAppliedAt = Date.parse(JSON.parse(fs.readFileSync('bot/config.json', 'utf8')).updatedAt) || 0; } catch (e) {}   // the checkout is the newest save at start
 await pollConfig(); applyPendingConfig();
 let closedForDay = false;                                              // the market does not open again today: no successor
 while (Date.now() < END && !stopping) {

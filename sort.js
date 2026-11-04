@@ -69,8 +69,8 @@
     const r = t.rows[0];
     return r && r.cells.length > 1 && [...r.cells].every(c => c.tagName === 'TH') ? r : null;
   }
-  const label = th => clean(th.textContent);
-  const sigOf = (t, hr) => (location.pathname.split('/').pop() || 'index.html') + '#' + [...hr.cells].map(label).join('|');
+  const label = th => { if (!th.querySelector('.sr')) return clean(th.textContent); const c = th.cloneNode(true); c.querySelectorAll('.sr').forEach(x => x.remove()); return clean(c.textContent); };   // a visually hidden caption is not a clickable heading
+  const sigOf = (t, hr) => location.pathname + '#' + [...hr.cells].map(label).join('|');   // the whole path: / (the app) and /docs/ must not share saved sorts
   const width = hr => [...hr.cells].reduce((a, c) => a + (c.colSpan || 1), 0);
   function bodies(t, hr) {                                                              // [[tbody, rows that move]]
     const out = [];

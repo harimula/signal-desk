@@ -583,7 +583,7 @@ journalFixture = null;
     const res = [];
     for (const f of ['retire.html', 'rentemi.html', 'docs/index.html', 'docs/settings.html']) {
       await pg.goto(base + f, { waitUntil: 'load' }); await pg.waitForTimeout(400);
-      res.push(await pg.evaluate(f2 => { const hr = t => t.tHead && t.tHead.rows.length ? t.tHead.rows[t.tHead.rows.length - 1] : t.rows[0]; const ths = [...document.querySelectorAll('th')].filter(th => th.offsetParent && th.textContent.trim() && th.parentElement === hr(th.closest('table'))); const tables = new Set(ths.map(th => th.closest('table'))); return f2 + ': ' + ths.filter(th => th.hasAttribute('data-sdsort')).length + '/' + ths.length + ' headings in ' + tables.size + ' tables'; }, f));
+      res.push(await pg.evaluate(f2 => { const hr = t => t.tHead && t.tHead.rows.length ? t.tHead.rows[t.tHead.rows.length - 1] : t.rows[0]; const vis = th => { const c = th.cloneNode(true); c.querySelectorAll('.sr').forEach(x => x.remove()); return c.textContent.trim(); }; const ths = [...document.querySelectorAll('th')].filter(th => th.offsetParent && vis(th) && !th.closest('table[data-nosort]') && th.parentElement === hr(th.closest('table'))); const tables = new Set(ths.map(th => th.closest('table'))); return f2 + ': ' + ths.filter(th => th.hasAttribute('data-sdsort')).length + '/' + ths.length + ' headings in ' + tables.size + ' tables'; }, f));
     }
     const ok = res.every(r => { const m = / (\d+)\/(\d+) headings/.exec(r); return m && +m[2] > 0 && m[1] === m[2]; });
     check('sorting: the calculators and the docs pages sort their tables too (every heading clickable)', ok && !errs.length, res.join(' · ') + ' ' + errs.join(' | '));

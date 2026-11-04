@@ -315,7 +315,7 @@ async function spyCycle(ctx) {
     const age = Date.now() - Date.parse(o.submitted_at || o.created_at || Date.now());
     if (!CFG.spyOn || age > 3 * 60000) {
       act(`${o.symbol} SPY option buy at ${o.limit_price} ${CFG.spyOn ? 'unfilled for 3 min' : 'still working while SPY quick trades are switched off'} — cancelled`); if (!DRY) await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {}); o._cancelled = true;
-    } else if (CFG.spyFastFill && age > 45000 && !DRY && !spyRepriced.has(o.symbol + TODAY) && !(expiresToday(o.symbol) && MINS >= SPY0_CUTOFF)) await spyReprice(o, cid(o));
+    } else if (CFG.spyFastFill && age > 45000 && !DRY && !noNew && !userPause && !G.block && !halt.spy && !((+o.filled_qty || 0) > 0) && !spyRepriced.has(o.symbol + TODAY) && !(expiresToday(o.symbol) && MINS >= SPY0_CUTOFF)) await spyReprice(o, cid(o));   // a re-offer is a NEW order: never while the session is ending, paused, halted or blocked, and never on a partly filled entry (audit 2026-11-04)
   }
   if (!CFG.spyOn && !open.length) { lastSpy = { at: new Date().toISOString(), on: false, money: 0, used: 0, today: null, halted: null, idle: 'switched off', tradesToday, max: CFG.spyMaxTrades, open: [] }; return; }
   const live = liveOrders.filter(o => !o._cancelled);
@@ -329,7 +329,7 @@ async function spyCycle(ctx) {
   const pending = live.some(o => o.side === 'buy' && /^sd-y[cp]-/.test(cid(o)));
   spyHeld = new Set(positions.filter(p => isSpyOption(p.symbol)).map(p => p.symbol).concat(live.filter(o => o.side === 'buy' && isSpyOption(o.symbol)).map(o => o.symbol)));
   if (spyPlacedAt && spyPlacedAt >= snapAt - 10000 && lastSpy) { lastSpy.at = new Date().toISOString(); return; }
-  if (!pending) spyPendingUntil = 0;                                                             // the last buy (placed well before this picture) has filled or was cancelled: the next entry may go
+  if (!pending && Date.now() - spyPlacedAt > 10000) spyPendingUntil = 0;                         // the last buy (placed well before this picture) has filled or was cancelled: the next entry may go. A buy placed seconds ago (a re-offer on this very cycle) is not in the picture yet — without this guard the tick path could buy a second time (audit 2026-11-04)
   const maxOpen = CFG.spyMaxOpen || 1, tradeMoney = SIDE.spy.money * CFG.spyTradePct / 100, free = SIDE.spy.money - SL_used(positions, live);
   const stale = sig && sig.side && !spyFresh(sig.side, sig.level, spyLvl(sig.side));
   const idle = !CFG.spyOn ? 'switched off' : halt.spy ? halt.spy : userPause ? 'paused from Telegram' : G.block ? 'paused by the market check' : noNew ? noNew : pdtBlock ? 'pattern-day-trader limit (account under $25k)' : tradesToday >= CFG.spyMaxTrades ? `${tradesToday} SPY trades today — daily maximum reached` : pending ? 'buy order working' : open.length >= maxOpen ? (maxOpen > 1 ? `${open.length} SPY trades open — the most at once` : 'in a trade') : open.length && free < tradeMoney * 0.5 ? 'all of the SPY money is in trades' : sig && sig.idle ? sig.idle : !sig ? 'waiting for SPY bars' : sig.side && !spyLatestIn() ? 'waiting for the 5-minute bar that just closed' : stale ? `waiting for a new break (last ${sig.side.toUpperCase()} at ${spyLvl(sig.side)})` : null;
@@ -337,7 +337,7 @@ async function spyCycle(ctx) {
   const openRows = open.map(({ p, d, e, q }) => ({ s: p.symbol, id: e ? cid(e) : '', entry: +p.avg_entry_price || (d ? d.entry : 0), pending: false, kind: d ? d.kind : 'call', qty: q, own: q, avg: r2d(+p.avg_entry_price * 100), cur: r2d(+p.current_price * 100), pl: r2d(+p.unrealized_pl), plpc: Math.round(+p.unrealized_plpc * 1000) / 10, opened: d ? d.openMins : (e && e.filled_at ? etMinsOf(e.filled_at) : null), tp: r2d((d ? d.entry : +p.avg_entry_price) * (1 + CFG.spyTp / 100) * 100), stop: r2d((d ? d.entry : +p.avg_entry_price) * (1 - CFG.spyStop / 100) * 100) }));
   const keepPending = lastSpy && lastSpy.open ? lastSpy.open.filter(o => o.pending && live.some(l => l.symbol === o.s && l.side === 'buy')) : [];
   lastSpy = { at: new Date().toISOString(), on: !!CFG.spyOn, budget: G.budget || 1, money: r0(SIDE.spy.money), used: r0(SL_used(positions, live)), today: SIDE.spy.today ?? null, halted: halt.spy, idle, blocked: !!(pending || open.length >= maxOpen || (open.length && free < tradeMoney * 0.5)), maxOpen, tradesToday, max: CFG.spyMaxTrades, market: sig && sig.market || null, vwap: sig && sig.vwap || null, level: sig && sig.level || null, armed: !!(sig && sig.armed), spyPx: px || null,
-    window: `${CFG.spyStart}–${CFG.spyEnd} ET, flat by ${EARLY() ? mmhh(CLOSE - 15) + ' (early close today)' : '3:45 PM'}`, open: openRows.concat(keepPending), closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte, tradePct: CFG.spyTradePct, maxOpen } };
+    window: `${CFG.spyStart}–${CFG.spyEnd} ET, flat by ${EARLY() ? mmhh(CLOSE - 15) + ' (early close today)' : '3:45 PM'}`, open: openRows.concat(keepPending), closed: dayClosed.length, closedPl: r2d(dayClosed.reduce((t, c) => t + c.pl, 0)), rules: { tp: CFG.spyTp, stop: CFG.spyStop, holdMin: CFG.spyHoldMin, dte: CFG.spyDte, tradePct: CFG.spyTradePct, maxOpen, vwapGap: CFG.spyVwapGap, beyondPrev: !!CFG.spyBeyondPrev } };
   if (idle || !sig || !sig.side || Date.now() < spyPendingUntil || spyEntering || spyPlacedAt >= snapAt) return;   // a tick bought while this cycle was working: decide again next cycle
   await spyPlace(sig.side, px, sig.why, Math.min(tradeMoney, free) * (G.budget || 1), sig.level);   // one trade: its % of the SPY money, never more than is free
 }
@@ -390,21 +390,23 @@ async function spyReprice(o, id) {
   const d = decodeSpyId(id); if (!d) return;
   const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${o.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[o.symbol];
   if (!q || !(q.ap > 0) || !(q.bp > 0) || (q.ap - q.bp) / q.ap > 0.05) return;
-  const lim = spyLim(q, o.symbol), first = +o.limit_price || d.entry;
-  if (!(lim > first)) return;                                                                  // the price came back to our offer: the resting order fills on its own
+  // the id carries the FIRST offer (re-offers are encoded with it below), so the 4% cap never compounds across re-offers or restarts
+  const lim = spyLim(q, o.symbol), first = d.entry || +o.limit_price, cur = +o.limit_price || first;
+  if (!(lim > cur)) return;                                                                    // the price came back to our offer: the resting order fills on its own
   if (lim > tick(first * 1.04, o.symbol) + 1e-9) return;                                       // sprinting: let it go (checked again next pass in case it comes back)
-  if (spyRepriced.size > 300) spyRepriced.clear();
-  spyRepriced.add(o.symbol + TODAY);
-  await T('/v2/orders/' + o.id, { method: 'DELETE' }).catch(() => {});
-  const fo = await T('/v2/orders/' + o.id).catch(() => null);                                  // it may have filled in the same instant — then there is nothing to re-offer
-  if (!fo || !['canceled', 'expired'].includes(fo.status)) return;
-  const rem = Math.floor((+(fo.qty ?? o.qty) || 0) - (+(fo.filled_qty ?? o.filled_qty) || 0)); if (rem < 1) return;
+  await cancelConfirmed([o]);                                                                   // waits out pending_cancel (~2 s) — a one-shot read often sees the cancel still in flight
+  const fo = await T('/v2/orders/' + o.id, QUICK).catch(() => null);
+  if (!fo || !['canceled', 'expired'].includes(fo.status)) return;                              // not terminal yet (or filled meanwhile): nothing placed, nothing burned — the next pass decides again
   o._cancelled = true;
+  if ((+fo.filled_qty || 0) > 0) { noteFill(fo.status, fo); return; }                           // filled in part while cancelling: the exits manage what filled; a second buy of the same contract would hide it from them
+  const rem = Math.floor(+fo.qty || +o.qty || 0); if (rem < 1) return;
+  if (spyRepriced.size > 300) spyRepriced.clear();
   act(`${o.symbol} SPY option buy at ${o.limit_price} unfilled for 45 s — re-offered at ${lim} (one re-try, never more than 4% over the first offer)`);
-  const nid = encodeSpyId(d.kind, o.symbol, lim, TODAY, MINS, rid());
+  const nid = encodeSpyId(d.kind, o.symbol, first, TODAY, MINS, rid());
   const ok = await send({ symbol: o.symbol, qty: String(rem), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day', client_order_id: nid },
     `SPY ${d.kind.toUpperCase()} quick trade re-offered at ${lim} to catch the fill`);
   if (!ok) return;
+  spyRepriced.add(o.symbol + TODAY);                                                            // the one re-offer is spent only once it is really out
   spyPendingUntil = Date.now() + 3 * 60000; spyPlacedAt = Date.now();
   if (lastSpy && lastSpy.open) { const row = lastSpy.open.find(r => r.s === o.symbol && r.pending); if (row) { row.id = nid; row.entry = lim; row.avg = r2d(lim * 100); row.cur = r2d(lim * 100); row.tp = r2d(lim * (1 + CFG.spyTp / 100) * 100); row.stop = r2d(lim * (1 - CFG.spyStop / 100) * 100); } }
 }
@@ -881,7 +883,7 @@ const act = (m, key) => {                                   // same message (or 
 // What stops new trades in this cycle besides the market check: the final check of a session, or its last 10 minutes.
 let noNew = '';
 let lastWatch = null, lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
-let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
+let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, spyPrevFailAt = 0, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
 const NM = { stock: { one: 'stock', many: 'stocks', Cap: 'Stocks' }, call: { one: 'CALL', many: 'CALLs', Cap: 'CALLs' }, put: { one: 'PUT', many: 'PUTs', Cap: 'PUTs' }, spy: { one: 'SPY option', many: 'SPY options', Cap: 'SPY options' }, wheel: { one: 'wheel', many: 'wheel trades', Cap: 'Wheel' } };
 let lastSpy = null, memRestored = false, flooredSyms = new Set(), prevHeld = new Map(), spyPlacedAt = 0;
 const missingFill = new Map();                                            // symbol → { t0: when it vanished without a listed closing fill, short }: no day-loss halt until it shows (at most 10 minutes)
@@ -891,14 +893,17 @@ const alerts = [];
 // "Message only when an order fills" (alertOnFill): the 🟢/🔴 placement lines wait here by client_order_id, and the phone
 // hears ✅ when the broker reports the order filled — an attempt that dies unfilled stays quiet (the page's log keeps it).
 const fillWhy = new Map(), fillSeen = new Set(), BORN_MS = Date.now();
+let fillMark = 0;                                                          // the newest announced fill's time: carried in the journal's mem, so a fill landing between two sessions is announced by the next one (and never twice)
 export function noteFill(ev, o, price) {
-  if (!CFG.alertOnFill || !o || !o.id) return;
-  const cid = o.client_order_id || ''; if (!/^sd-/.test(cid)) return;      // only the bot's own orders; hand orders stay quiet
+  if (!o || !o.id) return;
+  const cid = o.client_order_id || ''; if (!/^sd-/.test(cid)) return;      // only the bot's own orders (a bracket leg is announced under its parent's id); hand orders stay quiet
+  if (!CFG.alertOnFill && !fillWhy.has(cid)) return;                       // switched off mid-flight: a trade whose placement line was already held back is still announced, or it would never reach the phone at all
   const filled = +o.filled_qty || 0, qty = +o.qty || 0, px = +o.filled_avg_price || +price || 0;
   if (ev === 'fill' && !fillSeen.has(o.id + ':fill')) {
     fillSeen.add(o.id + ':fill');
     const opt = isOpt(o.symbol), tot = px * filled * (opt ? 100 : 1), base = fillWhy.get(cid); fillWhy.delete(cid);
-    alerts.push(`✅ ${o.side === 'buy' ? 'Filled' : 'Sold'}: ${o.side.toUpperCase()} ${filled} ${o.symbol} @ ${r2d(px)} ($${Math.round(tot).toLocaleString('en-US')})${base ? '\n— ' + base.replace(/^[🟢🔴] /, '') : ''}`);
+    alerts.push(`✅ ${o.side === 'buy' ? 'Filled' : 'Sold'}: ${o.side.toUpperCase()} ${filled} ${o.symbol} @ ${r2d(px)} ($${Math.round(tot).toLocaleString('en-US')})${base ? '\n— ' + base.replace(/^[🟢🔴] /u, '') : ''}`);
+    if (o.filled_at) fillMark = Math.max(fillMark, Date.parse(o.filled_at) || 0);
   } else if (['canceled', 'expired', 'rejected'].includes(ev)) {
     if (filled > 0 && filled < qty && !fillSeen.has(o.id + ':part')) { fillSeen.add(o.id + ':part'); alerts.push(`⚠️ Partly filled, then ${ev}: ${o.side.toUpperCase()} ${filled} of ${qty} ${o.symbol}${px ? ' @ ' + r2d(px) : ''}`); }
     fillWhy.delete(cid);                                                   // died: the placement line is dropped quietly
@@ -986,7 +991,7 @@ async function flushAlerts() {
   // A buy or sell alert (green / red dot) is held back only when the very same text went out in the last minute: two SPY
   // trades differ only in their numbers, and each must reach the phone. Other alerts (errors, limits) are held back for 20
   // minutes when only their numbers changed.
-  const lines = alerts.splice(0).filter(m => { const trade = /^(🟢|🔴)/.test(m), k = trade ? 'trade:' + m : m.replace(/[\d.]+/g, '#'); if (sentAlerts.has(k) && Date.now() - sentAlerts.get(k) < (trade ? 60000 : 20 * 60000)) return false; sentAlerts.set(k, Date.now()); return true; });
+  const lines = alerts.splice(0).filter(m => { const trade = ['🟢', '🔴', '✅', '⚠'].some(e => m.startsWith(e)), k = trade ? 'trade:' + m : m.replace(/[\d.]+/g, '#'); if (sentAlerts.has(k) && Date.now() - sentAlerts.get(k) < (trade ? 60000 : 20 * 60000)) return false; sentAlerts.set(k, Date.now()); return true; });   // ✅/⚠️ fill lines are trade lines too: two fills differing only in their numbers must both reach the phone (audit 2026-11-04)
   if (!lines.length || DRY || !CFG.alerts) return;
   if (tgOn()) try { await tgSend(lines.join('\n\n')); } catch (e) { console.log('telegram alert failed', e.message); }
 }
@@ -1064,7 +1069,7 @@ async function run() {
   }
   if (!memRestored) {                                                      // first cycle of this process: pick up today's day-state from the previous run's journal
     memRestored = true;
-    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.wheel && pv.mem.wheel.opts) wheelMem = pv.mem.wheel; if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.spyLevels && pv.mem.spyLevels.day === TODAY) spyLevels = pv.mem.spyLevels; if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
+    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.wheel && pv.mem.wheel.opts) wheelMem = pv.mem.wheel; if (pv && pv.mem && pv.mem.fillMark) fillMark = Math.max(fillMark, Date.parse(pv.mem.fillMark) || 0); if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.spyLevels && pv.mem.spyLevels.day === TODAY) spyLevels = pv.mem.spyLevels; if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
   }
   const clock = lastClock;
   if (READONLY) return;                                                    // journal only: nothing is placed, changed or cancelled
@@ -1099,7 +1104,15 @@ async function run() {
   { const R = wheelReconcile({ mem: wheelMem, positions, hist, today: ymdDash(Date.now()), now: new Date().toISOString() }); wheelMem = R.mem; for (const e of R.events) { const m = wheelEventText(e); act(m); alerts.push('\ud83d\udd01 ' + m); } }
   // fills the stream missed (or arrived while it was down): announced from the order history, never twice and never
   // from before this session started (a restart must not repeat the previous session's phone messages)
-  if (CFG.alertOnFill) for (const o of hist) if (o.status === 'filled' && /^sd-/.test(cidOf(o)) && Date.parse(o.filled_at || 0) > Math.max(BORN_MS, Date.now() - 15 * 60000)) noteFill('fill', o);
+  if (CFG.alertOnFill) {                                                   // fallback when the trade stream is down — and the net under the stream for fills between two sessions
+    const floor = Math.max(fillMark || BORN_MS, Date.now() - 60 * 60000);  // everything newer than the last announced fill (carried across restarts in mem), at most an hour back
+    for (const o of hist) {
+      if (!/^sd-/.test(cidOf(o))) continue;
+      if (o.status === 'filled' && Date.parse(o.filled_at || 0) > floor) noteFill('fill', o);
+      else if (['canceled', 'expired'].includes(o.status) && (+o.filled_qty || 0) > 0 && Date.parse(o.canceled_at || o.updated_at || o.filled_at || 0) > floor) noteFill(o.status, o);   // a partial that died while the stream was down still gets its ⚠️
+      for (const l of o.legs || []) if (l && l.id && l.status === 'filled' && Date.parse(l.filled_at || 0) > floor) noteFill('fill', { ...l, client_order_id: cidOf(o) });   // bracket/OTO legs (the broker names them): a day-trade exit or a stock's floor-stop fill is announced under its parent's id
+    }
+  }
   const wheelOrderSyms = new Set(hist.concat(openOrders).filter(o => isWheelId(cidOf(o)) && (String(o.filled_at || o.updated_at || o.submitted_at || '').slice(0, 10) === ymdDash(Date.now()) || ['new', 'accepted', 'partially_filled', 'held', 'pending_new'].includes(o.status))).map(o => o.symbol));   // its working orders and contracts it traded today — an old trade in a contract another part holds now does not make that position the wheel's
   const wheelUnds = new Set([...Object.values(wheelMem.opts).map(x => x.und), ...Object.keys(wheelMem.shares), ...openOrders.filter(o => isWheelSell(cidOf(o))).map(o => (parseOcc(o.symbol) || {}).und).filter(Boolean)]);
   const isWheelPos = sym => wheelHas(sym) || (isOpt(sym) && !posBySym[sym] && wheelOrderSyms.has(sym));   // its sold options and the shares a put delivered; a contract it bought back today (no position left) for today's fills
@@ -1119,11 +1132,18 @@ async function run() {
   }
   let spyPct = null;
   try {
-    if (!spyPrev || spyPrev.day !== TODAY) {
-      const sb = ((await D(`/v2/stocks/bars?symbols=SPY&timeframe=1Day&start=${new Date(Date.now() - 450 * 864e5).toISOString()}&limit=1000&adjustment=split&feed=iex&sort=asc`)).bars || {}).SPY || [];
-      const done = sb.filter(b => b.t.slice(0, 10) < ymdDash(Date.now()));
-      const prev = done[done.length - 1];
-      spyPrev = prev ? { day: TODAY, c: prev.c, hi: +prev.h || 0, lo: +prev.l || 0, closes: done.map(b => b.c), days: done.map(b => b.t.slice(0, 10)) } : null;
+    if ((!spyPrev || spyPrev.day !== TODAY) && Date.now() - spyPrevFailAt > 10 * 60000) {   // a failed read backs off 10 min instead of re-asking every beat
+      try {
+        const sb = ((await D(`/v2/stocks/bars?symbols=SPY&timeframe=1Day&start=${new Date(Date.now() - 450 * 864e5).toISOString()}&limit=1000&adjustment=split&feed=iex&sort=asc`)).bars || {}).SPY || [];
+        const done = sb.filter(b => b.t.slice(0, 10) < ymdDash(Date.now()));
+        const prev = done[done.length - 1];
+        // "yesterday" must really be the last trading day: a lagging feed whose newest bar is older than 5 calendar days
+        // gives no high/low (the beyond-yesterday filter then waits and says so) rather than a wrong one
+        const fresh = prev && (Date.parse(ymdDash(Date.now())) - Date.parse(prev.t.slice(0, 10))) / 864e5 <= 5;
+        spyPrev = prev ? { day: TODAY, c: prev.c, hi: fresh ? +prev.h || 0 : 0, lo: fresh ? +prev.l || 0 : 0, closes: done.map(b => b.c), days: done.map(b => b.t.slice(0, 10)) } : null;
+        if (prev && !fresh) console.log('SPY daily bars end', prev.t.slice(0, 10), '— too old for yesterday’s high/low');
+        if (!spyPrev) spyPrevFailAt = Date.now();
+      } catch (e) { spyPrevFailAt = Date.now(); throw e; }
     }
     const st = (await latestPrices(['SPY'])).SPY;
     if (spyPrev && st) spyPct = (st.p / spyPrev.c - 1) * 100;
@@ -1623,7 +1643,7 @@ async function writeJournal() {
     // panels the bot only computes while the market is open: a process that has not computed them yet keeps the previous ones
     risk: lastRisk || prev.risk || null, split: lastSplit || prev.split || null, spy: lastSpy || prev.spy || null, wheel: lastWheel || prev.wheel || null,
     watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
-    mem: { day: TODAY, lastDayPx, userPause, haltSaid: [...haltSaid], spyLevels, wheel: wheelMem },   // the wheel's memory carries across days (what it sold, the shares a put delivered)
+    mem: { day: TODAY, lastDayPx, userPause, haltSaid: [...haltSaid], spyLevels, wheel: wheelMem, fillMark: fillMark ? new Date(fillMark).toISOString() : null },   // the wheel's memory carries across days; fillMark = the newest announced fill, so the next session announces what landed in the gap
     since: await sinceStart(prev.since, fills, acct).catch(() => prev.since || null),   // day-state a restart must not forget: yesterday's closes of sold-out symbols, a Telegram /pause, alerts already sent
     limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {
