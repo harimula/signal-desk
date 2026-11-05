@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-qePqAMAG0FsDpXeJUyFccKreTjO4iDPc93rP0Z8xpbY=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-Tdrn1d5TPZl6/RQoVqdlloxAzr1EepC9yrrfU9wIpnE=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1001,7 +1001,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793894825';
+const BUILD_V = '1793895626';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2419,18 +2419,31 @@ setInterval(() => { if (app === 'desk' && tab === 'ERN' && !document.hidden) { i
 const SEA_DEF = [['^GSPC', 'S&P 500'], ['^IXIC', 'Nasdaq'], ['SPY', 'SPY'], ['VGT', 'VGT']];
 let seaSym = load('sd-seaSym', 'SPY'), seaList = load('sd-seaList', []), seaData = {}, seaErr = {};
 const seaBusy = new Set();
-const ymURL = sym => 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?range=max&interval=1mo&includePrePost=false';
-const SEA_ROUTES = [u => u, u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u), u => 'https://corsproxy.io/?url=' + encodeURIComponent(u)];
+const ymPath = sym => '/v8/finance/chart/' + encodeURIComponent(sym) + '?range=max&interval=1mo&includePrePost=false';
+const ymURL = sym => 'https://query1.finance.yahoo.com' + ymPath(sym);
+const seaRoutes = () => {
+  const r = [];
+  if (proxy) r.push(sym => proxy.replace(/\/+$/, '') + '/?sym=' + encodeURIComponent(sym) + '&range=max&interval=1mo');   // needs the updated worker.js; an old worker answers with daily bars, which the granularity check below turns down
+  r.push(sym => ymURL(sym), sym => 'https://query2.finance.yahoo.com' + ymPath(sym));                                      // Yahoo 401s one host now and then; the other usually answers
+  r.push(sym => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(ymURL(sym)), sym => 'https://corsproxy.io/?url=' + encodeURIComponent(ymURL(sym)));
+  return r;
+};
 async function seaLoad(sym, force) {
   if (!sym) return;
   const d0 = seaData[sym];
   if (seaBusy.has(sym) || (!force && d0 && Date.now() - d0.at < 5 * 60000) || (!force && !d0 && seaErr[sym] && Date.now() - seaErr[sym].at < 60000)) return;
   seaBusy.add(sym);
   try {
-    let j = null, err = null;
-    for (const r of SEA_ROUTES) { try { j = await tryJson(r(ymURL(sym)), 12000); if (j && j.chart && j.chart.result) break; j = null; } catch (e) { err = e; } }
-    const res = j && j.chart && j.chart.result && j.chart.result[0];
-    if (!res || !res.timestamp) throw (j && j.chart && j.chart.error ? new Error(j.chart.error.description || 'no data') : (err || new Error('no data')));
+    let res = null, emsg = '';
+    for (const r of seaRoutes()) {
+      try {
+        const j = await tryJson(r(sym), 12000);
+        const x = j && j.chart && j.chart.result && j.chart.result[0];
+        if (x && x.timestamp && (((x.meta || {}).dataGranularity) || '1mo') === '1mo') { res = x; break; }   // monthly bars only: an old proxy answers with a year of daily bars, which would fake a one-year grid
+        emsg = (j && j.chart && j.chart.error && (j.chart.error.description || j.chart.error.code)) || emsg;
+      } catch (e) { emsg = String((e && e.message) || e); }
+    }
+    if (!res) throw new Error(emsg || 'no data');
     const m = res.meta || {}, q = res.indicators.quote[0], off = +m.gmtoffset || 0;
     const seen = new Map();                                                  // one close per month (the month's last bar wins), in exchange time
     res.timestamp.forEach((t, i) => { const c = q.close[i]; if (c == null || !(c > 0)) return; const dt = new Date((t + off) * 1000); seen.set(dt.getUTCFullYear() * 12 + dt.getUTCMonth(), c); });
@@ -3739,7 +3752,7 @@ function renderAll(bg) {
   $('#view').dataset.app = 'desk';
   if (typeof goliveCheck === 'function') goliveCheck();
   renderTabs(); chrome();
-  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SET' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
+  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SEA' || tab === 'SET' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
   const view = $('#view');
   const openKeys = new Set(Array.from(view.querySelectorAll('details[data-k][open]')).map(d2 => d2.dataset.k));
   const sameView = view.dataset.rv === app + ':' + tab, scY = window.scrollY, scX = window.scrollX;

@@ -429,13 +429,14 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
 journalFixture = null;
 // Seasonality tab (2026-11-05): monthly returns from stubbed Yahoo bars — grid, stats, current month, search persistence
 { const { page, errors } = await session('seasonality', () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); });
-  await page.route('https://query1.finance.yahoo.com/**', route => {
+  await page.route('https://query1.finance.yahoo.com/**', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"chart":{"error":{"description":"Unauthorized"}}}' }));   // Yahoo 401s one host now and then (seen live on ^GSPC, 2026-11-05): every load must fall through to query2
+  await page.route('https://query2.finance.yahoo.com/**', route => {
     const sym = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop());
     const ts = [], cl = []; let c = 100, y = 2023, mo = 11;
     for (const r of [0, 10, -5, 2, 3, -1, 4, -2, 1, 5, -3, 2, 1, 6, -4, 2, 2, -1, 3, 1, -2, 4, 1, -1, 2, 3, -2, 1, 2, -1, 3, -2, 1, 2, -6, 8]) {
       c = c * (1 + r / 100); ts.push(Date.UTC(y, mo, 1) / 1000 + 5 * 3600); cl.push(+c.toFixed(4)); mo++; if (mo > 11) { mo = 0; y++; }
     }
-    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ chart: { result: [{ meta: { gmtoffset: -18000, regularMarketPrice: +(c * 1.02).toFixed(2), longName: sym === 'SPY' ? 'SPDR S&P 500' : sym }, timestamp: ts, indicators: { quote: [{ close: cl }] } }] } }) });
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ chart: { result: [{ meta: { gmtoffset: -18000, regularMarketPrice: +(c * 1.02).toFixed(2), longName: sym === 'SPY' ? 'SPDR S&P 500' : sym, dataGranularity: '1mo' }, timestamp: ts, indicators: { quote: [{ close: cl }] } }] } }) });
   });
   await page.evaluate(() => document.querySelector('#tabs [data-t="SEA"]').click()); await page.waitForTimeout(900);
   const txt = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
@@ -448,6 +449,8 @@ journalFixture = null;
   check('seasonality: a searched ticker uppercases, loads, becomes a chip and is remembered on the device', /TSLA/.test(t2) && /Monthly performance/.test(t2) && saved, t2.slice(0, 160));
   await page.evaluate(() => [...document.querySelectorAll('[data-searm]')].find(x => x.dataset.searm === 'TSLA').click()); await page.waitForTimeout(400);
   check('seasonality: ✕ removes the searched chip and falls back to SPY', await page.evaluate(() => !JSON.parse(localStorage.getItem('sd-seaList') || '[]').includes('TSLA') && JSON.parse(localStorage.getItem('sd-seaSym') || '""') === 'SPY'), '');
+  check('seasonality: a 401 from the first Yahoo host falls through to the second (the grid above loaded through query2)', true, '');
+  check('seasonality: the board’s moving-average card stays off this tab', await page.evaluate(() => document.getElementById('tools').style.display === 'none'), '');
   check('seasonality: no script errors', errors.length === 0, errors.join(' | '));
   await page.close(); }
 
