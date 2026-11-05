@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-cKHR1X4Da7SLORE4HDyKzv891B7b7MKQILRRXHwJ4hg=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-eDlwpFr1LUWZJih6XfYLde4PoGyjUmXq5zk8ZQ2tYdI=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1009,7 +1009,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793902576';
+const BUILD_V = '1793919098';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2426,7 +2426,7 @@ setInterval(() => { if (app === 'desk' && tab === 'ERN' && !document.hidden) { i
 // ---------- Seasonality: month-by-month returns for any symbol (Yahoo monthly bars, same routes as the board) ----------
 const SEA_DEF = [['^GSPC', 'S&P 500'], ['^IXIC', 'Nasdaq'], ['SPY', 'SPY'], ['VGT', 'VGT']];
 let seaSym = load('sd-seaSym', 'SPY'), seaList = load('sd-seaList', []), seaData = {}, seaErr = {};
-const seaBusy = new Set();
+const seaBusy = new Set(), seaT0 = {};
 const seaCacheGet = sym => { try { const v = JSON.parse(localStorage.getItem('sea2-' + sym) || 'null'); return v && Array.isArray(v.ret) ? { at: v.at, name: v.name, px: v.px, nowK: v.nowK, tz: v.tz || '', ret: new Map(v.ret), stale: true } : null; } catch (e) { return null; } };
 const seaCachePut = (sym, d) => { try { localStorage.setItem('sea2-' + sym, JSON.stringify({ at: d.at, name: d.name, px: d.px, nowK: d.nowK, tz: d.tz || '', ret: [...d.ret] })); const idx = JSON.parse(localStorage.getItem('sea2-idx') || '[]').filter(x => x !== sym); idx.push(sym); while (idx.length > 24) localStorage.removeItem('sea2-' + idx.shift()); localStorage.setItem('sea2-idx', JSON.stringify(idx)); localStorage.removeItem('sea1-' + sym); } catch (e) {} };
 const ymPath = sym => '/v8/finance/chart/' + encodeURIComponent(sym) + '?range=max&interval=1mo&includePrePost=false';
@@ -2450,11 +2450,13 @@ function seaFetch(path, proxyQ, wantMonthly, maxT0) {
   return new Promise((resolve, reject) => {
     let emsg = '', oldWorker = false, started = 0, pending = 0, done = false, timer = 0;
     const kick = () => {
-      if (done || started >= routes.length) return;
-      const u = routes[started++]; pending++;
+      if (done) return;
       if (timer) { clearTimeout(timer); timer = 0; }
-      if (started < routes.length) timer = setTimeout(kick, 2500);
-      tryJson(u, 9000).then(j => {
+      if (started >= routes.length) return;
+      if (pending >= 3) { timer = setTimeout(kick, 1000); return; }          // three at once is plenty — more only chokes a weak phone connection
+      const u = routes[started++]; pending++;
+      if (started < routes.length) timer = setTimeout(kick, 2000);
+      tryJson(u, 10000).then(j => {
         const x = j && j.chart && j.chart.result && j.chart.result[0];
         if (x && x.timestamp) {
           if ((!wantMonthly || (((x.meta || {}).dataGranularity) || '1mo') === '1mo') && (!maxT0 || x.timestamp[0] <= maxT0)) {
@@ -2464,12 +2466,12 @@ function seaFetch(path, proxyQ, wantMonthly, maxT0) {
         }
         emsg = (j && j.chart && j.chart.error && (j.chart.error.description || j.chart.error.code)) || emsg;
       }).catch(e => {
-        const m = String((e && e.message) || e); emsg = /abort/i.test(m) ? 'Yahoo did not answer within 9 seconds' : (m || emsg);
+        const m = String((e && e.message) || e); emsg = /abort/i.test(m) ? 'the network did not answer in time (very slow connection)' : (m || emsg);
       }).then(() => {
         pending--;
         if (done) return;
         if (started < routes.length) kick();
-        else if (!pending) { done = true; reject(new Error(oldWorker ? 'your saved price proxy runs an old worker.js \u2014 in Cloudflare, paste the repo\u2019s latest worker.js over it once and these errors stop' : emsg || 'no data')); }
+        else if (!pending) { done = true; if (timer) { clearTimeout(timer); timer = 0; } reject(new Error(oldWorker ? 'your saved price proxy runs an old worker.js \u2014 in Cloudflare, paste the repo\u2019s latest worker.js over it once and these errors stop' : emsg || 'no data')); }
       });
     };
     kick();
@@ -2489,7 +2491,7 @@ async function seaLoad(sym, force) {
   if (!sym) return;
   const d0 = seaData[sym];
   if (seaBusy.has(sym) || (!force && d0 && Date.now() - d0.at < 5 * 60000) || (!force && !d0 && seaErr[sym] && Date.now() - seaErr[sym].at < 60000)) return;
-  seaBusy.add(sym);
+  seaBusy.add(sym); seaT0[sym] = Date.now();
   try {
     const args = [ymPath(sym), 'sym=' + encodeURIComponent(sym) + '&range=max&interval=1mo', true];
     const res = await seaFetch(...args).catch(async () => {                  // one quiet second try before any error shows — phone networks drop whole batches for a moment
@@ -2524,7 +2526,7 @@ function seasonalityView() {
   const chips = picks.map(([x, label]) => `<span style="display:inline-flex;align-items:center;gap:2px"><button type="button" class="chip${x === seaSym ? ' on' : ''}" data-seasym="${esc(x)}">${esc(label)}</button>${SEA_DEF.some(([s]) => s === x) ? '' : `<button type="button" class="chip" data-searm="${esc(x)}" aria-label="Remove ${esc(x)}" style="padding:4px 8px">✕</button>`}</span>`).join(' ');
   const head = `<div class="tools card" style="gap:8px"><span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${chips}</span><span style="display:flex;gap:6px;align-items:center"><input id="seaIn" aria-label="Add a ticker" placeholder="Any ticker — TSLA, QQQ, ^NSEI…" style="min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:6px 10px;color:var(--text);font:inherit;font-size:12.5px"><button type="button" class="btn" id="seaGo">Add</button></span></div>`;
   if (!D && E) return head + `<div class="card" style="padding:16px"><b>${esc(seaSym)}</b> — could not load it (${esc(E.msg)}). <button type="button" class="btn" data-searetry="1">Try again</button><div class="mut" style="font-size:12px;margin-top:6px">Tickers are looked up on Yahoo Finance: indexes start with ^ (^GSPC, ^IXIC, ^NSEI), Indian stocks end with .NS (TCS.NS). Yahoo sometimes refuses busy phone networks for a few minutes — a tap on the chip tries again at once. For a route that never gets refused, set up the small Cloudflare proxy in ⚡ Live prices (one paste of the repo's worker.js; if yours predates Nov 5, paste the latest once so it serves monthly bars too).</div></div>`;
-  if (!D) return head + '<div class="card" style="padding:16px" aria-busy="true">Loading ' + esc(seaSym) + '…</div>';
+  if (!D) return head + '<div class="card" style="padding:16px" aria-busy="true">Loading ' + esc(seaSym) + '… <span id="seaLoadN" class="mut" style="font-size:12px"></span></div>';
   const years = [...new Set([...D.ret.keys()].map(k => Math.floor(k / 12)))].sort((x, y) => y - x).slice(0, 30);
   const val = (y, mo) => D.ret.has(y * 12 + mo) ? D.ret.get(y * 12 + mo) : null;
   const pc2 = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
@@ -2607,9 +2609,14 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('[data-seadrill], [data-seacol]')) { e.preventDefault(); e.target.click(); }
 });
 setInterval(() => { if (app === 'desk' && tab === 'SEA' && !document.hidden) seaLoad(seaSym); }, 5 * 60000);   // the 5-minute freshness check; seaLoad itself keeps at least 5 minutes between reads
+setInterval(() => {                                                        // while the loading card shows, count the wait out loud instead of looking frozen
+  const el = document.getElementById('seaLoadN'); if (!el || !seaT0[seaSym]) return;
+  const n = Math.round((Date.now() - seaT0[seaSym]) / 1000);
+  el.textContent = n >= 4 ? n + 's' + (n >= 10 ? ' — slow network, still trying; it gives up after about a minute' : '') : '';
+}, 1000);
 let seaPre = 0;
 setInterval(() => {                                                        // warm the other benchmark chips, one every few seconds while the tab is open
-  if (app !== 'desk' || tab !== 'SEA' || document.hidden) return;
+  if (app !== 'desk' || tab !== 'SEA' || document.hidden || seaBusy.size) return;   // never compete with a load already running (one weak connection at a time)
   const want = SEA_DEF.map(([x]) => x).filter(x => x !== seaSym && !seaData[x] && !(seaErr[x] && Date.now() - seaErr[x].at < 10 * 60000));
   if (want.length) seaLoad(want[seaPre++ % want.length]);
 }, 4000);
