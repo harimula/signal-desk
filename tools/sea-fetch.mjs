@@ -14,7 +14,7 @@ const routes = s => {
 async function pull(s) {
   let err = '';
   for (const u of routes(s)) {
-    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 20000);
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 10000);
     try {
       const r = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0' }, signal: ctl.signal });
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -33,13 +33,13 @@ fs.mkdirSync('data/sea', { recursive: true });
 // Yahoo refuses single requests at random from datacenter addresses (the first run lost 68 of 172 that way, scattered,
 // not rate-limit-shaped) — so: two at a time, a breath between requests, and up to three passes over the failures.
 let left = syms.slice();
-for (let pass = 1; pass <= 3 && left.length; pass++) {
-  if (pass > 1) { console.log('pass ' + pass + ': retrying ' + left.length + ' after a pause'); await new Promise(r => setTimeout(r, 25000)); }
+for (let pass = 1; pass <= 4 && left.length; pass++) {
+  if (pass > 1) { console.log('pass ' + pass + ': retrying ' + left.length + ' after a pause'); await new Promise(r => setTimeout(r, 20000)); }
   const fails = []; let i = 0;
   await Promise.all(Array.from({ length: 2 }, async () => {
     while (i < left.length) {
       const s = left[i++];
-      try { fs.writeFileSync(fname(s), JSON.stringify(await pull(s))); } catch (e) { fails.push(s); if (pass === 3) console.log('fail', s, e.message); }
+      try { fs.writeFileSync(fname(s), JSON.stringify(await pull(s))); } catch (e) { fails.push(s); if (pass === 4) console.log('fail', s, e.message); }
       await new Promise(r => setTimeout(r, 250));
     }
   }));
