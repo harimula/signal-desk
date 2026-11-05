@@ -430,6 +430,7 @@ journalFixture = null;
 // Seasonality tab (2026-11-05): monthly returns from stubbed Yahoo bars — grid, stats, current month, search persistence
 { const { page, errors } = await session('seasonality', () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); });
   await page.route('https://query1.finance.yahoo.com/**', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"chart":{"error":{"description":"Unauthorized"}}}' }));   // Yahoo 401s one host now and then (seen live on ^GSPC, 2026-11-05): every load must fall through to query2
+  await page.route('**/data/sea/**', route => route.fulfill({ status: 404, contentType: 'text/plain', body: 'not here' }));   // the nightly site copies stay out of this phase — the live ladder is what's tested
   await page.route('https://query2.finance.yahoo.com/**', route => {
     const ru = new URL(route.request().url()), sym = decodeURIComponent(ru.pathname.split('/').pop());
     if (ru.searchParams.get('interval') === '1d') {                         // the drill-down's day-by-day window
@@ -500,6 +501,13 @@ journalFixture = null;
   const tOw = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
   check('seasonality: when the saved proxy answers with the old worker’s daily bars, the error says to paste the latest worker.js (not “HTTP 403”)', /old worker\.js/.test(tOw) && !/could not load it \(HTTP 403\)/.test(tOw), tOw.slice(0, 280));
   await page.evaluate(() => { const x = [...document.querySelectorAll('[data-searm]')].find(b => b.dataset.searm === 'OLDW'); if (x) x.click(); });
+  // the site's own nightly copy: a symbol never seen on this device draws at once even with Yahoo fully refused
+  await page.route('**/data/sea/SITE.json', route => { const ts = [], cl = []; let c = 100, y = 2023, mo = 11;
+    for (const r of [0, 10, -5, 2, 3, -1, 4, -2, 1, 5, -3, 2, 1, 6, -4, 2, 2, -1, 3, 1, -2, 4, 1, -1, 2, 3, -2, 1, 2, -1, 3, -2, 1, 2, -6, 8]) { c = c * (1 + r / 100); ts.push(Date.UTC(y, mo, 1) / 1000 + (mo >= 3 && mo <= 10 ? 4 : 5) * 3600); cl.push(+c.toFixed(4)); mo++; if (mo > 11) { mo = 0; y++; } }
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ chart: { result: [{ meta: { exchangeTimezoneName: 'America/New_York', regularMarketPrice: +(c * 1.02).toFixed(2), longName: 'Site Copy Inc', dataGranularity: '1mo', builtAt: Date.now() - 16 * 3600000 }, timestamp: ts, indicators: { quote: [{ close: cl }] } }] } }) }); });
+  await page.fill('#seaIn', 'SITE'); await page.keyboard.press('Enter'); await page.waitForTimeout(2500);
+  const tSite = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  check('seasonality: a symbol never seen on this device draws at once from the site’s nightly copy while Yahoo refuses everything', /Site Copy Inc/.test(tSite) && /nightly copy/.test(tSite) && /\+10\.00%/.test(tSite), tSite.slice(0, 260));
   check('seasonality: the board’s moving-average card stays off this tab', await page.evaluate(() => document.getElementById('tools').style.display === 'none'), '');
   check('seasonality: no script errors', errors.length === 0, errors.join(' | '));
   await page.close(); }

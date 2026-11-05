@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-eDlwpFr1LUWZJih6XfYLde4PoGyjUmXq5zk8ZQ2tYdI=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-wYBFaSgtnHToJTC2jCakb43V55f4sXcDYxxtZ4zYEjQ=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1009,7 +1009,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793919098';
+const BUILD_V = '1793920781';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2487,25 +2487,39 @@ const seaMonKey = (() => { const F = {}; return (sec, tz) => {
   return +t.slice(0, 4) * 12 + (+t.slice(5, 7)) - 1;
 }; })();
 const SEA_MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function seaDigest(sym, res, at) {
+  const m = res.meta || {}, q = res.indicators.quote[0], tz = m.exchangeTimezoneName || '';
+  const seen = new Map();                                                  // one close per month (the month's last bar wins), by the exchange's own calendar
+  res.timestamp.forEach((t, i) => { const c = q.close[i]; if (c == null || !(c > 0)) return; seen.set(seaMonKey(t, tz), c); });
+  const keys = [...seen.keys()].sort((x, y) => x - y);
+  if (keys.length < 14) throw new Error('not enough monthly history');
+  const nowK = seaMonKey(Date.now() / 1000, tz);
+  if (keys[keys.length - 1] === nowK && +m.regularMarketPrice > 0) seen.set(nowK, +m.regularMarketPrice);   // this month, at the latest price
+  const ret = new Map();
+  for (let i = 1; i < keys.length; i++) { const a2 = seen.get(keys[i - 1]), b2 = seen.get(keys[i]); if (a2 > 0) ret.set(keys[i], (b2 / a2 - 1) * 100); }
+  return { at, name: m.longName || m.shortName || sym, px: +m.regularMarketPrice || seen.get(keys[keys.length - 1]), ret, nowK, tz };
+}
 async function seaLoad(sym, force) {
   if (!sym) return;
   const d0 = seaData[sym];
-  if (seaBusy.has(sym) || (!force && d0 && Date.now() - d0.at < 5 * 60000) || (!force && !d0 && seaErr[sym] && Date.now() - seaErr[sym].at < 60000)) return;
+  if (seaBusy.has(sym) || (!force && d0 && Date.now() - d0.at < 5 * 60000) || (!force && seaErr[sym] && Date.now() - seaErr[sym].at < 60000)) return;
   seaBusy.add(sym); seaT0[sym] = Date.now();
+  if (!d0 || d0.stale) {                                                   // the site's own nightly copy first: it comes from the same place as the page, so no network can refuse it
+    try {
+      const j = await tryJson('data/sea/' + sym.replace(/[^A-Za-z0-9.\-]/g, '_') + '.json', 8000);
+      const x = j && j.chart && j.chart.result && j.chart.result[0];
+      if (x && x.timestamp) {
+        const d = seaDigest(sym, x, +((x.meta || {}).builtAt) || Date.now());
+        d.stale = true; d.site = true;                                     // drawn at once, upgraded by the live read below
+        if (!seaData[sym] || seaData[sym].stale) { seaData[sym] = d; if (app === 'desk' && tab === 'SEA') renderAll(true); }
+      }
+    } catch (e) { void e; }                                                // no copy on the site for this symbol — the live routes decide
+  }
   try {
     const args = [ymPath(sym), 'sym=' + encodeURIComponent(sym) + '&range=max&interval=1mo', true];
     const res = await seaFetch(...args).catch(async () => {                  // one quiet second try before any error shows — phone networks drop whole batches for a moment
       await new Promise(r => setTimeout(r, 2500)); return seaFetch(...args); });
-    const m = res.meta || {}, q = res.indicators.quote[0], tz = m.exchangeTimezoneName || '';
-    const seen = new Map();                                                  // one close per month (the month's last bar wins), by the exchange's own calendar
-    res.timestamp.forEach((t, i) => { const c = q.close[i]; if (c == null || !(c > 0)) return; seen.set(seaMonKey(t, tz), c); });
-    const keys = [...seen.keys()].sort((x, y) => x - y);
-    if (keys.length < 14) throw new Error('not enough monthly history');
-    const nowK = seaMonKey(Date.now() / 1000, tz);
-    if (keys[keys.length - 1] === nowK && +m.regularMarketPrice > 0) seen.set(nowK, +m.regularMarketPrice);   // this month, at the latest price
-    const ret = new Map();
-    for (let i = 1; i < keys.length; i++) { const a2 = seen.get(keys[i - 1]), b2 = seen.get(keys[i]); if (a2 > 0) ret.set(keys[i], (b2 / a2 - 1) * 100); }
-    seaData[sym] = { at: Date.now(), name: m.longName || m.shortName || sym, px: +m.regularMarketPrice || seen.get(keys[keys.length - 1]), ret, nowK, tz };
+    seaData[sym] = seaDigest(sym, res, Date.now());
     seaCachePut(sym, seaData[sym]);
     delete seaErr[sym];
   } catch (e) {
@@ -2536,7 +2550,7 @@ function seasonalityView() {
   const stat = (f, name, tip) => `<tr><td class="lt" data-tipkey="${tip}">${name}</td>${MN.map((_, mo) => { const a2 = byMo(mo).map(x => x.v); if (!a2.length) return '<td></td>'; const v = f(a2); return `<td data-seacol="${mo}" role="button" tabindex="0" title="every ${SEA_MN[mo]} year by year"><span class="seaC ${v >= 0 ? 'p' : 'n'}">${name === 'Win rate' ? v.toFixed(1) + '%' : pc2(v)}</span></td>`; }).join('')}</tr>`;
   const avg = a2 => a2.reduce((t, x) => t + x, 0) / a2.length, med = a2 => { const b2 = [...a2].sort((x, y) => x - y); return b2.length % 2 ? b2[b2.length >> 1] : (b2[b2.length / 2 - 1] + b2[b2.length / 2]) / 2; };
   const grid = years.map(y => { const t = yearTot(y); return `<tr><td class="lt"><b>${y}</b></td>${MN.map((_, mo) => cell(y, mo)).join('')}<td>${t == null ? '' : `<span class="seaC ${t >= 0 ? 'p' : 'n'}">${pc2(t)}</span>`}</td></tr>`; }).join('');
-  return head + `<div class="card" style="padding:14px 16px;margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(D.name)}</b><span class="mut" style="font-size:12px">${esc(seaSym)} · $${fmt(D.px)} · each chip: that month's close against the month before (this month: the latest price)</span>${D.stale ? `<span class="mut" style="font-size:12px">· <b>saved copy</b> from ${esc(new Date(D.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}${E ? ' — the live read is refused right now (' + esc(E.msg) + '); a chip tap retries' : ' — refreshing…'}</span>` : ''}</div>
+  return head + `<div class="card" style="padding:14px 16px;margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(D.name)}</b><span class="mut" style="font-size:12px">${esc(seaSym)} · $${fmt(D.px)} · each chip: that month's close against the month before (this month: the latest price)</span>${D.stale ? `<span class="mut" style="font-size:12px">· <b>${D.site ? 'the site’s nightly copy' : 'saved copy'}</b> from ${esc(new Date(D.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}${E ? ' — the live read is refused right now (' + esc(E.msg) + '); a chip tap retries' : ' — refreshing…'}</span>` : ''}</div>
 <div class="tw" style="margin-top:10px"><table data-nosort class="seaT" style="min-width:900px"><thead><tr><th class="lt" style="min-width:76px"></th>${MN.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${stat(a2 => a2.filter(x => x > 0).length / a2.length * 100, 'Win rate', 'win rate')}${stat(avg, 'Average', 'average')}${stat(med, 'Median', 'median')}</tbody></table></div>
 <div class="mut" style="font-size:11.5px;margin-top:8px;line-height:1.55"><b>Win rate</b> — how many of the shown years that month ended green: 70% over 30 years means green in 21 of them. <b>Average</b> — those years’ returns added up and divided by the count; one wild year can drag it. <b>Median</b> — the middle year once they are sorted: half did better, half worse, so it ignores the wild ones. The month now in progress is left out of all three. Tap any number for the year-by-year list; tap a chip in the grid for that month’s day-by-day.</div></div>
 <div class="card" style="padding:14px 16px;margin-top:10px"><b style="font-size:13px">Monthly performance</b> <span class="mut" style="font-size:12px">· last ${years.length} years</span>
