@@ -473,6 +473,8 @@ journalFixture = null;
     const d = await page.evaluate(() => { const el = document.getElementById('seadrill'); return el ? el.innerText.replace(/\s+/g, ' ') : ''; });
     check('seasonality drill: a month chip opens its sheet with the month, its return and its rank among the shown years', /SPY — Jan 2024 · \+10\.00%/.test(d) && /1st best of 3 Jans shown/.test(d), d.slice(0, 220));
     check('seasonality drill: the sheet lists the month day by day — each close, that day\u2019s move and the month so far', /Jan 2/.test(d) && /\+1\.00%/.test(d) && /Month so far/.test(d) && /\$101\.00/.test(d), d.slice(0, 320));
+    const dal = await page.evaluate(() => { const t = document.querySelector('#seadrill table.seaD'); if (!t) return null; const hr = t.tHead.rows[0], br = t.tBodies[0].rows[0]; return [...hr.cells].map((h, i) => window.getComputedStyle(h).textAlign + '/' + window.getComputedStyle(br.cells[i]).textAlign); });
+    check('seasonality drill: every sheet column aligns its header with its rows (the site-wide table style once pulled them apart)', !!dal && dal.length === 4 && dal.every(x => x.split('/')[0] === x.split('/')[1]), JSON.stringify(dal));
     await page.keyboard.press('Escape'); await page.waitForTimeout(150);
     check('seasonality drill: Escape closes the sheet', await page.evaluate(() => !document.getElementById('seadrill')), ''); }
   // drill-down: a stats cell opens the year-by-year column — every year's value for that calendar month, best to worst
@@ -483,12 +485,21 @@ journalFixture = null;
     check('seasonality drill: the ✕ button closes the sheet', await page.evaluate(() => !document.getElementById('seadrill')), ''); }
   // every route refused → a reload still draws the symbol from the device's saved copy, and says so
   await page.unroute('https://query1.finance.yahoo.com/**'); await page.unroute('https://query2.finance.yahoo.com/**');
-  const refuse = route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"chart":{"error":{"description":"Unauthorized"}}}' });
-  await page.route('https://query1.finance.yahoo.com/**', refuse); await page.route('https://query2.finance.yahoo.com/**', refuse);
+  const refuse = route => route.fulfill({ status: 403, contentType: 'application/json', body: '{"chart":{"error":{"description":"HTTP 403"}}}' });
+  for (const h of ['https://query1.finance.yahoo.com/**', 'https://query2.finance.yahoo.com/**', 'https://api.allorigins.win/**', 'https://corsproxy.io/**', 'https://api.codetabs.com/**']) await page.route(h, refuse);
+  // the owner's saved proxy answers — but as the OLD worker would: one year of daily bars whatever was asked
+  await page.evaluate(() => localStorage.setItem('sd-proxy', JSON.stringify('https://sd-old.workers.dev')));
+  await page.route('https://sd-old.workers.dev/**', route => { const ts = [], cl = []; for (let i = 0; i < 250; i++) { ts.push(Math.floor(Date.now() / 1000) - (250 - i) * 86400); cl.push(100 + i / 10); }
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ chart: { result: [{ meta: { gmtoffset: -18000, exchangeTimezoneName: 'America/New_York', dataGranularity: '1d' }, timestamp: ts, indicators: { quote: [{ close: cl }] } }] } }) }); });
   await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(600);
   await page.evaluate(() => document.querySelector('#tabs [data-t="SEA"]').click()); await page.waitForTimeout(1500);
   const tOff = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
   check('seasonality: with every route refused, the device’s saved copy still draws the grid and says “saved copy”', /Monthly performance/.test(tOff) && /saved copy/.test(tOff), tOff.slice(0, 200));
+  // a symbol with no saved copy: the error must name the real cause — the saved proxy running the old worker — not a bare HTTP code
+  await page.fill('#seaIn', 'OLDW'); await page.keyboard.press('Enter'); await page.waitForTimeout(1500);
+  const tOw = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  check('seasonality: when the saved proxy answers with the old worker’s daily bars, the error says to paste the latest worker.js (not “HTTP 403”)', /old worker\.js/.test(tOw) && !/could not load it \(HTTP 403\)/.test(tOw), tOw.slice(0, 280));
+  await page.evaluate(() => { const x = [...document.querySelectorAll('[data-searm]')].find(b => b.dataset.searm === 'OLDW'); if (x) x.click(); });
   check('seasonality: the board’s moving-average card stays off this tab', await page.evaluate(() => document.getElementById('tools').style.display === 'none'), '');
   check('seasonality: no script errors', errors.length === 0, errors.join(' | '));
   await page.close(); }

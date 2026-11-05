@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-4BLnoiPS/c2fF4pHDsMXEQ1RHhaTbBxyTFeun0xiv/k=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-LYMbrxVY/DYcxOUfmr74wJc2sqKuP6HqnQR04Quh+7s=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -145,6 +145,8 @@ table.seaT th,table.seaT td{text-align:center;padding:8px 6px}
 table.seaT th:first-child,table.seaT td:first-child{text-align:left;width:84px;min-width:84px;position:sticky;left:0;background:var(--surface);z-index:2;box-shadow:6px 0 6px -6px rgba(10,14,22,.3)}
 table.seaT thead th:first-child{z-index:4}
 #seadrill{position:fixed;inset:0;z-index:9000}
+table.seaD th,table.seaD td{text-align:center;padding:8px 10px}
+table.seaD th:first-child,table.seaD td:first-child{text-align:left}
 .seaC[data-seadrill],[data-seacol]{cursor:pointer}
 @media (max-width:640px){.seaC{min-width:50px;font-size:10.5px;padding:2px 5px}table.seaT th,table.seaT td{padding-left:3px;padding-right:3px}table.seaT th:first-child,table.seaT td:first-child{width:64px;min-width:64px}}
 .tools{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;padding:12px 14px;margin:10px 0}
@@ -1007,7 +1009,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793898982';
+const BUILD_V = '1793900520';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2435,20 +2437,24 @@ const seaRoutes = (path, proxyQ) => {
   if (proxy && proxyQ) r.push(proxy.replace(/\/+$/, '') + '/?' + proxyQ);                       // needs the repo's current worker.js; an old worker answers with daily 1-y bars, which the granularity check turns down
   const u1 = 'https://query1.finance.yahoo.com' + path, u2 = 'https://query2.finance.yahoo.com' + path;
   r.push(u1, u2, 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u1), 'https://corsproxy.io/?url=' + encodeURIComponent(u1),
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent(u2), 'https://corsproxy.io/?url=' + encodeURIComponent(u2));
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(u2), 'https://corsproxy.io/?url=' + encodeURIComponent(u2),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u1), 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u2));
   return r;
 };
-async function seaFetch(path, proxyQ, wantMonthly) {
-  let emsg = '';
+async function seaFetch(path, proxyQ, wantMonthly, maxT0) {
+  let emsg = '', oldWorker = false;
   for (const u of seaRoutes(path, proxyQ)) {
     try {
       const j = await tryJson(u, 9000);
       const x = j && j.chart && j.chart.result && j.chart.result[0];
-      if (x && x.timestamp && (!wantMonthly || (((x.meta || {}).dataGranularity) || '1mo') === '1mo')) return x;
+      if (x && x.timestamp) {
+        if ((!wantMonthly || (((x.meta || {}).dataGranularity) || '1mo') === '1mo') && (!maxT0 || x.timestamp[0] <= maxT0)) return x;
+        if (proxy && u.indexOf(proxy.replace(/\/+$/, '')) === 0) oldWorker = true;   // the saved proxy answered, but with the old worker's fixed one-year daily bars
+      }
       emsg = (j && j.chart && j.chart.error && (j.chart.error.description || j.chart.error.code)) || emsg;
     } catch (e) { emsg = String((e && e.message) || e); }
   }
-  throw new Error(emsg || 'no data');
+  throw new Error(oldWorker ? 'your saved price proxy runs an old worker.js \u2014 in Cloudflare, paste the repo\u2019s latest worker.js over it once and these errors stop' : emsg || 'no data');
 }
 // which calendar month a bar belongs to, in the EXCHANGE's own time zone. A fixed clock offset mislabels every
 // summer-time month: Yahoo stamps monthly bars at midnight local, and the offset changes with daylight saving —
@@ -2541,7 +2547,7 @@ async function seaDrillMonth(y, mo) {
   seaSheet(`${seaSym} — ${SEA_MN[mo]} ${y} · ${seaPc(v)}${now ? ' so far' : ''}`, line + '<div id="seaDays" class="mut" style="font-size:12.5px" aria-busy="true">Loading the day-by-day…</div>');
   try {
     const p1 = Math.floor(Date.UTC(y, mo, 1) / 1000) - 9 * 86400, p2 = Math.floor(Date.UTC(y, mo + 1, 1) / 1000) + 86400;
-    const res = await seaFetch(dayPath(seaSym, p1, p2), 'sym=' + encodeURIComponent(seaSym) + `&interval=1d&period1=${p1}&period2=${p2}`, false);
+    const res = await seaFetch(dayPath(seaSym, p1, p2), 'sym=' + encodeURIComponent(seaSym) + `&interval=1d&period1=${p1}&period2=${p2}`, false, p1 + 12 * 86400);
     const q = res.indicators.quote[0], tzz = (res.meta || {}).exchangeTimezoneName || D.tz || '';
     const rows = []; let prev = null, base = null;
     res.timestamp.forEach((t, i) => {
@@ -2551,7 +2557,7 @@ async function seaDrillMonth(y, mo) {
       rows.push({ t, c, d: prev > 0 ? (c / prev - 1) * 100 : null, cum: base > 0 ? (c / base - 1) * 100 : null }); prev = c;
     });
     const el = document.getElementById('seaDays'); if (!el) return;
-    el.outerHTML = rows.length ? `<div class="tw"><table data-nosort style="min-width:380px"><thead><tr><th class="lt">Day</th><th>Close</th><th>That day</th><th>Month so far</th></tr></thead><tbody>${rows.map(r => `<tr><td class="lt">${esc(new Date(r.t * 1000).toLocaleDateString([], { timeZone: tzz || undefined, weekday: 'short', month: 'short', day: 'numeric' }))}</td><td style="text-align:right">$${fmt(r.c)}</td><td style="text-align:center">${r.d == null ? '–' : `<span class="seaC ${r.d >= 0 ? 'p' : 'n'}">${seaPc(r.d)}</span>`}</td><td style="text-align:center">${r.cum == null ? '–' : `<span class="seaC ${r.cum >= 0 ? 'p' : 'n'}">${seaPc(r.cum)}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<div class="mut">No daily bars for this month.</div>';
+    el.outerHTML = rows.length ? `<div class="tw"><table class="seaD" data-nosort style="min-width:380px"><thead><tr><th class="lt">Day</th><th>Close</th><th>That day</th><th>Month so far</th></tr></thead><tbody>${rows.map(r => `<tr><td class="lt">${esc(new Date(r.t * 1000).toLocaleDateString([], { timeZone: tzz || undefined, weekday: 'short', month: 'short', day: 'numeric' }))}</td><td>$${fmt(r.c)}</td><td>${r.d == null ? '–' : `<span class="seaC ${r.d >= 0 ? 'p' : 'n'}">${seaPc(r.d)}</span>`}</td><td>${r.cum == null ? '–' : `<span class="seaC ${r.cum >= 0 ? 'p' : 'n'}">${seaPc(r.cum)}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<div class="mut">No daily bars for this month.</div>';
   } catch (e) { const el = document.getElementById('seaDays'); if (el) { el.textContent = 'Could not fetch the day-by-day (' + String((e && e.message) || e).slice(0, 70) + ') — the chip’s figure is from monthly closes.'; el.removeAttribute('aria-busy'); } }
 }
 // a stats cell: that calendar month in every shown year, best to worst
@@ -2562,7 +2568,7 @@ function seaDrillCol(mo) {
   const srt = [...col].sort((a, b) => a.v - b.v), med = srt.length % 2 ? srt[srt.length >> 1].v : (srt[srt.length / 2 - 1].v + srt[srt.length / 2].v) / 2;
   seaSheet(`${seaSym} — every ${SEA_MN[mo]}, best to worst`,
     `<div style="font-size:12.5px;margin-bottom:8px">Green in <b>${w} of ${col.length}</b> years (${(w / col.length * 100).toFixed(0)}%) · average ${seaPc(avg)} · median ${seaPc(med)}${D.nowK % 12 === mo ? ' · the month now in progress is not counted' : ''}</div>
-<div class="tw"><table data-nosort style="min-width:260px"><thead><tr><th class="lt">Year</th><th>${esc(SEA_MN[mo])}</th></tr></thead><tbody>${col.map(x => `<tr><td class="lt">${x.y}</td><td style="text-align:center"><span class="seaC ${x.v >= 0 ? 'p' : 'n'}" data-seadrill="1" data-y="${x.y}" data-mo="${mo}" role="button" tabindex="0">${seaPc(x.v)}</span></td></tr>`).join('')}</tbody></table></div>`);
+<div class="tw"><table class="seaD" data-nosort style="min-width:260px"><thead><tr><th class="lt">Year</th><th>${esc(SEA_MN[mo])}</th></tr></thead><tbody>${col.map(x => `<tr><td class="lt">${x.y}</td><td><span class="seaC ${x.v >= 0 ? 'p' : 'n'}" data-seadrill="1" data-y="${x.y}" data-mo="${mo}" role="button" tabindex="0">${seaPc(x.v)}</span></td></tr>`).join('')}</tbody></table></div>`);
 }
 document.addEventListener('click', e => {
   const c = e.target.closest && e.target.closest('[data-seaclose]'); if (c) { seaSheetClose(); return; }

@@ -12,7 +12,7 @@ const CSP_HOSTS = {
   style: ["'unsafe-inline'", 'https://fonts.googleapis.com'],
   font: ['https://fonts.gstatic.com'],
   connect: ['https://api.github.com', 'https://*.github.io', 'https://finnhub.io', 'wss://ws.finnhub.io', 'https://api.telegram.org',  'https://financialmodelingprep.com', 'https://query1.finance.yahoo.com', 'https://query2.finance.yahoo.com',
-    'https://*.workers.dev', 'https://api.allorigins.win', 'https://corsproxy.io',                            // price relays (no keys travel through them)
+    'https://*.workers.dev', 'https://api.allorigins.win', 'https://corsproxy.io', 'https://api.codetabs.com', // price relays (no keys travel through them)
     'https://*.googleapis.com', 'https://*.firebaseio.com', 'wss://*.firebaseio.com'],                          // Firebase, only if accounts are switched on
 };
 const html = fs.readFileSync(FILE, 'utf8');
