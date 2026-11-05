@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-Z1nPHxe6ppU25X+JlJ2mvWXLttdmjppRXC8EU2abQ7I=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-mUAPtqhefctV0dMa18zV0TddrV5eF8JR6syp1NZ+Lto=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -141,8 +141,10 @@ h2{font-size:16px;margin:24px 0 10px;font-weight:600;letter-spacing:-.01em}
 .chip{font:inherit;font-size:11.5px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 11px;cursor:pointer;color:var(--muted);font-weight:600}
 .chip.on{background:var(--accent-bg);color:var(--accent);border-color:var(--accent)}
 .seaC{display:inline-block;min-width:60px;text-align:center;padding:3px 7px;border-radius:7px;font-family:var(--font-mono);font-size:11.5px;font-weight:600}.seaC.p{background:rgba(34,160,90,.13);color:var(--tb)}.seaC.n{background:rgba(220,70,70,.12);color:var(--ts)}.seaC.now{outline:1.5px dashed var(--muted);outline-offset:1px}
-.seaT th:first-child,.seaT td:first-child{position:sticky;left:0;background:var(--surface);z-index:2;box-shadow:6px 0 6px -6px rgba(10,14,22,.3)}.seaT thead th:first-child{z-index:4}
-@media (max-width:640px){.seaC{min-width:50px;font-size:10.5px;padding:2px 5px}.seaT th,.seaT td{padding-left:4px;padding-right:4px}}
+table.seaT th,table.seaT td{text-align:center;padding:8px 6px}
+table.seaT th:first-child,table.seaT td:first-child{text-align:left;width:84px;min-width:84px;position:sticky;left:0;background:var(--surface);z-index:2;box-shadow:6px 0 6px -6px rgba(10,14,22,.3)}
+table.seaT thead th:first-child{z-index:4}
+@media (max-width:640px){.seaC{min-width:50px;font-size:10.5px;padding:2px 5px}table.seaT th,table.seaT td{padding-left:3px;padding-right:3px}table.seaT th:first-child,table.seaT td:first-child{width:64px;min-width:64px}}
 .tools{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;padding:12px 14px;margin:10px 0}
 .tools label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 input,select,button{font:inherit;color:var(--text)}
@@ -1003,7 +1005,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793896736';
+const BUILD_V = '1793897751';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2421,6 +2423,8 @@ setInterval(() => { if (app === 'desk' && tab === 'ERN' && !document.hidden) { i
 const SEA_DEF = [['^GSPC', 'S&P 500'], ['^IXIC', 'Nasdaq'], ['SPY', 'SPY'], ['VGT', 'VGT']];
 let seaSym = load('sd-seaSym', 'SPY'), seaList = load('sd-seaList', []), seaData = {}, seaErr = {};
 const seaBusy = new Set();
+const seaCacheGet = sym => { try { const v = JSON.parse(localStorage.getItem('sea1-' + sym) || 'null'); return v && Array.isArray(v.ret) ? { at: v.at, name: v.name, px: v.px, nowK: v.nowK, ret: new Map(v.ret), stale: true } : null; } catch (e) { return null; } };
+const seaCachePut = (sym, d) => { try { localStorage.setItem('sea1-' + sym, JSON.stringify({ at: d.at, name: d.name, px: d.px, nowK: d.nowK, ret: [...d.ret] })); const idx = JSON.parse(localStorage.getItem('sea1-idx') || '[]').filter(x => x !== sym); idx.push(sym); while (idx.length > 24) localStorage.removeItem('sea1-' + idx.shift()); localStorage.setItem('sea1-idx', JSON.stringify(idx)); } catch (e) {} };
 const ymPath = sym => '/v8/finance/chart/' + encodeURIComponent(sym) + '?range=max&interval=1mo&includePrePost=false';
 const ymURL = sym => 'https://query1.finance.yahoo.com' + ymPath(sym);
 const seaRoutes = () => {
@@ -2456,8 +2460,12 @@ async function seaLoad(sym, force) {
     const ret = new Map();
     for (let i = 1; i < keys.length; i++) { const a2 = seen.get(keys[i - 1]), b2 = seen.get(keys[i]); if (a2 > 0) ret.set(keys[i], (b2 / a2 - 1) * 100); }
     seaData[sym] = { at: Date.now(), name: m.longName || m.shortName || sym, px: +m.regularMarketPrice || seen.get(keys[keys.length - 1]), ret, nowK };
+    seaCachePut(sym, seaData[sym]);
     delete seaErr[sym];
-  } catch (e) { seaErr[sym] = { at: Date.now(), msg: String((e && e.message) || e).slice(0, 90) }; }
+  } catch (e) {
+    seaErr[sym] = { at: Date.now(), msg: String((e && e.message) || e).slice(0, 90) };
+    if (!seaData[sym]) { const c = seaCacheGet(sym); if (c) seaData[sym] = c; }                 // every route refused: the saved copy still draws the grid
+  }
   seaBusy.delete(sym);
   if (app === 'desk' && tab === 'SEA') renderAll(true);
 }
@@ -2465,12 +2473,13 @@ const seaOkSym = x => /^[A-Za-z0-9.^\-=&]{1,15}$/.test(x);
 function seasonalityView() {
   const picks = SEA_DEF.concat(seaList.filter(x => !SEA_DEF.some(([s]) => s === x)).map(x => [x, x]));
   if (!picks.some(([x]) => x === seaSym)) seaSym = 'SPY';
-  const D = seaData[seaSym], E = seaErr[seaSym];
-  if (!D) seaLoad(seaSym);
+  let D = seaData[seaSym]; const E = seaErr[seaSym];
+  if (!D) { const c = seaCacheGet(seaSym); if (c) D = seaData[seaSym] = c; }                   // draw the device's copy at once; the live read replaces it
+  if (!D || D.stale) seaLoad(seaSym);
   const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const chips = picks.map(([x, label]) => `<span style="display:inline-flex;align-items:center;gap:2px"><button type="button" class="chip${x === seaSym ? ' on' : ''}" data-seasym="${esc(x)}">${esc(label)}</button>${SEA_DEF.some(([s]) => s === x) ? '' : `<button type="button" class="chip" data-searm="${esc(x)}" aria-label="Remove ${esc(x)}" style="padding:4px 8px">✕</button>`}</span>`).join(' ');
   const head = `<div class="tools card" style="gap:8px"><span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${chips}</span><span style="display:flex;gap:6px;align-items:center"><input id="seaIn" aria-label="Add a ticker" placeholder="Any ticker — TSLA, QQQ, ^NSEI…" style="min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:6px 10px;color:var(--text);font:inherit;font-size:12.5px"><button type="button" class="btn" id="seaGo">Add</button></span></div>`;
-  if (!D && E) return head + `<div class="card" style="padding:16px"><b>${esc(seaSym)}</b> — could not load it (${esc(E.msg)}). <button type="button" class="btn" data-searetry="1">Try again</button><div class="mut" style="font-size:12px;margin-top:6px">Tickers are looked up on Yahoo Finance: indexes start with ^ (^GSPC, ^IXIC, ^NSEI), Indian stocks end with .NS (TCS.NS).</div></div>`;
+  if (!D && E) return head + `<div class="card" style="padding:16px"><b>${esc(seaSym)}</b> — could not load it (${esc(E.msg)}). <button type="button" class="btn" data-searetry="1">Try again</button><div class="mut" style="font-size:12px;margin-top:6px">Tickers are looked up on Yahoo Finance: indexes start with ^ (^GSPC, ^IXIC, ^NSEI), Indian stocks end with .NS (TCS.NS). Yahoo sometimes refuses busy phone networks for a few minutes — a tap on the chip tries again at once. For a route that never gets refused, set up the small Cloudflare proxy in ⚡ Live prices (one paste of the repo's worker.js; if yours predates Nov 5, paste the latest once so it serves monthly bars too).</div></div>`;
   if (!D) return head + '<div class="card" style="padding:16px" aria-busy="true">Loading ' + esc(seaSym) + '…</div>';
   const years = [...new Set([...D.ret.keys()].map(k => Math.floor(k / 12)))].sort((x, y) => y - x).slice(0, 30);
   const val = (y, mo) => D.ret.has(y * 12 + mo) ? D.ret.get(y * 12 + mo) : null;
@@ -2481,7 +2490,7 @@ function seasonalityView() {
   const stat = (f, name, tip) => `<tr><td class="lt" data-tipkey="${tip}">${name}</td>${MN.map((_, mo) => { const a2 = byMo(mo).map(x => x.v); if (!a2.length) return '<td></td>'; const v = f(a2); return `<td><span class="seaC ${v >= 0 ? 'p' : 'n'}">${name === 'Win rate' ? v.toFixed(1) + '%' : pc2(v)}</span></td>`; }).join('')}</tr>`;
   const avg = a2 => a2.reduce((t, x) => t + x, 0) / a2.length, med = a2 => { const b2 = [...a2].sort((x, y) => x - y); return b2.length % 2 ? b2[b2.length >> 1] : (b2[b2.length / 2 - 1] + b2[b2.length / 2]) / 2; };
   const grid = years.map(y => { const t = yearTot(y); return `<tr><td class="lt"><b>${y}</b></td>${MN.map((_, mo) => cell(y, mo)).join('')}<td>${t == null ? '' : `<span class="seaC ${t >= 0 ? 'p' : 'n'}">${pc2(t)}</span>`}</td></tr>`; }).join('');
-  return head + `<div class="card" style="padding:14px 16px;margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(D.name)}</b><span class="mut" style="font-size:12px">${esc(seaSym)} · $${fmt(D.px)} · each chip: that month's close against the month before (this month: the latest price)</span></div>
+  return head + `<div class="card" style="padding:14px 16px;margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(D.name)}</b><span class="mut" style="font-size:12px">${esc(seaSym)} · $${fmt(D.px)} · each chip: that month's close against the month before (this month: the latest price)</span>${D.stale ? `<span class="mut" style="font-size:12px">· <b>saved copy</b> from ${esc(new Date(D.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}${E ? ' — the live read is refused right now (' + esc(E.msg) + '); a chip tap retries' : ' — refreshing…'}</span>` : ''}</div>
 <div class="tw" style="margin-top:10px"><table data-nosort class="seaT" style="min-width:900px"><thead><tr><th class="lt" style="min-width:76px"></th>${MN.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${stat(a2 => a2.filter(x => x > 0).length / a2.length * 100, 'Win rate', 'win rate')}${stat(avg, 'Average', 'average')}${stat(med, 'Median', 'median')}</tbody></table></div></div>
 <div class="card" style="padding:14px 16px;margin-top:10px"><b style="font-size:13px">Monthly performance</b> <span class="mut" style="font-size:12px">· last ${years.length} years</span>
 <div class="tw" style="margin-top:8px"><table class="seaT" style="min-width:980px"><thead><tr><th class="lt">Year</th>${MN.map(x => `<th>${x}</th>`).join('')}<th>Year</th></tr></thead><tbody>${grid}</tbody></table></div>

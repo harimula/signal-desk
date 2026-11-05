@@ -452,6 +452,16 @@ journalFixture = null;
   check('seasonality: a 401 from the first Yahoo host falls through to the second (the grid above loaded through query2)', true, '');
   { const st = await page.evaluate(() => { const t = [...document.querySelectorAll('table.seaT')].find(x => x.querySelector('th') && x.querySelector('th').textContent.trim() === 'Year'); if (!t) return null; const tw = t.closest('.tw'); tw.scrollLeft = 400; const c = t.tBodies[0].rows[0].cells[0], r = c.getBoundingClientRect(), w = tw.getBoundingClientRect(); return { pos: getComputedStyle(c).position, pinned: Math.abs(r.left - w.left) < 8 }; });
     check('seasonality: the Year column stays pinned while the grid scrolls sideways (phones)', !!st && st.pos === 'sticky' && st.pinned, JSON.stringify(st)); }
+  { const align = await page.evaluate(() => { const out = []; for (const t of document.querySelectorAll('table.seaT')) { const hr = t.tHead.rows[0], br = t.tBodies[0].rows[0]; for (const i of [1, 6, 12]) { if (!hr.cells[i] || !br.cells[i]) continue; const a2 = hr.cells[i].getBoundingClientRect(), c2 = br.cells[i].getBoundingClientRect(); out.push(Math.abs((a2.left + a2.right) / 2 - (c2.left + c2.right) / 2)); } } return out; });
+    check('seasonality: month headers sit exactly over their chips (both tables, sampled columns within 4px)', align.length >= 6 && align.every(x => x < 4), JSON.stringify(align)); }
+  // every route refused → a reload still draws the symbol from the device's saved copy, and says so
+  await page.unroute('https://query1.finance.yahoo.com/**'); await page.unroute('https://query2.finance.yahoo.com/**');
+  const refuse = route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"chart":{"error":{"description":"Unauthorized"}}}' });
+  await page.route('https://query1.finance.yahoo.com/**', refuse); await page.route('https://query2.finance.yahoo.com/**', refuse);
+  await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(600);
+  await page.evaluate(() => document.querySelector('#tabs [data-t="SEA"]').click()); await page.waitForTimeout(1500);
+  const tOff = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  check('seasonality: with every route refused, the device’s saved copy still draws the grid and says “saved copy”', /Monthly performance/.test(tOff) && /saved copy/.test(tOff), tOff.slice(0, 200));
   check('seasonality: the board’s moving-average card stays off this tab', await page.evaluate(() => document.getElementById('tools').style.display === 'none'), '');
   check('seasonality: no script errors', errors.length === 0, errors.join(' | '));
   await page.close(); }
