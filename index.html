@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-f06AO7Pi2icOm2D71MKck/RHFNYSElzw7hvGBq5IP8o=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-qePqAMAG0FsDpXeJUyFccKreTjO4iDPc93rP0Z8xpbY=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -140,6 +140,7 @@ h2{font-size:16px;margin:24px 0 10px;font-weight:600;letter-spacing:-.01em}
 .hmchips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{font:inherit;font-size:11.5px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 11px;cursor:pointer;color:var(--muted);font-weight:600}
 .chip.on{background:var(--accent-bg);color:var(--accent);border-color:var(--accent)}
+.seaC{display:inline-block;min-width:60px;text-align:center;padding:3px 7px;border-radius:7px;font-family:var(--font-mono);font-size:11.5px;font-weight:600}.seaC.p{background:rgba(34,160,90,.13);color:var(--tb)}.seaC.n{background:rgba(220,70,70,.12);color:var(--ts)}.seaC.now{outline:1.5px dashed var(--muted);outline-offset:1px}
 .tools{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;padding:12px 14px;margin:10px 0}
 .tools label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 input,select,button{font:inherit;color:var(--text)}
@@ -677,7 +678,7 @@ function analyzeAll() {
   }
 }
 analyzeAll();
-const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades'], ['SET', 'Bot settings'], ['NEWS', 'News'], ['ERN', 'Earnings']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
+const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades'], ['SET', 'Bot settings'], ['NEWS', 'News'], ['ERN', 'Earnings'], ['SEA', 'Seasonality']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
 let pfolios = [{id: 'p1', name: 'Portfolio'}];
 const pfOf = k => (typeof k === 'string' && k.startsWith('PF:')) ? k.slice(3) : null;
 const pfName = id => { const p = pfolios.find(x => x.id === id); return p ? p.name : 'Portfolio'; };
@@ -798,10 +799,10 @@ function chrome() {
   const m = MK[mkt], f = fresh(m);
   document.querySelectorAll('#mkSw [data-mkt]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mkt === mkt)));
   $('#mdots').innerHTML = [mkt].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
-  $('#asof').innerHTML = (tab === 'SET' ? (mkt === 'IN' ? 'India bot \u2014 strategies and simulated stake' : 'Control panel \u2014 risk, capital, strategy, keys') : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'ERN' ? 'Earnings calendar — who reports when, and what they report' : tab === 'BOT' ? 'Your bot — real rules, real prices, every trade' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? esc(m.label) + ' intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
-  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
+  $('#asof').innerHTML = (tab === 'SET' ? (mkt === 'IN' ? 'India bot \u2014 strategies and simulated stake' : 'Control panel \u2014 risk, capital, strategy, keys') : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'ERN' ? 'Earnings calendar — who reports when, and what they report' : tab === 'SEA' ? 'Month-by-month returns — the four benchmarks and any ticker you search' : tab === 'BOT' ? 'Your bot — real rules, real prices, every trade' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? esc(m.label) + ' intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
+  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SEA' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
   let h = linkedNote ? `<div class="banner info">${linkedNote}</div>` : '';
-  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && tab !== 'ERN' && tab !== 'SET' && !pfOf(tab)) {
+  if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && tab !== 'ERN' && tab !== 'SEA' && tab !== 'SET' && !pfOf(tab)) {
     if (f.level === 'stale') h += `<div class="banner warn"><b>Stale data. Entry zones are for reference only.</b> This snapshot is ${ageText(f.age)} old and prices have likely moved. Press ↻ Refresh prices.</div>`;
     else if (f.level === 'aging') h += `<div class="banner warn"><b>Snapshot is ageing.</b> Pulled ${ageText(f.age)} ago. Press ↻ Refresh prices.</div>`;
     h += `<div class="banner info srcnote">${esc(m.stamp.note)} Prices update when you press ↻ Refresh prices or on the auto-refresh schedule you pick (Yahoo data can lag ~15 minutes). Signals are rule-based readouts, not advice. The page places no orders.</div>`;
@@ -1000,7 +1001,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793792089';
+const BUILD_V = '1793894825';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2413,6 +2414,79 @@ async function ernLoadIN(force) {
 }
 const ernData = () => ernIN() ? ernRowsIN : ernRows;
 setInterval(() => { if (app === 'desk' && tab === 'ERN' && !document.hidden) { if (ernIN()) ernLoadIN(); else ernLoad(); } }, 5 * 60000);   // both keep 15 minutes between reads
+
+// ---------- Seasonality: month-by-month returns for any symbol (Yahoo monthly bars, same routes as the board) ----------
+const SEA_DEF = [['^GSPC', 'S&P 500'], ['^IXIC', 'Nasdaq'], ['SPY', 'SPY'], ['VGT', 'VGT']];
+let seaSym = load('sd-seaSym', 'SPY'), seaList = load('sd-seaList', []), seaData = {}, seaErr = {};
+const seaBusy = new Set();
+const ymURL = sym => 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?range=max&interval=1mo&includePrePost=false';
+const SEA_ROUTES = [u => u, u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u), u => 'https://corsproxy.io/?url=' + encodeURIComponent(u)];
+async function seaLoad(sym, force) {
+  if (!sym) return;
+  const d0 = seaData[sym];
+  if (seaBusy.has(sym) || (!force && d0 && Date.now() - d0.at < 5 * 60000) || (!force && !d0 && seaErr[sym] && Date.now() - seaErr[sym].at < 60000)) return;
+  seaBusy.add(sym);
+  try {
+    let j = null, err = null;
+    for (const r of SEA_ROUTES) { try { j = await tryJson(r(ymURL(sym)), 12000); if (j && j.chart && j.chart.result) break; j = null; } catch (e) { err = e; } }
+    const res = j && j.chart && j.chart.result && j.chart.result[0];
+    if (!res || !res.timestamp) throw (j && j.chart && j.chart.error ? new Error(j.chart.error.description || 'no data') : (err || new Error('no data')));
+    const m = res.meta || {}, q = res.indicators.quote[0], off = +m.gmtoffset || 0;
+    const seen = new Map();                                                  // one close per month (the month's last bar wins), in exchange time
+    res.timestamp.forEach((t, i) => { const c = q.close[i]; if (c == null || !(c > 0)) return; const dt = new Date((t + off) * 1000); seen.set(dt.getUTCFullYear() * 12 + dt.getUTCMonth(), c); });
+    const keys = [...seen.keys()].sort((x, y) => x - y);
+    if (keys.length < 14) throw new Error('not enough monthly history');
+    const nowDt = new Date(Date.now() + off * 1000), nowK = nowDt.getUTCFullYear() * 12 + nowDt.getUTCMonth();
+    if (keys[keys.length - 1] === nowK && +m.regularMarketPrice > 0) seen.set(nowK, +m.regularMarketPrice);   // this month, at the latest price
+    const ret = new Map();
+    for (let i = 1; i < keys.length; i++) { const a2 = seen.get(keys[i - 1]), b2 = seen.get(keys[i]); if (a2 > 0) ret.set(keys[i], (b2 / a2 - 1) * 100); }
+    seaData[sym] = { at: Date.now(), name: m.longName || m.shortName || sym, px: +m.regularMarketPrice || seen.get(keys[keys.length - 1]), ret, nowK };
+    delete seaErr[sym];
+  } catch (e) { seaErr[sym] = { at: Date.now(), msg: String((e && e.message) || e).slice(0, 90) }; }
+  seaBusy.delete(sym);
+  if (app === 'desk' && tab === 'SEA') renderAll(true);
+}
+const seaOkSym = x => /^[A-Za-z0-9.^\-=&]{1,15}$/.test(x);
+function seasonalityView() {
+  const picks = SEA_DEF.concat(seaList.filter(x => !SEA_DEF.some(([s]) => s === x)).map(x => [x, x]));
+  if (!picks.some(([x]) => x === seaSym)) seaSym = 'SPY';
+  const D = seaData[seaSym], E = seaErr[seaSym];
+  if (!D) seaLoad(seaSym);
+  const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const chips = picks.map(([x, label]) => `<span style="display:inline-flex;align-items:center;gap:2px"><button type="button" class="chip${x === seaSym ? ' on' : ''}" data-seasym="${esc(x)}">${esc(label)}</button>${SEA_DEF.some(([s]) => s === x) ? '' : `<button type="button" class="chip" data-searm="${esc(x)}" aria-label="Remove ${esc(x)}" style="padding:4px 8px">✕</button>`}</span>`).join(' ');
+  const head = `<div class="tools card" style="gap:8px"><span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${chips}</span><span style="display:flex;gap:6px;align-items:center"><input id="seaIn" aria-label="Add a ticker" placeholder="Any ticker — TSLA, QQQ, ^NSEI…" style="min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:6px 10px;color:var(--text);font:inherit;font-size:12.5px"><button type="button" class="btn" id="seaGo">Add</button></span></div>`;
+  if (!D && E) return head + `<div class="card" style="padding:16px"><b>${esc(seaSym)}</b> — could not load it (${esc(E.msg)}). <button type="button" class="btn" data-searetry="1">Try again</button><div class="mut" style="font-size:12px;margin-top:6px">Tickers are looked up on Yahoo Finance: indexes start with ^ (^GSPC, ^IXIC, ^NSEI), Indian stocks end with .NS (TCS.NS).</div></div>`;
+  if (!D) return head + '<div class="card" style="padding:16px" aria-busy="true">Loading ' + esc(seaSym) + '…</div>';
+  const years = [...new Set([...D.ret.keys()].map(k => Math.floor(k / 12)))].sort((x, y) => y - x).slice(0, 30);
+  const val = (y, mo) => D.ret.has(y * 12 + mo) ? D.ret.get(y * 12 + mo) : null;
+  const pc2 = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
+  const cell = (y, mo) => { const v = val(y, mo); if (v == null) return '<td></td>'; const now = y * 12 + mo === D.nowK; return `<td><span class="seaC ${v >= 0 ? 'p' : 'n'}${now ? ' now' : ''}"${now ? ' title="this month so far, at the latest price"' : ''}>${pc2(v)}</span></td>`; };
+  const yearTot = y => { let f = 1, n = 0; for (let mo = 0; mo < 12; mo++) { const v = val(y, mo); if (v != null) { f *= 1 + v / 100; n++; } } return n ? (f - 1) * 100 : null; };
+  const byMo = mo => years.map(y => ({ y, v: val(y, mo) })).filter(x => x.v != null && !(x.y * 12 + mo === D.nowK));   // the in-progress month stays out of the statistics
+  const stat = (f, name, tip) => `<tr><td class="lt" data-tipkey="${tip}">${name}</td>${MN.map((_, mo) => { const a2 = byMo(mo).map(x => x.v); if (!a2.length) return '<td></td>'; const v = f(a2); return `<td><span class="seaC ${v >= 0 ? 'p' : 'n'}">${name === 'Win rate' ? v.toFixed(1) + '%' : pc2(v)}</span></td>`; }).join('')}</tr>`;
+  const avg = a2 => a2.reduce((t, x) => t + x, 0) / a2.length, med = a2 => { const b2 = [...a2].sort((x, y) => x - y); return b2.length % 2 ? b2[b2.length >> 1] : (b2[b2.length / 2 - 1] + b2[b2.length / 2]) / 2; };
+  const grid = years.map(y => { const t = yearTot(y); return `<tr><td class="lt"><b>${y}</b></td>${MN.map((_, mo) => cell(y, mo)).join('')}<td>${t == null ? '' : `<span class="seaC ${t >= 0 ? 'p' : 'n'}">${pc2(t)}</span>`}</td></tr>`; }).join('');
+  return head + `<div class="card" style="padding:14px 16px;margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(D.name)}</b><span class="mut" style="font-size:12px">${esc(seaSym)} · $${fmt(D.px)} · each chip: that month's close against the month before (this month: the latest price)</span></div>
+<div class="tw" style="margin-top:10px"><table data-nosort style="min-width:900px"><thead><tr><th class="lt" style="min-width:76px"></th>${MN.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${stat(a2 => a2.filter(x => x > 0).length / a2.length * 100, 'Win rate', 'win rate')}${stat(avg, 'Average', 'average')}${stat(med, 'Median', 'median')}</tbody></table></div></div>
+<div class="card" style="padding:14px 16px;margin-top:10px"><b style="font-size:13px">Monthly performance</b> <span class="mut" style="font-size:12px">· last ${years.length} years</span>
+<div class="tw" style="margin-top:8px"><table style="min-width:980px"><thead><tr><th class="lt">Year</th>${MN.map(x => `<th>${x}</th>`).join('')}<th>Year</th></tr></thead><tbody>${grid}</tbody></table></div>
+<div class="mut" style="font-size:11.5px;margin-top:8px">Prices from Yahoo Finance · price returns, dividends not counted · updated ${new Date(D.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}, refreshes every 5 minutes while this tab is open. Not advice.</div></div>`;
+}
+function seaAdd() {
+  const el = $('#seaIn'); if (!el) return; const x = el.value.trim().toUpperCase(); if (!x) return;
+  if (!seaOkSym(x)) { el.value = ''; el.placeholder = 'Letters, digits, . ^ - only'; return; }
+  if (!SEA_DEF.some(([s]) => s === x) && !seaList.includes(x)) { seaList.push(x); if (seaList.length > 20) seaList.shift(); save('sd-seaList', seaList); }
+  seaSym = x; save('sd-seaSym', seaSym); el.value = ''; seaLoad(x, true); renderAll();
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-seasym], [data-searm], [data-searetry], #seaGo'); if (!t || app !== 'desk' || tab !== 'SEA') return;
+  if (t.id === 'seaGo') return seaAdd();
+  if (t.dataset.searetry) { delete seaErr[seaSym]; seaLoad(seaSym, true); renderAll(); return; }
+  if (t.dataset.searm) { seaList = seaList.filter(x => x !== t.dataset.searm); save('sd-seaList', seaList); if (seaSym === t.dataset.searm) { seaSym = 'SPY'; save('sd-seaSym', seaSym); } renderAll(); return; }
+  seaSym = t.dataset.seasym; save('sd-seaSym', seaSym); seaLoad(seaSym); renderAll();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'seaIn') { e.preventDefault(); seaAdd(); } });
+setInterval(() => { if (app === 'desk' && tab === 'SEA' && !document.hidden) seaLoad(seaSym); }, 5 * 60000);   // the 5-minute freshness check; seaLoad itself keeps at least 5 minutes between reads
 // The 100 most-traded US stocks count as big too: the bot's daily market scan (bot/scan.json, most traded first) — the names
 // the bot trades. Read at most once an hour; without the file, sales alone decide.
 let ernScan = null, ernScanAt = 0;
@@ -3603,7 +3677,7 @@ ${inChk('alerts', 'India Telegram summary', 'one message after each NSE day: buy
   const side = `<nav class="stnav" aria-label="Settings sections"><div class="mut" style="font-size:11.5px;margin-bottom:6px">On this page</div>${secIds.map(([id, t]) => `<a href="#${id}">${esc(t)}</a>`).join('')}<a href="docs/settings.html" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">What each setting does ↗</a></nav>`;
   return `<h2 style="margin-bottom:6px">Bot settings — ${mkt === 'IN' ? 'India bot' : 'USA bot'}</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">${mkt === 'IN' ? 'The India simulation reads these after each NSE close.' : 'Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.'} <a href="docs/settings.html"><b>What does each setting do? → the settings guide, with a worked example for every setting</b></a> <span class="mut">· guide updated 2026-10-27</span></div><div class="stwrap${mkt === 'IN' ? ' one' : ''}">${mkt === 'IN' ? '' : side}<div style="min-width:0">${body}</div></div>`;
 }
-function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'ERN' ? earningsView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
+function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'ERN' ? earningsView() : tab === 'SEA' ? seasonalityView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {
   root.querySelectorAll('.tw').forEach(tw => {
     let wrap = tw.parentElement;

@@ -427,6 +427,30 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
   await page.close();
 }
 journalFixture = null;
+// Seasonality tab (2026-11-05): monthly returns from stubbed Yahoo bars — grid, stats, current month, search persistence
+{ const { page, errors } = await session('seasonality', () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); });
+  await page.route('https://query1.finance.yahoo.com/**', route => {
+    const sym = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop());
+    const ts = [], cl = []; let c = 100, y = 2023, mo = 11;
+    for (const r of [0, 10, -5, 2, 3, -1, 4, -2, 1, 5, -3, 2, 1, 6, -4, 2, 2, -1, 3, 1, -2, 4, 1, -1, 2, 3, -2, 1, 2, -1, 3, -2, 1, 2, -6, 8]) {
+      c = c * (1 + r / 100); ts.push(Date.UTC(y, mo, 1) / 1000 + 5 * 3600); cl.push(+c.toFixed(4)); mo++; if (mo > 11) { mo = 0; y++; }
+    }
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ chart: { result: [{ meta: { gmtoffset: -18000, regularMarketPrice: +(c * 1.02).toFixed(2), longName: sym === 'SPY' ? 'SPDR S&P 500' : sym }, timestamp: ts, indicators: { quote: [{ close: cl }] } }] } }) });
+  });
+  await page.evaluate(() => document.querySelector('#tabs [data-t="SEA"]').click()); await page.waitForTimeout(900);
+  const txt = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  check('seasonality: the grid renders from monthly bars — +10.00% and −5.00% chips, the name, and the Year column', /Monthly performance/.test(txt) && /\+10\.00%/.test(txt) && /−5\.00%/.test(txt) && /SPDR S&P 500/.test(txt), txt.slice(0, 260));
+  check('seasonality: win rate, average and median sit above the grid and skip the in-progress month', /Win rate/.test(txt) && /Average/.test(txt) && /Median/.test(txt), '');
+  check('seasonality: the current month is marked “so far” with a dashed outline', await page.evaluate(() => !!document.querySelector('.seaC.now')), '');
+  await page.fill('#seaIn', 'tsla'); await page.keyboard.press('Enter'); await page.waitForTimeout(800);
+  const t2 = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('sd-seaList') || '[]').includes('TSLA') && JSON.parse(localStorage.getItem('sd-seaSym') || '""') === 'TSLA');
+  check('seasonality: a searched ticker uppercases, loads, becomes a chip and is remembered on the device', /TSLA/.test(t2) && /Monthly performance/.test(t2) && saved, t2.slice(0, 160));
+  await page.evaluate(() => [...document.querySelectorAll('[data-searm]')].find(x => x.dataset.searm === 'TSLA').click()); await page.waitForTimeout(400);
+  check('seasonality: ✕ removes the searched chip and falls back to SPY', await page.evaluate(() => !JSON.parse(localStorage.getItem('sd-seaList') || '[]').includes('TSLA') && JSON.parse(localStorage.getItem('sd-seaSym') || '""') === 'SPY'), '');
+  check('seasonality: no script errors', errors.length === 0, errors.join(' | '));
+  await page.close(); }
+
 // a #setup= link must not silently replace a saved GitHub connection (a crafted link could re-point the device)
 {
   const C = await browser.newContext(), c = await C.newPage();
