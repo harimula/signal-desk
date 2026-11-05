@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-mUAPtqhefctV0dMa18zV0TddrV5eF8JR6syp1NZ+Lto=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-4BLnoiPS/c2fF4pHDsMXEQ1RHhaTbBxyTFeun0xiv/k=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -144,6 +144,8 @@ h2{font-size:16px;margin:24px 0 10px;font-weight:600;letter-spacing:-.01em}
 table.seaT th,table.seaT td{text-align:center;padding:8px 6px}
 table.seaT th:first-child,table.seaT td:first-child{text-align:left;width:84px;min-width:84px;position:sticky;left:0;background:var(--surface);z-index:2;box-shadow:6px 0 6px -6px rgba(10,14,22,.3)}
 table.seaT thead th:first-child{z-index:4}
+#seadrill{position:fixed;inset:0;z-index:9000}
+.seaC[data-seadrill],[data-seacol]{cursor:pointer}
 @media (max-width:640px){.seaC{min-width:50px;font-size:10.5px;padding:2px 5px}table.seaT th,table.seaT td{padding-left:3px;padding-right:3px}table.seaT th:first-child,table.seaT td:first-child{width:64px;min-width:64px}}
 .tools{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;padding:12px 14px;margin:10px 0}
 .tools label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
@@ -1005,7 +1007,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793897751';
+const BUILD_V = '1793898982';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2423,43 +2425,58 @@ setInterval(() => { if (app === 'desk' && tab === 'ERN' && !document.hidden) { i
 const SEA_DEF = [['^GSPC', 'S&P 500'], ['^IXIC', 'Nasdaq'], ['SPY', 'SPY'], ['VGT', 'VGT']];
 let seaSym = load('sd-seaSym', 'SPY'), seaList = load('sd-seaList', []), seaData = {}, seaErr = {};
 const seaBusy = new Set();
-const seaCacheGet = sym => { try { const v = JSON.parse(localStorage.getItem('sea1-' + sym) || 'null'); return v && Array.isArray(v.ret) ? { at: v.at, name: v.name, px: v.px, nowK: v.nowK, ret: new Map(v.ret), stale: true } : null; } catch (e) { return null; } };
-const seaCachePut = (sym, d) => { try { localStorage.setItem('sea1-' + sym, JSON.stringify({ at: d.at, name: d.name, px: d.px, nowK: d.nowK, ret: [...d.ret] })); const idx = JSON.parse(localStorage.getItem('sea1-idx') || '[]').filter(x => x !== sym); idx.push(sym); while (idx.length > 24) localStorage.removeItem('sea1-' + idx.shift()); localStorage.setItem('sea1-idx', JSON.stringify(idx)); } catch (e) {} };
+const seaCacheGet = sym => { try { const v = JSON.parse(localStorage.getItem('sea2-' + sym) || 'null'); return v && Array.isArray(v.ret) ? { at: v.at, name: v.name, px: v.px, nowK: v.nowK, tz: v.tz || '', ret: new Map(v.ret), stale: true } : null; } catch (e) { return null; } };
+const seaCachePut = (sym, d) => { try { localStorage.setItem('sea2-' + sym, JSON.stringify({ at: d.at, name: d.name, px: d.px, nowK: d.nowK, tz: d.tz || '', ret: [...d.ret] })); const idx = JSON.parse(localStorage.getItem('sea2-idx') || '[]').filter(x => x !== sym); idx.push(sym); while (idx.length > 24) localStorage.removeItem('sea2-' + idx.shift()); localStorage.setItem('sea2-idx', JSON.stringify(idx)); localStorage.removeItem('sea1-' + sym); } catch (e) {} };
 const ymPath = sym => '/v8/finance/chart/' + encodeURIComponent(sym) + '?range=max&interval=1mo&includePrePost=false';
-const ymURL = sym => 'https://query1.finance.yahoo.com' + ymPath(sym);
-const seaRoutes = () => {
+const dayPath = (sym, p1, p2) => '/v8/finance/chart/' + encodeURIComponent(sym) + `?period1=${p1}&period2=${p2}&interval=1d&includePrePost=false`;
+// every way to reach Yahoo, most reliable first: the owner's proxy (never rate-limited), both Yahoo hosts, then the two relays on each
+const seaRoutes = (path, proxyQ) => {
   const r = [];
-  if (proxy) r.push(sym => proxy.replace(/\/+$/, '') + '/?sym=' + encodeURIComponent(sym) + '&range=max&interval=1mo');   // needs the updated worker.js; an old worker answers with daily bars, which the granularity check below turns down
-  r.push(sym => ymURL(sym), sym => 'https://query2.finance.yahoo.com' + ymPath(sym));                                      // Yahoo 401s one host now and then; the other usually answers
-  r.push(sym => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(ymURL(sym)), sym => 'https://corsproxy.io/?url=' + encodeURIComponent(ymURL(sym)));
+  if (proxy && proxyQ) r.push(proxy.replace(/\/+$/, '') + '/?' + proxyQ);                       // needs the repo's current worker.js; an old worker answers with daily 1-y bars, which the granularity check turns down
+  const u1 = 'https://query1.finance.yahoo.com' + path, u2 = 'https://query2.finance.yahoo.com' + path;
+  r.push(u1, u2, 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u1), 'https://corsproxy.io/?url=' + encodeURIComponent(u1),
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(u2), 'https://corsproxy.io/?url=' + encodeURIComponent(u2));
   return r;
 };
+async function seaFetch(path, proxyQ, wantMonthly) {
+  let emsg = '';
+  for (const u of seaRoutes(path, proxyQ)) {
+    try {
+      const j = await tryJson(u, 9000);
+      const x = j && j.chart && j.chart.result && j.chart.result[0];
+      if (x && x.timestamp && (!wantMonthly || (((x.meta || {}).dataGranularity) || '1mo') === '1mo')) return x;
+      emsg = (j && j.chart && j.chart.error && (j.chart.error.description || j.chart.error.code)) || emsg;
+    } catch (e) { emsg = String((e && e.message) || e); }
+  }
+  throw new Error(emsg || 'no data');
+}
+// which calendar month a bar belongs to, in the EXCHANGE's own time zone. A fixed clock offset mislabels every
+// summer-time month: Yahoo stamps monthly bars at midnight local, and the offset changes with daylight saving —
+// this is what made months go missing on 2026-11-05.
+const seaMonKey = (() => { const F = {}; return (sec, tz) => {
+  const z = tz || 'America/New_York';
+  const f = F[z] || (F[z] = new Intl.DateTimeFormat('en-CA', { timeZone: z, year: 'numeric', month: '2-digit' }));
+  const t = f.format(new Date(sec * 1000));
+  return +t.slice(0, 4) * 12 + (+t.slice(5, 7)) - 1;
+}; })();
+const SEA_MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 async function seaLoad(sym, force) {
   if (!sym) return;
   const d0 = seaData[sym];
   if (seaBusy.has(sym) || (!force && d0 && Date.now() - d0.at < 5 * 60000) || (!force && !d0 && seaErr[sym] && Date.now() - seaErr[sym].at < 60000)) return;
   seaBusy.add(sym);
   try {
-    let res = null, emsg = '';
-    for (const r of seaRoutes()) {
-      try {
-        const j = await tryJson(r(sym), 12000);
-        const x = j && j.chart && j.chart.result && j.chart.result[0];
-        if (x && x.timestamp && (((x.meta || {}).dataGranularity) || '1mo') === '1mo') { res = x; break; }   // monthly bars only: an old proxy answers with a year of daily bars, which would fake a one-year grid
-        emsg = (j && j.chart && j.chart.error && (j.chart.error.description || j.chart.error.code)) || emsg;
-      } catch (e) { emsg = String((e && e.message) || e); }
-    }
-    if (!res) throw new Error(emsg || 'no data');
-    const m = res.meta || {}, q = res.indicators.quote[0], off = +m.gmtoffset || 0;
-    const seen = new Map();                                                  // one close per month (the month's last bar wins), in exchange time
-    res.timestamp.forEach((t, i) => { const c = q.close[i]; if (c == null || !(c > 0)) return; const dt = new Date((t + off) * 1000); seen.set(dt.getUTCFullYear() * 12 + dt.getUTCMonth(), c); });
+    const res = await seaFetch(ymPath(sym), 'sym=' + encodeURIComponent(sym) + '&range=max&interval=1mo', true);
+    const m = res.meta || {}, q = res.indicators.quote[0], tz = m.exchangeTimezoneName || '';
+    const seen = new Map();                                                  // one close per month (the month's last bar wins), by the exchange's own calendar
+    res.timestamp.forEach((t, i) => { const c = q.close[i]; if (c == null || !(c > 0)) return; seen.set(seaMonKey(t, tz), c); });
     const keys = [...seen.keys()].sort((x, y) => x - y);
     if (keys.length < 14) throw new Error('not enough monthly history');
-    const nowDt = new Date(Date.now() + off * 1000), nowK = nowDt.getUTCFullYear() * 12 + nowDt.getUTCMonth();
+    const nowK = seaMonKey(Date.now() / 1000, tz);
     if (keys[keys.length - 1] === nowK && +m.regularMarketPrice > 0) seen.set(nowK, +m.regularMarketPrice);   // this month, at the latest price
     const ret = new Map();
     for (let i = 1; i < keys.length; i++) { const a2 = seen.get(keys[i - 1]), b2 = seen.get(keys[i]); if (a2 > 0) ret.set(keys[i], (b2 / a2 - 1) * 100); }
-    seaData[sym] = { at: Date.now(), name: m.longName || m.shortName || sym, px: +m.regularMarketPrice || seen.get(keys[keys.length - 1]), ret, nowK };
+    seaData[sym] = { at: Date.now(), name: m.longName || m.shortName || sym, px: +m.regularMarketPrice || seen.get(keys[keys.length - 1]), ret, nowK, tz };
     seaCachePut(sym, seaData[sym]);
     delete seaErr[sym];
   } catch (e) {
@@ -2476,7 +2493,7 @@ function seasonalityView() {
   let D = seaData[seaSym]; const E = seaErr[seaSym];
   if (!D) { const c = seaCacheGet(seaSym); if (c) D = seaData[seaSym] = c; }                   // draw the device's copy at once; the live read replaces it
   if (!D || D.stale) seaLoad(seaSym);
-  const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const MN = SEA_MN;
   const chips = picks.map(([x, label]) => `<span style="display:inline-flex;align-items:center;gap:2px"><button type="button" class="chip${x === seaSym ? ' on' : ''}" data-seasym="${esc(x)}">${esc(label)}</button>${SEA_DEF.some(([s]) => s === x) ? '' : `<button type="button" class="chip" data-searm="${esc(x)}" aria-label="Remove ${esc(x)}" style="padding:4px 8px">✕</button>`}</span>`).join(' ');
   const head = `<div class="tools card" style="gap:8px"><span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${chips}</span><span style="display:flex;gap:6px;align-items:center"><input id="seaIn" aria-label="Add a ticker" placeholder="Any ticker — TSLA, QQQ, ^NSEI…" style="min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:6px 10px;color:var(--text);font:inherit;font-size:12.5px"><button type="button" class="btn" id="seaGo">Add</button></span></div>`;
   if (!D && E) return head + `<div class="card" style="padding:16px"><b>${esc(seaSym)}</b> — could not load it (${esc(E.msg)}). <button type="button" class="btn" data-searetry="1">Try again</button><div class="mut" style="font-size:12px;margin-top:6px">Tickers are looked up on Yahoo Finance: indexes start with ^ (^GSPC, ^IXIC, ^NSEI), Indian stocks end with .NS (TCS.NS). Yahoo sometimes refuses busy phone networks for a few minutes — a tap on the chip tries again at once. For a route that never gets refused, set up the small Cloudflare proxy in ⚡ Live prices (one paste of the repo's worker.js; if yours predates Nov 5, paste the latest once so it serves monthly bars too).</div></div>`;
@@ -2484,14 +2501,15 @@ function seasonalityView() {
   const years = [...new Set([...D.ret.keys()].map(k => Math.floor(k / 12)))].sort((x, y) => y - x).slice(0, 30);
   const val = (y, mo) => D.ret.has(y * 12 + mo) ? D.ret.get(y * 12 + mo) : null;
   const pc2 = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
-  const cell = (y, mo) => { const v = val(y, mo); if (v == null) return '<td></td>'; const now = y * 12 + mo === D.nowK; return `<td><span class="seaC ${v >= 0 ? 'p' : 'n'}${now ? ' now' : ''}"${now ? ' title="this month so far, at the latest price"' : ''}>${pc2(v)}</span></td>`; };
+  const cell = (y, mo) => { const v = val(y, mo); if (v == null) return '<td></td>'; const now = y * 12 + mo === D.nowK; return `<td><span class="seaC ${v >= 0 ? 'p' : 'n'}${now ? ' now' : ''}" data-seadrill="1" data-y="${y}" data-mo="${mo}" role="button" tabindex="0"${now ? ' title="this month so far, at the latest price — tap for the day-by-day"' : ' title="tap for the day-by-day"'}>${pc2(v)}</span></td>`; };
   const yearTot = y => { let f = 1, n = 0; for (let mo = 0; mo < 12; mo++) { const v = val(y, mo); if (v != null) { f *= 1 + v / 100; n++; } } return n ? (f - 1) * 100 : null; };
   const byMo = mo => years.map(y => ({ y, v: val(y, mo) })).filter(x => x.v != null && !(x.y * 12 + mo === D.nowK));   // the in-progress month stays out of the statistics
-  const stat = (f, name, tip) => `<tr><td class="lt" data-tipkey="${tip}">${name}</td>${MN.map((_, mo) => { const a2 = byMo(mo).map(x => x.v); if (!a2.length) return '<td></td>'; const v = f(a2); return `<td><span class="seaC ${v >= 0 ? 'p' : 'n'}">${name === 'Win rate' ? v.toFixed(1) + '%' : pc2(v)}</span></td>`; }).join('')}</tr>`;
+  const stat = (f, name, tip) => `<tr><td class="lt" data-tipkey="${tip}">${name}</td>${MN.map((_, mo) => { const a2 = byMo(mo).map(x => x.v); if (!a2.length) return '<td></td>'; const v = f(a2); return `<td data-seacol="${mo}" role="button" tabindex="0" title="every ${SEA_MN[mo]} year by year"><span class="seaC ${v >= 0 ? 'p' : 'n'}">${name === 'Win rate' ? v.toFixed(1) + '%' : pc2(v)}</span></td>`; }).join('')}</tr>`;
   const avg = a2 => a2.reduce((t, x) => t + x, 0) / a2.length, med = a2 => { const b2 = [...a2].sort((x, y) => x - y); return b2.length % 2 ? b2[b2.length >> 1] : (b2[b2.length / 2 - 1] + b2[b2.length / 2]) / 2; };
   const grid = years.map(y => { const t = yearTot(y); return `<tr><td class="lt"><b>${y}</b></td>${MN.map((_, mo) => cell(y, mo)).join('')}<td>${t == null ? '' : `<span class="seaC ${t >= 0 ? 'p' : 'n'}">${pc2(t)}</span>`}</td></tr>`; }).join('');
   return head + `<div class="card" style="padding:14px 16px;margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(D.name)}</b><span class="mut" style="font-size:12px">${esc(seaSym)} · $${fmt(D.px)} · each chip: that month's close against the month before (this month: the latest price)</span>${D.stale ? `<span class="mut" style="font-size:12px">· <b>saved copy</b> from ${esc(new Date(D.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}${E ? ' — the live read is refused right now (' + esc(E.msg) + '); a chip tap retries' : ' — refreshing…'}</span>` : ''}</div>
-<div class="tw" style="margin-top:10px"><table data-nosort class="seaT" style="min-width:900px"><thead><tr><th class="lt" style="min-width:76px"></th>${MN.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${stat(a2 => a2.filter(x => x > 0).length / a2.length * 100, 'Win rate', 'win rate')}${stat(avg, 'Average', 'average')}${stat(med, 'Median', 'median')}</tbody></table></div></div>
+<div class="tw" style="margin-top:10px"><table data-nosort class="seaT" style="min-width:900px"><thead><tr><th class="lt" style="min-width:76px"></th>${MN.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${stat(a2 => a2.filter(x => x > 0).length / a2.length * 100, 'Win rate', 'win rate')}${stat(avg, 'Average', 'average')}${stat(med, 'Median', 'median')}</tbody></table></div>
+<div class="mut" style="font-size:11.5px;margin-top:8px;line-height:1.55"><b>Win rate</b> — how many of the shown years that month ended green: 70% over 30 years means green in 21 of them. <b>Average</b> — those years’ returns added up and divided by the count; one wild year can drag it. <b>Median</b> — the middle year once they are sorted: half did better, half worse, so it ignores the wild ones. The month now in progress is left out of all three. Tap any number for the year-by-year list; tap a chip in the grid for that month’s day-by-day.</div></div>
 <div class="card" style="padding:14px 16px;margin-top:10px"><b style="font-size:13px">Monthly performance</b> <span class="mut" style="font-size:12px">· last ${years.length} years</span>
 <div class="tw" style="margin-top:8px"><table class="seaT" style="min-width:980px"><thead><tr><th class="lt">Year</th>${MN.map(x => `<th>${x}</th>`).join('')}<th>Year</th></tr></thead><tbody>${grid}</tbody></table></div>
 <div class="mut" style="font-size:11.5px;margin-top:8px">Prices from Yahoo Finance · price returns, dividends not counted · updated ${new Date(D.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}, refreshes every 5 minutes while this tab is open. Not advice.</div></div>`;
@@ -2502,14 +2520,65 @@ function seaAdd() {
   if (!SEA_DEF.some(([s]) => s === x) && !seaList.includes(x)) { seaList.push(x); if (seaList.length > 20) seaList.shift(); save('sd-seaList', seaList); }
   seaSym = x; save('sd-seaSym', seaSym); el.value = ''; seaLoad(x, true); renderAll();
 }
+function seaSheet(title, body) {
+  let d = document.getElementById('seadrill'); if (!d) { d = document.createElement('div'); d.id = 'seadrill'; document.body.appendChild(d); }
+  d.innerHTML = `<div class="drill-bg" data-seaclose="1"></div><div class="drill-sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="drill-head"><b>${esc(title)}</b><button type="button" class="btn ghost" data-seaclose="1" aria-label="Close">✕</button></div><div class="drill-body">${body}</div></div>`;
+}
+const seaSheetClose = () => { const d = document.getElementById('seadrill'); if (d) d.remove(); };
+const seaPc = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
+const seaYears30 = D => [...new Set([...D.ret.keys()].map(x => Math.floor(x / 12)))].sort((a, b) => b - a).slice(0, 30);
+const seaColVals = (D, mo) => seaYears30(D).map(y => ({ y, v: D.ret.get(y * 12 + mo) })).filter(x => x.v != null && x.y * 12 + mo !== D.nowK);
+// a month chip: how this month ranks among its namesakes, then the day-by-day fetched live
+async function seaDrillMonth(y, mo) {
+  const D = seaData[seaSym]; if (!D) return;
+  const k = y * 12 + mo, v = D.ret.get(k); if (v == null) return;
+  const now = k === D.nowK, col = seaColVals(D, mo);
+  const pool = now ? [...col, { y, v }] : col;                              // this month among its namesakes (adding it if still in progress)
+  const better = pool.filter(x => x.y !== y && x.v > v).length;
+  const ord = n => { const sx = ['th', 'st', 'nd', 'rd'], m2 = n % 100; return n + (sx[(m2 - 20) % 10] || sx[m2] || sx[0]); };
+  const best = pool.reduce((a, x) => x.v > a.v ? x : a, pool[0]), worst = pool.reduce((a, x) => x.v < a.v ? x : a, pool[0]);
+  const line = pool.length > 2 ? `<div style="font-size:12.5px;margin-bottom:8px">${now ? 'So far the ' : 'The '}<b>${ord(better + 1)} best</b> of ${pool.length} ${SEA_MN[mo]}s shown · best ${seaPc(best.v)} (${best.y}) · worst ${seaPc(worst.v)} (${worst.y})</div>` : '';
+  seaSheet(`${seaSym} — ${SEA_MN[mo]} ${y} · ${seaPc(v)}${now ? ' so far' : ''}`, line + '<div id="seaDays" class="mut" style="font-size:12.5px" aria-busy="true">Loading the day-by-day…</div>');
+  try {
+    const p1 = Math.floor(Date.UTC(y, mo, 1) / 1000) - 9 * 86400, p2 = Math.floor(Date.UTC(y, mo + 1, 1) / 1000) + 86400;
+    const res = await seaFetch(dayPath(seaSym, p1, p2), 'sym=' + encodeURIComponent(seaSym) + `&interval=1d&period1=${p1}&period2=${p2}`, false);
+    const q = res.indicators.quote[0], tzz = (res.meta || {}).exchangeTimezoneName || D.tz || '';
+    const rows = []; let prev = null, base = null;
+    res.timestamp.forEach((t, i) => {
+      const c = q.close[i]; if (!(c > 0)) return; const kk = seaMonKey(t, tzz);
+      if (kk < k) { prev = c; return; } if (kk > k) return;
+      if (base == null) base = prev || c;
+      rows.push({ t, c, d: prev > 0 ? (c / prev - 1) * 100 : null, cum: base > 0 ? (c / base - 1) * 100 : null }); prev = c;
+    });
+    const el = document.getElementById('seaDays'); if (!el) return;
+    el.outerHTML = rows.length ? `<div class="tw"><table data-nosort style="min-width:380px"><thead><tr><th class="lt">Day</th><th>Close</th><th>That day</th><th>Month so far</th></tr></thead><tbody>${rows.map(r => `<tr><td class="lt">${esc(new Date(r.t * 1000).toLocaleDateString([], { timeZone: tzz || undefined, weekday: 'short', month: 'short', day: 'numeric' }))}</td><td style="text-align:right">$${fmt(r.c)}</td><td style="text-align:center">${r.d == null ? '–' : `<span class="seaC ${r.d >= 0 ? 'p' : 'n'}">${seaPc(r.d)}</span>`}</td><td style="text-align:center">${r.cum == null ? '–' : `<span class="seaC ${r.cum >= 0 ? 'p' : 'n'}">${seaPc(r.cum)}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<div class="mut">No daily bars for this month.</div>';
+  } catch (e) { const el = document.getElementById('seaDays'); if (el) { el.textContent = 'Could not fetch the day-by-day (' + String((e && e.message) || e).slice(0, 70) + ') — the chip’s figure is from monthly closes.'; el.removeAttribute('aria-busy'); } }
+}
+// a stats cell: that calendar month in every shown year, best to worst
+function seaDrillCol(mo) {
+  const D = seaData[seaSym]; if (!D) return;
+  const col = seaColVals(D, mo).sort((a, b) => b.v - a.v); if (!col.length) return;
+  const w = col.filter(x => x.v > 0).length, avg = col.reduce((t, x) => t + x.v, 0) / col.length;
+  const srt = [...col].sort((a, b) => a.v - b.v), med = srt.length % 2 ? srt[srt.length >> 1].v : (srt[srt.length / 2 - 1].v + srt[srt.length / 2].v) / 2;
+  seaSheet(`${seaSym} — every ${SEA_MN[mo]}, best to worst`,
+    `<div style="font-size:12.5px;margin-bottom:8px">Green in <b>${w} of ${col.length}</b> years (${(w / col.length * 100).toFixed(0)}%) · average ${seaPc(avg)} · median ${seaPc(med)}${D.nowK % 12 === mo ? ' · the month now in progress is not counted' : ''}</div>
+<div class="tw"><table data-nosort style="min-width:260px"><thead><tr><th class="lt">Year</th><th>${esc(SEA_MN[mo])}</th></tr></thead><tbody>${col.map(x => `<tr><td class="lt">${x.y}</td><td style="text-align:center"><span class="seaC ${x.v >= 0 ? 'p' : 'n'}" data-seadrill="1" data-y="${x.y}" data-mo="${mo}" role="button" tabindex="0">${seaPc(x.v)}</span></td></tr>`).join('')}</tbody></table></div>`);
+}
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-seasym], [data-searm], [data-searetry], #seaGo'); if (!t || app !== 'desk' || tab !== 'SEA') return;
+  const c = e.target.closest && e.target.closest('[data-seaclose]'); if (c) { seaSheetClose(); return; }
+  const t = e.target.closest && e.target.closest('[data-seadrill], [data-seacol], [data-seasym], [data-searm], [data-searetry], #seaGo'); if (!t || app !== 'desk' || tab !== 'SEA') return;
+  if (t.dataset.seadrill) return seaDrillMonth(+t.dataset.y, +t.dataset.mo);
+  if (t.dataset.seacol != null && t.dataset.seacol !== '') return seaDrillCol(+t.dataset.seacol);
   if (t.id === 'seaGo') return seaAdd();
   if (t.dataset.searetry) { delete seaErr[seaSym]; seaLoad(seaSym, true); renderAll(); return; }
   if (t.dataset.searm) { seaList = seaList.filter(x => x !== t.dataset.searm); save('sd-seaList', seaList); if (seaSym === t.dataset.searm) { seaSym = 'SPY'; save('sd-seaSym', seaSym); } renderAll(); return; }
   seaSym = t.dataset.seasym; save('sd-seaSym', seaSym); seaLoad(seaSym, !seaData[seaSym]); renderAll();   // no data yet → try right now, past the one-minute error memory
 });
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'seaIn') { e.preventDefault(); seaAdd(); } });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('seadrill')) { seaSheetClose(); return; }
+  if (e.key === 'Enter' && e.target && e.target.id === 'seaIn') { e.preventDefault(); seaAdd(); return; }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('[data-seadrill], [data-seacol]')) { e.preventDefault(); e.target.click(); }
+});
 setInterval(() => { if (app === 'desk' && tab === 'SEA' && !document.hidden) seaLoad(seaSym); }, 5 * 60000);   // the 5-minute freshness check; seaLoad itself keeps at least 5 minutes between reads
 let seaPre = 0;
 setInterval(() => {                                                        // warm the other benchmark chips, one every few seconds while the tab is open

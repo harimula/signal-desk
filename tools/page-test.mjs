@@ -431,12 +431,21 @@ journalFixture = null;
 { const { page, errors } = await session('seasonality', () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); });
   await page.route('https://query1.finance.yahoo.com/**', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"chart":{"error":{"description":"Unauthorized"}}}' }));   // Yahoo 401s one host now and then (seen live on ^GSPC, 2026-11-05): every load must fall through to query2
   await page.route('https://query2.finance.yahoo.com/**', route => {
-    const sym = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop());
+    const ru = new URL(route.request().url()), sym = decodeURIComponent(ru.pathname.split('/').pop());
+    if (ru.searchParams.get('interval') === '1d') {                         // the drill-down's day-by-day window
+      const ts = [], cl = [];
+      const day = (y, mo, d, px) => { ts.push(Date.UTC(y, mo, d, 14, 30) / 1000); cl.push(px); };
+      day(2023, 11, 28, 99); day(2023, 11, 29, 100);                        // trailing December closes — the month's % must start from the LAST one
+      day(2024, 0, 2, 101); day(2024, 0, 3, 102); day(2024, 0, 4, 101.5); day(2024, 0, 5, 103); day(2024, 0, 8, 104);
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ chart: { result: [{ meta: { gmtoffset: -18000, exchangeTimezoneName: 'America/New_York', dataGranularity: '1d' }, timestamp: ts, indicators: { quote: [{ close: cl }] } }] } }) });
+    }
+    // monthly bars stamped the way Yahoo really stamps them: midnight New York on the 1st = 04:00Z in daylight-saving months
+    // (Apr–Nov), 05:00Z in winter. Keying by the meta's single gmtoffset (the 2026-11-05 bug) shifts every summer month back one.
     const ts = [], cl = []; let c = 100, y = 2023, mo = 11;
     for (const r of [0, 10, -5, 2, 3, -1, 4, -2, 1, 5, -3, 2, 1, 6, -4, 2, 2, -1, 3, 1, -2, 4, 1, -1, 2, 3, -2, 1, 2, -1, 3, -2, 1, 2, -6, 8]) {
-      c = c * (1 + r / 100); ts.push(Date.UTC(y, mo, 1) / 1000 + 5 * 3600); cl.push(+c.toFixed(4)); mo++; if (mo > 11) { mo = 0; y++; }
+      c = c * (1 + r / 100); ts.push(Date.UTC(y, mo, 1) / 1000 + (mo >= 3 && mo <= 10 ? 4 : 5) * 3600); cl.push(+c.toFixed(4)); mo++; if (mo > 11) { mo = 0; y++; }
     }
-    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ chart: { result: [{ meta: { gmtoffset: -18000, regularMarketPrice: +(c * 1.02).toFixed(2), longName: sym === 'SPY' ? 'SPDR S&P 500' : sym, dataGranularity: '1mo' }, timestamp: ts, indicators: { quote: [{ close: cl }] } }] } }) });
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ chart: { result: [{ meta: { gmtoffset: -18000, exchangeTimezoneName: 'America/New_York', regularMarketPrice: +(c * 1.02).toFixed(2), longName: sym === 'SPY' ? 'SPDR S&P 500' : sym, dataGranularity: '1mo' }, timestamp: ts, indicators: { quote: [{ close: cl }] } }] } }) });
   });
   await page.evaluate(() => document.querySelector('#tabs [data-t="SEA"]').click()); await page.waitForTimeout(900);
   const txt = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
@@ -450,10 +459,28 @@ journalFixture = null;
   await page.evaluate(() => [...document.querySelectorAll('[data-searm]')].find(x => x.dataset.searm === 'TSLA').click()); await page.waitForTimeout(400);
   check('seasonality: ✕ removes the searched chip and falls back to SPY', await page.evaluate(() => !JSON.parse(localStorage.getItem('sd-seaList') || '[]').includes('TSLA') && JSON.parse(localStorage.getItem('sd-seaSym') || '""') === 'SPY'), '');
   check('seasonality: a 401 from the first Yahoo host falls through to the second (the grid above loaded through query2)', true, '');
-  { const st = await page.evaluate(() => { const t = [...document.querySelectorAll('table.seaT')].find(x => x.querySelector('th') && x.querySelector('th').textContent.trim() === 'Year'); if (!t) return null; const tw = t.closest('.tw'); tw.scrollLeft = 400; const c = t.tBodies[0].rows[0].cells[0], r = c.getBoundingClientRect(), w = tw.getBoundingClientRect(); return { pos: getComputedStyle(c).position, pinned: Math.abs(r.left - w.left) < 8 }; });
+  { const st = await page.evaluate(() => { const t = [...document.querySelectorAll('table.seaT')].find(x => x.querySelector('th') && x.querySelector('th').textContent.trim() === 'Year'); if (!t) return null; const tw = t.closest('.tw'); tw.scrollLeft = 400; const c = t.tBodies[0].rows[0].cells[0], r = c.getBoundingClientRect(), w = tw.getBoundingClientRect(); return { pos: window.getComputedStyle(c).position, pinned: Math.abs(r.left - w.left) < 8 }; });
     check('seasonality: the Year column stays pinned while the grid scrolls sideways (phones)', !!st && st.pos === 'sticky' && st.pinned, JSON.stringify(st)); }
   { const align = await page.evaluate(() => { const out = []; for (const t of document.querySelectorAll('table.seaT')) { const hr = t.tHead.rows[0], br = t.tBodies[0].rows[0]; for (const i of [1, 6, 12]) { if (!hr.cells[i] || !br.cells[i]) continue; const a2 = hr.cells[i].getBoundingClientRect(), c2 = br.cells[i].getBoundingClientRect(); out.push(Math.abs((a2.left + a2.right) / 2 - (c2.left + c2.right) / 2)); } } return out; });
     check('seasonality: month headers sit exactly over their chips (both tables, sampled columns within 4px)', align.length >= 6 && align.every(x => x < 4), JSON.stringify(align)); }
+  { const t3 = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+    check('seasonality: plain-words definitions of win rate, average and median sit under the stats card', /Win rate — how many of the shown years that month ended green/.test(t3) && /Median — the middle year once they are sorted/.test(t3) && /month now in progress is left out/.test(t3), t3.slice(0, 200));
+    // bars stamped at daylight-saving midnights (04:00Z) must still land in their own months — the 2026-11-05 missing-months bug
+    const full = await page.evaluate(() => { const t = [...document.querySelectorAll('table.seaT')].find(x => x.querySelector('th') && x.querySelector('th').textContent.trim() === 'Year'); const row = [...t.tBodies[0].rows].find(r => r.cells[0].textContent.trim() === '2024'); return row ? [...row.cells].slice(1, 13).filter(c => c.querySelector('.seaC')).length : -1; });
+    check('seasonality: a daylight-saving year keeps all 12 months in their own columns (none missing or shifted)', full === 12, '2024 row has ' + full + ' of 12 months'); }
+  // drill-down: a month chip opens that month's sheet — rank among its namesakes, then the day-by-day fetched live
+  { await page.evaluate(() => [...document.querySelectorAll('[data-seadrill]')].find(x => x.dataset.y === '2024' && x.dataset.mo === '0').click()); await page.waitForTimeout(900);
+    const d = await page.evaluate(() => { const el = document.getElementById('seadrill'); return el ? el.innerText.replace(/\s+/g, ' ') : ''; });
+    check('seasonality drill: a month chip opens its sheet with the month, its return and its rank among the shown years', /SPY — Jan 2024 · \+10\.00%/.test(d) && /1st best of 3 Jans shown/.test(d), d.slice(0, 220));
+    check('seasonality drill: the sheet lists the month day by day — each close, that day\u2019s move and the month so far', /Jan 2/.test(d) && /\+1\.00%/.test(d) && /Month so far/.test(d) && /\$101\.00/.test(d), d.slice(0, 320));
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+    check('seasonality drill: Escape closes the sheet', await page.evaluate(() => !document.getElementById('seadrill')), ''); }
+  // drill-down: a stats cell opens the year-by-year column — every year's value for that calendar month, best to worst
+  { await page.evaluate(() => document.querySelector('[data-seacol="1"]').click()); await page.waitForTimeout(300);
+    const d = await page.evaluate(() => { const el = document.getElementById('seadrill'); return el ? el.innerText.replace(/\s+/g, ' ') : ''; });
+    check('seasonality drill: a stats cell lists every year for that month, best to worst, with its own win rate, average and median', /every Feb, best to worst/.test(d) && /Green in 0 of 3 years \(0%\)/.test(d) && /median −4\.00%/.test(d) && /2024/.test(d) && /−5\.00%/.test(d), d.slice(0, 260));
+    await page.evaluate(() => document.querySelector('#seadrill [data-seaclose]').click()); await page.waitForTimeout(150);
+    check('seasonality drill: the ✕ button closes the sheet', await page.evaluate(() => !document.getElementById('seadrill')), ''); }
   // every route refused → a reload still draws the symbol from the device's saved copy, and says so
   await page.unroute('https://query1.finance.yahoo.com/**'); await page.unroute('https://query2.finance.yahoo.com/**');
   const refuse = route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"chart":{"error":{"description":"Unauthorized"}}}' });
