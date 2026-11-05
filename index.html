@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-Tdrn1d5TPZl6/RQoVqdlloxAzr1EepC9yrrfU9wIpnE=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-Z1nPHxe6ppU25X+JlJ2mvWXLttdmjppRXC8EU2abQ7I=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -141,6 +141,8 @@ h2{font-size:16px;margin:24px 0 10px;font-weight:600;letter-spacing:-.01em}
 .chip{font:inherit;font-size:11.5px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 11px;cursor:pointer;color:var(--muted);font-weight:600}
 .chip.on{background:var(--accent-bg);color:var(--accent);border-color:var(--accent)}
 .seaC{display:inline-block;min-width:60px;text-align:center;padding:3px 7px;border-radius:7px;font-family:var(--font-mono);font-size:11.5px;font-weight:600}.seaC.p{background:rgba(34,160,90,.13);color:var(--tb)}.seaC.n{background:rgba(220,70,70,.12);color:var(--ts)}.seaC.now{outline:1.5px dashed var(--muted);outline-offset:1px}
+.seaT th:first-child,.seaT td:first-child{position:sticky;left:0;background:var(--surface);z-index:2;box-shadow:6px 0 6px -6px rgba(10,14,22,.3)}.seaT thead th:first-child{z-index:4}
+@media (max-width:640px){.seaC{min-width:50px;font-size:10.5px;padding:2px 5px}.seaT th,.seaT td{padding-left:4px;padding-right:4px}}
 .tools{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;padding:12px 14px;margin:10px 0}
 .tools label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 input,select,button{font:inherit;color:var(--text)}
@@ -1001,7 +1003,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793895626';
+const BUILD_V = '1793896736';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2480,9 +2482,9 @@ function seasonalityView() {
   const avg = a2 => a2.reduce((t, x) => t + x, 0) / a2.length, med = a2 => { const b2 = [...a2].sort((x, y) => x - y); return b2.length % 2 ? b2[b2.length >> 1] : (b2[b2.length / 2 - 1] + b2[b2.length / 2]) / 2; };
   const grid = years.map(y => { const t = yearTot(y); return `<tr><td class="lt"><b>${y}</b></td>${MN.map((_, mo) => cell(y, mo)).join('')}<td>${t == null ? '' : `<span class="seaC ${t >= 0 ? 'p' : 'n'}">${pc2(t)}</span>`}</td></tr>`; }).join('');
   return head + `<div class="card" style="padding:14px 16px;margin-top:10px"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b style="font-size:14px">${esc(D.name)}</b><span class="mut" style="font-size:12px">${esc(seaSym)} · $${fmt(D.px)} · each chip: that month's close against the month before (this month: the latest price)</span></div>
-<div class="tw" style="margin-top:10px"><table data-nosort style="min-width:900px"><thead><tr><th class="lt" style="min-width:76px"></th>${MN.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${stat(a2 => a2.filter(x => x > 0).length / a2.length * 100, 'Win rate', 'win rate')}${stat(avg, 'Average', 'average')}${stat(med, 'Median', 'median')}</tbody></table></div></div>
+<div class="tw" style="margin-top:10px"><table data-nosort class="seaT" style="min-width:900px"><thead><tr><th class="lt" style="min-width:76px"></th>${MN.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${stat(a2 => a2.filter(x => x > 0).length / a2.length * 100, 'Win rate', 'win rate')}${stat(avg, 'Average', 'average')}${stat(med, 'Median', 'median')}</tbody></table></div></div>
 <div class="card" style="padding:14px 16px;margin-top:10px"><b style="font-size:13px">Monthly performance</b> <span class="mut" style="font-size:12px">· last ${years.length} years</span>
-<div class="tw" style="margin-top:8px"><table style="min-width:980px"><thead><tr><th class="lt">Year</th>${MN.map(x => `<th>${x}</th>`).join('')}<th>Year</th></tr></thead><tbody>${grid}</tbody></table></div>
+<div class="tw" style="margin-top:8px"><table class="seaT" style="min-width:980px"><thead><tr><th class="lt">Year</th>${MN.map(x => `<th>${x}</th>`).join('')}<th>Year</th></tr></thead><tbody>${grid}</tbody></table></div>
 <div class="mut" style="font-size:11.5px;margin-top:8px">Prices from Yahoo Finance · price returns, dividends not counted · updated ${new Date(D.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}, refreshes every 5 minutes while this tab is open. Not advice.</div></div>`;
 }
 function seaAdd() {
@@ -2496,10 +2498,16 @@ document.addEventListener('click', e => {
   if (t.id === 'seaGo') return seaAdd();
   if (t.dataset.searetry) { delete seaErr[seaSym]; seaLoad(seaSym, true); renderAll(); return; }
   if (t.dataset.searm) { seaList = seaList.filter(x => x !== t.dataset.searm); save('sd-seaList', seaList); if (seaSym === t.dataset.searm) { seaSym = 'SPY'; save('sd-seaSym', seaSym); } renderAll(); return; }
-  seaSym = t.dataset.seasym; save('sd-seaSym', seaSym); seaLoad(seaSym); renderAll();
+  seaSym = t.dataset.seasym; save('sd-seaSym', seaSym); seaLoad(seaSym, !seaData[seaSym]); renderAll();   // no data yet → try right now, past the one-minute error memory
 });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'seaIn') { e.preventDefault(); seaAdd(); } });
 setInterval(() => { if (app === 'desk' && tab === 'SEA' && !document.hidden) seaLoad(seaSym); }, 5 * 60000);   // the 5-minute freshness check; seaLoad itself keeps at least 5 minutes between reads
+let seaPre = 0;
+setInterval(() => {                                                        // warm the other benchmark chips, one every few seconds while the tab is open
+  if (app !== 'desk' || tab !== 'SEA' || document.hidden) return;
+  const want = SEA_DEF.map(([x]) => x).filter(x => x !== seaSym && !seaData[x] && !(seaErr[x] && Date.now() - seaErr[x].at < 10 * 60000));
+  if (want.length) seaLoad(want[seaPre++ % want.length]);
+}, 4000);
 // The 100 most-traded US stocks count as big too: the bot's daily market scan (bot/scan.json, most traded first) — the names
 // the bot trades. Read at most once an hour; without the file, sales alone decide.
 let ernScan = null, ernScanAt = 0;

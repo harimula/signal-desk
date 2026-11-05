@@ -450,6 +450,8 @@ journalFixture = null;
   await page.evaluate(() => [...document.querySelectorAll('[data-searm]')].find(x => x.dataset.searm === 'TSLA').click()); await page.waitForTimeout(400);
   check('seasonality: ✕ removes the searched chip and falls back to SPY', await page.evaluate(() => !JSON.parse(localStorage.getItem('sd-seaList') || '[]').includes('TSLA') && JSON.parse(localStorage.getItem('sd-seaSym') || '""') === 'SPY'), '');
   check('seasonality: a 401 from the first Yahoo host falls through to the second (the grid above loaded through query2)', true, '');
+  { const st = await page.evaluate(() => { const t = [...document.querySelectorAll('table.seaT')].find(x => x.querySelector('th') && x.querySelector('th').textContent.trim() === 'Year'); if (!t) return null; const tw = t.closest('.tw'); tw.scrollLeft = 400; const c = t.tBodies[0].rows[0].cells[0], r = c.getBoundingClientRect(), w = tw.getBoundingClientRect(); return { pos: getComputedStyle(c).position, pinned: Math.abs(r.left - w.left) < 8 }; });
+    check('seasonality: the Year column stays pinned while the grid scrolls sideways (phones)', !!st && st.pos === 'sticky' && st.pinned, JSON.stringify(st)); }
   check('seasonality: the board’s moving-average card stays off this tab', await page.evaluate(() => document.getElementById('tools').style.display === 'none'), '');
   check('seasonality: no script errors', errors.length === 0, errors.join(' | '));
   await page.close(); }
