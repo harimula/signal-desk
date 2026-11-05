@@ -496,7 +496,7 @@ journalFixture = null;
   const tOff = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
   check('seasonality: with every route refused, the device’s saved copy still draws the grid and says “saved copy”', /Monthly performance/.test(tOff) && /saved copy/.test(tOff), tOff.slice(0, 200));
   // a symbol with no saved copy: the error must name the real cause — the saved proxy running the old worker — not a bare HTTP code
-  await page.fill('#seaIn', 'OLDW'); await page.keyboard.press('Enter'); await page.waitForTimeout(1500);
+  await page.fill('#seaIn', 'OLDW'); await page.keyboard.press('Enter'); await page.waitForTimeout(6000);   // a full failure shows only after the quiet second try (~2.5s later)
   const tOw = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
   check('seasonality: when the saved proxy answers with the old worker’s daily bars, the error says to paste the latest worker.js (not “HTTP 403”)', /old worker\.js/.test(tOw) && !/could not load it \(HTTP 403\)/.test(tOw), tOw.slice(0, 280));
   await page.evaluate(() => { const x = [...document.querySelectorAll('[data-searm]')].find(b => b.dataset.searm === 'OLDW'); if (x) x.click(); });

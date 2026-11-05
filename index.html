@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-LYMbrxVY/DYcxOUfmr74wJc2sqKuP6HqnQR04Quh+7s=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-cKHR1X4Da7SLORE4HDyKzv891B7b7MKQILRRXHwJ4hg=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1009,7 +1009,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793900520';
+const BUILD_V = '1793902576';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2441,20 +2441,39 @@ const seaRoutes = (path, proxyQ) => {
     'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u1), 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u2));
   return r;
 };
-async function seaFetch(path, proxyQ, wantMonthly, maxT0) {
-  let emsg = '', oldWorker = false;
-  for (const u of seaRoutes(path, proxyQ)) {
-    try {
-      const j = await tryJson(u, 9000);
-      const x = j && j.chart && j.chart.result && j.chart.result[0];
-      if (x && x.timestamp) {
-        if ((!wantMonthly || (((x.meta || {}).dataGranularity) || '1mo') === '1mo') && (!maxT0 || x.timestamp[0] <= maxT0)) return x;
-        if (proxy && u.indexOf(proxy.replace(/\/+$/, '')) === 0) oldWorker = true;   // the saved proxy answered, but with the old worker's fixed one-year daily bars
-      }
-      emsg = (j && j.chart && j.chart.error && (j.chart.error.description || j.chart.error.code)) || emsg;
-    } catch (e) { emsg = String((e && e.message) || e); }
-  }
-  throw new Error(oldWorker ? 'your saved price proxy runs an old worker.js \u2014 in Cloudflare, paste the repo\u2019s latest worker.js over it once and these errors stop' : emsg || 'no data');
+// Routes race with a 2.5-second head start each: a slow route no longer blocks the ones behind it — the first good
+// answer wins, a refused route hands its turn to the next at once, and stragglers are ignored. (Before this the
+// routes ran strictly one after another, up to 9 seconds each — on a slow phone network that was a near-minute
+// wait ending in "Fetch is aborted".)
+function seaFetch(path, proxyQ, wantMonthly, maxT0) {
+  const routes = seaRoutes(path, proxyQ);
+  return new Promise((resolve, reject) => {
+    let emsg = '', oldWorker = false, started = 0, pending = 0, done = false, timer = 0;
+    const kick = () => {
+      if (done || started >= routes.length) return;
+      const u = routes[started++]; pending++;
+      if (timer) { clearTimeout(timer); timer = 0; }
+      if (started < routes.length) timer = setTimeout(kick, 2500);
+      tryJson(u, 9000).then(j => {
+        const x = j && j.chart && j.chart.result && j.chart.result[0];
+        if (x && x.timestamp) {
+          if ((!wantMonthly || (((x.meta || {}).dataGranularity) || '1mo') === '1mo') && (!maxT0 || x.timestamp[0] <= maxT0)) {
+            done = true; if (timer) clearTimeout(timer); resolve(x); return;
+          }
+          if (proxy && u.indexOf(proxy.replace(/\/+$/, '')) === 0) oldWorker = true;   // the saved proxy answered, but with the old worker's fixed one-year daily bars
+        }
+        emsg = (j && j.chart && j.chart.error && (j.chart.error.description || j.chart.error.code)) || emsg;
+      }).catch(e => {
+        const m = String((e && e.message) || e); emsg = /abort/i.test(m) ? 'Yahoo did not answer within 9 seconds' : (m || emsg);
+      }).then(() => {
+        pending--;
+        if (done) return;
+        if (started < routes.length) kick();
+        else if (!pending) { done = true; reject(new Error(oldWorker ? 'your saved price proxy runs an old worker.js \u2014 in Cloudflare, paste the repo\u2019s latest worker.js over it once and these errors stop' : emsg || 'no data')); }
+      });
+    };
+    kick();
+  });
 }
 // which calendar month a bar belongs to, in the EXCHANGE's own time zone. A fixed clock offset mislabels every
 // summer-time month: Yahoo stamps monthly bars at midnight local, and the offset changes with daylight saving —
@@ -2472,7 +2491,9 @@ async function seaLoad(sym, force) {
   if (seaBusy.has(sym) || (!force && d0 && Date.now() - d0.at < 5 * 60000) || (!force && !d0 && seaErr[sym] && Date.now() - seaErr[sym].at < 60000)) return;
   seaBusy.add(sym);
   try {
-    const res = await seaFetch(ymPath(sym), 'sym=' + encodeURIComponent(sym) + '&range=max&interval=1mo', true);
+    const args = [ymPath(sym), 'sym=' + encodeURIComponent(sym) + '&range=max&interval=1mo', true];
+    const res = await seaFetch(...args).catch(async () => {                  // one quiet second try before any error shows — phone networks drop whole batches for a moment
+      await new Promise(r => setTimeout(r, 2500)); return seaFetch(...args); });
     const m = res.meta || {}, q = res.indicators.quote[0], tz = m.exchangeTimezoneName || '';
     const seen = new Map();                                                  // one close per month (the month's last bar wins), by the exchange's own calendar
     res.timestamp.forEach((t, i) => { const c = q.close[i]; if (c == null || !(c > 0)) return; seen.set(seaMonKey(t, tz), c); });
