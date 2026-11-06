@@ -143,12 +143,13 @@ for (let pass = 1; pass <= 2 && fredLeft.length; pass++) {                  // t
 for (const [k] of fredLeft) if (old.series[k]) series[k] = old.series[k];   // still refused: keep the prior night's dial
 auth = await getAuth();
 // market-type dials have Yahoo twins — the one route proven to work from GitHub's servers (2026-11-05).
-const YF_FALLBACK = { vix: ['^VIX', 1], y10: ['^TNX', 0.1], dxy: ['DX-Y.NYB', 1], oil: ['CL=F', 1] };   // ^TNX quotes the 10-year yield times ten
-for (const [k, [sym, mul]] of Object.entries(YF_FALLBACK)) {
+const YF_FALLBACK = { vix: '^VIX', y10: '^TNX', dxy: 'DX-Y.NYB', oil: 'CL=F' };
+for (const [k, sym] of Object.entries(YF_FALLBACK)) {
   if (series[k] && !fail[k]) continue;
   try {
-    const rows = (await yahooDaily(sym)).map(([d, v]) => [d, v * mul]);
-    series[k] = { name: FRED[k][1], unit: FRED[k][2], freq: 'D', src: 'Yahoo ' + sym, ...digest(rows, 'raw') };
+    let rows = await yahooDaily(sym);
+    if (k === 'y10' && rows[rows.length - 1][1] > 20) rows = rows.map(x => [x[0], x[1] / 10]);   // ^TNX has quoted the 10-year yield both plain and times ten — take whichever this is
+    series[k] = { name: k === 'dxy' ? 'US dollar index (DXY)' : FRED[k][1], unit: FRED[k][2], freq: 'D', src: 'Yahoo ' + sym, ...digest(rows, 'raw') };
     delete fail[k]; win[k] = 'yahoo';
   } catch (e) { void e; }
 }
