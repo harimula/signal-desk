@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-FW8Gm4aH5vkaT+zBK05ZRYX+9MdzgRW1yhsQKxirchg=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-HkoiUkbJVwFbSdHsKeH3TbK5wBRpM7jeCI6xdlWtVzw=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1009,7 +1009,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793984735';
+const BUILD_V = '1793989386';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -3213,14 +3213,15 @@ ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins 
     const sc = J.score; if (!sc || !sc.lanes) return '';
     const L2 = { stock: 'Stocks', call: 'CALLs', put: 'PUTs', spy: 'SPY quick', wheel: 'Wheel' };
     const money = v => `<span class="${cls(v)}">${$$(v)}</span>`;
-    const rowS = (lab, a, tip) => a && a.n ? `<tr><td class="lt"${tip ? ` data-tipkey="${tip}"` : ''}>${lab}</td><td>${a.n}</td><td>${a.won} (${Math.round(a.winPct)}%)</td><td>${a.avgWin == null ? '—' : $$(a.avgWin)}</td><td class="${a.avgLoss == null ? '' : 'neg'}">${a.avgLoss == null ? '—' : $$(a.avgLoss)}</td><td>${a.per == null ? '—' : money(a.per)}</td><td class="${a.pf != null && a.pf < 1 ? 'neg' : a.pf != null ? 'pos' : ''}">${a.pf == null ? '—' : fmt(a.pf, 2)}</td><td><b>${money(a.pl)}</b></td></tr>` : `<tr><td class="lt"${tip ? ` data-tipkey="${tip}"` : ''}>${lab}</td><td>0</td><td colspan="6" class="lt mut" style="font-size:11.5px">no closed trades</td></tr>`;
-    const tblS = (title, key) => `<div style="font-weight:650;font-size:12.5px;margin:10px 0 4px">${title}</div><div class="tw"><table data-nosort style="min-width:560px"><thead><tr><th class="lt">Lane</th><th>Trades</th><th>Won</th><th data-tipkey="average win">Avg win</th><th data-tipkey="average loss">Avg loss</th><th data-tipkey="expectancy">$/trade</th><th data-tipkey="profit factor">PF</th><th>P/L</th></tr></thead><tbody>${['stock', 'call', 'put', 'spy', 'wheel'].map(l => rowS(L2[l], sc.lanes[l] && sc.lanes[l][key], l === 'wheel' ? 'wheel scorecard' : '')).join('')}${rowS('<b>All lanes</b>', sc.total && sc.total[key])}</tbody></table></div>`;
+    const rowS = (lnKey, lab, a, winKey, tip) => { const cell = `<span class="drillable" data-drill="score" data-arg="${lnKey}:${winKey}" role="button" tabindex="0"${tip ? ` data-tipkey="${tip}"` : ''}>${lab} <span class="drill-ico" aria-hidden="true">›</span></span>`;
+      return a && a.n ? `<tr><td class="lt">${cell}</td><td>${a.n}</td><td>${a.won} (${Math.round(a.winPct)}%)</td><td>${a.avgWin == null ? '—' : $$(a.avgWin)}</td><td class="${a.avgLoss == null ? '' : 'neg'}">${a.avgLoss == null ? '—' : $$(a.avgLoss)}</td><td>${a.per == null ? '—' : money(a.per)}</td><td class="${a.pf != null && a.pf < 1 ? 'neg' : a.pf != null ? 'pos' : ''}">${a.pf == null ? '—' : fmt(a.pf, 2)}</td><td><b>${money(a.pl)}</b></td></tr>` : `<tr><td class="lt">${cell}</td><td>0</td><td colspan="6" class="lt mut" style="font-size:11.5px">no closed trades</td></tr>`; };
+    const tblS = (title, key) => `<div style="font-weight:650;font-size:12.5px;margin:10px 0 4px">${title}</div><div class="tw"><table data-nosort style="min-width:560px"><thead><tr><th class="lt">Lane</th><th>Trades</th><th>Won</th><th data-tipkey="average win">Avg win</th><th data-tipkey="average loss">Avg loss</th><th data-tipkey="expectancy">$/trade</th><th data-tipkey="profit factor">PF</th><th>P/L</th></tr></thead><tbody>${['stock', 'call', 'put', 'spy', 'wheel'].map(l => rowS(l, L2[l], sc.lanes[l] && sc.lanes[l][key], key, l === 'wheel' ? 'wheel scorecard' : '')).join('')}${rowS('all', '<b>All lanes</b>', sc.total && sc.total[key], key)}</tbody></table></div>`;
     const drift = (sc.drift || []).length
       ? sc.drift.map(d => `<div style="margin-top:8px;font-size:12.5px"><span class="pill r-Top-Sell">drift</span> <b>${L2[d.lane]}</b>: the last ${d.n} closed trades won ${Math.round(d.winPct)}% against about ${d.expWin}% in this rule’s own study, and lost more than they made (profit factor ${fmt(d.pf, 2)}). One bad week is noise — held over ${d.n} trades it is how a changed market shows itself.</div>`).join('')
       : `<div class="mut" style="font-size:12px;margin-top:8px">✅ No drift: every lane with 30+ recent closed trades is inside its tested range.</div>`;
     return `<div class="card" style="padding:14px 16px;margin:0 0 14px"><b>📊 Weekly scorecard</b> <span class="mut" style="font-size:11.5px">· refreshes with the journal; Telegram gets the week\u2019s summary Fridays ~3:50 PM ET and the finished month\u2019s on the next month\u2019s first session · as of ${esc(new Date(sc.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}</span>
 ${tblS('This week — since Monday ' + esc(sc.weekOf), 'week')}${sc.total && sc.total.month ? tblS('This month — since ' + esc((sc.monthOf || '').slice(0, 7)) + '-01', 'month') : ''}${tblS('Last 60 days (all the journal holds)', 'all')}${drift}
-<div class="mut" style="font-size:11.5px;margin-top:8px"><b>$/trade</b> — what the average trade added or took (expectancy). <b>PF</b> — profit factor: dollars won per dollar lost; above 1.00 means the lane is paying for itself. Each lane is judged only against its own study’s numbers. The wheel is listed but never drift-flagged: by your setting it never sells at a loss, so its open red is paper until assignment.</div></div>`;
+<div class="mut" style="font-size:11.5px;margin-top:8px">Tap any lane for that window\u2019s trades, one by one. <b>$/trade</b> — what the average trade added or took (expectancy). <b>PF</b> — profit factor: dollars won per dollar lost; above 1.00 means the lane is paying for itself. Each lane is judged only against its own study’s numbers. The wheel is listed but never drift-flagged: by your setting it never sells at a loss, so its open red is paper until assignment.</div></div>`;
   })();
   const splitCard = (() => {                     // money split: stocks, CALLs and PUTs each with their own money, use, results and loss limit
     const S0 = J.settings || {}, on = J.split ? J.split.on : S0.split !== false;
@@ -4222,6 +4223,21 @@ function drillBody(J, key, arg) {
   const A = J.account || {}, eq = +A.equity || 0, last = +A.last_equity || eq, inv = open.reduce((t, o) => t + val(o), 0), unreal = open.reduce((t, o) => t + o.pl, 0);
   const closedToday = closed.filter(c => dET(c.outT) === today), realToday = closedToday.reduce((t, c) => t + c.pl, 0);
   const pc2 = v => v == null || !isFinite(v) ? '–' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${fmt(Math.abs(v), 2)}%</span>`;
+  if (key === 'score') {
+    const [ln, win] = (arg || ':').split(':'), sc = J.score || {};
+    const laneOf = t => (t.wheel || t.short) ? 'wheel' : t.kind === 'Stock' ? 'stock' : t.und === 'SPY' ? 'spy' : t.kind === 'Call' ? 'call' : 'put';
+    const inWin = c => { const d2 = dET(c.outT); return win === 'week' ? d2 >= (sc.weekOf || '9999') : win === 'month' ? d2.startsWith(sc.monthOf || '9999') : true; };
+    const arr = closed.filter(c => (ln === 'all' || laneOf(c) === ln) && inWin(c));
+    const w2 = arr.filter(c => c.pl > 0), gw = w2.reduce((t, c) => t + c.pl, 0), gl = -arr.filter(c => c.pl <= 0).reduce((t, c) => t + c.pl, 0);
+    const WLAB = { week: 'this week — since Monday ' + (sc.weekOf || '?'), month: 'this month (' + (sc.monthOf || '?') + ')', all: 'the last 60 days' };
+    const dr = (sc.drift || []).find(d2 => d2.lane === ln);
+    const sum = arr.length ? kv([['Trades', String(arr.length)], ['Won', `${w2.length} of ${arr.length} (${Math.round(w2.length / arr.length * 100)}%)`],
+      ['Average win', w2.length ? sd(gw / w2.length) : '–'], ['Average loss', arr.length - w2.length ? sd(-gl / (arr.length - w2.length)) : '–'],
+      ['$ per trade (expectancy)', sd((gw - gl) / arr.length)], ['Profit factor', gl > 0.005 ? `<b>${fmt(gw / gl, 2)}</b> — $${fmt(gw / gl, 2)} won per $1 lost` : '— (no losses)'],
+      ['P/L together', sd(gw - gl)]]) : '';
+    const driftLine = dr ? `<div style="margin:8px 0;font-size:12.5px"><span class="pill r-Top-Sell">drift</span> last ${dr.n} closed won ${Math.round(dr.winPct)}% vs ~${dr.expWin}% in this rule’s study, profit factor ${fmt(dr.pf, 2)}.</div>` : '';
+    return { title: `${ln === 'all' ? 'All lanes' : PN[ln] || ln} — ${WLAB[win] || win}`, html: sum + driftLine + h('Each trade, newest first') + closedTbl(arr) };
+  }
   if (key === 'won' || key === 'lost' || key === 'net') {
     const cost = c => Math.abs(c.qty) * c.inPx * (c.mult || (c.kind === 'Stock' ? 1 : 100)), real = closed.reduce((t, c) => t + c.pl, 0);
     const stake = J.settings && +J.settings.stakeUsd > 0 ? +J.settings.stakeUsd : 0, base0 = stake || (eq - real - unreal), share = v => base0 > 0 ? pc2(v / base0 * 100) : '';

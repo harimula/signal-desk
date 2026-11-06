@@ -341,13 +341,23 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
   await page.evaluate(() => document.querySelectorAll('main details').forEach(d => { d.open = true; }));
   const txt = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
   if (fx === scoreFx) {
-    check('scorecard: the card shows both windows with the desk numbers (win %, avg win/loss, $/trade, PF, P/L)', /Weekly scorecard/.test(txt) && /This week — since Monday 2026-11-02/.test(txt) && /Last 60 days \(all the journal holds\)/.test(txt) && /Stocks 12 8 \(67%\)/.test(txt) && /0\.75/.test(txt), (txt.match(/Weekly scorecard.{0,400}/) || [''])[0]);
-    check('scorecard: the month-to-date table sits between the week and the 60 days, with its own numbers', /This month — since 2026-11-01/.test(txt) && /Stocks 14 9 \(64%\)/.test(txt) && /finished month’s on the next month’s first session/.test(txt), (txt.match(/This month.{0,200}/) || [''])[0]);
-    check('scorecard: a lane with no trades says so instead of a row of dashes', /CALLs 0 no closed trades/.test(txt) && /PUTs 0 no closed trades/.test(txt), (txt.match(/CALLs 0.{0,80}/) || [''])[0]);
+    check('scorecard: the card shows both windows with the desk numbers (win %, avg win/loss, $/trade, PF, P/L)', /Weekly scorecard/.test(txt) && /This week — since Monday 2026-11-02/.test(txt) && /Last 60 days \(all the journal holds\)/.test(txt) && /Stocks › 12 8 \(67%\)/.test(txt) && /0\.75/.test(txt), (txt.match(/Weekly scorecard.{0,400}/) || [''])[0]);
+    check('scorecard: the month-to-date table sits between the week and the 60 days, with its own numbers', /This month — since 2026-11-01/.test(txt) && /Stocks › 14 9 \(64%\)/.test(txt) && /finished month’s on the next month’s first session/.test(txt), (txt.match(/This month.{0,200}/) || [''])[0]);
+    check('scorecard: a lane with no trades says so instead of a row of dashes', /CALLs › 0 no closed trades/.test(txt) && /PUTs › 0 no closed trades/.test(txt), (txt.match(/CALLs 0.{0,80}/) || [''])[0]);
     check('scorecard: the drift flag names the lane, the study gap and the profit factor in plain words', /drift/.test(txt) && /last 30 closed trades won 70% against about 82%/.test(txt) && /profit factor 0\.85/.test(txt), (txt.match(/drift.{0,260}/) || [''])[0]);
     check('scorecard: the plain-words key is on the card (expectancy, profit factor, the wheel never drift-flagged)', /what the average trade added or took/.test(txt) && /dollars won per dollar lost/.test(txt) && /never sells at a loss/.test(txt) && /judged only against its own study/.test(txt), '');
     const thNoTip = await page.evaluate(() => [...document.querySelectorAll('main th')].filter(el => el.offsetParent && !el.hasAttribute('data-tip')).map(el => el.textContent.trim()));
     check('scorecard: every heading of its tables has an explanation', thNoTip.length === 0, thNoTip.join(' | '));
+    // drill-down: a lane row opens that window's trades, summary computed from the very rows listed
+    await page.evaluate(() => [...document.querySelectorAll('[data-drill="score"]')].find(x => x.dataset.arg === 'stock:all').click()); await page.waitForTimeout(250);
+    const d60 = await page.evaluate(() => { const el = document.getElementById('drill'); return el ? el.innerText.replace(/\s+/g, ' ') : ''; });
+    check('scorecard drill: a lane row opens its trades for that window with the desk summary (stocks, last 60 days)', /Stocks — the last 60 days/.test(d60) && /Trades 1 Won 1 of 1/.test(d60) && /Profit factor/.test(d60) && /Each trade, newest first/.test(d60) && /drift/.test(d60) && /Bought/.test(d60), d60.slice(0, 300));
+    await page.keyboard.press('Escape'); await page.waitForTimeout(120);
+    await page.evaluate(() => [...document.querySelectorAll('[data-drill="score"]')].find(x => x.dataset.arg === 'call:week').click()); await page.waitForTimeout(250);
+    const dw = await page.evaluate(() => { const el = document.getElementById('drill'); return el ? el.innerText.replace(/\s+/g, ' ') : ''; });
+    check('scorecard drill: a window with nothing in it says “No closed trades.” plainly (CALLs, this week)', /CALLs — this week — since Monday 2026-11-02/.test(dw) && /No closed trades\./.test(dw), dw.slice(0, 220));
+    await page.keyboard.press('Escape'); await page.waitForTimeout(120);
+    check('scorecard drill: Escape closes the sheet', await page.evaluate(() => !document.getElementById('drill')), '');
   }
   if (fx === wheelFx) {
     check('wheel: its card lists the sold put (buy-back at $45.00 a contract, expiry) and the delivered shares (cost $138.50)', /Wheel — cash-secured puts & covered calls/.test(txt) && /KO PUT sold 65\.00 · 11-20/.test(txt) && /bought back at \$45\.00, else expires Fri, Nov 20 · \$6,500 set aside/.test(txt) && /PEP shares 100 \$138\.50/.test(txt) && /Next sale window: Mon, Nov 23, Tue, Nov 24, Wed, Nov 25/.test(txt), (txt.match(/Wheel — cash.{0,700}/) || [''])[0]);
