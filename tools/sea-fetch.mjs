@@ -6,17 +6,31 @@ import fs from 'node:fs';
 const bench = ['^GSPC', '^IXIC', 'SPY', 'VGT', 'QQQ'];
 const syms = [...new Set(bench.concat(JSON.parse(fs.readFileSync('symbols.json', 'utf8'))))].slice(0, 300);
 const fname = s => 'data/sea/' + s.replace(/[^A-Za-z0-9.\-]/g, '_') + '.json';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+let auth = null;                                                            // Yahoo's cookie+crumb: max-range monthly history 401s without it for many symbols (seen 2026-11-05: the same 68 of 172 on every run)
+async function getAuth() {
+  try {
+    const r1 = await fetch('https://fc.yahoo.com/', { headers: { 'user-agent': UA }, redirect: 'manual' });
+    const cookie = String(r1.headers.get('set-cookie') || '').split(';')[0];
+    if (!cookie) return null;
+    const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', { headers: { 'user-agent': UA, cookie } });
+    const crumb = (await r2.text()).trim();
+    return r2.ok && crumb && crumb.length <= 32 && !crumb.includes('<') ? { cookie, crumb } : null;
+  } catch (e) { void e; return null; }
+}
 const routes = s => {
   const p = '/v8/finance/chart/' + encodeURIComponent(s) + '?range=max&interval=1mo&includePrePost=false';
+  const cr = auth ? '&crumb=' + encodeURIComponent(auth.crumb) : '';
   const u1 = 'https://query1.finance.yahoo.com' + p, u2 = 'https://query2.finance.yahoo.com' + p;
-  return [u1, u2, 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u1), 'https://corsproxy.io/?url=' + encodeURIComponent(u2)];
+  return [{ u: u1 + cr, direct: true }, { u: u2 + cr, direct: true },
+    { u: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u1) }, { u: 'https://corsproxy.io/?url=' + encodeURIComponent(u2) }];
 };
 async function pull(s) {
   let err = '';
-  for (const u of routes(s)) {
+  for (const { u, direct } of routes(s)) {
     const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 10000);
     try {
-      const r = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0' }, signal: ctl.signal });
+      const r = await fetch(u, { headers: direct && auth ? { 'user-agent': UA, cookie: auth.cookie } : { 'user-agent': UA }, signal: ctl.signal });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const x = (await r.json()).chart.result[0], m = x.meta || {};
       if (!x.timestamp || (m.dataGranularity || '1mo') !== '1mo') throw new Error('not monthly bars');
@@ -30,6 +44,8 @@ async function pull(s) {
   throw new Error(err || 'no data');
 }
 fs.mkdirSync('data/sea', { recursive: true });
+auth = await getAuth();
+console.log('crumb:', auth ? 'yes' : 'no — unauthenticated routes only');
 // Yahoo refuses single requests at random from datacenter addresses (the first run lost 68 of 172 that way, scattered,
 // not rate-limit-shaped) — so: two at a time, a breath between requests, and up to three passes over the failures.
 let left = syms.slice(); const why = {};
