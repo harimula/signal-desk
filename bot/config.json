@@ -86,7 +86,7 @@
  "optTakeProfit": 10,
  "optStop": 30,
  "holdFloor": 25,
- "stockTp": 10,
+ "stockTp": 20,
  "staleMin": 45,
  "exitRule": "profit",
  "exitProfitPct": 0.5,
@@ -131,8 +131,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-11-06T18:55:00.000Z",
- "updatedBy": "Claude (SPY share 10% -> 5% while the new rule proves itself; owner accepted the recommendation 2026-11-03 3:39 PM)",
+ "updatedAt": "2026-11-06T19:02:15.077Z",
+ "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
 }
