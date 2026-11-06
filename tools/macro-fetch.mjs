@@ -95,6 +95,15 @@ async function yahooDaily(sym) {
   throw new Error(err || 'no data');
 }
 
+const FRED_KEY = process.env.FRED_API_KEY || '';                           // the official, free FRED API key (GitHub secret) — the dependable route; without it the free ladder is tried
+async function fredApi(id) {
+  const u = 'https://api.stlouisfed.org/fred/series/observations?series_id=' + id + '&api_key=' + FRED_KEY + '&file_type=json&observation_start=1990-01-01';
+  const j = JSON.parse(await get(u, undefined, 20000));
+  const rows = [];
+  for (const o of (j.observations || [])) { const n = +o.value; if (o.value !== '.' && Number.isFinite(n)) rows.push([o.date, n]); }
+  if (rows.length < 15) throw new Error('api: too short');
+  return rows;
+}
 let fredDirectDead = false;                                                 // FRED hangs for GitHub's addresses (seen 2026-11-05: every direct request aborted) — after one dead direct try, go straight to the relays
 const win = {};                                                             // which route served each series tonight — committed, for diagnosing from the repo
 async function fredCsv(k, id) {
@@ -106,6 +115,7 @@ async function fredCsv(k, id) {
     ['https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(g), false],
     ['https://corsproxy.io/?url=' + encodeURIComponent(g), false]];
   let err = '';
+  if (FRED_KEY) { try { const rows = await fredApi(id); win[k] = 'api'; return rows; } catch (e) { err = String((e && e.message) || e).slice(0, 80); } }
   for (let i = 0; i < routes.length; i++) {
     const [u, isDirect] = routes[i];
     if (isDirect && fredDirectDead) continue;
@@ -132,6 +142,20 @@ for (let pass = 1; pass <= 2 && fredLeft.length; pass++) {                  // t
 }
 for (const [k] of fredLeft) if (old.series[k]) series[k] = old.series[k];   // still refused: keep the prior night's dial
 auth = await getAuth();
+// market-type dials have Yahoo twins — the one route proven to work from GitHub's servers (2026-11-05).
+const YF_FALLBACK = { vix: ['^VIX', 1], y10: ['^TNX', 0.1], dxy: ['DX-Y.NYB', 1], oil: ['CL=F', 1] };   // ^TNX quotes the 10-year yield times ten
+for (const [k, [sym, mul]] of Object.entries(YF_FALLBACK)) {
+  if (series[k] && !fail[k]) continue;
+  try {
+    const rows = (await yahooDaily(sym)).map(([d, v]) => [d, v * mul]);
+    series[k] = { name: FRED[k][1], unit: FRED[k][2], freq: 'D', src: 'Yahoo ' + sym, ...digest(rows, 'raw') };
+    delete fail[k]; win[k] = 'yahoo';
+  } catch (e) { void e; }
+}
+if (fail.curve && series.y10 && series.y2 && !fail.y2) {                    // the curve is just 10y minus 2y — compute it when both legs are fresh
+  const h2 = new Map(series.y2.hist), hist = series.y10.hist.filter(x => h2.has(x[0])).map(x => [x[0], Math.round((x[1] - h2.get(x[0])) * 100) / 100]);
+  if (hist.length > 1) { series.curve = { name: FRED.curve[1], unit: 'pp', freq: 'D', src: 'computed 10y − 2y', date: series.y10.date, val: Math.round((series.y10.val - series.y2.val) * 100) / 100, prev: Math.round((series.y10.prev - series.y2.prev) * 100) / 100, hist }; delete fail.curve; win.curve = 'computed'; }
+}
 for (const [k, [sym, name, unit]] of Object.entries(YAHOO)) {
   try { series[k] = { name, unit, freq: 'D', src: 'Yahoo ' + sym, ...digest(await yahooDaily(sym), 'raw') }; }
   catch (e) { fail[k] = String((e && e.message) || e).slice(0, 100); if (old.series[k]) series[k] = old.series[k]; }
