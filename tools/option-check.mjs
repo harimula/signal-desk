@@ -49,6 +49,11 @@ const CONFIGS = [
   { key: 'tp10-stop90-target-14d', tp: 0.10, stop: 0.9, rule: 'none', days: 14 },
   { key: 'tp5-stop90-target-30d', tp: 0.05, stop: 0.9, rule: 'none', days: 30 },
   { key: 'tp10-stop90-target-30d', tp: 0.10, stop: 0.9, rule: 'none', days: 30 },
+  { key: 'tp10-stop30-target-14d', tp: 0.10, stop: 0.3, rule: 'none', days: 14 },   // the owner's 2026-11-06 ask: cap the loss at 30, take profit at 10
+  { key: 'tp15-stop30-target-14d', tp: 0.15, stop: 0.3, rule: 'none', days: 14 },
+  { key: 'tp10-stop50-target-14d', tp: 0.10, stop: 0.5, rule: 'none', days: 14 },
+  { key: 'tp25-stop30-target-14d', tp: 0.25, stop: 0.3, rule: 'none', days: 14 },
+  { key: 'tp50-stop30-target-14d', tp: 0.50, stop: 0.3, rule: 'none', days: 14 },
 ];
 const HOLD = 15, SPREAD = 0.02;
 const out = { at: new Date().toISOString(), signals: { call: sig.call.length, put: sig.put.length }, results: {} };

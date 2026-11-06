@@ -83,8 +83,8 @@
  "rsiThreshold": 25,
  "maxHold": 15,
  "entryEnd": "15:30",
- "optTakeProfit": 5,
- "optStop": 90,
+ "optTakeProfit": 10,
+ "optStop": 30,
  "holdFloor": 25,
  "stockTp": 10,
  "staleMin": 45,
@@ -131,7 +131,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-11-03T20:45:00.000Z",
+ "updatedAt": "2026-11-06T18:55:00.000Z",
  "updatedBy": "Claude (SPY share 10% -> 5% while the new rule proves itself; owner accepted the recommendation 2026-11-03 3:39 PM)",
  "liveConfirm": "",
  "stakeUsd": 0
