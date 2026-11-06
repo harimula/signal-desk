@@ -96,25 +96,39 @@ async function yahooDaily(sym) {
 }
 
 let fredDirectDead = false;                                                 // FRED hangs for GitHub's addresses (seen 2026-11-05: every direct request aborted) — after one dead direct try, go straight to the relays
-async function fredCsv(id) {
-  const direct = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=' + id;
-  const relays = ['https://api.allorigins.win/raw?url=' + encodeURIComponent(direct),
-    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(direct),
-    'https://corsproxy.io/?url=' + encodeURIComponent(direct)];
+const win = {};                                                             // which route served each series tonight — committed, for diagnosing from the repo
+async function fredCsv(k, id) {
+  const g = 'https://fred.stlouisfed.org/graph/fredgraph.csv?cosd=1990-01-01&id=' + id;   // trimmed: daily series since 1954 are half a megabyte untrimmed
+  const d = 'https://fred.stlouisfed.org/series/' + id + '/downloaddata/' + id + '.csv';  // the classic download endpoint — a different path, in case one is refused
+  const routes = [[g, true], [d, true],
+    ['https://api.allorigins.win/raw?url=' + encodeURIComponent(g), false],
+    ['https://api.allorigins.win/raw?url=' + encodeURIComponent(d), false],
+    ['https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(g), false],
+    ['https://corsproxy.io/?url=' + encodeURIComponent(g), false]];
   let err = '';
-  for (const u of (fredDirectDead ? relays : [direct, ...relays])) {
-    try { return parseFred(await get(u, undefined, u === direct ? 8000 : 15000)); }
-    catch (e) { err = String((e && e.message) || e).slice(0, 80); if (u === direct && /abort/i.test(err)) fredDirectDead = true; }
+  for (let i = 0; i < routes.length; i++) {
+    const [u, isDirect] = routes[i];
+    if (isDirect && fredDirectDead) continue;
+    try { const rows = parseFred(await get(u, undefined, isDirect ? 8000 : 15000)); win[k] = i; return rows; }
+    catch (e) { err = String((e && e.message) || e).slice(0, 80); if (isDirect && /abort/i.test(err)) fredDirectDead = true; }
   }
   throw new Error(err);
 }
 const old = fs.existsSync('data/macro.json') ? JSON.parse(fs.readFileSync('data/macro.json', 'utf8')) : { series: {} };
 const series = {}, fail = {};
-for (const [k, [id, name, unit, freq, tr]] of Object.entries(FRED)) {
-  try { series[k] = { name, unit, freq, src: 'FRED ' + id, ...digest(await fredCsv(id), tr) }; }
-  catch (e) { fail[k] = String((e && e.message) || e).slice(0, 100); if (old.series[k]) series[k] = old.series[k]; }
-  await new Promise(r => setTimeout(r, 300));
+let fredLeft = Object.entries(FRED);
+for (let pass = 1; pass <= 3 && fredLeft.length; pass++) {                  // the relays refuse single requests at random (the sea-fetch lesson) — passes mop them up
+  if (pass > 1) { console.log('pass ' + pass + ': retrying ' + fredLeft.length); await new Promise(r => setTimeout(r, 15000)); }
+  const again = [];
+  for (const ent of fredLeft) {
+    const [k, [id, name, unit, freq, tr]] = ent;
+    try { series[k] = { name, unit, freq, src: 'FRED ' + id, ...digest(await fredCsv(k, id), tr) }; delete fail[k]; }
+    catch (e) { fail[k] = String((e && e.message) || e).slice(0, 100); again.push(ent); }
+    await new Promise(r => setTimeout(r, 300));
+  }
+  fredLeft = again;
 }
+for (const [k] of fredLeft) if (old.series[k]) series[k] = old.series[k];   // still refused: keep the prior night's dial
 auth = await getAuth();
 for (const [k, [sym, name, unit]] of Object.entries(YAHOO)) {
   try { series[k] = { name, unit, freq: 'D', src: 'Yahoo ' + sym, ...digest(await yahooDaily(sym), 'raw') }; }
@@ -123,4 +137,4 @@ for (const [k, [sym, name, unit]] of Object.entries(YAHOO)) {
 const got = Object.keys(series).length;
 console.log('ok', got, 'fail', Object.keys(fail).length, Object.keys(fail).join(' '));
 if (!got) process.exit(1);                                                  // nothing at all (and nothing old to keep): leave the file alone
-fs.writeFileSync('data/macro.json', JSON.stringify({ v: 1, at: Date.now(), series, fail }, null, 1));
+fs.writeFileSync('data/macro.json', JSON.stringify({ v: 1, at: Date.now(), series, fail, win }, null, 1));
