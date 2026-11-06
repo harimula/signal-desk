@@ -32,18 +32,19 @@ async function pull(s) {
 fs.mkdirSync('data/sea', { recursive: true });
 // Yahoo refuses single requests at random from datacenter addresses (the first run lost 68 of 172 that way, scattered,
 // not rate-limit-shaped) — so: two at a time, a breath between requests, and up to three passes over the failures.
-let left = syms.slice();
+let left = syms.slice(); const why = {};
 for (let pass = 1; pass <= 4 && left.length; pass++) {
   if (pass > 1) { console.log('pass ' + pass + ': retrying ' + left.length + ' after a pause'); await new Promise(r => setTimeout(r, 20000)); }
   const fails = []; let i = 0;
   await Promise.all(Array.from({ length: 2 }, async () => {
     while (i < left.length) {
       const s = left[i++];
-      try { fs.writeFileSync(fname(s), JSON.stringify(await pull(s))); } catch (e) { fails.push(s); if (pass === 4) console.log('fail', s, e.message); }
+      try { fs.writeFileSync(fname(s), JSON.stringify(await pull(s))); delete why[s]; } catch (e) { fails.push(s); why[s] = String((e && e.message) || e).slice(0, 120); if (pass === 4) console.log('fail', s, e.message); }
       await new Promise(r => setTimeout(r, 250));
     }
   }));
   left = fails;
 }
 console.log('ok', syms.length - left.length, 'fail', left.length);
+fs.writeFileSync('data/sea/_report.json', JSON.stringify({ at: Date.now(), ok: syms.length - left.length, fail: left.length, why }, null, 1));   // committed, so a failing night can be diagnosed from the repo itself
 if (left.length === syms.length) process.exit(1);                           // nothing fetched at all: fail loudly and keep yesterday's files
