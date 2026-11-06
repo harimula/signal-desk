@@ -19,11 +19,14 @@ async function getAuth() {
   } catch (e) { void e; return null; }
 }
 const routes = s => {
-  const p = '/v8/finance/chart/' + encodeURIComponent(s) + '?range=max&interval=1mo&includePrePost=false';
+  const e = encodeURIComponent(s), now = Math.floor(Date.now() / 1000);
+  const p = '/v8/finance/chart/' + e + '?range=max&interval=1mo&includePrePost=false';
   const cr = auth ? '&crumb=' + encodeURIComponent(auth.crumb) : '';
   const u1 = 'https://query1.finance.yahoo.com' + p, u2 = 'https://query2.finance.yahoo.com' + p;
   return [{ u: u1 + cr, direct: true }, { u: u2 + cr, direct: true },
-    { u: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u1) }, { u: 'https://corsproxy.io/?url=' + encodeURIComponent(u2) }];
+    { u: 'https://query1.finance.yahoo.com/v8/finance/chart/' + e + '?period1=0&period2=' + now + '&interval=1mo&includePrePost=false' + cr, direct: true },   // same ask, spelled as an exact window — some symbols 401 only the range=max spelling
+    { u: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u1) }, { u: 'https://corsproxy.io/?url=' + encodeURIComponent(u2) },
+    { u: 'https://query2.finance.yahoo.com/v8/finance/chart/' + e + '?range=10y&interval=1mo&includePrePost=false' + cr, direct: true }];   // last resort: ten years beats nothing
 };
 async function pull(s) {
   let err = '';
@@ -31,7 +34,7 @@ async function pull(s) {
     const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 10000);
     try {
       const r = await fetch(u, { headers: direct && auth ? { 'user-agent': UA, cookie: auth.cookie } : { 'user-agent': UA }, signal: ctl.signal });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).replace(/\s+/g, ' ').slice(0, 160));
       const x = (await r.json()).chart.result[0], m = x.meta || {};
       if (!x.timestamp || (m.dataGranularity || '1mo') !== '1mo') throw new Error('not monthly bars');
       const q = x.indicators.quote[0], ts = [], cl = [];
@@ -62,5 +65,5 @@ for (let pass = 1; pass <= 4 && left.length; pass++) {
   left = fails;
 }
 console.log('ok', syms.length - left.length, 'fail', left.length);
-fs.writeFileSync('data/sea/_report.json', JSON.stringify({ at: Date.now(), ok: syms.length - left.length, fail: left.length, why }, null, 1));   // committed, so a failing night can be diagnosed from the repo itself
+fs.writeFileSync('data/sea/_report.json', JSON.stringify({ at: Date.now(), crumb: !!auth, ok: syms.length - left.length, fail: left.length, why }, null, 1));   // committed, so a failing night can be diagnosed from the repo itself
 if (left.length === syms.length) process.exit(1);                           // nothing fetched at all: fail loudly and keep yesterday's files
