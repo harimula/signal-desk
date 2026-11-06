@@ -1,6 +1,6 @@
 {
  "v": 1,
- "at": 1793934376620,
+ "at": 1793936046924,
  "series": {
   "unemp": {
    "name": "Unemployment rate",
@@ -436,7 +436,7 @@
    "freq": "D",
    "src": "Yahoo GC=F",
    "date": "2026-11-06",
-   "val": 4070.3,
+   "val": 4059.7,
    "prev": 4113.5,
    "hist": [
     [
@@ -533,7 +533,7 @@
     ],
     [
      "2026-11",
-     4070.3
+     4059.7
     ]
    ]
   },
@@ -543,7 +543,7 @@
    "freq": "D",
    "src": "Yahoo BTC-USD",
    "date": "2026-11-06",
-   "val": 76107.34,
+   "val": 75725.75,
    "prev": 80405.29,
    "hist": [
     [
@@ -640,26 +640,31 @@
     ],
     [
      "2026-11",
-     76107.34
+     75725.75
     ]
    ]
   }
  },
  "fail": {
-  "ff": "HTTP 401",
   "y2": "HTTP 401",
   "y10": "HTTP 401",
+  "ff": "HTTP 401",
   "curve": "HTTP 401",
   "mort": "HTTP 401",
   "cpi": "HTTP 401",
-  "core": "HTTP 401",
   "pce": "HTTP 401",
+  "core": "HTTP 401",
   "bei": "HTTP 401",
+  "unemp": "HTTP 401",
   "jobs": "HTTP 401",
   "claims": "HTTP 401",
+  "gdp": "HTTP 401",
+  "sent": "HTTP 401",
+  "sahm": "HTTP 401",
   "vix": "HTTP 401",
   "hy": "HTTP 401",
   "dxy": "HTTP 401",
   "oil": "HTTP 401"
- }
+ },
+ "win": {}
 }
