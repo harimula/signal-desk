@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-wYBFaSgtnHToJTC2jCakb43V55f4sXcDYxxtZ4zYEjQ=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-DvJKLFTL8KF2vQUDJSQUP6KDNOsmnovoC6nWg5A1N9Q=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1009,7 +1009,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793920781';
+const BUILD_V = '1793925282';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2429,7 +2429,7 @@ let seaSym = load('sd-seaSym', 'SPY'), seaList = load('sd-seaList', []), seaData
 const seaBusy = new Set(), seaT0 = {};
 const seaCacheGet = sym => { try { const v = JSON.parse(localStorage.getItem('sea2-' + sym) || 'null'); return v && Array.isArray(v.ret) ? { at: v.at, name: v.name, px: v.px, nowK: v.nowK, tz: v.tz || '', ret: new Map(v.ret), stale: true } : null; } catch (e) { return null; } };
 const seaCachePut = (sym, d) => { try { localStorage.setItem('sea2-' + sym, JSON.stringify({ at: d.at, name: d.name, px: d.px, nowK: d.nowK, tz: d.tz || '', ret: [...d.ret] })); const idx = JSON.parse(localStorage.getItem('sea2-idx') || '[]').filter(x => x !== sym); idx.push(sym); while (idx.length > 24) localStorage.removeItem('sea2-' + idx.shift()); localStorage.setItem('sea2-idx', JSON.stringify(idx)); localStorage.removeItem('sea1-' + sym); } catch (e) {} };
-const ymPath = sym => '/v8/finance/chart/' + encodeURIComponent(sym) + '?range=max&interval=1mo&includePrePost=false';
+const ymPath = sym => '/v8/finance/chart/' + encodeURIComponent(sym) + `?period1=0&period2=${Math.floor(Date.now() / 1000)}&interval=1mo&includePrePost=false`;   // an exact window, not range=max: Yahoo 401s the range=max spelling for many symbols (2026-11-05)
 const dayPath = (sym, p1, p2) => '/v8/finance/chart/' + encodeURIComponent(sym) + `?period1=${p1}&period2=${p2}&interval=1d&includePrePost=false`;
 // every way to reach Yahoo, most reliable first: the owner's proxy (never rate-limited), both Yahoo hosts, then the two relays on each
 const seaRoutes = (path, proxyQ) => {
@@ -2516,7 +2516,7 @@ async function seaLoad(sym, force) {
     } catch (e) { void e; }                                                // no copy on the site for this symbol — the live routes decide
   }
   try {
-    const args = [ymPath(sym), 'sym=' + encodeURIComponent(sym) + '&range=max&interval=1mo', true];
+    const args = [ymPath(sym), 'sym=' + encodeURIComponent(sym) + `&interval=1mo&period1=0&period2=${Math.floor(Date.now() / 1000)}`, true];
     const res = await seaFetch(...args).catch(async () => {                  // one quiet second try before any error shows — phone networks drop whole batches for a moment
       await new Promise(r => setTimeout(r, 2500)); return seaFetch(...args); });
     seaData[sym] = seaDigest(sym, res, Date.now());
