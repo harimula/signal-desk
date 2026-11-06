@@ -325,13 +325,13 @@ const wheelFx = path.join(os.tmpdir(), 'sd-journal-wheel.json');
 const scoreFx = path.join(os.tmpdir(), 'sd-journal-score.json');
 { const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/journal-full.json'), 'utf8'));
   const agg = (n, won, avgWin, avgLoss, pl, per, pf) => ({ n, won, winPct: n ? Math.round(won / n * 10000) / 100 : null, avgWin, avgLoss, pl, per, pf });
-  j.score = { at: '2026-11-06T18:40:00Z', weekOf: '2026-11-02', weekKey: '2026-11-02',
-    lanes: { stock: { week: agg(12, 8, 95.5, -210.25, -500, -41.67, 0.75), all: agg(34, 24, 110, -240, 240, 7.06, 1.1) },
-      call: { week: agg(0, 0, null, null, 0, null, null), all: agg(6, 4, 150, -300, 0, 0, 1) },
-      put: { week: agg(0, 0, null, null, 0, null, null), all: agg(0, 0, null, null, 0, null, null) },
-      spy: { week: agg(2, 2, 80, null, 160, 80, null), all: agg(9, 7, 90, -120, 390, 43.33, 2.63) },
-      wheel: { week: agg(1, 1, 43, null, 43, 43, null), all: agg(4, 4, 55, null, 220, 55, null) } },
-    total: { week: agg(15, 11, 90, -215, -297, -19.8, 0.82), all: agg(53, 39, 105, -230, 850, 16.04, 1.26) },
+  j.score = { at: '2026-11-06T18:40:00Z', weekOf: '2026-11-02', weekKey: '2026-11-02', monthOf: '2026-11',
+    lanes: { stock: { week: agg(12, 8, 95.5, -210.25, -500, -41.67, 0.75), month: agg(14, 9, 96, -205, -420, -30, 0.79), all: agg(34, 24, 110, -240, 240, 7.06, 1.1) },
+      call: { week: agg(0, 0, null, null, 0, null, null), month: agg(0, 0, null, null, 0, null, null), all: agg(6, 4, 150, -300, 0, 0, 1) },
+      put: { week: agg(0, 0, null, null, 0, null, null), month: agg(0, 0, null, null, 0, null, null), all: agg(0, 0, null, null, 0, null, null) },
+      spy: { week: agg(2, 2, 80, null, 160, 80, null), month: agg(3, 2, 80, -60, 100, 33.33, 2.67), all: agg(9, 7, 90, -120, 390, 43.33, 2.63) },
+      wheel: { week: agg(1, 1, 43, null, 43, 43, null), month: agg(1, 1, 43, null, 43, 43, null), all: agg(4, 4, 55, null, 220, 55, null) } },
+    total: { week: agg(15, 11, 90, -215, -297, -19.8, 0.82), month: agg(18, 12, 91, -210, -277, -15.4, 0.85), all: agg(53, 39, 105, -230, 850, 16.04, 1.26) },
     drift: [{ lane: 'stock', n: 30, winPct: 70, expWin: 82, pf: 0.85, per: -12.4 }] };
   fs.writeFileSync(scoreFx, JSON.stringify(j)); }
 for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT, SPY and day-trade rows)'], ['journal-old.json', 'older journal shape (no watch rows, no split, no spy, no day block)'], [profitFx, 'profit sell rule and market filter'], [wheelFx, 'the wheel (sold put, delivered shares)'], [scoreFx, 'the weekly scorecard']]) {
@@ -342,6 +342,7 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
   const txt = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
   if (fx === scoreFx) {
     check('scorecard: the card shows both windows with the desk numbers (win %, avg win/loss, $/trade, PF, P/L)', /Weekly scorecard/.test(txt) && /This week — since Monday 2026-11-02/.test(txt) && /Last 60 days \(all the journal holds\)/.test(txt) && /Stocks 12 8 \(67%\)/.test(txt) && /0\.75/.test(txt), (txt.match(/Weekly scorecard.{0,400}/) || [''])[0]);
+    check('scorecard: the month-to-date table sits between the week and the 60 days, with its own numbers', /This month — since 2026-11-01/.test(txt) && /Stocks 14 9 \(64%\)/.test(txt) && /finished month’s on the next month’s first session/.test(txt), (txt.match(/This month.{0,200}/) || [''])[0]);
     check('scorecard: a lane with no trades says so instead of a row of dashes', /CALLs 0 no closed trades/.test(txt) && /PUTs 0 no closed trades/.test(txt), (txt.match(/CALLs 0.{0,80}/) || [''])[0]);
     check('scorecard: the drift flag names the lane, the study gap and the profit factor in plain words', /drift/.test(txt) && /last 30 closed trades won 70% against about 82%/.test(txt) && /profit factor 0\.85/.test(txt), (txt.match(/drift.{0,260}/) || [''])[0]);
     check('scorecard: the plain-words key is on the card (expectancy, profit factor, the wheel never drift-flagged)', /what the average trade added or took/.test(txt) && /dollars won per dollar lost/.test(txt) && /never sells at a loss/.test(txt) && /judged only against its own study/.test(txt), '');

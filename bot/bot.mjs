@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 import { sma, rsi2, liveSignal, rsi2Trigger, rsi2ExitLevel, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit, profitExit, profitExitLevel, marketAbove200 } from './strategy.mjs';
 import { buildJournal, optionEvents } from './journal.mjs';
-import { computeScore, scoreText, driftText, scoreDue, weekMonday } from './scorecard.mjs';
+import { computeScore, scoreText, driftText, scoreDue, weekMonday, monthDue, monthScore, monthText, monthOf, prevMonthOf } from './scorecard.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk, sideDayPl } from './risk.mjs';
 import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
@@ -895,7 +895,7 @@ const alerts = [];
 // hears ✅ when the broker reports the order filled — an attempt that dies unfilled stays quiet (the page's log keeps it).
 const fillWhy = new Map(), fillSeen = new Set(), BORN_MS = Date.now();
 let fillMark = 0;                                                          // the newest announced fill's time: carried in the journal's mem, so a fill landing between two sessions is announced by the next one (and never twice)
-let scoreWk = '', driftSaid = {};                                          // the weekly scorecard's send stamp and the drift alarm's once-per-lane-per-week stamps (both live in the journal's mem)
+let scoreWk = '', scoreMo = '', driftSaid = {};                                          // the weekly scorecard's send stamp and the drift alarm's once-per-lane-per-week stamps (both live in the journal's mem)
 export function noteFill(ev, o, price) {
   if (!o || !o.id) return;
   const cid = o.client_order_id || ''; if (!/^sd-/.test(cid)) return;      // only the bot's own orders (a bracket leg is announced under its parent's id); hand orders stay quiet
@@ -1071,7 +1071,7 @@ async function run() {
   }
   if (!memRestored) {                                                      // first cycle of this process: pick up today's day-state from the previous run's journal
     memRestored = true;
-    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.wheel && pv.mem.wheel.opts) wheelMem = pv.mem.wheel; if (pv && pv.mem && pv.mem.fillMark) fillMark = Math.max(fillMark, Date.parse(pv.mem.fillMark) || 0); if (pv && pv.mem && pv.mem.scoreWk) scoreWk = pv.mem.scoreWk; if (pv && pv.mem && pv.mem.driftSaid) driftSaid = { ...pv.mem.driftSaid }; if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.spyLevels && pv.mem.spyLevels.day === TODAY) spyLevels = pv.mem.spyLevels; if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
+    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.wheel && pv.mem.wheel.opts) wheelMem = pv.mem.wheel; if (pv && pv.mem && pv.mem.fillMark) fillMark = Math.max(fillMark, Date.parse(pv.mem.fillMark) || 0); if (pv && pv.mem && pv.mem.scoreWk) scoreWk = pv.mem.scoreWk; if (pv && pv.mem && pv.mem.scoreMo) scoreMo = pv.mem.scoreMo; if (pv && pv.mem && pv.mem.driftSaid) driftSaid = { ...pv.mem.driftSaid }; if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.spyLevels && pv.mem.spyLevels.day === TODAY) spyLevels = pv.mem.spyLevels; if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
   }
   const clock = lastClock;
   if (READONLY) return;                                                    // journal only: nothing is placed, changed or cancelled
@@ -1638,6 +1638,12 @@ async function writeJournal() {
       if (tgOn()) await tgSend(scoreText(score)).catch(e => console.log('scorecard telegram failed', e.message));
       act('Weekly scorecard sent — ' + (score.drift.length ? score.drift.length + ' lane' + (score.drift.length > 1 ? 's' : '') + ' drifting below study' : 'every lane inside its tested range'));
     }
+    if (monthDue(Date.now(), scoreMo)) {                                      // the finished month's summary, on the new month's first session write
+      scoreMo = monthOf(Date.now());
+      const ms = monthScore(closed, prevMonthOf(Date.now()), Date.now());
+      if (tgOn()) await tgSend(monthText(ms)).catch(e => console.log('monthly scorecard telegram failed', e.message));
+      act('Monthly scorecard sent — ' + (ms.total.n ? ms.total.n + ' closed trades' : 'no closed trades') + ' in ' + ms.ym);
+    }
     for (const d of score.drift) if (driftSaid[d.lane] !== score.weekKey) {   // at most one alarm per lane per week
       driftSaid[d.lane] = score.weekKey;
       if (tgOn()) await tgSend(driftText(d)).catch(e => console.log('drift telegram failed', e.message));
@@ -1660,7 +1666,7 @@ async function writeJournal() {
     // panels the bot only computes while the market is open: a process that has not computed them yet keeps the previous ones
     risk: lastRisk || prev.risk || null, split: lastSplit || prev.split || null, spy: lastSpy || prev.spy || null, wheel: lastWheel || prev.wheel || null, score,
     watch: lastWatch || prev.watch || null, day: lastDay || prev.day || null,
-    mem: { day: TODAY, lastDayPx, userPause, haltSaid: [...haltSaid], spyLevels, wheel: wheelMem, fillMark: fillMark ? new Date(fillMark).toISOString() : null, scoreWk, driftSaid },   // the wheel's memory carries across days; fillMark = the newest announced fill, so the next session announces what landed in the gap
+    mem: { day: TODAY, lastDayPx, userPause, haltSaid: [...haltSaid], spyLevels, wheel: wheelMem, fillMark: fillMark ? new Date(fillMark).toISOString() : null, scoreWk, scoreMo, driftSaid },   // the wheel's memory carries across days; fillMark = the newest announced fill, so the next session announces what landed in the gap
     since: await sinceStart(prev.since, fills, acct).catch(() => prev.since || null),   // day-state a restart must not forget: yesterday's closes of sold-out symbols, a Telegram /pause, alerts already sent
     limits: { riskPct: RISK_PCT, optRiskPct: OPT_RISK_PCT, maxHeat: MAX_HEAT, perSector: MAX_PER_SECTOR, streak: MAX_STREAK, weekCap: WEEK_CAP, dayCap: LOSS_CAP } };
   if (PRIVATE) {

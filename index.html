@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-Lxp/F1/Ajc536CqtOqAG1CNxLvwL4B6B7KvDH4l1b/0=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-FW8Gm4aH5vkaT+zBK05ZRYX+9MdzgRW1yhsQKxirchg=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1009,7 +1009,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793982796';
+const BUILD_V = '1793984735';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -3218,8 +3218,8 @@ ${lvBox('Closed trades', closed.length ? `${closed.length} · ${Math.round(wins 
     const drift = (sc.drift || []).length
       ? sc.drift.map(d => `<div style="margin-top:8px;font-size:12.5px"><span class="pill r-Top-Sell">drift</span> <b>${L2[d.lane]}</b>: the last ${d.n} closed trades won ${Math.round(d.winPct)}% against about ${d.expWin}% in this rule’s own study, and lost more than they made (profit factor ${fmt(d.pf, 2)}). One bad week is noise — held over ${d.n} trades it is how a changed market shows itself.</div>`).join('')
       : `<div class="mut" style="font-size:12px;margin-top:8px">✅ No drift: every lane with 30+ recent closed trades is inside its tested range.</div>`;
-    return `<div class="card" style="padding:14px 16px;margin:0 0 14px"><b>📊 Weekly scorecard</b> <span class="mut" style="font-size:11.5px">· refreshes with the journal; the Telegram summary goes out Fridays ~3:50 PM ET · as of ${esc(new Date(sc.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}</span>
-${tblS('This week — since Monday ' + esc(sc.weekOf), 'week')}${tblS('Last 60 days (all the journal holds)', 'all')}${drift}
+    return `<div class="card" style="padding:14px 16px;margin:0 0 14px"><b>📊 Weekly scorecard</b> <span class="mut" style="font-size:11.5px">· refreshes with the journal; Telegram gets the week\u2019s summary Fridays ~3:50 PM ET and the finished month\u2019s on the next month\u2019s first session · as of ${esc(new Date(sc.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}</span>
+${tblS('This week — since Monday ' + esc(sc.weekOf), 'week')}${sc.total && sc.total.month ? tblS('This month — since ' + esc((sc.monthOf || '').slice(0, 7)) + '-01', 'month') : ''}${tblS('Last 60 days (all the journal holds)', 'all')}${drift}
 <div class="mut" style="font-size:11.5px;margin-top:8px"><b>$/trade</b> — what the average trade added or took (expectancy). <b>PF</b> — profit factor: dollars won per dollar lost; above 1.00 means the lane is paying for itself. Each lane is judged only against its own study’s numbers. The wheel is listed but never drift-flagged: by your setting it never sells at a loss, so its open red is paper until assignment.</div></div>`;
   })();
   const splitCard = (() => {                     // money split: stocks, CALLs and PUTs each with their own money, use, results and loss limit

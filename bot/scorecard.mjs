@@ -35,15 +35,18 @@ function agg(list) {
     pf: gl > 0.005 ? r2(gw / gl) : null };                                  // profit factor; no losses yet → null, shown as “—”
 }
 
+export const monthOf = ms => etDay(ms).slice(0, 7);                         // YYYY-MM, New York
+export const prevMonthOf = ms => { const [y, m] = monthOf(ms).split('-').map(Number); return (m === 1 ? (y - 1) + '-12' : y + '-' + String(m - 1).padStart(2, '0')); };
+export const monthLabel = ym => new Date(ym + '-15T12:00:00Z').toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 export function computeScore(closed, nowMs) {
-  const monday = weekMonday(nowMs), lanes = ['stock', 'call', 'put', 'spy', 'wheel'];
+  const monday = weekMonday(nowMs), mo = monthOf(nowMs), lanes = ['stock', 'call', 'put', 'spy', 'wheel'];
   const rows = (closed || []).map(t => ({ pl: +t.pl || 0, lane: tradeLane(t), day: etDay(Date.parse(t.outT) || nowMs) }));
-  const out = { at: new Date(nowMs).toISOString(), weekOf: monday, weekKey: monday, lanes: {}, total: null, drift: [] };
+  const out = { at: new Date(nowMs).toISOString(), weekOf: monday, weekKey: monday, monthOf: mo, lanes: {}, total: null, drift: [] };
   for (const ln of lanes) {
     const all = rows.filter(t => t.lane === ln);
-    out.lanes[ln] = { week: agg(all.filter(t => t.day >= monday)), all: agg(all) };
+    out.lanes[ln] = { week: agg(all.filter(t => t.day >= monday)), month: agg(all.filter(t => t.day.startsWith(mo))), all: agg(all) };
   }
-  out.total = { week: agg(rows.filter(t => t.day >= monday)), all: agg(rows) };
+  out.total = { week: agg(rows.filter(t => t.day >= monday)), month: agg(rows.filter(t => t.day.startsWith(mo))), all: agg(rows) };
   for (const ln of ['stock', 'call', 'spy']) {                              // the wheel never sells at a loss by the owner's setting — its red is paper until assignment, so it is never drift-flagged
     const last = rows.filter(t => t.lane === ln).slice(0, DRIFT_N);         // the journal's closed list is newest-first
     if (last.length < DRIFT_N) continue;
@@ -55,12 +58,27 @@ export function computeScore(closed, nowMs) {
 
 // The Friday send: once per week, from 3:50 PM New York on (the session's journal writes catch it before the close).
 export const scoreDue = (nowMs, sentWk) => etWd(nowMs) === 5 && etMins(nowMs) >= 950 && weekMonday(nowMs) !== sentWk;
+// The monthly send: the finished month's summary goes out on the next month's first session write (like a statement).
+export const monthDue = (nowMs, sentMo) => monthOf(nowMs) !== sentMo;
+export function monthScore(closed, ym, nowMs) {
+  const rows = (closed || []).map(t => ({ pl: +t.pl || 0, lane: tradeLane(t), day: etDay(Date.parse(t.outT) || nowMs || Date.now()) })).filter(t => t.day.startsWith(ym));
+  const out = { ym, lanes: {}, total: agg(rows) };
+  for (const ln of ['stock', 'call', 'put', 'spy', 'wheel']) out.lanes[ln] = agg(rows.filter(t => t.lane === ln));
+  return out;
+}
 
 const usd = v => (v < 0 ? '−$' : '+$') + Math.abs(v).toFixed(Math.abs(v) >= 100 ? 0 : 2);
 const laneLine = (ln, a) => a.n
   ? `${LANE_LAB[ln]}: ${a.n} closed, ${a.won} won (${Math.round(a.winPct)}%) · avg win ${a.avgWin == null ? '—' : usd(a.avgWin)} / loss ${a.avgLoss == null ? '—' : usd(a.avgLoss)} · ${usd(a.pl)}${ln === 'wheel' ? ' (the wheel never sells at a loss by your setting — its open red is paper until assignment)' : ''}`
   : `${LANE_LAB[ln]}: no closed trades`;
 export const driftText = d => `⚠️ ${LANE_LAB[d.lane]} drift: the last ${d.n} closed trades won ${Math.round(d.winPct)}% against about ${d.expWin}% in this rule's own study, and lost more than they made (profit factor ${d.pf.toFixed(2)}). One bad week is noise — a drift this size held over ${d.n} trades is how a changed market shows itself. Settings stay judged by study, not by this message.`;
+export function monthText(ms) {
+  const L = [`🗓️ Monthly scorecard — ${monthLabel(ms.ym)}`];
+  for (const ln of ['stock', 'call', 'put', 'spy', 'wheel']) { const a = ms.lanes[ln]; if (a.n || ln === 'stock' || ln === 'spy' || ln === 'wheel') L.push(laneLine(ln, a)); }
+  const T = ms.total;
+  L.push(T.n ? `The month in one line: ${usd(T.pl)} over ${T.n} closed trades, ${T.won} won (${Math.round(T.winPct)}%)${T.pf != null ? ', profit factor ' + T.pf.toFixed(2) : ''}.` : 'No closed trades that month.');
+  return L.join('\n');
+}
 export function scoreText(sc) {
   const L = [`📊 Weekly scorecard — week of ${sc.weekOf}`];
   for (const ln of ['stock', 'call', 'put', 'spy', 'wheel']) {

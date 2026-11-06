@@ -5,7 +5,7 @@ import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { spySignal, spyExit, spyFresh, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
 import { buildJournal, parseSym, optionEvents } from './journal.mjs';
-import { tradeLane, computeScore, scoreDue, scoreText, driftText, weekMonday, etWd, etMins, EXPECT } from './scorecard.mjs';
+import { tradeLane, computeScore, scoreDue, scoreText, driftText, weekMonday, etWd, etMins, EXPECT, monthOf, prevMonthOf, monthDue, monthScore, monthText, monthLabel } from './scorecard.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
 import { normalize, summary } from './config.mjs';
@@ -751,6 +751,25 @@ test('scorecard: the drift alarm needs 30 trades, an 8-point gap AND lost money;
   assert.equal(computeScore(mk(8, 'stock').slice(0, 29), fri).drift.length, 0);           // 29 trades: too few to judge
   assert.equal(computeScore(mk(25, 'wheel'), fri).drift.length, 0);                       // the wheel is shown but never drift-flagged
   assert.equal(computeScore(mk(8, 'spy'), fri).drift.length, 0);                          // 73.3% sits ABOVE SPY's 80 − 8 = 72 floor: no flag\n  assert.equal(computeScore(mk(9, 'spy'), fri).drift[0].lane, 'spy');                     // 70% is under it, and losing: flagged
+});
+test('scorecard: the month window, the month-end send and its text', () => {
+  const fri = Date.UTC(2026, 10, 6, 20, 51);                                              // Fri 2026-11-06, New York
+  assert.equal(monthOf(fri), '2026-11'); assert.equal(prevMonthOf(fri), '2026-10');
+  assert.equal(prevMonthOf(Date.UTC(2026, 0, 15, 12, 0)), '2025-12');                     // January looks back across the year line
+  assert.equal(monthLabel('2026-10'), 'October 2026');
+  const closed = [
+    { kind: 'Stock', und: 'A', pl: 120, outT: '2026-11-04T20:00:00Z' },                   // this month
+    { kind: 'Stock', und: 'B', pl: -40, outT: '2026-10-28T20:00:00Z' },                   // last month
+    { kind: 'Call', und: 'SPY', pl: 60, outT: '2026-10-12T19:00:00Z' }];                  // last month
+  const sc = computeScore(closed, fri);
+  assert.equal(sc.monthOf, '2026-11');
+  assert.deepEqual([sc.lanes.stock.month.n, sc.lanes.stock.all.n, sc.total.month.pl], [1, 2, 120]);
+  const ms = monthScore(closed, '2026-10', fri);
+  assert.deepEqual([ms.total.n, ms.total.pl, ms.lanes.spy.n, ms.lanes.stock.pl], [2, 20, 1, -40]);
+  const txt = monthText(ms);
+  assert.ok(txt.includes('Monthly scorecard — October 2026'), txt);
+  assert.ok(txt.includes('The month in one line: +$20.00 over 2 closed trades, 1 won (50%)'), txt);
+  assert.ok(monthDue(fri, '') && monthDue(fri, '2026-10') && !monthDue(fri, '2026-11'));  // first write of a new month sends once
 });
 test('scorecard: the Friday send window, the weekly stamp and the texts', () => {
   const fri = Date.UTC(2026, 10, 6, 20, 51);
