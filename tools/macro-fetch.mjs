@@ -109,7 +109,7 @@ async function fredCsv(k, id) {
   for (let i = 0; i < routes.length; i++) {
     const [u, isDirect] = routes[i];
     if (isDirect && fredDirectDead) continue;
-    try { const rows = parseFred(await get(u, undefined, isDirect ? 8000 : 15000)); win[k] = i; return rows; }
+    try { const rows = parseFred(await get(u, undefined, isDirect ? 6000 : 10000)); win[k] = i; return rows; }
     catch (e) { err = String((e && e.message) || e).slice(0, 80); if (isDirect && /abort/i.test(err)) fredDirectDead = true; }
   }
   throw new Error(err);
@@ -117,15 +117,17 @@ async function fredCsv(k, id) {
 const old = fs.existsSync('data/macro.json') ? JSON.parse(fs.readFileSync('data/macro.json', 'utf8')) : { series: {} };
 const series = {}, fail = {};
 let fredLeft = Object.entries(FRED);
-for (let pass = 1; pass <= 3 && fredLeft.length; pass++) {                  // the relays refuse single requests at random (the sea-fetch lesson) — passes mop them up
-  if (pass > 1) { console.log('pass ' + pass + ': retrying ' + fredLeft.length); await new Promise(r => setTimeout(r, 15000)); }
-  const again = [];
-  for (const ent of fredLeft) {
-    const [k, [id, name, unit, freq, tr]] = ent;
-    try { series[k] = { name, unit, freq, src: 'FRED ' + id, ...digest(await fredCsv(k, id), tr) }; delete fail[k]; }
-    catch (e) { fail[k] = String((e && e.message) || e).slice(0, 100); again.push(ent); }
-    await new Promise(r => setTimeout(r, 300));
-  }
+for (let pass = 1; pass <= 2 && fredLeft.length; pass++) {                  // the relays refuse single requests at random (the sea-fetch lesson) — a second pass mops up;
+  if (pass > 1) { console.log('pass ' + pass + ': retrying ' + fredLeft.length); await new Promise(r => setTimeout(r, 12000)); }   // three series at once, or hanging routes blow the step's time budget (the 2026-11-05 night-three lesson)
+  const again = []; let qi = 0;
+  await Promise.all(Array.from({ length: 3 }, async () => {
+    while (qi < fredLeft.length) {
+      const ent = fredLeft[qi++]; const [k, [id, name, unit, freq, tr]] = ent;
+      try { series[k] = { name, unit, freq, src: 'FRED ' + id, ...digest(await fredCsv(k, id), tr) }; delete fail[k]; }
+      catch (e) { fail[k] = String((e && e.message) || e).slice(0, 100); again.push(ent); }
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }));
   fredLeft = again;
 }
 for (const [k] of fredLeft) if (old.series[k]) series[k] = old.series[k];   // still refused: keep the prior night's dial
