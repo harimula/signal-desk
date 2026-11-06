@@ -321,12 +321,33 @@ const wheelFx = path.join(os.tmpdir(), 'sd-journal-wheel.json');
     { sym: 'PEP', und: 'PEP', kind: 'Stock', mult: 1, qty: 100, avg: 140, now: 141.2, pl: 120, plPct: 0.86, since: '2026-10-17T20:00:00Z', wheel: true }]);
   j.closed = [{ sym: 'KO261016P00064000', und: 'KO', kind: 'Put', exp: '2026-10-16', strike: 64, mult: 100, qty: 1, inPx: 0.85, inT: '2026-09-21T14:05:00Z', outPx: 0.42, outT: '2026-10-02T15:00:00Z', pl: 43, plPct: 50.59, short: true, wheel: true }].concat(j.closed);
   fs.writeFileSync(wheelFx, JSON.stringify(j)); }
-for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT, SPY and day-trade rows)'], ['journal-old.json', 'older journal shape (no watch rows, no split, no spy, no day block)'], [profitFx, 'profit sell rule and market filter'], [wheelFx, 'the wheel (sold put, delivered shares)']]) {
+// the weekly scorecard (2026-11-06): per-lane desk math and a drift flag, as the bot publishes them
+const scoreFx = path.join(os.tmpdir(), 'sd-journal-score.json');
+{ const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/journal-full.json'), 'utf8'));
+  const agg = (n, won, avgWin, avgLoss, pl, per, pf) => ({ n, won, winPct: n ? Math.round(won / n * 10000) / 100 : null, avgWin, avgLoss, pl, per, pf });
+  j.score = { at: '2026-11-06T18:40:00Z', weekOf: '2026-11-02', weekKey: '2026-11-02',
+    lanes: { stock: { week: agg(12, 8, 95.5, -210.25, -500, -41.67, 0.75), all: agg(34, 24, 110, -240, 240, 7.06, 1.1) },
+      call: { week: agg(0, 0, null, null, 0, null, null), all: agg(6, 4, 150, -300, 0, 0, 1) },
+      put: { week: agg(0, 0, null, null, 0, null, null), all: agg(0, 0, null, null, 0, null, null) },
+      spy: { week: agg(2, 2, 80, null, 160, 80, null), all: agg(9, 7, 90, -120, 390, 43.33, 2.63) },
+      wheel: { week: agg(1, 1, 43, null, 43, 43, null), all: agg(4, 4, 55, null, 220, 55, null) } },
+    total: { week: agg(15, 11, 90, -215, -297, -19.8, 0.82), all: agg(53, 39, 105, -230, 850, 16.04, 1.26) },
+    drift: [{ lane: 'stock', n: 30, winPct: 70, expWin: 82, pf: 0.85, per: -12.4 }] };
+  fs.writeFileSync(scoreFx, JSON.stringify(j)); }
+for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT, SPY and day-trade rows)'], ['journal-old.json', 'older journal shape (no watch rows, no split, no spy, no day block)'], [profitFx, 'profit sell rule and market filter'], [wheelFx, 'the wheel (sold put, delivered shares)'], [scoreFx, 'the weekly scorecard']]) {
   journalFixture = fx;
   const { page, errors } = await session('bot trades · ' + label, () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); });
   await page.evaluate(() => document.querySelector('#tabs [data-t="BOT"]').click()); await page.waitForTimeout(1500);
   await page.evaluate(() => document.querySelectorAll('main details').forEach(d => { d.open = true; }));
   const txt = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  if (fx === scoreFx) {
+    check('scorecard: the card shows both windows with the desk numbers (win %, avg win/loss, $/trade, PF, P/L)', /Weekly scorecard/.test(txt) && /This week — since Monday 2026-11-02/.test(txt) && /Last 60 days \(all the journal holds\)/.test(txt) && /Stocks 12 8 \(67%\)/.test(txt) && /0\.75/.test(txt), (txt.match(/Weekly scorecard.{0,400}/) || [''])[0]);
+    check('scorecard: a lane with no trades says so instead of a row of dashes', /CALLs 0 no closed trades/.test(txt) && /PUTs 0 no closed trades/.test(txt), (txt.match(/CALLs 0.{0,80}/) || [''])[0]);
+    check('scorecard: the drift flag names the lane, the study gap and the profit factor in plain words', /drift/.test(txt) && /last 30 closed trades won 70% against about 82%/.test(txt) && /profit factor 0\.85/.test(txt), (txt.match(/drift.{0,260}/) || [''])[0]);
+    check('scorecard: the plain-words key is on the card (expectancy, profit factor, the wheel never drift-flagged)', /what the average trade added or took/.test(txt) && /dollars won per dollar lost/.test(txt) && /never sells at a loss/.test(txt) && /judged only against its own study/.test(txt), '');
+    const thNoTip = await page.evaluate(() => [...document.querySelectorAll('main th')].filter(el => el.offsetParent && !el.hasAttribute('data-tip')).map(el => el.textContent.trim()));
+    check('scorecard: every heading of its tables has an explanation', thNoTip.length === 0, thNoTip.join(' | '));
+  }
   if (fx === wheelFx) {
     check('wheel: its card lists the sold put (buy-back at $45.00 a contract, expiry) and the delivered shares (cost $138.50)', /Wheel — cash-secured puts & covered calls/.test(txt) && /KO PUT sold 65\.00 · 11-20/.test(txt) && /bought back at \$45\.00, else expires Fri, Nov 20 · \$6,500 set aside/.test(txt) && /PEP shares 100 \$138\.50/.test(txt) && /Next sale window: Mon, Nov 23, Tue, Nov 24, Wed, Nov 25/.test(txt), (txt.match(/Wheel — cash.{0,700}/) || [''])[0]);
     check('wheel: Open now names a sold option and its shares as the wheel\'s, and money in trades counts what it set aside', /Option sold/.test(txt) && /Wheel — cash-secured put sold: a resting order buys it back at \$45\.00/.test(txt) && /Stock \(wheel\)/.test(txt) && /Wheel — shares a put delivered \(cost \$138\.50/.test(txt) && /wheel \$20,620 set aside/.test(txt), (txt.match(/Money in trades now.{0,300}/) || [''])[0]);

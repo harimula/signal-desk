@@ -5,6 +5,7 @@ import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { spySignal, spyExit, spyFresh, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
 import { buildJournal, parseSym, optionEvents } from './journal.mjs';
+import { tradeLane, computeScore, scoreDue, scoreText, driftText, weekMonday, etWd, etMins, EXPECT } from './scorecard.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
 import { normalize, summary } from './config.mjs';
@@ -714,5 +715,58 @@ test('India results: a moved meeting shows once — the new date until the EPS i
   assert.deepEqual(EI.onePerQuarter(held, '2026-10-29').map(r => r.d), ['2026-10-20']);
   assert.equal(EI.fromNse([{ symbol: 'TATACONSUM', company: 'TATA CONSUMER PRODUCTS LIMITED', purpose: 'Financial Results', date: '26-Oct-2026' }])[0].n, 'Tata Consumer Products Limited');
 });
+
+test('scorecard: lanes, the New-York week and the desk math', () => {
+  assert.equal(tradeLane({ kind: 'Stock' }), 'stock');
+  assert.equal(tradeLane({ kind: 'Stock', wheel: true }), 'wheel');                       // shares a put delivered
+  assert.equal(tradeLane({ kind: 'Put', short: true }), 'wheel');                         // a sold put
+  assert.equal(tradeLane({ kind: 'Call', und: 'SPY' }), 'spy');
+  assert.equal(tradeLane({ kind: 'Put', und: 'SPY' }), 'spy');
+  assert.equal(tradeLane({ kind: 'Call', und: 'NVDA' }), 'call');
+  const fri = Date.UTC(2026, 10, 6, 20, 51);                                              // Fri 2026-11-06 15:51 New York (EST)
+  assert.equal(etWd(fri), 5); assert.equal(etMins(fri), 951);
+  assert.equal(weekMonday(fri), '2026-11-02');
+  assert.equal(weekMonday(Date.UTC(2026, 10, 8, 23, 0)), '2026-11-02');                   // Sunday evening still belongs to that week
+  const closed = [
+    { kind: 'Stock', und: 'A', pl: 100, outT: '2026-11-05T20:00:00Z' },
+    { kind: 'Stock', und: 'B', pl: 50, outT: '2026-11-04T20:00:00Z' },
+    { kind: 'Stock', und: 'C', pl: -300, outT: '2026-11-03T20:00:00Z' },
+    { kind: 'Call', und: 'SPY', pl: -80, outT: '2026-10-28T20:00:00Z' }];                 // last week: in the 60-day column only
+  const sc = computeScore(closed, fri);
+  assert.equal(sc.weekOf, '2026-11-02');
+  const w = sc.lanes.stock.week;
+  assert.deepEqual([w.n, w.won, w.winPct, w.avgWin, w.avgLoss, w.pl, w.per, w.pf], [3, 2, 66.67, 75, -300, -150, -50, 0.5]);
+  assert.equal(sc.lanes.spy.week.n, 0); assert.equal(sc.lanes.spy.all.n, 1);
+  assert.equal(sc.total.all.pl, -230);
+  assert.equal(sc.drift.length, 0);                                                       // no lane has 30 closed trades: silence, never a flag on a thin sample
+});
+test('scorecard: the drift alarm needs 30 trades, an 8-point gap AND lost money; the wheel is never flagged', () => {
+  const fri = Date.UTC(2026, 10, 6, 20, 51);
+  const mk = (losers, lane, winPl = 60) => Array.from({ length: 30 }, (_, i) => ({
+    kind: lane === 'stock' ? 'Stock' : lane === 'wheel' ? 'Put' : 'Call', und: lane === 'spy' ? 'SPY' : 'NVDA',
+    ...(lane === 'wheel' ? { short: true } : {}), pl: i < losers ? -200 : winPl, outT: '2026-11-0' + (1 + (i % 5)) + 'T20:00:00Z' }));
+  let sc = computeScore(mk(8, 'stock'), fri);                                             // 22 of 30 won = 73.3% vs the 82 − 8 = 74 floor, and losing
+  assert.equal(sc.drift.length, 1); assert.equal(sc.drift[0].lane, 'stock'); assert.ok(sc.drift[0].pf < 1);
+  assert.equal(computeScore(mk(8, 'stock', 90), fri).drift.length, 0);                    // same 73.3% but the wins pay (profit factor 1.24): no flag
+  assert.equal(computeScore(mk(8, 'stock').slice(0, 29), fri).drift.length, 0);           // 29 trades: too few to judge
+  assert.equal(computeScore(mk(25, 'wheel'), fri).drift.length, 0);                       // the wheel is shown but never drift-flagged
+  assert.equal(computeScore(mk(8, 'spy'), fri).drift.length, 0);                          // 73.3% sits ABOVE SPY's 80 − 8 = 72 floor: no flag\n  assert.equal(computeScore(mk(9, 'spy'), fri).drift[0].lane, 'spy');                     // 70% is under it, and losing: flagged
+});
+test('scorecard: the Friday send window, the weekly stamp and the texts', () => {
+  const fri = Date.UTC(2026, 10, 6, 20, 51);
+  assert.ok(scoreDue(fri, ''));
+  assert.ok(!scoreDue(Date.UTC(2026, 10, 5, 20, 51), ''));                                // Thursday
+  assert.ok(!scoreDue(Date.UTC(2026, 10, 6, 20, 49), ''));                                // 15:49 — a minute early
+  assert.ok(!scoreDue(fri, '2026-11-02'));                                                // already sent this week
+  assert.ok(scoreDue(fri, '2026-10-26'));                                                 // last week's stamp does not block
+  const sc = computeScore([{ kind: 'Stock', und: 'A', pl: 100, outT: '2026-11-05T20:00:00Z' }], fri);
+  const txt = scoreText(sc);
+  assert.ok(txt.includes('Weekly scorecard — week of 2026-11-02'), txt);
+  assert.ok(txt.includes('Stocks: 1 closed, 1 won (100%)'), txt);
+  assert.ok(txt.includes('every lane with 30+ recent trades is inside its tested range'), txt);
+  assert.ok(driftText({ lane: 'spy', n: 30, winPct: 60, expWin: 80, pf: 0.7 }).includes('SPY quick options drift'), 'drift text names the lane');
+  assert.deepEqual([EXPECT.stock.win, EXPECT.call.win, EXPECT.spy.win], [82, 72, 80]);    // the studies' yardsticks, pinned so a drive-by edit fails loudly
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
