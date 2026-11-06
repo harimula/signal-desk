@@ -512,6 +512,44 @@ journalFixture = null;
   check('seasonality: no script errors', errors.length === 0, errors.join(' | '));
   await page.close(); }
 
+// ---- the Macro tab: dials, statuses against the standard bands, plain-words help ----
+{ const { page, errors } = await session('macro', () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); });
+  const MS = { // a crafted night: an inverted curve, inflation above target, calm stress — the statuses are what's tested
+    ff: { name: 'Fed funds rate', unit: '%', freq: 'D', src: 'FRED DFF', date: '2026-11-04', val: 3.9, prev: 3.9, hist: [['2025-01', 4.4], ['2025-06', 4.1], ['2026-01', 4.0], ['2026-10', 3.9]] },
+    curve: { name: 'Yield curve (10y − 2y)', unit: 'pp', freq: 'D', src: 'FRED T10Y2Y', date: '2026-11-04', val: -0.25, prev: -0.2, hist: [['2025-01', 0.3], ['2026-10', -0.25]] },
+    cpi: { name: 'Inflation (CPI, yearly)', unit: '%', freq: 'M', src: 'FRED CPIAUCSL', date: '2026-09-01', val: 2.9, prev: 3.0, hist: [['2025-01', 3.4], ['2026-09', 2.9]] },
+    sahm: { name: 'Sahm rule (recession signal)', unit: 'pp', freq: 'M', src: 'FRED SAHMREALTIME', date: '2026-09-01', val: 0.13, prev: 0.1, hist: [['2025-01', 0.2], ['2026-09', 0.13]] },
+    jobs: { name: 'New jobs (payrolls, monthly)', unit: 'k', freq: 'M', src: 'FRED PAYEMS', date: '2026-09-01', val: 119, prev: 22, hist: [['2025-01', 140], ['2026-09', 119]] },
+    vix: { name: 'VIX (fear gauge)', unit: '', freq: 'D', src: 'FRED VIXCLS', date: '2026-11-04', val: 16.2, prev: 17.1, hist: [['2025-01', 15], ['2026-10', 16.2]] },
+    hy: { name: 'Junk-bond spread', unit: '%', freq: 'D', src: 'FRED BAMLH0A0HYM2', date: '2026-11-04', val: 3.1, prev: 3.05, hist: [['2025-01', 3.3], ['2026-10', 3.1]] },
+    gold: { name: 'Gold', unit: '$', freq: 'D', src: 'Yahoo GC=F', date: '2026-11-04', val: 3980, prev: 3940, hist: [['2025-01', 2700], ['2026-10', 3980]] } };
+  await page.route('**/data/macro.json', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ v: 1, at: Date.now() - 3 * 3600000, series: MS, fail: {} }) }));
+  await page.evaluate(() => { [...document.querySelectorAll('nav button, .tabs button, button')].find(b => b.textContent.trim() === 'Macro').click(); });
+  await page.waitForTimeout(700);
+  const t = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  check('macro: dials render with value, change and date (Fed funds 3.90%)', /Fed funds rate/.test(t) && /3\.90%/.test(t) && /vs the prior reading/.test(t), t.slice(0, 260));
+  check('macro: statuses follow the standard bands — curve −0.25 reads “inverted”, CPI 2.9 “above target”, Sahm 0.13 “no signal”, VIX 16.2 “calm”', /inverted/.test(t) && /above target/.test(t) && /no signal/.test(t) && /calm/.test(t), t.slice(0, 400));
+  const inv = await page.evaluate(() => { const el = [...document.querySelectorAll('.seaC.n')].find(x => x.textContent.trim() === 'inverted'); return !!el; });
+  check('macro: the inverted-curve chip is red (class n), not just text', inv, '');
+  check('macro: the at-a-glance strip sums the four signals', /At a glance:/.test(t) && /Yield curve: inverted/.test(t) && /Recession signal: no signal/.test(t), t.slice(0, 300));
+  check('macro: dollar amounts and job counts format properly ($3,980 gold, +119k jobs)', /\$3,980/.test(t) && /\+119k/.test(t), t.slice(0, 400));
+  const sparks = await page.evaluate(() => document.querySelectorAll('svg.mspark').length);
+  check('macro: each dial draws its two-year sparkline', sparks >= 8, 'sparks=' + sparks);
+  check('macro: a series missing from tonight’s file says so instead of breaking (10-year treasury)', /10-year treasury — not in tonight/.test(t), t.slice(0, 500));
+  check('macro: the sources and the not-advice line are on the panel', /FRED/.test(t) && /not financial advice/.test(t) && /rules of thumb/.test(t), '');
+  // the file missing entirely → a plain error card with a retry, no script errors
+  await page.unroute('**/data/macro.json');
+  await page.route('**/data/macro.json', route => route.fulfill({ status: 404, contentType: 'text/plain', body: 'no' }));
+  await page.evaluate(() => { window.macData = null; });
+  await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(400);
+  await page.evaluate(() => { [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Macro').click(); });
+  await page.waitForTimeout(600);
+  const t2 = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  check('macro: with no data file yet, a plain error card with Try again shows', /Could not load the macro data/.test(t2) && /Try again/.test(t2), t2.slice(0, 200));
+  check('macro: no script errors', errors.length === 0, errors.join(' | '));
+  await page.close(); }
+
+
 // a #setup= link must not silently replace a saved GitHub connection (a crafted link could re-point the device)
 {
   const C = await browser.newContext(), c = await C.newPage();

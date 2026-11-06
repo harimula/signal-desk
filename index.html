@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-DvJKLFTL8KF2vQUDJSQUP6KDNOsmnovoC6nWg5A1N9Q=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-RlfTD7UcD7LUdFWsbBBYMz1oEWnxz+clrmxA0DY68iU=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -25,7 +25,7 @@
   /* Signal Desk design tokens — light: cool paper, ink-navy text, cobalt for actions. Dark flips the accent to amber (an instrument panel). */
   --bg:#f3f5f9;--surface:#ffffff;--surface2:#eaeef5;--text:#0e1526;--muted:#5b6678;--line:#d7dde8;
   --tb:#05705f;--line-mid:#7c3aed;--tb-bg:#dcf1ea;--b:#0f6e5e;--b-bg:#e2f3ef;--h:#636a78;--h-bg:#edf0f5;
-  --s:#b25000;--s-bg:#fdeedd;--ts:#d30e1d;--ts-bg:#fde7e9;--accent:#1b3c8f;--accent-bg:#e3eafa;--accent-ink:#ffffff;
+  --s:#b25000;--s-bg:#fdeedd;--ts:#d30e1d;--tw:#8a6a15;--ts-bg:#fde7e9;--accent:#1b3c8f;--accent-bg:#e3eafa;--accent-ink:#ffffff;
   --warn:#8a5a00;--warn-bg:#fbf0d2;--gold:#8a5a00;
   --shadow:none;--radius:10px;
   --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
@@ -33,12 +33,12 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0b1020;--surface:#111a2e;--surface2:#182340;--text:#e7ebf3;--muted:#9aa6bc;--line:#26324f;
   --tb:#2dd4bf;--line-mid:#b69cff;--tb-bg:#0e3a33;--b:#26a69a;--b-bg:#0e2f2c;--h:#9aa6bc;--h-bg:#1e2a44;
-  --s:#ff9850;--s-bg:#3a2a14;--ts:#f5616d;--ts-bg:#3a1a22;--accent:#f2b544;--accent-bg:#3a2e12;--accent-ink:#1a1400;--gold:#f2b544;
+  --s:#ff9850;--s-bg:#3a2a14;--ts:#f5616d;--tw:#e0b23f;--ts-bg:#3a1a22;--accent:#f2b544;--accent-bg:#3a2e12;--accent-ink:#1a1400;--gold:#f2b544;
   --warn:#f3cf7a;--warn-bg:#33290f;--shadow:none;}}
 :root[data-theme="dark"]{
   --bg:#0b1020;--surface:#111a2e;--surface2:#182340;--text:#e7ebf3;--muted:#9aa6bc;--line:#26324f;
   --tb:#2dd4bf;--line-mid:#b69cff;--tb-bg:#0e3a33;--b:#26a69a;--b-bg:#0e2f2c;--h:#9aa6bc;--h-bg:#1e2a44;
-  --s:#ff9850;--s-bg:#3a2a14;--ts:#f5616d;--ts-bg:#3a1a22;--accent:#f2b544;--accent-bg:#3a2e12;--accent-ink:#1a1400;--gold:#f2b544;
+  --s:#ff9850;--s-bg:#3a2a14;--ts:#f5616d;--tw:#e0b23f;--ts-bg:#3a1a22;--accent:#f2b544;--accent-bg:#3a2e12;--accent-ink:#1a1400;--gold:#f2b544;
   --warn:#f3cf7a;--warn-bg:#33290f;--shadow:none;}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -140,7 +140,10 @@ h2{font-size:16px;margin:24px 0 10px;font-weight:600;letter-spacing:-.01em}
 .hmchips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{font:inherit;font-size:11.5px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 11px;cursor:pointer;color:var(--muted);font-weight:600}
 .chip.on{background:var(--accent-bg);color:var(--accent);border-color:var(--accent)}
-.seaC{display:inline-block;min-width:60px;text-align:center;padding:3px 7px;border-radius:7px;font-family:var(--font-mono);font-size:11.5px;font-weight:600}.seaC.p{background:rgba(34,160,90,.13);color:var(--tb)}.seaC.n{background:rgba(220,70,70,.12);color:var(--ts)}.seaC.now{outline:1.5px dashed var(--muted);outline-offset:1px}
+.seaC{display:inline-block;min-width:60px;text-align:center;padding:3px 7px;border-radius:7px;font-family:var(--font-mono);font-size:11.5px;font-weight:600}.seaC.p{background:rgba(34,160,90,.13);color:var(--tb)}.seaC.n{background:rgba(220,70,70,.12);color:var(--ts)}.seaC.now{outline:1.5px dashed var(--muted);outline-offset:1px}.seaC.w{background:rgba(226,166,38,.16);color:var(--tw)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.mtile{border:1px solid var(--line);border-radius:10px;padding:10px 11px}
+.mspark{display:block;margin:3px 0;color:var(--muted)}
 table.seaT th,table.seaT td{text-align:center;padding:8px 6px}
 table.seaT th:first-child,table.seaT td:first-child{text-align:left;width:84px;min-width:84px;position:sticky;left:0;background:var(--surface);z-index:2;box-shadow:6px 0 6px -6px rgba(10,14,22,.3)}
 table.seaT thead th:first-child{z-index:4}
@@ -686,7 +689,7 @@ function analyzeAll() {
   }
 }
 analyzeAll();
-const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades'], ['SET', 'Bot settings'], ['NEWS', 'News'], ['ERN', 'Earnings'], ['SEA', 'Seasonality']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
+const TABS0 = [['US', 'USA stocks'], ['IN', 'India stocks'], ['DT', 'Day trading'], ['OP', 'Option trading'], ['BOT', 'Bot trades'], ['SET', 'Bot settings'], ['NEWS', 'News'], ['ERN', 'Earnings'], ['SEA', 'Seasonality'], ['MAC', 'Macro']], TABS1 = [['MY', 'My tickers'], ['RULES', 'Rules']];
 let pfolios = [{id: 'p1', name: 'Portfolio'}];
 const pfOf = k => (typeof k === 'string' && k.startsWith('PF:')) ? k.slice(3) : null;
 const pfName = id => { const p = pfolios.find(x => x.id === id); return p ? p.name : 'Portfolio'; };
@@ -807,8 +810,8 @@ function chrome() {
   const m = MK[mkt], f = fresh(m);
   document.querySelectorAll('#mkSw [data-mkt]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mkt === mkt)));
   $('#mdots').innerHTML = [mkt].map(c => { const o = mOpen(MK[c]); return `<span class="mkst"><span class="dot${o ? ' on' : ''}"></span>${MK[c].label} ${o ? 'open' : 'closed'}</span>`; }).join('');
-  $('#asof').innerHTML = (tab === 'SET' ? (mkt === 'IN' ? 'India bot \u2014 strategies and simulated stake' : 'Control panel \u2014 risk, capital, strategy, keys') : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'ERN' ? 'Earnings calendar — who reports when, and what they report' : tab === 'SEA' ? 'Month-by-month returns — the four benchmarks and any ticker you search' : tab === 'BOT' ? 'Your bot — real rules, real prices, every trade' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? esc(m.label) + ' intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
-  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SEA' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
+  $('#asof').innerHTML = (tab === 'SET' ? (mkt === 'IN' ? 'India bot \u2014 strategies and simulated stake' : 'Control panel \u2014 risk, capital, strategy, keys') : tab === 'NEWS' ? 'Market news, summarized — and what is scheduled next' : tab === 'ERN' ? 'Earnings calendar — who reports when, and what they report' : tab === 'SEA' ? 'Month-by-month returns — the four benchmarks and any ticker you search' : tab === 'MAC' ? 'US macro — rates, inflation, jobs and market stress, refreshed nightly' : tab === 'BOT' ? 'Your bot — real rules, real prices, every trade' : tab === 'RULES' ? 'Every rule this page uses, in plain words' : tab === 'DT' ? esc(m.label) + ' intraday levels from the last completed session' : pfOf(tab) ? esc(pfName(pfOf(tab))) + ' — valued at the latest refreshed price' : tab === 'MY' ? 'Your own tickers' : esc(m.label) + ' prices as of <b>' + esc(m.stamp.liveLocal) + '</b>');
+  $('#clock').innerHTML = (tab === 'MY' || tab === 'RULES' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SEA' || tab === 'MAC' || tab === 'SET' || pfOf(tab)) ? '' : 'Snapshot age: <b>' + ageText(f.age) + '</b> · market ' + (f.open ? 'open' : 'closed');
   let h = linkedNote ? `<div class="banner info">${linkedNote}</div>` : '';
   if (tab !== 'MY' && tab !== 'RULES' && tab !== 'DT' && tab !== 'OP' && tab !== 'BOT' && tab !== 'NEWS' && tab !== 'ERN' && tab !== 'SEA' && tab !== 'SET' && !pfOf(tab)) {
     if (f.level === 'stale') h += `<div class="banner warn"><b>Stale data. Entry zones are for reference only.</b> This snapshot is ${ageText(f.age)} old and prices have likely moved. Press ↻ Refresh prices.</div>`;
@@ -1009,7 +1012,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793925282';
+const BUILD_V = '1793933470';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2628,6 +2631,76 @@ setInterval(() => {                                                        // wh
   const n = Math.round((Date.now() - seaT0[seaSym]) / 1000);
   el.textContent = n >= 4 ? n + 's' + (n >= 10 ? ' — slow network, still trying; it gives up after about a minute' : '') : '';
 }, 1000);
+
+// ============ Macro tab (MAC): the dials behind the market, each in plain words ============
+// Data: data/macro.json, written nightly by GitHub Actions (tools/macro-fetch.mjs — FRED + gold/bitcoin).
+// Same origin as the page, so it draws on any network; statuses are common rules of thumb, not advice.
+let macData = null, macErr = '', macAt = 0, macBusy = false;
+async function macLoad(force) {
+  if (macBusy || (!force && macData && Date.now() - macAt < 30 * 60000) || (!force && !macData && macErr && Date.now() - macAt < 60000)) return;
+  macBusy = true;
+  try { const j = await tryJson('data/macro.json', 9000); if (!j || !j.series || !Object.keys(j.series).length) throw new Error('the file is empty'); macData = j; macErr = ''; }
+  catch (e) { macErr = String((e && e.message) || e).slice(0, 80); }
+  macAt = Date.now(); macBusy = false;
+  if (app === 'desk' && tab === 'MAC') renderAll(true);
+}
+const MAC_GROUPS = [
+  ['Interest rates — the price of money', ['ff', 'y2', 'y10', 'curve', 'mort']],
+  ['Inflation — how fast prices climb (the Fed aims at 2%)', ['cpi', 'core', 'pce', 'bei']],
+  ['Jobs & growth', ['unemp', 'jobs', 'claims', 'gdp', 'sent', 'sahm']],
+  ['Market stress & money flows', ['vix', 'hy', 'dxy', 'oil', 'gold', 'btc']]];
+const MAC_TIPKEY = { ff: 'fed funds', y2: '2-year treasury', y10: '10-year treasury', curve: 'yield curve', mort: '30-year mortgage', cpi: 'cpi inflation', core: 'core inflation', pce: 'pce inflation', bei: 'inflation expected', unemp: 'unemployment rate', jobs: 'new jobs', claims: 'jobless claims', gdp: 'gdp growth', sent: 'consumer sentiment', sahm: 'sahm rule', vix: 'vix', hy: 'junk-bond spread', dxy: 'dollar index', oil: 'oil price', gold: 'gold price', btc: 'bitcoin price' };
+const MAC_HINT = { ff: 'set by the Federal Reserve', y2: 'tracks where the Fed is headed', y10: 'prices mortgages and stocks', curve: 'below zero has preceded recessions', mort: 'what a home loan costs', cpi: 'the headline number', core: 'without food and energy', pce: 'the Fed\u2019s preferred measure', bei: 'what markets expect, next 10 years', unemp: 'share of workers without a job', jobs: 'hiring pace, month over month', claims: 'fresh layoffs, week by week', gdp: 'the economy\u2019s growth pace', sent: 'how households feel', sahm: '0.5 or more has meant recession', vix: 'expected choppiness, next 30 days', hy: 'extra yield risky borrowers pay', dxy: 'the dollar against trade partners', oil: 'fuel and input costs', gold: 'the classic safe haven', btc: 'risk appetite, crypto flavor' };
+function macStat(k, v) {                                                     // → [chip class, plain word] or null for dials with no sensible fixed bands
+  switch (k) {
+    case 'curve': return v < 0 ? ['n', 'inverted'] : v < 0.5 ? ['w', 'flat'] : ['p', 'normal'];
+    case 'cpi': case 'core': case 'pce': return v <= 2.5 ? ['p', 'near target'] : v <= 4 ? ['w', 'above target'] : ['n', 'hot'];
+    case 'bei': return v >= 1.5 && v <= 2.5 ? ['p', 'anchored'] : ['w', v > 2.5 ? 'drifting up' : 'drifting down'];
+    case 'sahm': return v < 0.5 ? ['p', 'no signal'] : ['n', 'signalling'];
+    case 'claims': return v < 250 ? ['p', 'low'] : v <= 300 ? ['w', 'rising'] : ['n', 'high'];
+    case 'jobs': return v > 150 ? ['p', 'strong'] : v >= 0 ? ['w', 'soft'] : ['n', 'shrinking'];
+    case 'gdp': return v > 2 ? ['p', 'solid'] : v >= 0 ? ['w', 'slow'] : ['n', 'contracting'];
+    case 'sent': return v > 85 ? ['p', 'upbeat'] : v >= 70 ? ['w', 'glum'] : ['n', 'depressed'];
+    case 'vix': return v < 17 ? ['p', 'calm'] : v <= 25 ? ['w', 'jumpy'] : ['n', 'stressed'];
+    case 'hy': return v < 4 ? ['p', 'calm'] : v <= 5 ? ['w', 'tightening'] : ['n', 'stressed'];
+    default: return null;
+  }
+}
+const macVal = (k, s, v) => k === 'jobs' ? (v >= 0 ? '+' : '\u2212') + fmt(Math.abs(v), 0) + 'k'
+  : s.unit === 'k' ? fmt(v, 0) + 'k'
+  : s.unit === 'pp' ? (v >= 0 ? '+' : '\u2212') + fmt(Math.abs(v)) + ' pp'
+  : s.unit === '%' ? fmt(v) + '%'
+  : s.unit === '$' ? '$' + fmt(v, v >= 1000 ? 0 : 2)
+  : fmt(v, 1);
+const macChg = s => { const d = s.val - s.prev; if (!Number.isFinite(d)) return '';
+  if (s.unit === '$') { const pc = s.prev > 0 ? (s.val / s.prev - 1) * 100 : 0; return (pc >= 0 ? '\u25b2 +' : '\u25bc \u2212') + Math.abs(pc).toFixed(1) + '%'; }
+  return (d >= 0 ? '\u25b2 +' : '\u25bc \u2212') + fmt(Math.abs(d), s.unit === 'k' ? 0 : 2) + (s.unit === 'k' ? 'k' : s.unit === '' ? '' : ' pp'); };
+const macSpark = h => { if (!h || h.length < 2) return ''; const vs = h.map(x => x[1]), mn = Math.min(...vs), mx = Math.max(...vs), sp = (mx - mn) || 1;
+  const pts = vs.map((v, i) => (i * 90 / (vs.length - 1)).toFixed(1) + ',' + (21 - (v - mn) / sp * 16).toFixed(1)).join(' ');
+  return '<svg class="mspark" width="90" height="24" viewBox="0 0 90 24" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".6"/></svg>'; };
+function macroView() {
+  macLoad();
+  const head = '<div class="card" style="padding:14px 16px;margin-bottom:12px"><b>US macro — the dials behind the market</b> <span class="mut" style="font-size:12px">· sources: FRED (the St. Louis Fed\u2019s public database) and Yahoo Finance · refreshed every evening after the close · two years of history in each small line · a screen, not a forecast and not financial advice</span></div>';
+  if (!macData && macErr) return head + `<div class="card" style="padding:16px"><b>Could not load the macro data</b> (${esc(macErr)}). <button type="button" class="btn" data-macretry="1">Try again</button><div class="mut" style="font-size:12px;margin-top:8px">The data lives on the site itself and is refreshed nightly — if this keeps failing, tonight\u2019s copy may still be building.</div></div>`;
+  if (!macData) return head + '<div class="card" style="padding:16px" aria-busy="true">Loading the macro dials\u2026</div>';
+  const S = macData.series, FREQW = { D: 'the prior reading', W: 'a week earlier', M: 'a month earlier', Q: 'a quarter earlier' };
+  const chip = (k, v) => { const st = macStat(k, v); return st ? ` <span class="seaC ${st[0]}" style="min-width:0">${st[1]}</span>` : ''; };
+  const tile = k => { const s = S[k]; if (!s) return `<div class="mtile mut" style="font-size:12px">${esc(MAC_TIPKEY[k] || k)} — not in tonight\u2019s file</div>`;
+    return `<div class="mtile"><div style="font-size:11.5px" class="mut"><span data-tipkey="${MAC_TIPKEY[k]}">${esc(s.name)}</span>${chip(k, s.val)}</div>
+<div style="font-size:19px;font-weight:650;font-family:var(--font-mono);margin:2px 0">${macVal(k, s, s.val)}</div>
+<div class="mut" style="font-size:10.5px">${macChg(s)} vs ${FREQW[s.freq] || 'before'} · ${esc(s.date)}</div>${macSpark(s.hist)}<div class="mut" style="font-size:10.5px">${MAC_HINT[k] || ''}</div></div>`; };
+  const sum = [];
+  if (S.curve) sum.push(['Yield curve', macStat('curve', S.curve.val)]);
+  if (S.cpi) sum.push(['Inflation', macStat('cpi', S.cpi.val)]);
+  if (S.sahm) sum.push(['Recession signal', macStat('sahm', S.sahm.val)]);
+  if (S.vix && S.hy) { const a = macStat('vix', S.vix.val), b = macStat('hy', S.hy.val); sum.push(['Stress', a[0] === 'n' || b[0] === 'n' ? ['n', 'high'] : a[0] === 'w' || b[0] === 'w' ? ['w', 'some'] : ['p', 'calm']]); }
+  const strip = sum.length ? `<div class="card" style="padding:10px 16px;margin-bottom:12px;display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px"><span data-tipkey="macro summary" class="mut">At a glance:</span>${sum.map(([n, st]) => `<span>${n}: <span class="seaC ${st[0]}" style="min-width:0">${st[1]}</span></span>`).join('')}</div>` : '';
+  const old = Date.now() - macData.at > 4 * 86400000 ? `<div class="mut" style="font-size:11.5px;margin-bottom:10px">Heads up: this copy is from ${esc(new Date(macData.at).toLocaleDateString())} — the nightly refresh has not run since.</div>` : '';
+  const groups = MAC_GROUPS.map(([title, ks]) => `<div class="card" style="padding:14px 16px;margin-bottom:12px"><div style="font-weight:650;font-size:13px;margin-bottom:8px">${title}</div><div class="mgrid">${ks.map(tile).join('')}</div></div>`).join('');
+  return head + strip + old + groups + `<div class="mut" style="font-size:11px">Statuses use common rules of thumb — inflation against the Fed\u2019s 2% aim, the yield curve against zero, jobless claims against the 250–300k band, the Sahm rule\u2019s 0.5 trigger, VIX and the junk-bond spread against their calm-to-stressed bands. They describe each dial; they do not say buy or sell. Data as of ${esc(new Date(macData.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}.</div>`;
+}
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-macretry]'); if (t && app === 'desk' && tab === 'MAC') { macErr = ''; macLoad(true); renderAll(true); } });
+setInterval(() => { if (app === 'desk' && tab === 'MAC' && !document.hidden) macLoad(); }, 30 * 60000);
 let seaPre = 0;
 setInterval(() => {                                                        // warm the other benchmark chips, one every few seconds while the tab is open
   if (app !== 'desk' || tab !== 'SEA' || document.hidden || seaBusy.size) return;   // never compete with a load already running (one weak connection at a time)
@@ -3824,7 +3897,7 @@ ${inChk('alerts', 'India Telegram summary', 'one message after each NSE day: buy
   const side = `<nav class="stnav" aria-label="Settings sections"><div class="mut" style="font-size:11.5px;margin-bottom:6px">On this page</div>${secIds.map(([id, t]) => `<a href="#${id}">${esc(t)}</a>`).join('')}<a href="docs/settings.html" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">What each setting does ↗</a></nav>`;
   return `<h2 style="margin-bottom:6px">Bot settings — ${mkt === 'IN' ? 'India bot' : 'USA bot'}</h2><div class="mut" style="font-size:12.5px;margin:0 0 12px">${mkt === 'IN' ? 'The India simulation reads these after each NSE close.' : 'Everything the bot does is controlled here. Changes reach the bot within about a minute. Keys go to encrypted GitHub secrets, never to this page.'} <a href="docs/settings.html"><b>What does each setting do? → the settings guide, with a worked example for every setting</b></a> <span class="mut">· guide updated 2026-10-27</span></div><div class="stwrap${mkt === 'IN' ? ' one' : ''}">${mkt === 'IN' ? '' : side}<div style="min-width:0">${body}</div></div>`;
 }
-function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'ERN' ? earningsView() : tab === 'SEA' ? seasonalityView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
+function viewHTML() { return tab === 'SET' ? settingsView() : tab === 'NEWS' ? newsView() : tab === 'ERN' ? earningsView() : tab === 'SEA' ? seasonalityView() : tab === 'MAC' ? macroView() : tab === 'BOT' ? botView() : tab === 'RULES' ? rulesView() : tab === 'OP' ? opView() : tab === 'DT' ? dtView() : pfOf(tab) ? pfView(pfOf(tab)) : tab === 'MY' ? myView() : marketView(tab); }
 function twNav2(root) {
   root.querySelectorAll('.tw').forEach(tw => {
     let wrap = tw.parentElement;
@@ -3886,7 +3959,7 @@ function renderAll(bg) {
   $('#view').dataset.app = 'desk';
   if (typeof goliveCheck === 'function') goliveCheck();
   renderTabs(); chrome();
-  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SEA' || tab === 'SET' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
+  $('#tools').style.display = (tab === 'RULES' || tab === 'DT' || tab === 'OP' || tab === 'BOT' || tab === 'NEWS' || tab === 'ERN' || tab === 'SEA' || tab === 'MAC' || tab === 'SET' || pfOf(tab) || ((tab === 'US' || tab === 'IN') && view2 !== 'screen')) ? 'none' : '';
   const view = $('#view');
   const openKeys = new Set(Array.from(view.querySelectorAll('details[data-k][open]')).map(d2 => d2.dataset.k));
   const sameView = view.dataset.rv === app + ':' + tab, scY = window.scrollY, scX = window.scrollX;

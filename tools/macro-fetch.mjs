@@ -31,8 +31,8 @@ const FRED = {
 };
 const YAHOO = { gold: ['GC=F', 'Gold', '$'], btc: ['BTC-USD', 'Bitcoin', '$'] };
 
-async function get(u, headers) {
-  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 15000);
+async function get(u, headers, ms = 15000) {
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), ms);
   try { const r = await fetch(u, { headers: { 'user-agent': UA, ...headers }, signal: ctl.signal }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.text(); }
   finally { clearTimeout(tm); }
 }
@@ -95,13 +95,24 @@ async function yahooDaily(sym) {
   throw new Error(err || 'no data');
 }
 
+let fredDirectDead = false;                                                 // FRED hangs for GitHub's addresses (seen 2026-11-05: every direct request aborted) — after one dead direct try, go straight to the relays
+async function fredCsv(id) {
+  const direct = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=' + id;
+  const relays = ['https://api.allorigins.win/raw?url=' + encodeURIComponent(direct),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(direct),
+    'https://corsproxy.io/?url=' + encodeURIComponent(direct)];
+  let err = '';
+  for (const u of (fredDirectDead ? relays : [direct, ...relays])) {
+    try { return parseFred(await get(u, undefined, u === direct ? 8000 : 15000)); }
+    catch (e) { err = String((e && e.message) || e).slice(0, 80); if (u === direct && /abort/i.test(err)) fredDirectDead = true; }
+  }
+  throw new Error(err);
+}
 const old = fs.existsSync('data/macro.json') ? JSON.parse(fs.readFileSync('data/macro.json', 'utf8')) : { series: {} };
 const series = {}, fail = {};
 for (const [k, [id, name, unit, freq, tr]] of Object.entries(FRED)) {
-  try {
-    const rows = parseFred(await get('https://fred.stlouisfed.org/graph/fredgraph.csv?id=' + id));
-    series[k] = { name, unit, freq, src: 'FRED ' + id, ...digest(rows, tr) };
-  } catch (e) { fail[k] = String((e && e.message) || e).slice(0, 100); if (old.series[k]) series[k] = old.series[k]; }
+  try { series[k] = { name, unit, freq, src: 'FRED ' + id, ...digest(await fredCsv(id), tr) }; }
+  catch (e) { fail[k] = String((e && e.message) || e).slice(0, 100); if (old.series[k]) series[k] = old.series[k]; }
   await new Promise(r => setTimeout(r, 300));
 }
 auth = await getAuth();
