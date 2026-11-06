@@ -710,6 +710,29 @@ journalFixture = null;
     const cl = await pg.evaluate(() => { const t = [...document.querySelectorAll('table')].find(x => /^Date$/i.test((x.querySelector('th') || {}).textContent || '')); if (!t) return null; const th = t.querySelector('th'); const before = [...t.querySelectorAll('tbody tr, tr')].filter(r => r.cells[0] && r.cells[0].tagName === 'TD').map(r => r.cells[0].textContent.trim()); th.click(); th.click(); const after = [...t.querySelectorAll('tr')].filter(r => r.cells[0] && r.cells[0].tagName === 'TD').map(r => r.cells[0].textContent.trim()); return { n: before.length, asc: after.every((x, i) => i === 0 || x >= after[i - 1]) }; });
     check('sorting: the docs change log sorts by date (oldest first after two clicks)', !!cl && cl.n > 10 && cl.asc, JSON.stringify(cl));
     await pg.close(); }
+// ---- the heat map's "day move" must divide the live price by a FRESH last close, not the weeks-stale baked one ----
+// (2026-11-06: the committed DATA block's lastClose was weeks old, so live px ÷ baked close rendered a move-since-build —
+//  AMD showed −15% as a "day move". The load-time overlay now refreshes daily bars from live.json before the first render.)
+{ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const errors = []; page.on('pageerror', e => errors.push(e.message.slice(0, 160)));
+  // a crafted snapshot: AMD closed yesterday at 455.00 and trades 459.55 now — a clean +1.00% day. The baked block says 528.75.
+  const baked = JSON.parse(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').match(/const DATA = (\{[\s\S]*?\});/)[1]);
+  const row = baked.rows.AMD.slice(); row[1] = 459.55; row[2] = 455.00; row[3] = 450.00;   // px, lastClose, prevClose — fresh
+  const live = { at: Date.now(), liveAt: { US: Math.floor(Date.now() / 1000), IN: 0 }, dates: {}, rows: { AMD: row } };
+  await page.route('**/live.json*', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify(live) }));
+  await page.goto(base, { waitUntil: 'networkidle' }); await page.waitForTimeout(400);
+  await page.evaluate(() => { [...document.querySelectorAll('nav button, .tabs button, button')].find(b => b.textContent.trim() === 'Stocks')?.click(); });
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Heat map')?.click(); });
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { document.querySelector('[data-hm="chg"]')?.click(); });
+  await page.waitForTimeout(200);
+  const amd = await page.evaluate(() => { const b = document.querySelector('.hmc[data-s="AMD"]'); return b ? b.querySelector('span').textContent.trim() : '(no AMD tile)'; });
+  const n = parseFloat(amd.replace(/[+%−-]/g, m => m === '−' || m === '-' ? '-' : ''));
+  check('heat map: day move divides by a fresh last close (AMD +1.0%, not the −13% move-since-build)', /^[+]?1\.0/.test(amd.replace('−', '-')) || Math.abs(n - 1) < 0.3, 'AMD tile shows ' + amd);
+  check('heat map: no script errors', errors.length === 0, errors.join(' | '));
+  await page.close(); }
+
 await browser.close(); srv.close();
 // 5. documentation pages: a way back to the app, opened in the same window (the site runs as a home-screen app)
 {

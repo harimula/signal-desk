@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-HkoiUkbJVwFbSdHsKeH3TbK5wBRpM7jeCI6xdlWtVzw=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-gUR6CRHPTgSvbbEQMdhXK+Nor+zLSoxa7O98BeU2s1k=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1009,7 +1009,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793989386';
+const BUILD_V = '1793996109';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -4422,8 +4422,17 @@ if (!FB_CONFIG) {
   let leaveArmed = false; $('#signLeave').addEventListener('click', () => { if (!leaveArmed) { leaveArmed = true; $('#signLeave').textContent = 'Really wipe this device? Click again'; return; } signOutDevice(); });
 }
 renderAll(); refreshInfo();
-// commodities + USD→INR live only in live.json: pull them once at start so the Portfolio tab has them before the first refresh
-(async () => { try { const r = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const j = await r.json(); let n = 0; for (const k of Object.keys(j.rows || {})) if (!DATA.rows[k]) { DATA.rows[k] = j.rows[k]; n++; } if (n) renderAll(); } catch (e) {} })();
+// At load, overlay the scheduled snapshot (live.json): fill commodities / USD→INR (not in the built-in universe) AND
+// refresh every built-in symbol's DAILY bars — the committed DATA block can be weeks old, and its stale lastClose under a
+// fresh live price turned the heat map's "day move" into a move-since-build (2026-11-06). lastClose/prevClose must stay in
+// step with px, so a full-row replace (with BASE_PX + the live stamp) keeps every day-move honest before the first refresh.
+(async () => { try { const r = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const j = await r.json(); let n = 0, u = 0;
+  for (const k of Object.keys(j.rows || {})) { const w = j.rows[k];
+    if (!DATA.rows[k]) { DATA.rows[k] = w; n++; }
+    else if (Array.isArray(w) && w.length >= 29) { DATA.rows[k] = w.slice(0, 27).concat([w[27], w[28]]); BASE_PX[k] = w[1]; u++; } }   // fresh daily bars, px and all
+  if (u) for (const [code, m] of Object.entries(DATA.markets)) { const la = (j.liveAt && j.liveAt[code]) || 0; if (la > (BASE_STAMP[code].liveAt || 0)) BASE_STAMP[code].liveAt = la; }
+  if (u) analyzeAll();                                                       // the day-move and every indicator are recomputed from the fresh daily bars
+  if (n || u) renderAll(); } catch (e) {} })();
 setTimeout(() => { try { syncPull(); } catch (e) {} }, 800);
 if (sessionStorage.getItem('sd-linked')) { sessionStorage.removeItem('sd-linked'); linkedNote = 'This device is now linked: your token, passphrase and keys are installed. Your holdings, watchlist and settings arrive in a few seconds, and from now on changes on any linked device sync automatically.'; try { chrome(); } catch (e) {} setTimeout(() => { linkedNote = ''; try { chrome(); } catch (e) {} }, 30000); }
 setInterval(chrome, 60000);
