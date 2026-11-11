@@ -784,7 +784,7 @@ test('scorecard: the Friday send window, the weekly stamp and the texts', () => 
   assert.ok(txt.includes('Stocks: 1 closed, 1 won (100%)'), txt);
   assert.ok(txt.includes('every lane with 30+ recent trades is inside its tested range'), txt);
   assert.ok(driftText({ lane: 'spy', n: 30, winPct: 60, expWin: 80, pf: 0.7 }).includes('SPY quick options drift'), 'drift text names the lane');
-  assert.deepEqual([EXPECT.stock.win, EXPECT.call.win, EXPECT.spy.win], [82, 52, 80]);    // the studies' yardsticks, pinned so a drive-by edit fails loudly (call: tp10/stop30 model row, 2026-11-06)
+  assert.deepEqual([EXPECT.stock.win, EXPECT.call.win, EXPECT.spy.win], [82, 61, 80]);    // the studies' yardsticks, pinned so a drive-by edit fails loudly (call: tp10/stop30 on real prices, option-check 2026-11-06)
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
