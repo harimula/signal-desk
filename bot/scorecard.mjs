@@ -10,7 +10,10 @@ const WD = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
 export const etDay = ms => ETD.format(new Date(ms));                        // YYYY-MM-DD, New York
 export const etWd = ms => WD[ETW.format(new Date(ms))] || 0;                // Monday = 1 … Sunday = 7
 export const etMins = ms => { const [h, m] = ETM.format(new Date(ms)).split(':'); return (+h % 24) * 60 + +m; };
-export const weekMonday = ms => etDay(ms - (etWd(ms) - 1) * 864e5);         // the Monday of that New-York week
+export const weekMonday = ms => {                                           // the Monday of that New-York week — day math anchored at noon, so the DST hour can never roll the date (audit 2026-11-10)
+  const [y, m, d] = etDay(ms).split('-').map(Number);
+  return etDay(Date.UTC(y, m - 1, d, 17) - (etWd(ms) - 1) * 864e5);
+};
 
 // Which lane a closed journal trade belongs to. The wheel is everything sold-to-open or born from an option event
 // (assignment / called away); SPY options bought long are the quick-options sleeve; the rest split by kind.
@@ -20,7 +23,7 @@ export const LANE_LAB = { stock: 'Stocks', call: 'CALLs', put: 'PUTs', spy: 'SPY
 // Each live rule's own tested numbers — the drift alarm's yardstick, with the study each number comes from.
 export const EXPECT = {
   stock: { win: 82, src: 'winrate_report 2026-10-27: first close +0.5%, 15-day hold, market filter — 82.4% won over 33 years' },
-  call: { win: 61, src: 'option-check 2026-11-06, REAL option prices (299 signals since 2024-03): tp +10% / stop −30% / 14d — 61.2% won, +1.48%/trade' },
+  call: { win: 58, src: 'option-check 2026-11-06, REAL option prices (299 signals since 2024-03): tp +15% / stop −30% / 14d — 58.2% won, +2.54%/trade (set with the owner’s 2026-11-10 target change)' },
   spy: { win: 80, src: 'spy0_report 2026-11-03: 94% won on 60 real-price days (36 trades); the long-run model sits lower — 80 is the alarm floor, not a promise' }
 };
 const DRIFT_N = 30, DRIFT_GAP = 8;                                          // judge only on 30+ closed trades, flag at 8+ points under the study AND losing money
@@ -56,8 +59,18 @@ export function computeScore(closed, nowMs) {
   return out;
 }
 
-// The Friday send: once per week, from 3:50 PM New York on (the session's journal writes catch it before the close).
-export const scoreDue = (nowMs, sentWk) => etWd(nowMs) === 5 && etMins(nowMs) >= 950 && weekMonday(nowMs) !== sentWk;
+// The Friday send: once per week, in the session's last stretch — from 3:50 PM New York, or 15 minutes before an
+// early close (the day after Thanksgiving closes at 1:00 PM and the session loop ends with it; audit 2026-11-10).
+export const scoreDue = (nowMs, sentWk, closeMins) => etWd(nowMs) === 5 && etMins(nowMs) >= Math.min(950, closeMins ? closeMins - 15 : 950) && weekMonday(nowMs) !== sentWk;
+// A Friday the bot never saw (full holiday, or a session that ended before the window): the next session sends that
+// week's card late, computed as of that Friday noon. Returns the instant to compute at, or 0. Needs a real previous
+// stamp — a blank one means a fresh journal, where sending history would be noise.
+export const scoreCatchupAt = (nowMs, sentWk) => {
+  if (!sentWk || etWd(nowMs) === 5) return 0;
+  const [y, m, d] = weekMonday(nowMs).split('-').map(Number);
+  const fri = Date.UTC(y, m - 1, d, 17) - 3 * 864e5;                        // the Friday before this week's Monday, noon New York
+  return weekMonday(fri) !== sentWk ? fri : 0;
+};
 // The monthly send: the finished month's summary goes out on the next month's first session write (like a statement).
 export const monthDue = (nowMs, sentMo) => monthOf(nowMs) !== sentMo;
 export function monthScore(closed, ym, nowMs) {
@@ -76,7 +89,7 @@ export function monthText(ms) {
   const L = [`🗓️ Monthly scorecard — ${monthLabel(ms.ym)}`];
   for (const ln of ['stock', 'call', 'put', 'spy', 'wheel']) { const a = ms.lanes[ln]; if (a.n || ln === 'stock' || ln === 'spy' || ln === 'wheel') L.push(laneLine(ln, a)); }
   const T = ms.total;
-  L.push(T.n ? `The month in one line: ${usd(T.pl)} over ${T.n} closed trades, ${T.won} won (${Math.round(T.winPct)}%)${T.pf != null ? ', profit factor ' + T.pf.toFixed(2) : ''}.` : 'No closed trades that month.');
+  L.push(T.n ? `The month in one line: ${usd(T.pl)} over ${T.n} closed trades, ${T.won} won (${Math.round(T.winPct)}%)${T.pf != null ? ', profit factor ' + T.pf.toFixed(2) : ''}. (Counted from the journal’s 60-day fill window — a position opened before it closes uncounted.)` : 'No closed trades that month.');
   return L.join('\n');
 }
 export function scoreText(sc) {
@@ -87,6 +100,6 @@ export function scoreText(sc) {
   }
   const T = sc.total;
   L.push(`All lanes this week: ${usd(T.week.pl)} over ${T.week.n} closed · last 60 days: ${usd(T.all.pl)}, ${T.all.won} of ${T.all.n} won${T.all.pf != null ? ', profit factor ' + T.all.pf.toFixed(2) : ''}`);
-  L.push(sc.drift.length ? sc.drift.map(driftText).join('\n') : '✅ Drift: every lane with 30+ recent trades is inside its tested range.');
+  L.push(sc.drift.length ? sc.drift.map(driftText).join('\n') : '✅ Drift: every graded lane (stocks, CALLs, SPY) with 30+ recent trades is inside its tested range.');
   return L.join('\n');
 }

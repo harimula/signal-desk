@@ -5,7 +5,7 @@ import { encode as mpEncode, decode as mpDecode } from './msgpack.mjs';
 import { spySignal, spyExit, spyFresh, encodeSpyId, decodeSpyId, isSpyOption } from './spyopt.mjs';
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
 import { buildJournal, parseSym, optionEvents } from './journal.mjs';
-import { tradeLane, computeScore, scoreDue, scoreText, driftText, weekMonday, etWd, etMins, EXPECT, monthOf, prevMonthOf, monthDue, monthScore, monthText, monthLabel } from './scorecard.mjs';
+import { tradeLane, computeScore, scoreDue, scoreCatchupAt, scoreText, driftText, weekMonday, etWd, etMins, EXPECT, monthOf, prevMonthOf, monthDue, monthScore, monthText, monthLabel } from './scorecard.mjs';
 import { guard, symbolRisk, classify } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
 import { normalize, summary } from './config.mjs';
@@ -33,18 +33,18 @@ console.log('Risk engine');
 test('stock size limited by risk at stop', () => { assert.equal(stockQty({ equity: 100000, riskPct: 0.5, entry: 100, stop: 95, budget: 1e9 }), 100); });
 test('stock size limited by $ budget', () => { assert.equal(stockQty({ equity: 100000, riskPct: 0.5, entry: 100, stop: 99, budget: 10000 }), 100); });
 test('no size when stop is above entry', () => { assert.equal(stockQty({ equity: 100000, riskPct: 0.5, entry: 100, stop: 101, budget: 1e9 }), 0); });
-test('option size: -50% stop risks <= riskPct', () => { assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 1e9 }), 5); });
-test('option size: a wider stop buys fewer contracts for the same risk (90% stop → 2 instead of 5)', () => { assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 1e9, stopPct: 90 }), 2); assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 1e9, stopPct: 50 }), 5); });
-test('open risk: an option counts what its own stop would lose', () => { const pos = [{ symbol: 'AAA261113C00100000', qty: '2', avg_entry_price: '3' }]; assert.equal(openRisk({ positions: pos, orders: [], stopFor: () => null }), 300); assert.equal(openRisk({ positions: pos, orders: [], stopFor: () => null, optStopFor: () => 0.9 }), 540); });
+test('option size: the whole premium is the risk — $500 budget buys 2 contracts of a $2.00 option', () => { assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 1e9 }), 2); });
+test('option size: the stop setting no longer changes the size (gaps go through stops — audit 2026-11-10)', () => { assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 1e9, stopPct: 90 }), 2); assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 1e9, stopPct: 30 }), 2); assert.equal(optionQty({ equity: 100000, riskPct: 0.5, price: 2, budget: 150 }), 0); });
+test('open risk: an option counts its whole premium by default (audit 2026-11-10); a fraction can still be passed', () => { const pos = [{ symbol: 'AAA261113C00100000', qty: '2', avg_entry_price: '3' }]; assert.equal(openRisk({ positions: pos, orders: [], stopFor: () => null }), 600); assert.equal(openRisk({ positions: pos, orders: [], stopFor: () => null, optStopFor: () => 0.9 }), 540); });
 test('regime: bull / bear / unknown', () => {
   assert.equal(regimeOf(Array.from({ length: 250 }, (_, i) => 100 + i)).regime, 'bull');
   assert.equal(regimeOf(Array.from({ length: 250 }, (_, i) => 400 - i)).regime, 'bear');
   assert.equal(regimeOf([1, 2, 3]).regime, 'unknown');
 });
 test('loss streak counts back from latest trade', () => { assert.equal(lossStreak([{ outT: '1', pl: 5 }, { outT: '2', pl: -1 }, { outT: '3', pl: -2 }]), 2); });
-test('open risk: stops, options at -50%, pending orders', () => {
+test('open risk: stock stops, option full premium, pending orders', () => {
   const r = openRisk({ positions: [{ symbol: 'AAA', qty: '10', avg_entry_price: '100' }, { symbol: 'AAA261030C00100000', qty: '1', avg_entry_price: '2' }], orders: [{ symbol: 'BBB', side: 'buy', qty: '5', limit_price: '50' }], stopFor: s => (s === 'AAA' ? 90 : s === 'BBB' ? 48 : null) });
-  assert.equal(r, 10 * 10 + 100 + 5 * 2);
+  assert.equal(r, 10 * 10 + 200 + 5 * 2);                                                  // the option now counts its whole $200 premium (audit 2026-11-10)
 });
 test('sector map', () => { assert.equal(sectorOf('NVDA'), 'Tech'); assert.equal(sectorOf('ZZZZ'), 'Other'); });
 
@@ -750,7 +750,8 @@ test('scorecard: the drift alarm needs 30 trades, an 8-point gap AND lost money;
   assert.equal(computeScore(mk(8, 'stock', 90), fri).drift.length, 0);                    // same 73.3% but the wins pay (profit factor 1.24): no flag
   assert.equal(computeScore(mk(8, 'stock').slice(0, 29), fri).drift.length, 0);           // 29 trades: too few to judge
   assert.equal(computeScore(mk(25, 'wheel'), fri).drift.length, 0);                       // the wheel is shown but never drift-flagged
-  assert.equal(computeScore(mk(8, 'spy'), fri).drift.length, 0);                          // 73.3% sits ABOVE SPY's 80 − 8 = 72 floor: no flag\n  assert.equal(computeScore(mk(9, 'spy'), fri).drift[0].lane, 'spy');                     // 70% is under it, and losing: flagged
+  assert.equal(computeScore(mk(8, 'spy'), fri).drift.length, 0);                          // 73.3% sits ABOVE SPY's 80 − 8 = 72 floor: no flag
+  assert.equal(computeScore(mk(9, 'spy'), fri).drift[0].lane, 'spy');                     // 70% is under it, and losing: flagged
 });
 test('scorecard: the month window, the month-end send and its text', () => {
   const fri = Date.UTC(2026, 10, 6, 20, 51);                                              // Fri 2026-11-06, New York
@@ -771,6 +772,18 @@ test('scorecard: the month window, the month-end send and its text', () => {
   assert.ok(txt.includes('The month in one line: +$20.00 over 2 closed trades, 1 won (50%)'), txt);
   assert.ok(monthDue(fri, '') && monthDue(fri, '2026-10') && !monthDue(fri, '2026-11'));  // first write of a new month sends once
 });
+test('scorecard: week math survives the daylight-saving change; early closes and missed Fridays are covered', () => {
+  assert.equal(weekMonday(Date.parse('2026-11-02T04:30:00Z')), '2026-10-26');             // Sun 23:30 ET on fall-back weekend — used to answer a Tuesday (audit 2026-11-10)
+  assert.equal(weekMonday(Date.parse('2026-03-09T03:30:00Z')), '2026-03-02');             // spring-forward twin
+  assert.ok(scoreDue(Date.UTC(2026, 10, 27, 17, 50), '', 780));                           // early-close Friday (1:00 PM): due from 12:45
+  assert.ok(!scoreDue(Date.UTC(2026, 10, 27, 17, 20), '', 780));
+  const mon = Date.UTC(2026, 10, 9, 15, 0);                                               // Monday Nov 9
+  const late = scoreCatchupAt(mon, '2026-10-26');                                         // last send two weeks back: Friday Nov 6 is owed
+  assert.ok(late > 0); assert.equal(weekMonday(late), '2026-11-02'); assert.equal(etWd(late), 5);
+  assert.equal(scoreCatchupAt(mon, '2026-11-02'), 0);                                     // already sent
+  assert.equal(scoreCatchupAt(mon, ''), 0);                                               // fresh journal: no history spam
+  assert.equal(scoreCatchupAt(Date.UTC(2026, 10, 6, 20, 51), '2026-10-26'), 0);           // Fridays use the normal path
+});
 test('scorecard: the Friday send window, the weekly stamp and the texts', () => {
   const fri = Date.UTC(2026, 10, 6, 20, 51);
   assert.ok(scoreDue(fri, ''));
@@ -782,9 +795,9 @@ test('scorecard: the Friday send window, the weekly stamp and the texts', () => 
   const txt = scoreText(sc);
   assert.ok(txt.includes('Weekly scorecard — week of 2026-11-02'), txt);
   assert.ok(txt.includes('Stocks: 1 closed, 1 won (100%)'), txt);
-  assert.ok(txt.includes('every lane with 30+ recent trades is inside its tested range'), txt);
+  assert.ok(txt.includes('every graded lane (stocks, CALLs, SPY) with 30+ recent trades is inside its tested range'), txt);
   assert.ok(driftText({ lane: 'spy', n: 30, winPct: 60, expWin: 80, pf: 0.7 }).includes('SPY quick options drift'), 'drift text names the lane');
-  assert.deepEqual([EXPECT.stock.win, EXPECT.call.win, EXPECT.spy.win], [82, 61, 80]);    // the studies' yardsticks, pinned so a drive-by edit fails loudly (call: tp10/stop30 on real prices, option-check 2026-11-06)
+  assert.deepEqual([EXPECT.stock.win, EXPECT.call.win, EXPECT.spy.win], [82, 58, 80]);    // the studies' yardsticks, pinned so a drive-by edit fails loudly (call: tp10/stop30 on real prices, option-check 2026-11-06)
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

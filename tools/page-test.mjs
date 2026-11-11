@@ -29,7 +29,7 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH 
 let failed = 0;
 const check = (name, ok, detail = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + name + (ok ? '' : '  ' + detail)); if (!ok) failed++; };
 
-async function session(label, prep, cfgPatch = {}) {                        // cfgPatch: what the stubbed bot/config.json says instead of the owner's file
+async function session(label, prep, cfgPatch = {}, routes = null) {         // cfgPatch: the stubbed bot/config.json; routes(page): stubs that must exist BEFORE the first navigation and tab walk (audit 2026-11-10)
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message.slice(0, 160)));
@@ -56,6 +56,7 @@ async function session(label, prep, cfgPatch = {}) {                        // c
     if (p.startsWith('/actions/secrets/') && m === 'PUT') { secretPuts.push({ name: p.split('/').pop(), ...JSON.parse(route.request().postData()) }); return route.fulfill({ status: 201, body: '' }); }
     return json(404, { message: 'Not Found' });
   });
+  if (routes) await routes(page);
   await page.goto(base, { waitUntil: 'networkidle' });
   await page.evaluate(prep);
   await page.reload({ waitUntil: 'networkidle' });
@@ -460,7 +461,7 @@ for (const [fx, label] of [['journal-full.json', 'full journal (stock, CALL, PUT
 }
 journalFixture = null;
 // Seasonality tab (2026-11-05): monthly returns from stubbed Yahoo bars — grid, stats, current month, search persistence
-{ const { page, errors } = await session('seasonality', () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); });
+{ const seaRoutes = async page => {
   await page.route('https://query1.finance.yahoo.com/**', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"chart":{"error":{"description":"Unauthorized"}}}' }));   // Yahoo 401s one host now and then (seen live on ^GSPC, 2026-11-05): every load must fall through to query2
   await page.route('**/data/sea/**', route => route.fulfill({ status: 404, contentType: 'text/plain', body: 'not here' }));   // the nightly site copies stay out of this phase — the live ladder is what's tested
   await page.route('https://query2.finance.yahoo.com/**', route => {
@@ -480,6 +481,11 @@ journalFixture = null;
     }
     route.fulfill({ contentType: 'application/json', body: JSON.stringify({ chart: { result: [{ meta: { gmtoffset: -18000, exchangeTimezoneName: 'America/New_York', regularMarketPrice: +(c * 1.02).toFixed(2), longName: sym === 'SPY' ? 'SPDR S&P 500' : sym, dataGranularity: '1mo' }, timestamp: ts, indicators: { quote: [{ close: cl }] } }] } }) });
   });
+};
+const { page, errors } = await session('seasonality', () => { localStorage.clear(); localStorage.setItem('sd-mkt', JSON.stringify('US')); }, {}, seaRoutes);
+  
+  
+  
   await page.evaluate(() => document.querySelector('#tabs [data-t="SEA"]').click()); await page.waitForTimeout(900);
   const txt = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
   check('seasonality: the grid renders from monthly bars — +10.00% and −5.00% chips, the name, and the Year column', /Monthly performance/.test(txt) && /\+10\.00%/.test(txt) && /−5\.00%/.test(txt) && /SPDR S&P 500/.test(txt), txt.slice(0, 260));

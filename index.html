@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-gUR6CRHPTgSvbbEQMdhXK+Nor+zLSoxa7O98BeU2s1k=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-kX3yaQdlUKornFFbS+jstHrszFNk8Uvn1ImP58wuhWU=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -746,7 +746,8 @@ let tf = load('sd-tf', '3M');
 let cstyle = load('sd-cs', 'candle');
 let pf = {};
 const TFN = {'1M': 22, '3M': 66, 'Max': 999};
-maN = load('sd-man', 50); maT = load('sd-mat', 'SMA'); tab = load('sd-tab', 'US'); if (tab === 'PF') tab = 'PF:p1'; if (tab === 'MAC') tab = 'SEA';   // the Macro tab existed for one day (2026-11-05→06, removed at the owner's request) if (tab === 'US' || tab === 'IN') tab = mkt;
+maN = load('sd-man', 50); maT = load('sd-mat', 'SMA'); tab = load('sd-tab', 'US'); if (tab === 'PF') tab = 'PF:p1';
+if (tab === 'US' || tab === 'IN') tab = mkt;                               // a saved stocks tab opens in the saved market (restored in the 2026-11-10 audit — the Macro-removal comment had swallowed this statement)
 function setMkt(m) {
   mkt = m === 'IN' ? 'IN' : 'US'; dtMk = mkt; opMk = mkt; botMk = mkt; save('sd-mkt', mkt);
   if (tab === 'US' || tab === 'IN') { tab = mkt; save('sd-tab', tab); }
@@ -1009,7 +1010,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1793996109';
+const BUILD_V = '1794364386';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -1041,6 +1042,7 @@ setInterval(() => {
 
 // ---------- Finnhub live streaming (optional, US stocks) ----------
 let fhKey = load('sd-fh', ''), fhWS = null, fhPend = {};
+const fhSeen = new Set();                                                  // symbols the live stream has priced this session — a stale snapshot must not overwrite them (audit 2026-11-10)
 function fhStatus(t) { const el = $('#fhSt'); if (el && t) el.textContent = t; }
 function fhBadge(on) { const el = $('#fhLive'); if (el) el.style.display = on ? '' : 'none'; }
 function fhConnect() {
@@ -1071,7 +1073,7 @@ setInterval(() => {
   const ks = Object.keys(fhPend); if (!ks.length || rfBusy) return;
   const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) return;
   const flash = [];
-  for (const sym of ks) { const px = fhPend[sym]; const row = DATA.rows[sym]; if (row && px > 0) { if (r2n(px) !== row[1]) flash.push([sym, px - row[1]]); row[1] = r2n(px); BASE_PX[sym] = r2n(px); } else setLivePx(sym, px); }
+  for (const sym of ks) { const px = fhPend[sym]; const row = DATA.rows[sym]; if (row && px > 0) { if (r2n(px) !== row[1]) flash.push([sym, px - row[1]]); row[1] = r2n(px); BASE_PX[sym] = r2n(px); fhSeen.add(sym); } else setLivePx(sym, px); }
   fhPend = {};
   const nowS = Math.floor(Date.now() / 1000);
   if (nowS > BASE_STAMP.US.liveAt) { BASE_STAMP.US.liveAt = nowS; BASE_STAMP.US.liveLocal = tzFmt(Date.now(), DATA.markets.US.tz, 'ET') + ' (live)'; BASE_STAMP.US.note = 'US prices are streaming live from Finnhub; indicators use daily bars through the last completed session.'; }
@@ -4226,9 +4228,9 @@ function drillBody(J, key, arg) {
   if (key === 'score') {
     const [ln, win] = (arg || ':').split(':'), sc = J.score || {};
     const laneOf = t => (t.wheel || t.short) ? 'wheel' : t.kind === 'Stock' ? 'stock' : t.und === 'SPY' ? 'spy' : t.kind === 'Call' ? 'call' : 'put';
-    const inWin = c => { const d2 = dET(c.outT); return win === 'week' ? d2 >= (sc.weekOf || '9999') : win === 'month' ? d2.startsWith(sc.monthOf || '9999') : true; };
+    const inWin = c => { const t2 = Date.parse(c.outT); const d2 = dET(Number.isFinite(t2) ? t2 : Date.now()); return win === 'week' ? d2 >= (sc.weekOf || '9999') : win === 'month' ? d2.startsWith(sc.monthOf || '9999') : true; };   // a malformed outT must not kill the sheet (audit 2026-11-10)
     const arr = closed.filter(c => (ln === 'all' || laneOf(c) === ln) && inWin(c));
-    const w2 = arr.filter(c => c.pl > 0), gw = w2.reduce((t, c) => t + c.pl, 0), gl = -arr.filter(c => c.pl <= 0).reduce((t, c) => t + c.pl, 0);
+    const w2 = arr.filter(c => +c.pl > 0), gw = w2.reduce((t, c) => t + (+c.pl || 0), 0), gl = -arr.filter(c => !(+c.pl > 0)).reduce((t, c) => t + (+c.pl || 0), 0);
     const WLAB = { week: 'this week — since Monday ' + (sc.weekOf || '?'), month: 'this month (' + (sc.monthOf || '?') + ')', all: 'the last 60 days' };
     const dr = (sc.drift || []).find(d2 => d2.lane === ln);
     const sum = arr.length ? kv([['Trades', String(arr.length)], ['Won', `${w2.length} of ${arr.length} (${Math.round(w2.length / arr.length * 100)}%)`],
@@ -4428,8 +4430,9 @@ renderAll(); refreshInfo();
 // step with px, so a full-row replace (with BASE_PX + the live stamp) keeps every day-move honest before the first refresh.
 (async () => { try { const r = await fetch('live.json?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return; const j = await r.json(); let n = 0, u = 0;
   for (const k of Object.keys(j.rows || {})) { const w = j.rows[k];
-    if (!DATA.rows[k]) { DATA.rows[k] = w; n++; }
-    else if (Array.isArray(w) && w.length >= 29) { DATA.rows[k] = w.slice(0, 27).concat([w[27], w[28]]); BASE_PX[k] = w[1]; u++; } }   // fresh daily bars, px and all
+    if (!Array.isArray(w) || w.length < 28) continue;                        // a malformed snapshot row never becomes a first-class one (audit 2026-11-10)
+    if (!DATA.rows[k]) { DATA.rows[k] = w; if (w[1] > 0) BASE_PX[k] = w[1]; n++; }   // snapshot-only symbols (commodities, USD→INR) need their BASE_PX too, or analyzeAll() blanks the price they were just given (audit 2026-11-10)
+    else if (w.length >= 29) { DATA.rows[k] = w.slice(0, 27).concat([w[27], w[28]]); if (!fhSeen.has(k)) BASE_PX[k] = w[1]; else DATA.rows[k][1] = BASE_PX[k]; u++; } }   // a price the live stream already set this session stays — the snapshot is up to 10 minutes older (audit 2026-11-10)
   if (u) for (const [code, m] of Object.entries(DATA.markets)) { const la = (j.liveAt && j.liveAt[code]) || 0; if (la > (BASE_STAMP[code].liveAt || 0)) BASE_STAMP[code].liveAt = la; }
   if (u) analyzeAll();                                                       // the day-move and every indicator are recomputed from the fresh daily bars
   if (n || u) renderAll(); } catch (e) {} })();

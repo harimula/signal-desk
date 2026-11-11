@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 import { sma, rsi2, liveSignal, rsi2Trigger, rsi2ExitLevel, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit, profitExit, profitExitLevel, marketAbove200 } from './strategy.mjs';
 import { buildJournal, optionEvents } from './journal.mjs';
-import { computeScore, scoreText, driftText, scoreDue, weekMonday, monthDue, monthScore, monthText, monthOf, prevMonthOf } from './scorecard.mjs';
+import { computeScore, scoreText, driftText, scoreDue, scoreCatchupAt, monthDue, monthScore, monthText, monthOf, prevMonthOf } from './scorecard.mjs';
 import { guard, loadEvents, symbolRisk } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk, sideDayPl } from './risk.mjs';
 import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
@@ -739,7 +739,9 @@ function alertDetail(body) {
   const unit = opt ? '/contract' : '';
   return ` \u00b7 bought $${(avg * mult).toFixed(2)}${unit}, selling \u2248$${(cur * mult).toFixed(2)}${unit} \u2192 ${pl >= 0 ? '+' : ''}${money(pl)} (${plpc >= 0 ? '+' : ''}${plpc.toFixed(1)}%)`;
 }
-const send = async (body, why) => { why = why + alertDetail(body); const dk = (/^sd-y/.test(body.client_order_id || '') || (/^sd-wb-/.test(body.client_order_id || '') && body.type === 'market')) && body.side === 'buy' ? body.client_order_id : body.side + ':' + body.symbol + ':' + body.type, t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); const line = (body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why; act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (DRY) { alerts.push(line); return { dry: true }; }
+const send = async (body, why) => { why = why + alertDetail(body);
+  // the dedupe key: a sell limit carries its price, so a take-profit REPLACED at a new price is not a duplicate (audit 2026-11-10)
+  const dk = (/^sd-y/.test(body.client_order_id || '') || (/^sd-wb-/.test(body.client_order_id || '') && body.type === 'market')) && body.side === 'buy' ? body.client_order_id : body.side + ':' + body.symbol + ':' + body.type + (body.side === 'sell' && body.limit_price ? ':' + body.limit_price : ''), t0 = placed.get(dk); if (t0 && Date.now() - t0 < (body.side === 'buy' ? 6 * 3600e3 : 90e3)) { console.log('duplicate suppressed:', dk); return null; } placed.set(dk, Date.now()); const line = (body.side === 'buy' ? '\ud83d\udfe2 ' : '\ud83d\udd34 ') + why; act(why + ' — ' + body.side.toUpperCase() + ' ' + body.qty + ' ' + body.symbol + (body.limit_price ? ' @ ' + body.limit_price : ' at market')); if (DRY) { alerts.push(line); return { dry: true }; }
   return T('/v2/orders', { method: 'POST', body: JSON.stringify(body) }).then(r => { if (CFG.alertOnFill) fillWhy.set(body.client_order_id, line); else alerts.push(line); return r; }).catch(e => { const sure = e && e.status >= 400 && e.status < 500; if (sure) placed.delete(dk); act(`Order ${sure ? 'NOT accepted' : 'may not have arrived (no answer)'}: ${body.side} ${body.qty} ${body.symbol} — ${String(e.message || e).slice(0, 90)}`); if (body.side === 'sell') return 'refused'; throw e; }); };   // only a clear 4xx refusal frees the order for a retry: a timed-out POST may have reached the broker   // a refused sell must not stop the rest of the cycle (other positions still need managing); it is retried next check   // the phone alert goes out only for an accepted order; a rejected one must not block its own retry
 
 // Closing a position at market, safely: cancel its resting sell orders and wait until the broker confirms each one is
@@ -779,9 +781,12 @@ async function optTakeProfit(p, sells, qty, avg, noSameDay) {
   if (noSameDay || !/^sd-/.test(cidOf(leg))) return;                                      // an order placed by hand is the owner's: left alone
   const short = (+leg.qty || 0) - (+leg.filled_qty || 0) < qty - 1e-9;                     // placed before the rest of a buy filled in pieces: it would sell only part
   if (!short && Math.abs(+leg.limit_price - tpPx) <= tickStep(tpPx, p.symbol) + 0.005) return;   // resting at today's setting (give or take one price step), for the whole position
-  if (tpCancelled.has(leg.id)) return; tpCancelled.add(leg.id);
+  if (tpCancelled.has(leg.id)) return;
+  if (!DRY) {
+    try { await T('/v2/orders/' + leg.id, { method: 'DELETE' }); } catch (e) { return; }   // the cancel did not go through: tried again next check, nothing claimed (audit 2026-11-10 — it used to be marked done before the DELETE)
+  }
+  tpCancelled.add(leg.id);
   act(`${p.symbol} take-profit order at ${leg.limit_price} ${short ? 'covers only part of the position' : 'is from an older setting'} — cancelled; the new one at +${OPT_TP}% (${tpPx}) follows`);
-  if (!DRY) await T('/v2/orders/' + leg.id, { method: 'DELETE' }).catch(() => {});
 }
 // ---- time in New York ----
 // Every order of the last N days, oldest pages too: one call returns at most 500, and a busy account (day trades, SPY,
@@ -1054,7 +1059,11 @@ export async function tgPollCycle() { try { return await tgPoll(tgCommand); } ca
 
 let sweepAt = 0;
 async function run() {
-  // ---- kill switch: the very first thing, before any other broker call; every delete on its own; the SPY sleeve disarmed ----
+  if (!memRestored) {                                                      // the previous run's memory comes FIRST — before the kill switch and anything that can throw, so no later journal write can clobber real stamps with blanks (audit 2026-11-10)
+    memRestored = true;
+    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.wheel && pv.mem.wheel.opts) wheelMem = pv.mem.wheel; if (pv && pv.mem && pv.mem.fillMark) fillMark = Math.max(fillMark, Date.parse(pv.mem.fillMark) || 0); if (pv && pv.mem && pv.mem.scoreWk) scoreWk = pv.mem.scoreWk; if (pv && pv.mem && pv.mem.scoreMo) scoreMo = pv.mem.scoreMo; if (pv && pv.mem && pv.mem.driftSaid) driftSaid = { ...pv.mem.driftSaid }; if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.spyLevels && pv.mem.spyLevels.day === TODAY) spyLevels = pv.mem.spyLevels; if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) { memRestored = false; }
+  }
+  // ---- kill switch: before any other broker call; every delete on its own; the SPY sleeve disarmed ----
   if (!READONLY && stopSet()) {
     act('STOP file found — cancelling all orders and closing everything.');
     lastSpy = null; spyPendingUntil = Date.now() + 10 * 60000;
@@ -1068,10 +1077,6 @@ async function run() {
   await loadCalendar();
   if (!lastClock || Date.now() - (lastClock._at || 0) > 30000) { lastClock = await T('/v2/clock'); lastClock._at = Date.now();
     try { const nc = lastClock.next_close, ep = nc ? etParts(new Date(nc)) : null; if (ep && ep.year + ep.month + ep.day === TODAY) CLOSE = (+ep.hour % 24) * 60 + +ep.minute; } catch (e) {}   // the broker's clock knows early-close days
-  }
-  if (!memRestored) {                                                      // first cycle of this process: pick up today's day-state from the previous run's journal
-    memRestored = true;
-    try { const pv = await previousJournal(); if (pv && pv.mem && pv.mem.wheel && pv.mem.wheel.opts) wheelMem = pv.mem.wheel; if (pv && pv.mem && pv.mem.fillMark) fillMark = Math.max(fillMark, Date.parse(pv.mem.fillMark) || 0); if (pv && pv.mem && pv.mem.scoreWk) scoreWk = pv.mem.scoreWk; if (pv && pv.mem && pv.mem.scoreMo) scoreMo = pv.mem.scoreMo; if (pv && pv.mem && pv.mem.driftSaid) driftSaid = { ...pv.mem.driftSaid }; if (pv && pv.mem && pv.mem.day === TODAY) { Object.assign(lastDayPx, pv.mem.lastDayPx || {}); if (pv.mem.userPause) userPause = true; for (const k of pv.mem.haltSaid || []) haltSaid.add(k); if (pv.mem.spyLevels && pv.mem.spyLevels.day === TODAY) spyLevels = pv.mem.spyLevels; if (pv.mem.userPause) act('Restarted: still paused from Telegram (/resume to allow new entries)'); } } catch (e) {}
   }
   const clock = lastClock;
   if (READONLY) return;                                                    // journal only: nothing is placed, changed or cancelled
@@ -1338,7 +1343,13 @@ async function run() {
       const h = MINS >= CLOSE - 10 && px ? held(und, day8) : 0;          // the closing-time rule, from the day after the buy
       const closeWhy = !(h > 0) ? null : CFG.optExit === 'target' ? (h >= CFG.maxHold ? `held ${h} sessions — selling the ${K} (max hold)` : null)   // 'target': no bounce exit, only take-profit, stop, max hold, expiry
         : (() => { const x = (K === 'PUT' ? rsi2ShortExit : rsi2Exit)(completed(bars0, und).map(b => b.c), px, h, CFG.maxHold); return x.exit ? `stock ${x.why} — selling the ${K}` : null; })();
-      if (plpc <= -CFG.optStop) await out(`${p.symbol} ${plpc.toFixed(0)}% — option stop`);
+      let stopFire = plpc <= -CFG.optStop, stopPl = plpc, bidOk = false;
+      if (stopFire && !DRY) {                                            // confirm on a fresh quote: the position's mark can be a stale print or the mid of a wide market, and the stop sell is unpriced. No quote at all → sell anyway, fail-safe (audit 2026-11-10)
+        const qq = ((await D(`/v1beta1/options/quotes/latest?symbols=${p.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[p.symbol];
+        const bidPl = qq && qq.bp > 0 && avg > 0 ? (qq.bp / avg - 1) * 100 : null;
+        if (bidPl != null) { stopPl = bidPl; bidOk = true; if (bidPl > -CFG.optStop) { stopFire = false; act(`${p.symbol}: the mark shows ${plpc.toFixed(0)}% but the live bid is ${bidPl.toFixed(0)}% — stop not confirmed, holding`, 'stophold:' + p.symbol + ':' + TODAY); } }
+      }
+      if (stopFire) await out(`${p.symbol} ${stopPl.toFixed(0)}% — option stop${bidOk ? ' (bid-confirmed)' : ''}`);
       else if (halt[kindOf(p.symbol)] && CFG.optExit !== 'target') await out(`${p.symbol} ${SPLIT ? NM[kindOf(p.symbol)].one + ' daily loss limit' : 'daily loss cap'} hit — closing options`);   // under 'target' a loss limit only stops new trades: the study held each trade to its own exits
       else if (G.closeOptionsAt != null && MINS >= G.closeOptionsAt) await out(`${p.symbol} Fed decision in minutes — closing options`);
       else if (daysToExp <= 3) await out(`${p.symbol} ${daysToExp} days to expiry — out before time decay accelerates`);
@@ -1471,7 +1482,7 @@ async function run() {
     const src = ord && /^sd-s-/.test(cid(ord)) ? ord : hist.find(o => o.side === 'buy' && cid(o).startsWith('sd-s-' + sym + '-'));
     return src ? +cid(src).split('-')[4] / 100 : null;
   };
-  let heat = openRisk({ positions: positions.filter(p => !isWheelPos(p.symbol)), orders: liveOrders.filter(o => !isWheelId(cid(o))), stopFor, optStopFor: sym => (isSpyOption(sym) ? CFG.spyStop : CFG.optStop) / 100 });   // the wheel's money is its own share, set aside in full
+  let heat = openRisk({ positions: positions.filter(p => !isWheelPos(p.symbol)), orders: liveOrders.filter(o => !isWheelId(cid(o))), stopFor, optStopFor: sym => Math.max((isSpyOption(sym) ? CFG.spyStop : CFG.optStop) / 100, 0.5) });   // at least half the premium counts: gaps go through tight stops (audit 2026-11-10); the wheel's money is its own share, set aside in full
   const heatCap = equity * MAX_HEAT / 100;
   const undOf = s => isOpt(s) ? OPT_RE.exec(s)[1] : s;
   const sectorCount = {};
@@ -1540,12 +1551,12 @@ async function run() {
       const c = cs.filter(x => x.expiration_date === ex).sort((a, b) => Math.abs(+a.strike_price - s.px) - Math.abs(+b.strike_price - s.px))[0];
       const q = ((await D(`/v1beta1/options/quotes/latest?symbols=${c.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[c.symbol];
       if (!q || !(q.ap > 0) || !(q.bp > 0)) { skip(`${c.symbol}: no live quote — skipped`); continue; }
-      const maxSpr = Math.min(0.2, CFG.optStop / 200, OPT_TP / 100);    // the spread must be under half the stop (or the stop fires on the spread alone) and under the take-profit (or the spread eats the target)
-      if ((q.ap - q.bp) / q.ap > maxSpr) { skip(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over ${+(maxSpr * 100).toFixed(1)}% for a +${OPT_TP}% take-profit / ${CFG.optStop}% stop) — skipped`); continue; }
+      const maxSpr = Math.min(0.15, CFG.optStop / 200, OPT_TP / 200);   // the spread must be under half the stop (or the stop fires on the spread alone) and under HALF the take-profit — a spread equal to the target eats it whole (tightened in the 2026-11-10 audit)
+      if ((q.ap - q.bp) / q.ap >= maxSpr) { skip(`${c.symbol}: spread too wide (${q.bp}/${q.ap}, over ${+(maxSpr * 100).toFixed(1)}% for a +${OPT_TP}% take-profit / ${CFG.optStop}% stop) — skipped`); continue; }
       const lim = tick(Math.min(q.ap, (q.ap + q.bp) / 2 * 1.03), c.symbol);
       const qty = optionQty({ equity, riskPct: OPT_RISK_PCT * G.budget, price: lim, budget: slBudget(kind), stopPct: CFG.optStop });
       if (qty < 1) { skip(`${c.symbol}: 1 contract ($${Math.round(lim * 100)}) is above this trade's money budget — skipped${capNote(kind)}`); continue; }
-      const addO = qty * lim * 100 * CFG.optStop / 100;                 // money lost if it reaches its stop
+      const addO = qty * lim * 100 * Math.max(CFG.optStop, 50) / 100;   // at least half the premium counts as heat — an overnight gap goes well past a tight stop (audit 2026-11-10)
       if (heat + addO > heatCap) { skip(`${c.symbol} skipped — total risk would exceed ${MAX_HEAT}% of the account`); continue; }
       await send({ symbol: c.symbol, qty: String(qty), side: 'buy', type: 'limit', limit_price: String(lim), time_in_force: 'day',
         client_order_id: `${kind === 'put' ? 'sd-p-' : 'sd-q-'}${c.symbol}-${TODAY}-${qty}-${rid()}` }, kind === 'put' ? `${s.sym} PUT on RSI-2 pop (RSI-2 ${s.r2}, below 200-day ${s.s200})` : `${s.sym} CALL on RSI-2 dip (RSI-2 ${s.r2})`);
@@ -1629,28 +1640,36 @@ async function writeJournal() {
   const { closed, open } = buildJournal(fills.concat(optEv.fills), positions, optEv.events);
   for (const o of open) if (wheelHas(o.sym)) o.wheel = true;                                     // the wheel's sold options and the shares a put delivered
   const prev = await previousJournal();
-  // Weekly scorecard + drift alarm: per-lane results graded against each rule's own study (bot/scorecard.mjs).
+  // Weekly/monthly scorecard + drift panel (bot/scorecard.mjs). The Telegram sends sit AFTER the lock check below:
+  // a locked journal cannot persist the send stamps, so it must not send at all — it would repeat every session.
   let score = prev.score || null;
-  try {
-    score = computeScore(closed, Date.now());
-    if (scoreDue(Date.now(), scoreWk)) {
-      scoreWk = weekMonday(Date.now());
-      if (tgOn()) await tgSend(scoreText(score)).catch(e => console.log('scorecard telegram failed', e.message));
-      act('Weekly scorecard sent — ' + (score.drift.length ? score.drift.length + ' lane' + (score.drift.length > 1 ? 's' : '') + ' drifting below study' : 'every lane inside its tested range'));
-    }
-    if (monthDue(Date.now(), scoreMo)) {                                      // the finished month's summary, on the new month's first session write
-      scoreMo = monthOf(Date.now());
-      const ms = monthScore(closed, prevMonthOf(Date.now()), Date.now());
-      if (tgOn()) await tgSend(monthText(ms)).catch(e => console.log('monthly scorecard telegram failed', e.message));
-      act('Monthly scorecard sent — ' + (ms.total.n ? ms.total.n + ' closed trades' : 'no closed trades') + ' in ' + ms.ym);
-    }
-    for (const d of score.drift) if (driftSaid[d.lane] !== score.weekKey) {   // at most one alarm per lane per week
-      driftSaid[d.lane] = score.weekKey;
-      if (tgOn()) await tgSend(driftText(d)).catch(e => console.log('drift telegram failed', e.message));
-      act(`Drift flag: ${d.lane} lane won ${Math.round(d.winPct)}% of its last ${d.n} vs ~${d.expWin}% in its study (profit factor ${d.pf})`, 'drift-' + d.lane + '-' + score.weekKey);
-    }
-  } catch (e) { console.log('scorecard skipped:', e.message); }
+  try { score = computeScore(closed, Date.now()); } catch (e) { console.log('scorecard skipped:', e.message); }
   if (journalLocked && process.env.JOURNAL_RESET !== '1') { const k = 'jlock'; if (!haltSaid.has(k)) { haltSaid.add(k); act('Journal NOT saved: ' + journalLocked + '. Trading is unaffected. Fix the JOURNAL_KEY secret (or set JOURNAL_RESET=1 once to start a new journal).'); } console.log('journal not written:', journalLocked); return; }
+  // Scorecard sends: only with the previous journal's stamps restored (never on blanks), and only with Telegram
+  // configured — a stamp advanced without a real send swallows that message for good (the journal-refresh workflow
+  // runs without Telegram secrets). Each stamp moves only once its message was actually handed to Telegram, so a
+  // Telegram hiccup retries on the next journal write instead of losing the week (audit 2026-11-10).
+  if (score && memRestored && tgOn()) {
+    const wkAt = scoreDue(Date.now(), scoreWk, CLOSE) ? Date.now() : scoreCatchupAt(Date.now(), scoreWk);
+    if (wkAt) { try {
+      const sc2 = Math.abs(wkAt - Date.now()) < 60000 ? score : computeScore(closed, wkAt);
+      await tgSend(scoreText(sc2));
+      scoreWk = sc2.weekKey;
+      act('Weekly scorecard sent — ' + (sc2.drift.length ? sc2.drift.length + ' lane' + (sc2.drift.length > 1 ? 's' : '') + ' drifting below study' : 'every graded lane inside its tested range'));
+    } catch (e) { console.log('scorecard telegram failed', e.message); } }
+    if (!scoreMo) { scoreMo = monthOf(Date.now()); }                       // a fresh journal starts its monthly clock quietly — there is no history to summarize
+    else if (monthDue(Date.now(), scoreMo)) { try {
+      const ms = monthScore(closed, prevMonthOf(Date.now()), Date.now());
+      await tgSend(monthText(ms));
+      scoreMo = monthOf(Date.now());
+      act('Monthly scorecard sent — ' + (ms.total.n ? ms.total.n + ' closed trades' : 'no closed trades') + ' in ' + ms.ym);
+    } catch (e) { console.log('monthly scorecard telegram failed', e.message); } }
+    for (const d of score.drift) if (driftSaid[d.lane] !== score.weekKey) { try {
+      await tgSend(driftText(d));
+      driftSaid[d.lane] = score.weekKey;                                     // at most one alarm per lane per week
+      act(`Drift flag: ${d.lane} lane won ${Math.round(d.winPct)}% of its last ${d.n} vs ~${d.expWin}% in its study (profit factor ${d.pf})`, 'drift-' + d.lane + '-' + score.weekKey);
+    } catch (e) { console.log('drift telegram failed', e.message); } }
+  }
   if (!journalActs) journalActs = (prev.acts || []).filter(a => a && a.t && a.m);
   for (const a of acts.slice(actsFlushed)) if (!journalActs.some(b => sameAct(a, b))) journalActs.push(a);   // append only what is new, once
   actsFlushed = acts.length; journalActs = journalActs.slice(-80);

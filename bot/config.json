@@ -83,7 +83,7 @@
  "rsiThreshold": 25,
  "maxHold": 15,
  "entryEnd": "15:30",
- "optTakeProfit": 10,
+ "optTakeProfit": 15,
  "optStop": 30,
  "holdFloor": 25,
  "stockTp": 20,
@@ -131,7 +131,7 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-11-06T19:02:15.077Z",
+ "updatedAt": "2026-11-11T03:30:00.000Z",
  "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0

@@ -25,11 +25,13 @@ export function stockQty({ equity, riskPct, entry, stop, budget }) {
   return Math.max(0, Math.min(Math.floor(budget / entry), Math.floor(equity * riskPct / 100 / perShare)));
 }
 
-// Contracts so that the -50% option stop loses at most riskPct% of equity — and never more than the budget.
-export function optionQty({ equity, riskPct, price, budget, stopPct = 50 }) {          // stopPct: the option stop in force (a wider stop → fewer contracts for the same risk)
+// Contracts sized on the WHOLE premium: an option can gap far through its stop overnight, so the risk budget assumes
+// the premium can be lost in full. (Audit 2026-11-10: sizing from the stop meant the owner's 90→30 stop change nearly
+// tripled the contracts per trade, and heat under-counted the overnight tail by the same factor.)
+export function optionQty({ equity, riskPct, price, budget }) {
   if (!(price > 0)) return 0;
   const perContract = price * 100;
-  return Math.max(0, Math.min(Math.floor(budget / perContract), Math.floor(equity * riskPct / 100 / (perContract * Math.min(1, Math.max(0.05, stopPct / 100))))));
+  return Math.max(0, Math.min(Math.floor(budget / perContract), Math.floor(equity * riskPct / 100 / perContract)));
 }
 
 // Market regime from SPY daily closes (oldest -> newest, completed sessions only).
@@ -51,8 +53,9 @@ export function lossStreak(closed) {
   return n;
 }
 
-// Money at risk right now: distance to each stop (stocks) and the -50% stop (options), plus pending entries.
-export function openRisk({ positions, orders, stopFor, optStopFor = () => 0.5 }) {   // optStopFor(symbol): the fraction of the premium lost at that option's stop
+// Money at risk right now: distance to each stop (stocks) and the whole premium (options — gaps go through stops),
+// plus pending entries.
+export function openRisk({ positions, orders, stopFor, optStopFor = () => 1 }) {   // optStopFor(symbol): the premium fraction counted at risk (1 = all of it, the default since the 2026-11-10 audit)
   let r = 0;
   for (const p of positions) {
     const q = Math.abs(+p.qty), avg = +p.avg_entry_price;
