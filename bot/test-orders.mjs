@@ -550,6 +550,18 @@ check('earnings calendar: a report 11 days out lets the stock buy through but bl
   assert.ok(!EC3.options.length, JSON.stringify(EC3.options));
   assert.ok((EC3.acts || []).some(m => /DIP CALL skipped \u2014 reports earnings 2026-11-03/.test(m)), JSON.stringify((EC3.acts || []).filter(m => /DIP/.test(m))));
 });
+const EC5 = run({ stocks: true, options: true, newsGuard: true, optHold: 5 }, { earnCal: { at: '2026-10-23T01:00:00Z', dates: { DIP: '2026-11-03' } } });
+check('earnings horizon follows the option clock (audit #6): optHold 5 holds ~8 days, so a report 11 days out blocks nothing', () => {
+  assert.ok(EC5.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(EC5.orders));
+  assert.ok(EC5.options.some(o => /^DIP\d{6}C/.test(o.symbol)), JSON.stringify(EC5.options) + JSON.stringify((EC5.acts || []).filter(m => /DIP/.test(m))));
+});
+const EC6 = run({ stocks: true, options: true, newsGuard: true, optHold: 5 }, { earnCal: { at: '2026-10-23T01:00:00Z', dates: { DIP: '2026-10-31' } } });
+check('earnings horizon follows the option clock: a report 8 days out blocks the CALL but not the stock, and the watch row carries optHold', () => {
+  assert.ok(EC6.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(EC6.orders));
+  assert.ok(!EC6.options.length, JSON.stringify(EC6.options));
+  assert.ok((EC6.acts || []).some(m => /DIP CALL skipped \u2014 reports earnings 2026-10-31/.test(m)), JSON.stringify((EC6.acts || []).filter(m => /DIP/.test(m))));
+  assert.equal(EC6.watch.optHold, 5, JSON.stringify(EC6.watch.optHold));
+});
 const EC4 = run({ stocks: true, options: true, newsGuard: true }, {});
 check('earnings calendar missing: buys go on as before, and the bot says once that the calendar is missing', () => {
   assert.ok(EC4.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(EC4.orders));
@@ -929,9 +941,13 @@ check('audit: a take-profit buy-back cancelled at the broker by hand is placed a
 });
 const A4 = run({ ...WHO, newsGuard: true }, { ...WIN, symNews: [{ headline: 'DIP to report Q3 results on Thursday', symbols: ['DIP'], created_at: '2026-10-19T13:30:00Z', source: 't', summary: '' }] });
 const A4e = run({ ...WHO, newsGuard: true }, { ...WIN, earnCal: { at: '2026-10-19T01:00:00Z', dates: { DIP: '2026-10-24' } } });
-check('audit 2026-11-11: the wheel sells no new put on a stock that reports within 7 days (earnings calendar)', () => {
+check('audit 2026-11-11: the wheel sells no new put on a stock that reports before the put expires (earnings calendar)', () => {
   assert.ok(!A4e.orders.some(x => /^sd-wp-DIP/.test(x.client_order_id)), JSON.stringify(A4e.orders.map(o => o.client_order_id)));
   assert.ok((A4e.acts || []).some(m => /DIP — reports earnings 2026-10-24/.test(m)), JSON.stringify((A4e.acts || []).filter(m => /DIP/.test(m))));
+});
+const A4f = run({ ...WHO, newsGuard: true }, { ...WIN, earnCal: { at: '2026-10-19T01:00:00Z', dates: { DIP: '2026-11-25' } } });
+check('audit #6: a report AFTER the put\'s expiry (2026-11-20) does not block the wheel sale', () => {
+  assert.ok(A4f.orders.some(x => /^sd-wp-DIP/.test(x.client_order_id)), JSON.stringify(A4f.orders.map(o => o.client_order_id)) + JSON.stringify((A4f.acts || []).filter(m => /DIP/.test(m))));
 });
 check('audit: a wheel candidate with earnings news is skipped even when the shared news cache has nothing on it (scan mode)', () => {
   assert.ok(!A4.orders.some(x => /^sd-wp-DIP/.test(x.client_order_id)), JSON.stringify(A4.orders.map(o => o.client_order_id)));

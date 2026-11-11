@@ -8,22 +8,32 @@ import fs from 'node:fs';
 import { SECTOR } from '../bot/risk.mjs';
 import { DEFAULT_SYMBOLS } from '../bot/config.mjs';
 
-const cfgSyms = (() => { try { return JSON.parse(fs.readFileSync('bot/config.json', 'utf8')).symbols || []; } catch (e) { void e; return []; } })();
-const boardSyms = (() => { try { return JSON.parse(fs.readFileSync('symbols.json', 'utf8')); } catch (e) { void e; return []; } })();
-const syms = [...new Set([...Object.keys(SECTOR), ...DEFAULT_SYMBOLS, ...cfgSyms, ...boardSyms])]
-  .filter(s => /^[A-Z.]{1,6}$/.test(s)).sort().slice(0, 600);
+const readJson = (f, fb) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { void e; return fb; } };
+const cfgSyms = readJson('bot/config.json', {}).symbols || [];
+const boardSyms = readJson('symbols.json', []);
+const scanSyms = readJson('bot/scan.json', {}).symbols || [];                   // the market scan's own 200 most-active (audit 2026-11-11: 24 of them were in no other list — the guard must cover what the bot actually buys)
+// Funds and one delisted stock have no earnings and 404 every night — asking anyway wastes the rate budget and buries a
+// real failure in a 25-deep noise floor (audit 2026-11-11). India's .NS symbols belong to earnings-in.mjs, not here.
+const SKIP = new Set(['SPY', 'QQQ', 'IWM', 'DIA', 'VOO', 'VTI', 'TLT', 'GLD', 'IAU', 'SLV', 'USO', 'UNG', 'GDX', 'SMH', 'IGV', 'TQQQ', 'SOXL', 'XLC', 'XLE', 'XLF', 'XLI', 'XLP', 'XLV', 'XLY', 'X']);
+const syms = [...new Set([...Object.keys(SECTOR), ...DEFAULT_SYMBOLS, ...cfgSyms, ...boardSyms, ...scanSyms])]
+  .filter(s => /^[A-Z.]{1,6}$/.test(s) && !/\.(NS|BO)$/.test(s) && !SKIP.has(s)).sort().slice(0, 600);
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 let auth = null;                                                            // Yahoo's cookie+crumb, same dance as tools/sea-fetch.mjs (quoteSummary 401s without it)
-async function getAuth() {
-  try {
-    const r1 = await fetch('https://fc.yahoo.com/', { headers: { 'user-agent': UA }, redirect: 'manual' });
-    const cookie = String(r1.headers.get('set-cookie') || '').split(';')[0];
-    if (!cookie) return null;
-    const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', { headers: { 'user-agent': UA, cookie } });
-    const crumb = (await r2.text()).trim();
-    return r2.ok && crumb && crumb.length <= 32 && !crumb.includes('<') ? { cookie, crumb } : null;
-  } catch (e) { void e; return null; }
+async function getAuth() {                                                  // two tries, 8s cap per request: one blackholed request must not forfeit the night (audit 2026-11-11)
+  for (let a = 0; a < 2; a++) {
+    const t8 = () => AbortSignal.timeout(8000);
+    try {
+      const r1 = await fetch('https://fc.yahoo.com/', { headers: { 'user-agent': UA }, redirect: 'manual', signal: t8() });
+      const cookie = String(r1.headers.get('set-cookie') || '').split(';')[0];
+      if (!cookie) continue;
+      const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', { headers: { 'user-agent': UA, cookie }, signal: t8() });
+      const crumb = (await r2.text()).trim();
+      if (r2.ok && crumb && crumb.length <= 32 && !crumb.includes('<')) return { cookie, crumb };
+    } catch (e) { void e; }
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  return null;
 }
 async function pull(s) {
   const e = encodeURIComponent(s), cr = auth ? '&crumb=' + encodeURIComponent(auth.crumb) : '';
@@ -36,8 +46,10 @@ async function pull(s) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const x = (await r.json()).quoteSummary.result[0];
       const ed = (((x || {}).calendarEvents || {}).earnings || {}).earningsDate || [];
-      const raw = ed.map(d => d && d.raw).filter(v => v > 0).sort()[0];     // a range of dates: the earliest is the risk
-      return raw ? new Date(raw * 1000).toISOString().slice(0, 10) : '';    // '' = answered, but no date scheduled
+      // The earliest date that is not already past: right after a report Yahoo can list [the past actual, the next
+      // scheduled] — the past one must not shadow the real risk (audit 2026-11-11). Past-only = nothing scheduled.
+      const days = ed.map(d => d && d.raw > 0 ? new Date(d.raw * 1000).toISOString().slice(0, 10) : '').filter(Boolean).sort();
+      return days.find(d => d >= new Date().toISOString().slice(0, 10)) || '';   // '' = answered, nothing scheduled ahead
     } catch (e2) { err = String((e2 && e2.message) || e2); } finally { clearTimeout(tm); }
   }
   throw new Error(err || 'no data');
@@ -63,8 +75,18 @@ for (let pass = 1; pass <= 3 && left.length; pass++) {
     }
   }));
   left = fails;
+  if (got) write();                                                         // publish after every pass: a timed-out night keeps what it got (audit 2026-11-11)
 }
 console.log('answered', got, 'of', syms.length, '· with a date', Object.keys(dates).length, '· fail', left.length);
-fs.mkdirSync('data', { recursive: true });
-fs.writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), dates, report: { asked: syms.length, answered: got, fail: left.length, crumb: !!auth, why } }, null, 1));
-if (!got) process.exit(1);                                                  // nothing answered at all: fail loudly, keep yesterday's file
+function write() {
+  // Mass-empty guard: if a Yahoo regression answers 200-with-nothing for everything, do not blank a healthy calendar on a
+  // green run — keep the previous future dates and say so in the report (audit 2026-11-11).
+  const prevFuture = Object.entries(prev).filter(([, d]) => d >= today), kept = [];
+  if (prevFuture.length >= 40 && Object.keys(dates).length < prevFuture.length / 2) {
+    for (const [s, d] of prevFuture) if (!dates[s]) { dates[s] = d; kept.push(s); }
+  }
+  fs.mkdirSync('data', { recursive: true });
+  fs.writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), dates, report: { asked: syms.length, answered: got, fail: left.length, crumb: !!auth, kept: kept.length || undefined, why } }, null, 1));
+}
+if (!got) { console.log('nothing answered at all — keeping yesterday\'s file untouched'); process.exit(1); }   // truly nothing: no write, the bot's staleness warning can see the file age
+write();

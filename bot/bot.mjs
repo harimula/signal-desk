@@ -633,7 +633,8 @@ async function wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, clai
           const p0 = (px[x] || {}).p; if (!(p0 >= CFG.wheelMinPrice && p0 <= CFG.wheelMaxPrice) || p0 * (1 - CFG.wheelOtmPct / 100) * 100 > left) continue;
           if ((wheelSkip.get('p:' + x) || 0) > Date.now()) continue;
           if (bars) { const C = completed(bars, x); if (trendThrough(C.map(b => b.d), C.map(b => b.c), tDays, today).ok !== true) continue; }   // the stock too, before each day of the window so far
-          const risk = CFG.newsGuard ? symbolRisk(x, newsCache.syms) || symbolRisk(x, await wheelNews(x)) || earningsSoon(x, earnCal, ymdDash(Date.now()), 7) : null; if (risk) { skipW('p:' + x, `${x} — ${risk}`, 60 * 60000); continue; }
+          const putLife = sellExp ? Math.max(1, Math.round((Date.parse(sellExp) - Date.parse(ymdDash(Date.now()))) / 864e5)) : 7;   // the put lives until its expiry — a report anywhere inside that can assign through a gap (audit 2026-11-11)
+          const risk = CFG.newsGuard ? symbolRisk(x, newsCache.syms) || symbolRisk(x, await wheelNews(x)) || earningsSoon(x, earnCal, ymdDash(Date.now()), putLife) : null; if (risk) { skipW('p:' + x, `${x} — ${risk}`, 60 * 60000); continue; }
           looked++;
           const c = await wheelContract(x, 'put', sellExp, p0); if (!c.ok) { skipW('p:' + x, c.why, c.retry); continue; }
           if (c.K * 100 > left) continue;
@@ -1159,7 +1160,7 @@ async function run() {
     if (!lastEv || Date.parse(lastEv) - Date.parse(td) < 45 * 864e5) { const k = 'cal:' + td; if (!haltSaid.has(k)) { haltSaid.add(k); act('Calendar warning: the economic calendar (events.json) ' + (lastEv ? 'ends ' + lastEv : 'is empty') + ' — add the next dates or the news/event guard stops seeing Fed days and CPI/jobs reports.'); } } }
   earnCal = CFG.newsGuard ? loadEarnings() : null;               // nightly US earnings calendar: new buys step aside near a scheduled report
   if (CFG.newsGuard) { const at = earnCal && Date.parse(earnCal.at), k2 = 'earncal:' + ymdDash(Date.now());
-    if (!(at > Date.now() - 5 * 864e5) && !haltSaid.has(k2)) { haltSaid.add(k2); act('Calendar warning: the US earnings calendar (data/earnings-us.json) is ' + (earnCal ? 'stale' : 'missing') + ' \u2014 until the nightly earnings-us job writes it, new buys are checked against earnings headlines only.'); } }
+    if (!(at > Date.now() - 5 * 864e5) && !haltSaid.has(k2)) { haltSaid.add(k2); act('Calendar warning: the US earnings calendar (data/earnings-us.json) is ' + (earnCal ? 'stale \u2014 its dates still block new buys, but reports scheduled since ' + String(earnCal.at).slice(0, 10) + ' are missing; check the earnings-us job' : 'missing \u2014 new buys are checked against earnings headlines only until the nightly earnings-us job writes it') + '.'); } }
   const G = lastGuard = guard({ events: CFG.eventGuard ? loadEvents() : [], todayDash: ymdDash(Date.now()), mins: MINS, headlines: CFG.newsGuard ? newsCache.market : [], spyPct });
   G.spyPct = spyPct; G.newsOk = newsCache.ok;
   const RG = regimeOf(spyPrev && spyPrev.closes);
@@ -1167,8 +1168,9 @@ async function run() {
   // real money starts small: every budget and risk figure is scaled by the live size setting (paper is always 100%)
   const liveScale = CFG.mode === 'live' ? CFG.liveSizePct / 100 : 1;
   if (liveScale < 1) { G.budget = (G.budget || 1) * liveScale; G.reasons.push(`Live trading at ${CFG.liveSizePct}% of the paper size (ramp-up setting)`); }
-  // market filter (setting): no new dip buys — stocks or CALLs — while SPY's last close is below its 200-day average. With the
-  // first-profitable-close exit this cut the worst fall of the 33-year test from -40% to -18% (tools/winrate-study.mjs).
+  // market filter (setting): no new dip buys — stocks or CALLs — while SPY's last close is below its market line (mktAvg:
+  // the 200-day average, or the faster 100-day since 2026-11-11). With the first-profitable-close exit the 200-day cut the
+  // worst fall of the 33-year test from -40% to -18%; the 100-day measured better still on 2016+ data (tools/winrate-study.mjs).
   const MF = marketAbove200(spyPrev && spyPrev.closes, CFG.mktAvg || 200);
   G.mkt = MF; G.mktBlock = CFG.marketFilter && !(MF && MF.above) ? (MF ? `SPY closed at ${MF.last}, below its ${CFG.mktAvg || 200}-day average ${MF.s200}` : `SPY's ${CFG.mktAvg || 200}-day average is not known yet`) : null;
   if (G.mktBlock) G.reasons.push(`Market filter: ${G.mktBlock} \u2014 no new dip buys (stocks and CALLs); open positions are managed as usual`);
@@ -1469,7 +1471,7 @@ async function run() {
       }
       heldRows.push(row);
     }
-    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : userPause ? 'paused from Telegram' : G.block ? 'paused by the market check' : noNew ? noNew : G.mktBlock ? 'market filter: ' + G.mktBlock + ' \u2014 no new dip buys' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, exitRule: CFG.exitRule, exitPct: CFG.exitProfitPct, optExit: CFG.optExit, mktFilter: !!CFG.marketFilter, mkt: G.mkt || null, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
+    lastWatch = { at: new Date().toISOString(), idle: bothHalted ? (SPLIT ? 'all daily loss limits hit' : 'daily loss cap hit') : MINS < G.minStart ? 'before the entry window' : MINS >= Math.min(ENTRY_END, CLOSE - 15) ? `swing entry window closed for today (entries 9:45\u2013${CFG.entryEnd} ET; Bot settings \u2192 4. Strategy)` : userPause ? 'paused from Telegram' : G.block ? 'paused by the market check' : noNew ? noNew : G.mktBlock ? 'market filter: ' + G.mktBlock + ' \u2014 no new dip buys' : null, thr: CFG.rsiThreshold, maxHold: CFG.maxHold, optHold: CFG.optHold || 0, exitRule: CFG.exitRule, exitPct: CFG.exitProfitPct, optExit: CFG.optExit, mktFilter: !!CFG.marketFilter, mkt: G.mkt || null, pickBy: CFG.pickBy || 'dip', held: heldRows, intraday: !!CFG.intraday, universe: CFG.universe, scanned: scanCache.info ? scanCache.info.scanned : null, scanAt: scanCache.info ? scanCache.info.at : null, on: { stocks: STK_ON, calls: OPT_ON, puts: PUT_ON },
       buy: STK_ON ? sigs.map(x => x.sym) : [], call: OPT_ON ? sigs.map(x => x.sym) : [], put: PUT_ON ? shortSigs.map(x => x.sym) : [], total: UNIVERSE.length, rows };
   }
   if (shortSigs.length) act(`RSI-2 pops (PUT candidates): ${shortSigs.map(s => s.sym + ' (' + s.r2 + ')').join(', ')}`, 'pops:' + shortSigs.map(s => s.sym).join(','));   // logged again when the names change, not every time an RSI value moves
@@ -1542,7 +1544,8 @@ async function run() {
       if (heat >= heatCap) { act(`${K}: total risk is at the ${MAX_HEAT}% cap — no new option trades until it falls`, 'optheat'); break; }
       // a call is skipped once the dip has bounced 1%+; a put once the pop has already fallen 1%+
       if (!s.px || wheelUnds.has(s.sym) || hasOptOn(s.sym) || laneRecent(kind + ':' + s.sym) || (kind === 'call' ? s.px > s.prevClose * 1.01 : s.px < s.prevClose * 0.99) || sectorFull(s.sym)) continue;
-      const eRisk = CFG.newsGuard ? symbolRisk(s.sym, newsCache.syms) || earningsSoon(s.sym, earnCal, ymdDash(Date.now()), CFG.optDays) : null;
+      const optHorizon = CFG.optHold > 0 ? Math.min(CFG.optDays, Math.ceil(CFG.optHold * 7 / 5) + 1) : CFG.optDays;   // how long the option is really held: the optHold clock (sessions \u2192 calendar days) when set, else up to its expiry window (audit 2026-11-11)
+      const eRisk = CFG.newsGuard ? symbolRisk(s.sym, newsCache.syms) || earningsSoon(s.sym, earnCal, ymdDash(Date.now()), optHorizon) : null;
       if (eRisk) { act(`${s.sym} ${kind.toUpperCase()} skipped \u2014 ${eRisk}`); continue; }
       if (todays.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym)) continue;
       // a candidate turned down after a broker call (no contract, no quote, spread too wide, over the budget or the risk cap)
