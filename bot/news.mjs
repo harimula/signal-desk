@@ -41,6 +41,20 @@ export function loadEvents(path = 'events.json') {
   try { return JSON.parse(fs.readFileSync(path, 'utf8')).events || []; } catch (e) { return []; }
 }
 
+// US earnings calendar (data/earnings-us.json, written nightly by .github/workflows/earnings-us.yml): each symbol's next
+// scheduled report date, from Yahoo's calendar. A scheduled date is firmer than a headline (symbolRisk sees only stories
+// that happen to appear in the news feed), so new buys step aside before a report instead of holding through its gap.
+export function loadEarnings(path = 'data/earnings-us.json') {
+  try { const j = JSON.parse(fs.readFileSync(path, 'utf8')); return j && j.dates ? j : null; } catch (e) { return null; }
+}
+// 'reports earnings <date> (in N days)' when sym's next report is within the next `horizon` calendar days (a report today
+// counts as 0 days), else null. cal = loadEarnings()'s result; null (no calendar) means no opinion, never a block.
+export function earningsSoon(sym, cal, todayDash, horizon) {
+  const d = cal && cal.dates && cal.dates[sym]; if (!d) return null;
+  const n = Math.round((Date.parse(d) - Date.parse(todayDash)) / 864e5);
+  return n >= 0 && n <= horizon ? `reports earnings ${d} (in ${n} day${n === 1 ? '' : 's'})` : null;
+}
+
 const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
 
 // Decide today's trading mode from the calendar, the clock (minutes ET), live headlines and SPY.

@@ -6,7 +6,7 @@ import { spySignal, spyExit, spyFresh, encodeSpyId, decodeSpyId, isSpyOption } f
 import { stockQty, optionQty, regimeOf, lossStreak, openRisk, sectorOf, sideDayPl } from './risk.mjs';
 import { buildJournal, parseSym, optionEvents } from './journal.mjs';
 import { tradeLane, computeScore, scoreDue, scoreCatchupAt, scoreText, driftText, weekMonday, etWd, etMins, EXPECT, monthOf, prevMonthOf, monthDue, monthScore, monthText, monthLabel } from './scorecard.mjs';
-import { guard, symbolRisk, classify } from './news.mjs';
+import { guard, symbolRisk, classify, earningsSoon } from './news.mjs';
 import { keysFor, relevant, parseRss } from '../news.mjs';
 import { normalize, summary } from './config.mjs';
 import { isStockAsset } from './scan.mjs';
@@ -463,10 +463,34 @@ test('market filter: SPY above / below its 200-day average, unknown with too lit
   assert.equal(marketAbove200(up.slice(0, 150)), null); assert.equal(marketAbove200(null), null);
   const m = marketAbove200(down); assert.ok(m.s200 > m.last);
 });
+test('market line (audit 2026-11-11): the 100-day line answers with 150 closes and reports its own length', () => {
+  const up = Array.from({ length: 150 }, (_, i) => 400 + i);
+  assert.equal(marketAbove200(up), null);                                   // 200-day: not enough history
+  const m = marketAbove200(up, 100); assert.equal(m.above, true); assert.equal(m.days, 100);
+  // a slide below the 100-day but still above the 200-day: the faster line blocks, the slow one does not
+  const slide = Array.from({ length: 250 }, (_, i) => i < 220 ? 400 + i : 620 - (i - 220) * 2);
+  assert.equal(marketAbove200(slide, 100).above, false); assert.equal(marketAbove200(slide, 200).above, true);
+});
+test('earnings calendar (audit 2026-11-11): a report inside the horizon blocks, outside or unknown does not', () => {
+  const cal = { at: '2026-11-10T22:20:00Z', dates: { ZS: '2026-11-18', PM: '2026-11-11' } };
+  assert.match(earningsSoon('ZS', cal, '2026-11-11', 7), /reports earnings 2026-11-18 \(in 7 days\)/);
+  assert.equal(earningsSoon('ZS', cal, '2026-11-11', 6), null);             // one day beyond the horizon
+  assert.match(earningsSoon('PM', cal, '2026-11-11', 7), /in 0 days/);      // reports today (tonight) — still a block
+  assert.equal(earningsSoon('PM', cal, '2026-11-12', 7), null);             // yesterday's report is no longer a risk
+  assert.equal(earningsSoon('AAPL', cal, '2026-11-11', 7), null);           // no date on file: no opinion
+  assert.equal(earningsSoon('ZS', null, '2026-11-11', 7), null);            // no calendar at all: never a block
+});
 test('settings: option sell rule and expiry are validated', () => {
   const d = normalize({}); assert.equal(d.optExit, 'bounce'); assert.equal(d.optDays, 14);
   const c = normalize({ optExit: 'target', optDays: 30 }); assert.equal(c.optExit, 'target'); assert.equal(c.optDays, 30);
   assert.equal(normalize({ optExit: 'moon' }).optExit, 'bounce'); assert.equal(normalize({ optDays: 500 }).optDays, 60); assert.equal(normalize({ optDays: 1 }).optDays, 7);
+});
+test('settings: the market line accepts only 100 or 200, under any preset (audit 2026-11-11)', () => {
+  assert.equal(normalize({}).mktAvg, 200);
+  assert.equal(normalize({ preset: 'aggressive', mktAvg: 100 }).mktAvg, 100);  // not a preset key: the raw value applies
+  assert.equal(normalize({ mktAvg: '100' }).mktAvg, 100);
+  for (const bad of [150, 50, 0, 'fast', null]) assert.equal(normalize({ mktAvg: bad }).mktAvg, 200, String(bad));
+  assert.match(summary(normalize({ marketFilter: true, mktAvg: 100 })), /market filter on \(100-day\)/);
 });
 test('settings: sell rule, its profit % and the market filter are validated', () => {
   const d = normalize({}); assert.equal(d.exitRule, 'bounce'); assert.equal(d.exitProfitPct, 0.5); assert.equal(d.marketFilter, false);

@@ -120,6 +120,7 @@ if (process.argv[2] === 'child') {
   fs.mkdirSync('bot', { recursive: true });
   const bot = await import(pathToFileURL(path.join(HERE, 'bot.mjs')).href);
   if (FAKE.stop) fs.writeFileSync('bot/STOP', 'stop');
+  if (FAKE.earnCal) { fs.mkdirSync('data', { recursive: true }); fs.writeFileSync('data/earnings-us.json', JSON.stringify(FAKE.earnCal)); }   // the nightly US earnings calendar, as earnings-us.yml writes it
   if (FAKE.stopLocal) fs.writeFileSync('bot/STOP.local', 'stop (from the page)');                                // the running session's mirror of the page's Pause
   if (FAKE.sessionEndIn != null) bot.setSessionEnd(FIXED + FAKE.sessionEndIn * 60000);                           // this session ends in N minutes
   if (FAKE.prevJournal) fs.writeFileSync('bot/journal.json', JSON.stringify(FAKE.journalKey ? await bot.encryptJournal(FAKE.prevJournal, FAKE.prevKey || FAKE.journalKey, 1000) : FAKE.prevJournal));   // what the previous run left behind
@@ -528,6 +529,30 @@ const MFU = run({ stocks: true, options: true, marketFilter: true });
 check('market filter on, SPY above its 200-day: the dip is bought as usual (stock and CALL)', () => { assert.ok(MFU.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(MFU.orders)); assert.ok(MFU.options.some(o => /^DIP\d{6}C/.test(o.symbol))); });
 const MFO = run({ stocks: true, options: false, marketFilter: false }, { spyDaily: 'down', live: { SPY: 399.5 } });
 check('market filter off: SPY below its 200-day does not stop the dip buy', () => assert.ok(MFO.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(MFO.orders) + JSON.stringify(MFO.acts)));
+const MF100 = run({ stocks: true, options: false, marketFilter: true, mktAvg: 100 }, { spyDaily: 'down', live: { SPY: 399.5 } });
+check('market line 100-day: the block message names the 100-day average (audit 2026-11-11)', () => { assert.ok(!MF100.orders.some(o => o.side === 'buy'), JSON.stringify(MF100.orders)); assert.ok((MF100.acts || []).some(m => /below its 100-day average/.test(m)), JSON.stringify((MF100.acts || []).filter(m => /Market/.test(m)))); });
+
+// ---- 2026-11-11 audit: the nightly earnings calendar — new buys step aside before a scheduled report ----
+const EC = { at: '2026-10-23T01:00:00Z', dates: { DIP: '2026-10-27' } };                                     // DIP reports in 4 days (the fake clock is Fri 2026-10-23)
+const EC1 = run({ stocks: true, options: true, newsGuard: true }, { earnCal: EC });
+check('earnings calendar: a stock reporting in 4 days gets no stock buy and no CALL, with the reason logged', () => {
+  assert.ok(!EC1.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(EC1.orders));
+  assert.ok(!EC1.options.length, JSON.stringify(EC1.options));
+  assert.ok((EC1.acts || []).some(m => /DIP skipped \u2014 reports earnings 2026-10-27 \(in 4 days\)/.test(m)), JSON.stringify((EC1.acts || []).filter(m => /DIP/.test(m))));
+});
+const EC2 = run({ stocks: true, options: true, newsGuard: true }, { earnCal: { at: '2026-10-23T01:00:00Z', dates: { DIP: '2026-11-20' } } });
+check('earnings calendar: a report 28 days out blocks nothing (stock horizon 7 days, CALL horizon optDays)', () => { assert.ok(EC2.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(EC2.orders)); assert.ok(EC2.options.some(o => /^DIP\d{6}C/.test(o.symbol)), JSON.stringify(EC2.options)); });
+const EC3 = run({ stocks: true, options: true, newsGuard: true }, { earnCal: { at: '2026-10-23T01:00:00Z', dates: { DIP: '2026-11-03' } } });
+check('earnings calendar: a report 11 days out lets the stock buy through but blocks the 14-day CALL', () => {
+  assert.ok(EC3.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(EC3.orders));
+  assert.ok(!EC3.options.length, JSON.stringify(EC3.options));
+  assert.ok((EC3.acts || []).some(m => /DIP CALL skipped \u2014 reports earnings 2026-11-03/.test(m)), JSON.stringify((EC3.acts || []).filter(m => /DIP/.test(m))));
+});
+const EC4 = run({ stocks: true, options: true, newsGuard: true }, {});
+check('earnings calendar missing: buys go on as before, and the bot says once that the calendar is missing', () => {
+  assert.ok(EC4.orders.some(o => o.symbol === 'DIP' && o.side === 'buy'), JSON.stringify(EC4.orders));
+  assert.ok((EC4.acts || []).some(m => /US earnings calendar \(data\/earnings-us\.json\) is missing/.test(m)), JSON.stringify((EC4.acts || []).filter(m => /Calendar/.test(m))));
+});
 const MFP = run({ stocks: false, options: false, puts: true, marketFilter: true }, { spyDaily: 'down', live: { SPY: 399.5 } });
 check('market filter: PUTs are not blocked (the filter only stops dip buys)', () => assert.ok(MFP.options.some(o => /^POP\d{6}P/.test(o.symbol)), JSON.stringify(MFP.orders) + JSON.stringify(MFP.acts)));
 
@@ -901,6 +926,11 @@ check('audit: a take-profit buy-back cancelled at the broker by hand is placed a
   const b = A3.orders.filter(x => /^sd-wb-/.test(x.client_order_id)); assert.equal(b.length, 2, JSON.stringify(A3.orders.map(o => o.client_order_id)));
 });
 const A4 = run({ ...WHO, newsGuard: true }, { ...WIN, symNews: [{ headline: 'DIP to report Q3 results on Thursday', symbols: ['DIP'], created_at: '2026-10-19T13:30:00Z', source: 't', summary: '' }] });
+const A4e = run({ ...WHO, newsGuard: true }, { ...WIN, earnCal: { at: '2026-10-19T01:00:00Z', dates: { DIP: '2026-10-24' } } });
+check('audit 2026-11-11: the wheel sells no new put on a stock that reports within 7 days (earnings calendar)', () => {
+  assert.ok(!A4e.orders.some(x => /^sd-wp-DIP/.test(x.client_order_id)), JSON.stringify(A4e.orders.map(o => o.client_order_id)));
+  assert.ok((A4e.acts || []).some(m => /DIP — reports earnings 2026-10-24/.test(m)), JSON.stringify((A4e.acts || []).filter(m => /DIP/.test(m))));
+});
 check('audit: a wheel candidate with earnings news is skipped even when the shared news cache has nothing on it (scan mode)', () => {
   assert.ok(!A4.orders.some(x => /^sd-wp-DIP/.test(x.client_order_id)), JSON.stringify(A4.orders.map(o => o.client_order_id)));
   assert.ok(A4.orders.some(x => /^sd-wp-FALL/.test(x.client_order_id)), JSON.stringify(A4.orders.map(o => o.client_order_id)) + JSON.stringify(A4.wheel && A4.wheel.idle));

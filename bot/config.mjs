@@ -14,8 +14,9 @@ export const DEFAULTS = {
   rsiThreshold: 10, maxHold: 10, entryEnd: '11:00', optTakeProfit: 50, optStop: 50, holdFloor: 25, stockTp: 10, staleMin: 45,   // stockTp: sell a stock at this % gain (0 = off: RSI-2 exit only); 10 = research-backed default
   // When a stock is sold (besides the take-profit and the stop): 'bounce' = at the close once above its 5-day average (the 33-year
   // research rule); 'profit' = at the first close at least exitProfitPct % above the buy price (win-rate study 2026-10-27).
-  // marketFilter: no new dip buys (stocks and CALLs) while SPY closed below its 200-day average.
-  exitRule: 'bounce', exitProfitPct: 0.5, marketFilter: false,
+  // marketFilter: no new dip buys (stocks and CALLs) while SPY closed below its market line — its mktAvg-day average
+  // (200 = the original line; 100 = faster, steps aside earlier in a slide; winrate study 2026-11-11).
+  exitRule: 'bounce', exitProfitPct: 0.5, marketFilter: false, mktAvg: 200,
   // Swing CALLs and PUTs: optExit 'bounce' = also sold when the stock closes back over (PUT: under) its 5-day average; 'target' = sold
   // only at the take-profit, the stop, the max hold or 3 days before expiry. optDays = the shortest time to expiry a new one may
   // have (the nearest expiry from optDays to optDays + 21 days out is bought; 14 = the original 14–35-day window).
@@ -66,6 +67,7 @@ export function normalize(raw) {
   if (raw.optExit === 'bounce' || raw.optExit === 'target') c.optExit = raw.optExit;
   if (raw.universe === 'scan' || raw.universe === 'list') c.universe = raw.universe;
   if (raw.pickBy === 'leaders' || raw.pickBy === 'dip') c.pickBy = raw.pickBy;
+  if (+raw.mktAvg === 100 || +raw.mktAvg === 200) c.mktAvg = +raw.mktAvg;
   for (const k of ['stockUnit', 'callUnit', 'putUnit']) if (raw[k] === 'pct' || raw[k] === 'usd') c[k] = raw[k];
   if (!c.spyOn) c.spySharePct = Math.min(c.spySharePct, 100);
   const spyShare = c.spyOn ? c.spySharePct : 0;                                                      // the shares can never add up to more than the stake
@@ -88,4 +90,4 @@ export function normalize(raw) {
 }
 export const entryEndMin = c => { const [h, m] = c.entryEnd.split(':').map(Number); return h * 60 + m; };
 const money = (c, unit, pct, usd) => c[unit] === 'usd' ? '$' + c[usd] : c[pct] + '%';
-export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''}${c.mode === 'live' ? ' · LIVE at ' + c.liveSizePct + '% size' : ''}${c.stakeUsd > 0 ? ' · stake $' + c.stakeUsd : ''}${c.split ? ' · split ' + (100 - c.callSharePct - c.putSharePct - (c.spyOn ? c.spySharePct : 0) - (c.wheelOn ? c.wheelSharePct : 0)) + '/' + c.callSharePct + '/' + c.putSharePct + (c.spyOn ? '/' + c.spySharePct : '') + (c.wheelOn ? '/' + c.wheelSharePct : '') + ' stocks/CALLs/PUTs' + (c.spyOn ? '/SPY' : '') + (c.wheelOn ? '/wheel' : '') : ''}${c.wheelOn ? ' · wheel: puts ' + c.wheelOtmPct + '% under, bought back at ' + (c.wheelTp > 0 ? (100 - c.wheelTp) + '% of the premium' : 'expiry') : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · sells ${c.exitRule === 'profit' ? 'at the first close +' + c.exitProfitPct + '% up' : 'on the bounce'} (max ${c.maxHold} days)${c.marketFilter ? ' · market filter on' : ''} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;
+export const summary = c => `${c.preset}${c.dayTrade ? ' · DAY-TRADING ON' : ''}${c.mode === 'live' ? ' · LIVE at ' + c.liveSizePct + '% size' : ''}${c.stakeUsd > 0 ? ' · stake $' + c.stakeUsd : ''}${c.split ? ' · split ' + (100 - c.callSharePct - c.putSharePct - (c.spyOn ? c.spySharePct : 0) - (c.wheelOn ? c.wheelSharePct : 0)) + '/' + c.callSharePct + '/' + c.putSharePct + (c.spyOn ? '/' + c.spySharePct : '') + (c.wheelOn ? '/' + c.wheelSharePct : '') + ' stocks/CALLs/PUTs' + (c.spyOn ? '/SPY' : '') + (c.wheelOn ? '/wheel' : '') : ''}${c.wheelOn ? ' · wheel: puts ' + c.wheelOtmPct + '% under, bought back at ' + (c.wheelTp > 0 ? (100 - c.wheelTp) + '% of the premium' : 'expiry') : ''} · ${c.universe === 'scan' ? 'market scan, top ' + c.scanSize : c.symbols.length + ' listed stocks'} · stocks ${c.stocks ? money(c, 'stockUnit', 'stockPct', 'stockUsd') + '/position' : 'off'} · CALLs ${c.options ? money(c, 'callUnit', 'optPct', 'callUsd') + '/trade' : 'off'} · PUTs ${c.puts ? money(c, 'putUnit', 'putPct', 'putUsd') + '/trade' : 'off'} · sells ${c.exitRule === 'profit' ? 'at the first close +' + c.exitProfitPct + '% up' : 'on the bounce'} (max ${c.maxHold} days)${c.marketFilter ? ' · market filter on (' + (c.mktAvg || 200) + '-day)' : ''} · risk ${c.riskPct}%/trade, cap ${c.maxHeat}% · ${c.mode.toUpperCase()}`;

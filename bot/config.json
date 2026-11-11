@@ -85,12 +85,13 @@
  "entryEnd": "15:30",
  "optTakeProfit": 15,
  "optStop": 30,
- "holdFloor": 25,
+ "holdFloor": 20,
  "stockTp": 20,
  "staleMin": 45,
  "exitRule": "profit",
  "exitProfitPct": 0.5,
  "marketFilter": true,
+ "mktAvg": 100,
  "optExit": "target",
  "optDays": 14,
  "newsGuard": true,
@@ -131,8 +132,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-11-11T19:12:27.922Z",
- "updatedBy": "settings page",
+ "updatedAt": "2026-11-11T21:30:00.000Z",
+ "updatedBy": "audit 2026-11-11 (market line 100-day, hard floor 20%)",
  "liveConfirm": "",
  "stakeUsd": 0
 }

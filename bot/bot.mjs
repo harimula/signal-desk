@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import { sma, rsi2, liveSignal, rsi2Trigger, rsi2ExitLevel, r2d, rsi2Signal, rsi2Exit, rsi2ShortSignal, rsi2ShortExit, profitExit, profitExitLevel, marketAbove200 } from './strategy.mjs';
 import { buildJournal, optionEvents } from './journal.mjs';
 import { computeScore, scoreText, driftText, scoreDue, scoreCatchupAt, monthDue, monthScore, monthText, monthOf, prevMonthOf } from './scorecard.mjs';
-import { guard, loadEvents, symbolRisk } from './news.mjs';
+import { guard, loadEvents, symbolRisk, loadEarnings, earningsSoon } from './news.mjs';
 import { sectorOf, stockQty, optionQty, regimeOf, lossStreak, openRisk, sideDayPl } from './risk.mjs';
 import { normalize, entryEndMin, summary as cfgSummary } from './config.mjs';
 import { tgOn, tgSend, tgPoll } from './telegram.mjs';
@@ -633,7 +633,7 @@ async function wheelLane({ equity, positions, hist, liveOrders, G, pdtNear, clai
           const p0 = (px[x] || {}).p; if (!(p0 >= CFG.wheelMinPrice && p0 <= CFG.wheelMaxPrice) || p0 * (1 - CFG.wheelOtmPct / 100) * 100 > left) continue;
           if ((wheelSkip.get('p:' + x) || 0) > Date.now()) continue;
           if (bars) { const C = completed(bars, x); if (trendThrough(C.map(b => b.d), C.map(b => b.c), tDays, today).ok !== true) continue; }   // the stock too, before each day of the window so far
-          const risk = CFG.newsGuard ? symbolRisk(x, newsCache.syms) || symbolRisk(x, await wheelNews(x)) : null; if (risk) { skipW('p:' + x, `${x} — ${risk}`, 60 * 60000); continue; }
+          const risk = CFG.newsGuard ? symbolRisk(x, newsCache.syms) || symbolRisk(x, await wheelNews(x)) || earningsSoon(x, earnCal, ymdDash(Date.now()), 7) : null; if (risk) { skipW('p:' + x, `${x} — ${risk}`, 60 * 60000); continue; }
           looked++;
           const c = await wheelContract(x, 'put', sellExp, p0); if (!c.ok) { skipW('p:' + x, c.why, c.retry); continue; }
           if (c.K * 100 > left) continue;
@@ -889,7 +889,7 @@ const act = (m, key) => {                                   // same message (or 
 // What stops new trades in this cycle besides the market check: the final check of a session, or its last 10 minutes.
 let noNew = '';
 let lastWatch = null, lastSignals = null, lastClock = null, barsCache = { at: 0, bars: null }, lastPosSig = '', pendingActs = 0;
-let newsCache = { at: 0, market: [], syms: [], ok: true }, lastGuard = null, spyPrev = null, spyPrevFailAt = 0, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
+let newsCache = { at: 0, market: [], syms: [], ok: true }, earnCal = null, lastGuard = null, spyPrev = null, spyPrevFailAt = 0, weekCache = { at: 0, start: null }, fillsCache = { at: 0, closed: [], fills: [] }, lastRisk = null;
 const NM = { stock: { one: 'stock', many: 'stocks', Cap: 'Stocks' }, call: { one: 'CALL', many: 'CALLs', Cap: 'CALLs' }, put: { one: 'PUT', many: 'PUTs', Cap: 'PUTs' }, spy: { one: 'SPY option', many: 'SPY options', Cap: 'SPY options' }, wheel: { one: 'wheel', many: 'wheel trades', Cap: 'Wheel' } };
 let lastSpy = null, memRestored = false, flooredSyms = new Set(), prevHeld = new Map(), spyPlacedAt = 0;
 const missingFill = new Map();                                            // symbol → { t0: when it vanished without a listed closing fill, short }: no day-loss halt until it shows (at most 10 minutes)
@@ -1157,6 +1157,9 @@ async function run() {
   } catch (e) {}
   if (CFG.eventGuard) { const ev = loadEvents(), lastEv = ev.length ? ev[ev.length - 1].date : '', td = ymdDash(Date.now());
     if (!lastEv || Date.parse(lastEv) - Date.parse(td) < 45 * 864e5) { const k = 'cal:' + td; if (!haltSaid.has(k)) { haltSaid.add(k); act('Calendar warning: the economic calendar (events.json) ' + (lastEv ? 'ends ' + lastEv : 'is empty') + ' — add the next dates or the news/event guard stops seeing Fed days and CPI/jobs reports.'); } } }
+  earnCal = CFG.newsGuard ? loadEarnings() : null;               // nightly US earnings calendar: new buys step aside near a scheduled report
+  if (CFG.newsGuard) { const at = earnCal && Date.parse(earnCal.at), k2 = 'earncal:' + ymdDash(Date.now());
+    if (!(at > Date.now() - 5 * 864e5) && !haltSaid.has(k2)) { haltSaid.add(k2); act('Calendar warning: the US earnings calendar (data/earnings-us.json) is ' + (earnCal ? 'stale' : 'missing') + ' \u2014 until the nightly earnings-us job writes it, new buys are checked against earnings headlines only.'); } }
   const G = lastGuard = guard({ events: CFG.eventGuard ? loadEvents() : [], todayDash: ymdDash(Date.now()), mins: MINS, headlines: CFG.newsGuard ? newsCache.market : [], spyPct });
   G.spyPct = spyPct; G.newsOk = newsCache.ok;
   const RG = regimeOf(spyPrev && spyPrev.closes);
@@ -1166,8 +1169,8 @@ async function run() {
   if (liveScale < 1) { G.budget = (G.budget || 1) * liveScale; G.reasons.push(`Live trading at ${CFG.liveSizePct}% of the paper size (ramp-up setting)`); }
   // market filter (setting): no new dip buys — stocks or CALLs — while SPY's last close is below its 200-day average. With the
   // first-profitable-close exit this cut the worst fall of the 33-year test from -40% to -18% (tools/winrate-study.mjs).
-  const MF = marketAbove200(spyPrev && spyPrev.closes);
-  G.mkt = MF; G.mktBlock = CFG.marketFilter && !(MF && MF.above) ? (MF ? `SPY closed at ${MF.last}, below its 200-day average ${MF.s200}` : 'SPY\'s 200-day average is not known yet') : null;
+  const MF = marketAbove200(spyPrev && spyPrev.closes, CFG.mktAvg || 200);
+  G.mkt = MF; G.mktBlock = CFG.marketFilter && !(MF && MF.above) ? (MF ? `SPY closed at ${MF.last}, below its ${CFG.mktAvg || 200}-day average ${MF.s200}` : `SPY's ${CFG.mktAvg || 200}-day average is not known yet`) : null;
   if (G.mktBlock) G.reasons.push(`Market filter: ${G.mktBlock} \u2014 no new dip buys (stocks and CALLs); open positions are managed as usual`);
   if (RG.regime === 'bear') G.reasons.push('Bear market regime (SPY below its 50- and 200-day averages) \u2014 fewer stocks qualify, since each must be above its own 200-day');   // reported, not enforced: the filter did not improve RSI-2 in the research
   // (neutral regime: no size change for RSI-2)
@@ -1501,7 +1504,7 @@ async function run() {
       if (slots <= 0) break;
       if (!s.px || wheelUnds.has(s.sym) || stockPos.some(p => p.symbol === s.sym) || liveOrders.some(o => o.symbol === s.sym) || todays.some(o => cid(o).startsWith('sd-r-' + s.sym + '-'))) continue;   // a wheel stock is the wheel's
       if (s.px > s.prevClose * 1.01) { act(`${s.sym} skipped \u2014 already bounced ${((s.px / s.prevClose - 1) * 100).toFixed(1)}% since yesterday's close`); continue; }
-      const risk = CFG.newsGuard ? symbolRisk(s.sym, newsCache.syms) : null; if (risk) { act(`${s.sym} skipped \u2014 ${risk}`); continue; }
+      const risk = CFG.newsGuard ? symbolRisk(s.sym, newsCache.syms) || earningsSoon(s.sym, earnCal, ymdDash(Date.now()), 7) : null; if (risk) { act(`${s.sym} skipped \u2014 ${risk}`); continue; }
       if (sectorFull(s.sym)) { act(`${s.sym} skipped \u2014 already ${MAX_PER_SECTOR} positions in ${sectorOf(s.sym)}`); continue; }
       const lim = r2d(s.px * 1.002);
       const qty = stockQty({ equity, riskPct: RISK_PCT * G.budget, entry: lim, stop: lim - s.riskUnit, budget: slBudget('stock') });
@@ -1537,7 +1540,9 @@ async function run() {
       if (!(slBudget(kind) >= 1)) { act(`${K}: no money left for a new one today${capNote(kind)}`, 'optmoney:' + kind); break; }
       if (heat >= heatCap) { act(`${K}: total risk is at the ${MAX_HEAT}% cap — no new option trades until it falls`, 'optheat'); break; }
       // a call is skipped once the dip has bounced 1%+; a put once the pop has already fallen 1%+
-      if (!s.px || wheelUnds.has(s.sym) || hasOptOn(s.sym) || laneRecent(kind + ':' + s.sym) || (kind === 'call' ? s.px > s.prevClose * 1.01 : s.px < s.prevClose * 0.99) || (CFG.newsGuard && symbolRisk(s.sym, newsCache.syms)) || sectorFull(s.sym)) continue;
+      if (!s.px || wheelUnds.has(s.sym) || hasOptOn(s.sym) || laneRecent(kind + ':' + s.sym) || (kind === 'call' ? s.px > s.prevClose * 1.01 : s.px < s.prevClose * 0.99) || sectorFull(s.sym)) continue;
+      const eRisk = CFG.newsGuard ? symbolRisk(s.sym, newsCache.syms) || earningsSoon(s.sym, earnCal, ymdDash(Date.now()), CFG.optDays) : null;
+      if (eRisk) { act(`${s.sym} ${kind.toUpperCase()} skipped \u2014 ${eRisk}`); continue; }
       if (todays.some(o => isOpt(o.symbol) && OPT_RE.exec(o.symbol)[1] === s.sym)) continue;
       // a candidate turned down after a broker call (no contract, no quote, spread too wide, over the budget or the risk cap)
       // is looked at again after 10 minutes, not on every check

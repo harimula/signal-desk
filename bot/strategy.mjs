@@ -108,11 +108,14 @@ export function profitExit(entry, price, sessionsHeld, maxHold = 15, pct = 0.5) 
   return { exit: false, level: lvl };
 }
 
-// ---- market filter (setting marketFilter): new dip buys only while SPY's last close is above its 200-day average ----
-export function marketAbove200(spyCloses) {
-  if (!Array.isArray(spyCloses) || spyCloses.length < 200) return null;          // unknown: the caller decides (the bot does not buy)
-  const s = sma(spyCloses, 200), last = spyCloses[spyCloses.length - 1];
-  return { above: last > s, last: r2d(last), s200: r2d(s) };
+// ---- market filter (setting marketFilter): new dip buys only while SPY's last close is above its market line — the
+//      average of the last `days` closes (setting mktAvg: 200 = the original line; 100 = a faster line that steps aside
+//      earlier in a slide — on 2016+ scan-universe data it beat the 200-day on $/trade, return and drawdown, and it was
+//      below from 2026-10-30, the week whose dip buys the owner's account bled on) ----
+export function marketAbove200(spyCloses, days = 200) {
+  if (!Array.isArray(spyCloses) || spyCloses.length < days) return null;         // unknown: the caller decides (the bot does not buy)
+  const s = sma(spyCloses, days), last = spyCloses[spyCloses.length - 1];
+  return { above: last > s, last: r2d(last), s200: r2d(s), days };
 }
 
 // ---- RSI-2 mirror for PUTs (an experiment: the research chose the long side only) ----
