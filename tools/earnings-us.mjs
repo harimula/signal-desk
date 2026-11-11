@@ -61,7 +61,8 @@ auth = await getAuth();
 console.log('crumb:', auth ? 'yes' : 'no');
 const today = new Date().toISOString().slice(0, 10);
 const dates = {}; const why = {};
-for (const [s, d] of Object.entries(prev)) if (d >= today) dates[s] = d;    // yesterday's answers stand until replaced; past dates drop off
+const askSet = new Set(syms);
+for (const [s, d] of Object.entries(prev)) if (d >= today && askSet.has(s)) dates[s] = d;   // yesterday's answers stand until replaced; past dates and symbols no longer asked drop off
 let left = syms.slice(), got = 0;
 for (let pass = 1; pass <= 3 && left.length; pass++) {
   if (pass > 1) { console.log('pass ' + pass + ': retrying ' + left.length); await new Promise(r => setTimeout(r, 15000)); }
