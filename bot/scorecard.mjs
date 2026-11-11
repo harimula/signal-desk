@@ -23,7 +23,7 @@ export const LANE_LAB = { stock: 'Stocks', call: 'CALLs', put: 'PUTs', spy: 'SPY
 // Each live rule's own tested numbers — the drift alarm's yardstick, with the study each number comes from.
 export const EXPECT = {
   stock: { win: 82, src: 'winrate_report 2026-10-27: first close +0.5%, 15-day hold, market filter — 82.4% won over 33 years' },
-  call: { win: 58, src: 'option-check 2026-11-06, REAL option prices (299 signals since 2024-03): tp +15% / stop −30% / 14d — 58.2% won, +2.54%/trade (set with the owner’s 2026-11-10 target change)' },
+  call: { win: 58, src: 'option-check 2026-11-11, REAL option prices (299 signals since 2024-03): tp +15% / stop −30% / 14d expiry / 5-session hold — 57.9% won, +2.45%/trade (the owner’s 2026-11-11 quick-turnaround ask)' },
   spy: { win: 80, src: 'spy0_report 2026-11-03: 94% won on 60 real-price days (36 trades); the long-run model sits lower — 80 is the alarm floor, not a promise' }
 };
 const DRIFT_N = 30, DRIFT_GAP = 8;                                          // judge only on 30+ closed trades, flag at 8+ points under the study AND losing money

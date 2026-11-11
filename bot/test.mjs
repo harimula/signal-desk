@@ -484,6 +484,7 @@ test('settings: option sell rule and expiry are validated', () => {
   const d = normalize({}); assert.equal(d.optExit, 'bounce'); assert.equal(d.optDays, 14);
   const c = normalize({ optExit: 'target', optDays: 30 }); assert.equal(c.optExit, 'target'); assert.equal(c.optDays, 30);
   assert.equal(normalize({ optExit: 'moon' }).optExit, 'bounce'); assert.equal(normalize({ optDays: 500 }).optDays, 60); assert.equal(normalize({ optDays: 1 }).optDays, 7);
+  assert.equal(normalize({}).optHold, 0); assert.equal(normalize({ optHold: 5 }).optHold, 5); assert.equal(normalize({ optHold: 99 }).optHold, 30);   // 0 = follow maxHold (audit 2026-11-11)
 });
 test('settings: the market line accepts only 100 or 200, under any preset (audit 2026-11-11)', () => {
   assert.equal(normalize({}).mktAvg, 200);

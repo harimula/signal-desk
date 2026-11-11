@@ -1337,6 +1337,7 @@ async function run() {
     }
     // Swing CALLs / PUTs. The take-profit is a resting limit order at the broker (optTakeProfit); the bot sells at market only
     // for the stop, the expiry, a Fed decision, the closing-time rule, and — under the "bounce" sell rule — a daily loss limit.
+    const OPT_HOLD = CFG.optHold > 0 ? CFG.optHold : CFG.maxHold;           // options may run on a shorter clock than stocks (optHold; 0 = same)
     for (const { p, e, q } of swingOpt) {
       const sells = sellsFor(p.symbol); if (sells.some(o => o.type === 'market')) continue;
       const parts = cid(e).split('-'), day8 = parts[3], und = OPT_RE.exec(p.symbol)[1], exp = '20' + OPT_RE.exec(p.symbol)[2];
@@ -1344,8 +1345,8 @@ async function run() {
       const out = async why => closeOut(p.symbol, q, sells, why);
       const daysToExp = (Date.parse(dash8(exp)) - Date.parse(ymdDash(Date.now()))) / 864e5;
       const h = MINS >= CLOSE - 10 && px ? held(und, day8) : 0;          // the closing-time rule, from the day after the buy
-      const closeWhy = !(h > 0) ? null : CFG.optExit === 'target' ? (h >= CFG.maxHold ? `held ${h} sessions — selling the ${K} (max hold)` : null)   // 'target': no bounce exit, only take-profit, stop, max hold, expiry
-        : (() => { const x = (K === 'PUT' ? rsi2ShortExit : rsi2Exit)(completed(bars0, und).map(b => b.c), px, h, CFG.maxHold); return x.exit ? `stock ${x.why} — selling the ${K}` : null; })();
+      const closeWhy = !(h > 0) ? null : CFG.optExit === 'target' ? (h >= OPT_HOLD ? `held ${h} sessions — selling the ${K} (max hold)` : null)   // 'target': no bounce exit, only take-profit, stop, max hold, expiry
+        : (() => { const x = (K === 'PUT' ? rsi2ShortExit : rsi2Exit)(completed(bars0, und).map(b => b.c), px, h, OPT_HOLD); return x.exit ? `stock ${x.why} — selling the ${K}` : null; })();
       let stopFire = plpc <= -CFG.optStop, stopPl = plpc, bidOk = false;
       if (stopFire && !DRY) {                                            // confirm on a fresh quote: the position's mark can be a stale print or the mid of a wide market, and the stop sell is unpriced. No quote at all → sell anyway, fail-safe (audit 2026-11-10)
         const qq = ((await D(`/v1beta1/options/quotes/latest?symbols=${p.symbol}&feed=indicative`).catch(() => ({}))).quotes || {})[p.symbol];

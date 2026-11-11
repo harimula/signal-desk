@@ -94,6 +94,7 @@
  "mktAvg": 100,
  "optExit": "target",
  "optDays": 14,
+ "optHold": 5,
  "newsGuard": true,
  "eventGuard": true,
  "alerts": true,
@@ -132,8 +133,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-11-11T21:30:00.000Z",
- "updatedBy": "audit 2026-11-11 (market line 100-day, hard floor 20%)",
+ "updatedAt": "2026-11-11T21:55:00.000Z",
+ "updatedBy": "audit 2026-11-11 (market line 100-day, hard floor 20%, option hold 5)",
  "liveConfirm": "",
  "stakeUsd": 0
 }

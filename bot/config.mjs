@@ -21,6 +21,9 @@ export const DEFAULTS = {
   // only at the take-profit, the stop, the max hold or 3 days before expiry. optDays = the shortest time to expiry a new one may
   // have (the nearest expiry from optDays to optDays + 21 days out is bought; 14 = the original 14–35-day window).
   optExit: 'bounce', optDays: 14,
+  // optHold: sessions before an open option is sold at the close (0 = follow maxHold). On real prices (option-check
+  // 2026-11-11) a 5-session hold kept +2.45%/trade vs +2.54 over 15 — the same money turns over ~3x faster.
+  optHold: 0,
   newsGuard: true, eventGuard: true, alerts: true, alertDetail: true, alertOnFill: false,
   symbols: DEFAULT_SYMBOLS,
   universe: 'list', scanSize: 200, scanMinPrice: 5,
@@ -53,7 +56,7 @@ export const RANGES = {
   callSharePct: [0, 100], putSharePct: [0, 100], optDayCap: [1, 50], spySharePct: [0, 50], spyTradePct: [10, 100], spyTp: [5, 100], spyStop: [5, 60], spyHoldMin: [2, 120], spyMaxTrades: [1, 20], spyMaxOpen: [1, 5], spyStreak: [1, 6], spyDayCap: [5, 100], spyDte: [0, 5], spyVwapGap: [0, 2], wheelSharePct: [0, 50], wheelOtmPct: [0, 20], wheelTp: [0, 90], wheelStop: [0, 10], wheelMinPrice: [1, 1000], wheelMaxPrice: [5, 2000], wheelMaxPositions: [1, 10], stockCapPct: [0, 100], callCapPct: [0, 100], putCapPct: [0, 100], stockCapUsd: [0, 1e7], callCapUsd: [0, 1e7], putCapUsd: [0, 1e7],
   scanSize: [50, 400], scanMinPrice: [1, 500],
   liveSizePct: [5, 100], stakeUsd: [0, 1e8], dayOrMin: [5, 60], dayMaxTrades: [1, 10], dayStreak: [1, 5], dayRiskPct: [0.1, 2], dayTarget: [1, 4], dayRvol: [0.5, 3], dayTimeStop: [15, 180], dayOptTp: [10, 200], dayOptStop: [20, 80], dayOptDteMax: [1, 14],
-  rsiThreshold: [2, 30], maxHold: [1, 30], exitProfitPct: [0.1, 5], optDays: [7, 60], optTakeProfit: [5, 300], optStop: [5, 90], holdFloor: [2, 60], stockTp: [0, 100], staleMin: [5, 240],
+  rsiThreshold: [2, 30], maxHold: [1, 30], exitProfitPct: [0.1, 5], optDays: [7, 60], optHold: [0, 30], optTakeProfit: [5, 300], optStop: [5, 90], holdFloor: [2, 60], stockTp: [0, 100], staleMin: [5, 240],
 };
 const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 export function normalize(raw) {
