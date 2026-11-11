@@ -54,6 +54,15 @@ const CONFIGS = [
   { key: 'tp10-stop50-target-14d', tp: 0.10, stop: 0.5, rule: 'none', days: 14 },
   { key: 'tp25-stop30-target-14d', tp: 0.25, stop: 0.3, rule: 'none', days: 14 },
   { key: 'tp50-stop30-target-14d', tp: 0.50, stop: 0.3, rule: 'none', days: 14 },
+  // 2026-11-11, the owner's ask (quick turnarounds, small profits, capped losses): shorter holds, tighter stops, shorter expiries
+  { key: 'tp15-stop30-target-14d-hold5', tp: 0.15, stop: 0.3, rule: 'none', days: 14, hold: 5 },
+  { key: 'tp10-stop30-target-14d-hold5', tp: 0.10, stop: 0.3, rule: 'none', days: 14, hold: 5 },
+  { key: 'tp10-stop30-target-14d-hold3', tp: 0.10, stop: 0.3, rule: 'none', days: 14, hold: 3 },
+  { key: 'tp15-stop20-target-14d', tp: 0.15, stop: 0.2, rule: 'none', days: 14 },
+  { key: 'tp10-stop20-target-14d', tp: 0.10, stop: 0.2, rule: 'none', days: 14 },
+  { key: 'tp12-stop25-target-14d', tp: 0.12, stop: 0.25, rule: 'none', days: 14 },
+  { key: 'tp15-stop30-target-7d', tp: 0.15, stop: 0.3, rule: 'none', days: 7 },
+  { key: 'tp10-stop30-target-7d', tp: 0.10, stop: 0.3, rule: 'none', days: 7 },
 ];
 const HOLD = 15, SPREAD = 0.02;
 const out = { at: new Date().toISOString(), signals: { call: sig.call.length, put: sig.put.length }, results: {} };
@@ -95,12 +104,12 @@ for (const side of ['call', 'put']) {
         if (!res) {
           const rule = cf.rule === 'bounce' && (side === 'call' ? C > X.s5[jj] : C < X.s5[jj]);
           if (rule) res = { r: last * (1 - SPREAD / 2) / c0 - 1, why: 'rule' };
-          else if (held >= HOLD || g.exp - cal[u] <= 3) res = { r: last * (1 - SPREAD / 2) / c0 - 1, why: 'time' };
+          else if (held >= (cf.hold || HOLD) || g.exp - cal[u] <= 3) res = { r: last * (1 - SPREAD / 2) / c0 - 1, why: 'time' };
         }
       }
       if (!res) continue;
       real.push(res);
-      const m = optionExitModel(P, X, g.t, g.S0, side, { tp: cf.tp, stop: cf.stop, rule: cf.rule, x: 0, hold: HOLD, dte: g.exp - cal[g.t], ivMult: 1.2, spread: SPREAD }, g.K);
+      const m = optionExitModel(P, X, g.t, g.S0, side, { tp: cf.tp, stop: cf.stop, rule: cf.rule, x: 0, hold: cf.hold || HOLD, dte: g.exp - cal[g.t], ivMult: 1.2, spread: SPREAD }, g.K);
       if (m) model.push(m);
     }
     const st = a => { const n = a.length, w = a.filter(x => x.r > 0); return { n, win: n ? +(w.length / n * 100).toFixed(1) : null, avg: n ? +(a.reduce((s, x) => s + x.r, 0) / n * 100).toFixed(2) : null, avgW: w.length ? +(w.reduce((s, x) => s + x.r, 0) / w.length * 100).toFixed(1) : null, avgL: n - w.length ? +(a.filter(x => x.r <= 0).reduce((s, x) => s + x.r, 0) / (n - w.length) * 100).toFixed(1) : null }; };
