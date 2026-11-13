@@ -464,8 +464,11 @@ journalFixture = null;
 { const seaRoutes = async page => {
   await page.route('https://query1.finance.yahoo.com/**', route => route.fulfill({ status: 401, contentType: 'application/json', body: '{"chart":{"error":{"description":"Unauthorized"}}}' }));   // Yahoo 401s one host now and then (seen live on ^GSPC, 2026-11-05): every load must fall through to query2
   await page.route('**/data/sea/**', route => route.fulfill({ status: 404, contentType: 'text/plain', body: 'not here' }));   // the nightly site copies stay out of this phase — the live ladder is what's tested
+  for (const relay of ['https://api.allorigins.win/**', 'https://corsproxy.io/**', 'https://api.codetabs.com/**']) await page.route(relay, route => route.fulfill({ status: 404, contentType: 'text/plain', body: 'not here' }));   // the CORS relays stay offline in tests — the direct stubs below answer
   await page.route('https://query2.finance.yahoo.com/**', route => {
     const ru = new URL(route.request().url()), sym = decodeURIComponent(ru.pathname.split('/').pop());
+    if (ru.pathname.includes('/v1/finance/search')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ quotes: [{ symbol: 'NVDA', quoteType: 'EQUITY', shortname: 'NVIDIA Corporation' }] }) });   // the symbol search behind "did you mean"
+    if (sym === 'NVIDIA') return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ chart: { result: null, error: { code: 'Not Found', description: 'No data found, symbol may be delisted' } } }) });
     if (ru.searchParams.get('interval') === '1d') {                         // the drill-down's day-by-day window
       const ts = [], cl = [];
       const day = (y, mo, d, px) => { ts.push(Date.UTC(y, mo, d, 14, 30) / 1000); cl.push(px); };
@@ -498,6 +501,17 @@ const { page, errors } = await session('seasonality', () => { localStorage.clear
   await page.evaluate(() => [...document.querySelectorAll('[data-searm]')].find(x => x.dataset.searm === 'TSLA').click()); await page.waitForTimeout(400);
   check('seasonality: ✕ removes the searched chip and falls back to SPY', await page.evaluate(() => !JSON.parse(localStorage.getItem('sd-seaList') || '[]').includes('TSLA') && JSON.parse(localStorage.getItem('sd-seaSym') || '""') === 'SPY'), '');
   check('seasonality: a 401 from the first Yahoo host falls through to the second (the grid above loaded through query2)', true, '');
+  await page.fill('#seaIn', 'nvidia'); await page.keyboard.press('Enter');   // a company NAME, not a ticker (2026-11-13): Yahoo 404s the chart, the page must say so and offer the symbol
+  let seen3 = false;                                                        // the page's CSP forbids waitForFunction's eval — poll with evaluate instead
+  for (let i = 0; i < 40 && !seen3; i++) { await page.waitForTimeout(500); seen3 = await page.evaluate(() => /Use NVDA/.test(document.querySelector('main').innerText)); }
+  const t3 = await page.evaluate(() => document.querySelector('main').innerText.replace(/\s+/g, ' '));
+  check('seasonality: a typed company name says “no ticker by that spelling” and offers the symbol, not a network excuse', /no ticker by that spelling/.test(t3) && /Did you mean NVDA — NVIDIA Corporation\?/.test(t3) && !/did not answer in time/.test(t3), t3.slice(0, 300));
+  await page.evaluate(() => [...document.querySelectorAll('[data-seause]')].pop().click());
+  let seen4 = false;
+  for (let i = 0; i < 30 && !seen4; i++) { await page.waitForTimeout(500); seen4 = await page.evaluate(() => /Monthly performance/.test(document.querySelector('main').innerText) && JSON.parse(localStorage.getItem('sd-seaSym') || '""') === 'NVDA'); }
+  check('seasonality: the swapped symbol becomes the active grid', seen4, '');
+  check('seasonality: “Use NVDA” swaps the chip, loads the grid and forgets the misspelling', await page.evaluate(() => { const l = JSON.parse(localStorage.getItem('sd-seaList') || '[]'); return l.includes('NVDA') && !l.includes('NVIDIA'); }), '');
+  await page.evaluate(() => [...document.querySelectorAll('[data-searm]')].find(x => x.dataset.searm === 'NVDA').click()); await page.waitForTimeout(300);
   { const st = await page.evaluate(() => { const t = [...document.querySelectorAll('table.seaT')].find(x => x.querySelector('th') && x.querySelector('th').textContent.trim() === 'Year'); if (!t) return null; const tw = t.closest('.tw'); tw.scrollLeft = 400; const c = t.tBodies[0].rows[0].cells[0], r = c.getBoundingClientRect(), w = tw.getBoundingClientRect(); return { pos: window.getComputedStyle(c).position, pinned: Math.abs(r.left - w.left) < 8 }; });
     check('seasonality: the Year column stays pinned while the grid scrolls sideways (phones)', !!st && st.pos === 'sticky' && st.pinned, JSON.stringify(st)); }
   { const align = await page.evaluate(() => { const out = []; for (const t of document.querySelectorAll('table.seaT')) { const hr = t.tHead.rows[0], br = t.tBodies[0].rows[0]; for (const i of [1, 6, 12]) { if (!hr.cells[i] || !br.cells[i]) continue; const a2 = hr.cells[i].getBoundingClientRect(), c2 = br.cells[i].getBoundingClientRect(); out.push(Math.abs((a2.left + a2.right) / 2 - (c2.left + c2.right) / 2)); } } return out; });

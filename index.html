@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-ZetQ9Rmq5KIV/JnS3gRookIQezTImR3wPSzy+SNxA34=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5246M1AykzuMKHV3C1Es9CebXsUWuu9uSN/4H3fDtto=' 'sha256-jHHL7ueZK95GZQtVEkRQvpsOg1JW3uhzzOjLIq4h8GY=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/libsodium@0.7.13/ https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/ https://www.gstatic.com/firebasejs/10.14.1/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://*.github.io https://finnhub.io wss://ws.finnhub.io https://api.telegram.org https://financialmodelingprep.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://*.workers.dev https://api.allorigins.win https://corsproxy.io https://api.codetabs.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Signal Desk: stock signals, option ideas and a paper-trading bot, with the rules spelled out.">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -1010,7 +1010,7 @@ $('#arSel').addEventListener('change', e => { setAuto(+e.target.value); if (arMi
 setAuto(arMin);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && arMin > 0 && lastRefresh && Date.now() - lastRefresh > arMin * 60000 && (exOpen(MK.US) || exOpen(MK.IN))) refreshAll(true); });
 setInterval(refreshInfo, 15000);
-const BUILD_V = '1794584544';
+const BUILD_V = '1794586488';
 async function verCheck() {
   try {
     const r = await fetch('ver.txt?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return;
@@ -2450,7 +2450,7 @@ const seaRoutes = (path, proxyQ) => {
 function seaFetch(path, proxyQ, wantMonthly, maxT0) {
   const routes = seaRoutes(path, proxyQ);
   return new Promise((resolve, reject) => {
-    let emsg = '', oldWorker = false, started = 0, pending = 0, done = false, timer = 0;
+    let emsg = '', oldWorker = false, notFound = false, started = 0, pending = 0, done = false, timer = 0;
     const kick = () => {
       if (done) return;
       if (timer) { clearTimeout(timer); timer = 0; }
@@ -2466,14 +2466,16 @@ function seaFetch(path, proxyQ, wantMonthly, maxT0) {
           }
           if (proxy && u.indexOf(proxy.replace(/\/+$/, '')) === 0) oldWorker = true;   // the saved proxy answered, but with the old worker's fixed one-year daily bars
         }
-        emsg = (j && j.chart && j.chart.error && (j.chart.error.description || j.chart.error.code)) || emsg;
+        const errD = j && j.chart && j.chart.error && (j.chart.error.description || j.chart.error.code);
+        if (errD) { emsg = errD; if (/no data|not found|delisted/i.test(errD)) notFound = true; }   // Yahoo itself said the symbol does not exist — that is not a network problem
       }).catch(e => {
-        const m = String((e && e.message) || e); emsg = /abort/i.test(m) ? 'the network did not answer in time (very slow connection)' : (m || emsg);
+        const m = String((e && e.message) || e); if (/HTTP 404/.test(m)) notFound = true;
+        emsg = /abort/i.test(m) ? 'the network did not answer in time (very slow connection)' : (m || emsg);
       }).then(() => {
         pending--;
         if (done) return;
         if (started < routes.length) kick();
-        else if (!pending) { done = true; if (timer) { clearTimeout(timer); timer = 0; } reject(new Error(oldWorker ? 'your saved price proxy runs an old worker.js \u2014 in Cloudflare, paste the repo\u2019s latest worker.js over it once and these errors stop' : emsg || 'no data')); }
+        else if (!pending) { done = true; if (timer) { clearTimeout(timer); timer = 0; } reject(new Error(oldWorker ? 'your saved price proxy runs an old worker.js \u2014 in Cloudflare, paste the repo\u2019s latest worker.js over it once and these errors stop' : notFound ? 'yahoo-no-ticker' : emsg || 'no data')); }
       });
     };
     kick();
@@ -2525,13 +2527,26 @@ async function seaLoad(sym, force) {
     seaCachePut(sym, seaData[sym]);
     delete seaErr[sym];
   } catch (e) {
-    seaErr[sym] = { at: Date.now(), msg: String((e && e.message) || e).slice(0, 90) };
+    const m0 = String((e && e.message) || e), nf = m0 === 'yahoo-no-ticker';
+    seaErr[sym] = { at: Date.now(), msg: nf ? 'Yahoo has no ticker by that spelling' : m0.slice(0, 90) };
+    if (!seaData[sym] && /^[A-Za-z]{1,12}$/.test(sym)) seaWho(sym).then(w => {                 // maybe a company name was typed — offer the real symbol
+      const E2 = seaErr[sym]; if (w && w.sym !== sym && E2) { E2.sug = w; if (app === 'desk' && tab === 'SEA') renderAll(true); } });
     if (!seaData[sym]) { const c = seaCacheGet(sym); if (c) seaData[sym] = c; }                 // every route refused: the saved copy still draws the grid
   }
   seaBusy.delete(sym);
   if (app === 'desk' && tab === 'SEA') renderAll(true);
 }
 const seaOkSym = x => /^[A-Za-z0-9.^\-=&]{1,15}$/.test(x);
+// A company name instead of a ticker (NVIDIA, APPLE): ask Yahoo's symbol search what they meant. Direct hosts first
+// (free in a test, refused by browsers' CORS in the wild), then the same relays the price routes use.
+async function seaWho(q) {
+  const p = '/v1/finance/search?q=' + encodeURIComponent(q) + '&quotesCount=6&newsCount=0&listsCount=0';
+  const u1 = 'https://query1.finance.yahoo.com' + p, u2 = 'https://query2.finance.yahoo.com' + p;
+  for (const u of [u1, u2, 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u1), 'https://corsproxy.io/?url=' + encodeURIComponent(u1), 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u2)]) {
+    try { const j = await tryJson(u, 8000); const hit = ((j && j.quotes) || []).find(x => x && x.symbol && /EQUITY|ETF|INDEX|MUTUALFUND/i.test(x.quoteType || '')); if (hit) return { sym: String(hit.symbol).toUpperCase(), name: hit.shortname || hit.longname || '' }; } catch (e) { void e; }
+  }
+  return null;
+}
 function seasonalityView() {
   const picks = SEA_DEF.concat(seaList.filter(x => !SEA_DEF.some(([s]) => s === x)).map(x => [x, x]));
   if (!picks.some(([x]) => x === seaSym)) seaSym = 'SPY';
@@ -2541,7 +2556,7 @@ function seasonalityView() {
   const MN = SEA_MN;
   const chips = picks.map(([x, label]) => `<span style="display:inline-flex;align-items:center;gap:2px"><button type="button" class="chip${x === seaSym ? ' on' : ''}" data-seasym="${esc(x)}">${esc(label)}</button>${SEA_DEF.some(([s]) => s === x) ? '' : `<button type="button" class="chip" data-searm="${esc(x)}" aria-label="Remove ${esc(x)}" style="padding:4px 8px">✕</button>`}</span>`).join(' ');
   const head = `<div class="tools card" style="gap:8px"><span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${chips}</span><span style="display:flex;gap:6px;align-items:center"><input id="seaIn" aria-label="Add a ticker" placeholder="Any ticker — TSLA, QQQ, ^NSEI…" style="min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:6px 10px;color:var(--text);font:inherit;font-size:12.5px"><button type="button" class="btn" id="seaGo">Add</button></span></div>`;
-  if (!D && E) return head + `<div class="card" style="padding:16px"><b>${esc(seaSym)}</b> — could not load it (${esc(E.msg)}). <button type="button" class="btn" data-searetry="1">Try again</button><div class="mut" style="font-size:12px;margin-top:6px">Tickers are looked up on Yahoo Finance: indexes start with ^ (^GSPC, ^IXIC, ^NSEI), Indian stocks end with .NS (TCS.NS). Yahoo sometimes refuses busy phone networks for a few minutes — a tap on the chip tries again at once. For a route that never gets refused, set up the small Cloudflare proxy in ⚡ Live prices (one paste of the repo's worker.js; if yours predates Nov 5, paste the latest once so it serves monthly bars too).</div></div>`;
+  if (!D && E) return head + `<div class="card" style="padding:16px"><b>${esc(seaSym)}</b> — could not load it (${esc(E.msg)}).${E.sug ? ` Did you mean <b>${esc(E.sug.sym)}</b>${E.sug.name ? ' — ' + esc(E.sug.name) : ''}? <button type="button" class="btn" data-seause="${esc(E.sug.sym)}" data-seaold="${esc(seaSym)}">Use ${esc(E.sug.sym)}</button>` : ''} <button type="button" class="btn ghost" data-searetry="1">Try again</button><div class="mut" style="font-size:12px;margin-top:6px">Tickers are looked up on Yahoo Finance: indexes start with ^ (^GSPC, ^IXIC, ^NSEI), Indian stocks end with .NS (TCS.NS). Yahoo sometimes refuses busy phone networks for a few minutes — a tap on the chip tries again at once. For a route that never gets refused, set up the small Cloudflare proxy in ⚡ Live prices (one paste of the repo's worker.js; if yours predates Nov 5, paste the latest once so it serves monthly bars too).</div></div>`;
   if (!D) return head + '<div class="card" style="padding:16px" aria-busy="true">Loading ' + esc(seaSym) + '… <span id="seaLoadN" class="mut" style="font-size:12px"></span></div>';
   const years = [...new Set([...D.ret.keys()].map(k => Math.floor(k / 12)))].sort((x, y) => y - x).slice(0, 30);
   const val = (y, mo) => D.ret.has(y * 12 + mo) ? D.ret.get(y * 12 + mo) : null;
@@ -2611,10 +2626,16 @@ function seaDrillCol(mo) {
 }
 document.addEventListener('click', e => {
   const c = e.target.closest && e.target.closest('[data-seaclose]'); if (c) { seaSheetClose(); return; }
-  const t = e.target.closest && e.target.closest('[data-seadrill], [data-seacol], [data-seasym], [data-searm], [data-searetry], #seaGo'); if (!t || app !== 'desk' || tab !== 'SEA') return;
+  const t = e.target.closest && e.target.closest('[data-seadrill], [data-seacol], [data-seasym], [data-searm], [data-searetry], [data-seause], #seaGo'); if (!t || app !== 'desk' || tab !== 'SEA') return;
   if (t.dataset.seadrill) return seaDrillMonth(+t.dataset.y, +t.dataset.mo);
   if (t.dataset.seacol != null && t.dataset.seacol !== '') return seaDrillCol(+t.dataset.seacol);
   if (t.id === 'seaGo') return seaAdd();
+  if (t.dataset.seause) {                                                  // swap the mistyped chip for the ticker Yahoo suggested
+    const nu = t.dataset.seause, old = t.dataset.seaold;
+    seaList = seaList.filter(x => x !== old && x !== nu); if (!SEA_DEF.some(([s]) => s === nu)) { seaList.push(nu); while (seaList.length > 20) seaList.shift(); }
+    save('sd-seaList', seaList); delete seaErr[old]; if (seaSym === old) { seaSym = nu; save('sd-seaSym', seaSym); }
+    seaLoad(nu, true); renderAll(); return;
+  }
   if (t.dataset.searetry) { delete seaErr[seaSym]; seaLoad(seaSym, true); renderAll(); return; }
   if (t.dataset.searm) { seaList = seaList.filter(x => x !== t.dataset.searm); save('sd-seaList', seaList); if (seaSym === t.dataset.searm) { seaSym = 'SPY'; save('sd-seaSym', seaSym); } renderAll(); return; }
   seaSym = t.dataset.seasym; save('sd-seaSym', seaSym); seaLoad(seaSym, !seaData[seaSym]); renderAll();   // no data yet → try right now, past the one-minute error memory
