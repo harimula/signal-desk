@@ -52,7 +52,7 @@
  "spyVwapGap": 0.15,
  "spyBeyondPrev": true,
  "spyStart": "09:50",
- "spyEnd": "14:00",
+ "spyEnd": "11:30",
  "wheelOn": true,
  "wheelSharePct": 40,
  "wheelOtmPct": 5,
@@ -133,8 +133,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-11-17T16:37:36.008Z",
- "updatedBy": "settings page",
+ "updatedAt": "2026-11-17T17:35:00.000Z",
+ "updatedBy": "owner 2026-11-17: SPY window back to 11:30 after the afternoon re-test (SPY share 20 / maxOpen 5 kept)",
  "liveConfirm": "",
  "stakeUsd": 0
 }
