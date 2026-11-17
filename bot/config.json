@@ -52,7 +52,7 @@
  "spyVwapGap": 0.15,
  "spyBeyondPrev": true,
  "spyStart": "09:50",
- "spyEnd": "11:30",
+ "spyEnd": "14:00",
  "wheelOn": true,
  "wheelSharePct": 40,
  "wheelOtmPct": 5,
@@ -133,8 +133,8 @@
   "F"
  ],
  "version": 1,
- "updatedAt": "2026-11-11T21:55:00.000Z",
- "updatedBy": "audit 2026-11-11 (market line 100-day, hard floor 20%, option hold 5)",
+ "updatedAt": "2026-11-17T16:36:26.446Z",
+ "updatedBy": "settings page",
  "liveConfirm": "",
  "stakeUsd": 0
 }
