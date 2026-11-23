@@ -1,0 +1,738 @@
+{
+ "at": "2026-11-23T16:15:01.449Z",
+ "settings": {
+  "spyOn": true,
+  "spyStart": "09:50",
+  "spyEnd": "11:30",
+  "spyDte": 1,
+  "spyMaxOpen": 5,
+  "newsGuard": true,
+  "eventGuard": true
+ },
+ "days": [
+  {
+   "day": "2026-11-18",
+   "through": "16:00",
+   "spy": {
+    "open": 733.415,
+    "high": 735.01,
+    "low": 726.9,
+    "last": 730.33,
+    "rangePct": 1.12,
+    "dayPct": -0.42
+   },
+   "volume": {
+    "first20minBarAvg": 29769,
+    "laterBarAvg": 16628,
+    "ratio": 1.79,
+    "byHour": {
+     "9": {
+      "bars": 3,
+      "busy": 1,
+      "armed": 1,
+      "medianVolX": 0.98
+     },
+     "10": {
+      "bars": 12,
+      "busy": 2,
+      "armed": 1,
+      "medianVolX": 0.69
+     },
+     "11": {
+      "bars": 5,
+      "busy": 1,
+      "armed": 0,
+      "medianVolX": 0.57
+     }
+    }
+   },
+   "headlines": 1555,
+   "minutes": {
+    "window": 100,
+    "paused": 0,
+    "up": 12,
+    "down": 71,
+    "flat": 17,
+    "armedUp": 5,
+    "armedDown": 5
+   },
+   "pauses": [],
+   "pausedBy": [],
+   "pauseHeadlines": [],
+   "armedBars": [
+    {
+     "bar": "9:55–10:00",
+     "side": "call",
+     "volX": 1.26
+    },
+    {
+     "bar": "10:40–10:45",
+     "side": "put",
+     "volX": 1.7
+    }
+   ],
+   "signalsNow": [],
+   "signalsBefore": [
+    {
+     "side": "put",
+     "level": 728.8,
+     "px": 728.72,
+     "t": "9:50",
+     "vwap": 731.91,
+     "bar": "9:45–9:50",
+     "barUp": false,
+     "volX": 0.94,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 732.22,
+     "px": 732.41,
+     "t": "9:56",
+     "vwap": 731.66,
+     "bar": "9:50–9:55",
+     "barUp": true,
+     "volX": 0.98,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 733.73,
+     "px": 734.98,
+     "t": "10:00",
+     "vwap": 731.87,
+     "bar": "9:55–10:00",
+     "barUp": true,
+     "volX": 1.26,
+     "armed": true,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 728.54,
+     "px": 728.45,
+     "t": "10:48",
+     "vwap": 731.6,
+     "bar": "10:40–10:45",
+     "barUp": false,
+     "volX": 1.7,
+     "armed": true,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 727.79,
+     "px": 726.95,
+     "t": "11:20",
+     "vwap": 731.14,
+     "bar": "11:15–11:20",
+     "barUp": false,
+     "volX": 0.56,
+     "armed": false,
+     "paused": false
+    }
+   ]
+  },
+  {
+   "day": "2026-11-19",
+   "through": "16:00",
+   "spy": {
+    "open": 737.54,
+    "high": 739.77,
+    "low": 715.71,
+    "last": 715.84,
+    "rangePct": 3.36,
+    "dayPct": -2.94
+   },
+   "volume": {
+    "first20minBarAvg": 45068,
+    "laterBarAvg": 33683,
+    "ratio": 1.34,
+    "byHour": {
+     "9": {
+      "bars": 3,
+      "busy": 0,
+      "armed": 0,
+      "medianVolX": 0.58
+     },
+     "10": {
+      "bars": 12,
+      "busy": 4,
+      "armed": 3,
+      "medianVolX": 0.97
+     },
+     "11": {
+      "bars": 5,
+      "busy": 1,
+      "armed": 1,
+      "medianVolX": 0.78
+     }
+    }
+   },
+   "headlines": 1680,
+   "minutes": {
+    "window": 100,
+    "paused": 0,
+    "up": 2,
+    "down": 97,
+    "flat": 1,
+    "armedUp": 0,
+    "armedDown": 20
+   },
+   "pauses": [],
+   "pausedBy": [],
+   "pauseHeadlines": [],
+   "armedBars": [
+    {
+     "bar": "10:15–10:20",
+     "side": "put",
+     "volX": 1.05
+    },
+    {
+     "bar": "10:30–10:35",
+     "side": "put",
+     "volX": 1.28
+    },
+    {
+     "bar": "10:35–10:40",
+     "side": "put",
+     "volX": 1.65
+    },
+    {
+     "bar": "11:15–11:20",
+     "side": "put",
+     "volX": 1.15
+    }
+   ],
+   "signalsNow": [],
+   "signalsBefore": [
+    {
+     "side": "call",
+     "level": 739.36,
+     "px": 739.42,
+     "t": "9:50",
+     "vwap": 738.04,
+     "bar": "9:45–9:50",
+     "barUp": true,
+     "volX": 0.42,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 735.48,
+     "px": 735.35,
+     "t": "10:10",
+     "vwap": 737.52,
+     "bar": "10:05–10:10",
+     "barUp": false,
+     "volX": 0.41,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 734.14,
+     "px": 732.84,
+     "t": "10:15",
+     "vwap": 737.32,
+     "bar": "10:10–10:15",
+     "barUp": false,
+     "volX": 0.69,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 732.66,
+     "px": 732.09,
+     "t": "10:20",
+     "vwap": 736.89,
+     "bar": "10:15–10:20",
+     "barUp": false,
+     "volX": 1.05,
+     "armed": true,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 731.36,
+     "px": 730.46,
+     "t": "10:25",
+     "vwap": 736.47,
+     "bar": "10:20–10:25",
+     "barUp": false,
+     "volX": 0.93,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 730.46,
+     "px": 730,
+     "t": "10:30",
+     "vwap": 736.02,
+     "bar": "10:25–10:30",
+     "barUp": false,
+     "volX": 0.98,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 728.12,
+     "px": 728.08,
+     "t": "10:35",
+     "vwap": 735.34,
+     "bar": "10:30–10:35",
+     "barUp": false,
+     "volX": 1.28,
+     "armed": true,
+     "paused": false
+    }
+   ]
+  },
+  {
+   "day": "2026-11-20",
+   "through": "16:00",
+   "spy": {
+    "open": 713.56,
+    "high": 718.26,
+    "low": 686.75,
+    "last": 690.68,
+    "rangePct": 4.59,
+    "dayPct": -3.21
+   },
+   "volume": {
+    "first20minBarAvg": 52801,
+    "laterBarAvg": 35141,
+    "ratio": 1.5,
+    "byHour": {
+     "9": {
+      "bars": 3,
+      "busy": 0,
+      "armed": 0,
+      "medianVolX": 0.7
+     },
+     "10": {
+      "bars": 12,
+      "busy": 4,
+      "armed": 2,
+      "medianVolX": 0.88
+     },
+     "11": {
+      "bars": 5,
+      "busy": 1,
+      "armed": 0,
+      "medianVolX": 0.76
+     }
+    }
+   },
+   "headlines": 1128,
+   "minutes": {
+    "window": 100,
+    "paused": 0,
+    "up": 23,
+    "down": 74,
+    "flat": 3,
+    "armedUp": 0,
+    "armedDown": 10
+   },
+   "pauses": [],
+   "pausedBy": [],
+   "pauseHeadlines": [],
+   "armedBars": [
+    {
+     "bar": "10:15–10:20",
+     "side": "put",
+     "volX": 1.26
+    },
+    {
+     "bar": "10:20–10:25",
+     "side": "put",
+     "volX": 1.25
+    }
+   ],
+   "signalsNow": [],
+   "signalsBefore": [
+    {
+     "side": "call",
+     "level": 715,
+     "px": 715.555,
+     "t": "9:54",
+     "vwap": 712.98,
+     "bar": "9:45–9:50",
+     "barUp": true,
+     "volX": 0.7,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 715.56,
+     "px": 716,
+     "t": "9:55",
+     "vwap": 713.26,
+     "bar": "9:50–9:55",
+     "barUp": true,
+     "volX": 0.92,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 717.24,
+     "px": 718.26,
+     "t": "10:00",
+     "vwap": 713.49,
+     "bar": "9:55–10:00",
+     "barUp": true,
+     "volX": 0.42,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 713.71,
+     "px": 713.58,
+     "t": "10:15",
+     "vwap": 713.98,
+     "bar": "10:10–10:15",
+     "barUp": false,
+     "volX": 0.61,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 711.27,
+     "px": 710.97,
+     "t": "10:20",
+     "vwap": 713.76,
+     "bar": "10:15–10:20",
+     "barUp": false,
+     "volX": 1.26,
+     "armed": true,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 709.75,
+     "px": 709.15,
+     "t": "10:25",
+     "vwap": 713.42,
+     "bar": "10:20–10:25",
+     "barUp": false,
+     "volX": 1.25,
+     "armed": true,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 708.85,
+     "px": 708.66,
+     "t": "10:33",
+     "vwap": 713.07,
+     "bar": "10:25–10:30",
+     "barUp": true,
+     "volX": 1.25,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 708.66,
+     "px": 708.41,
+     "t": "10:37",
+     "vwap": 712.9,
+     "bar": "10:30–10:35",
+     "barUp": false,
+     "volX": 0.62,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 708.41,
+     "px": 708,
+     "t": "10:44",
+     "vwap": 712.67,
+     "bar": "10:35–10:40",
+     "barUp": false,
+     "volX": 0.93,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 708,
+     "px": 707.12,
+     "t": "10:45",
+     "vwap": 712.45,
+     "bar": "10:40–10:45",
+     "barUp": false,
+     "volX": 0.88,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 706.39,
+     "px": 705.53,
+     "t": "11:01",
+     "vwap": 711.89,
+     "bar": "10:55–11:00",
+     "barUp": false,
+     "volX": 0.52,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "put",
+     "level": 705.85,
+     "px": 705.36,
+     "t": "11:25",
+     "vwap": 711.01,
+     "bar": "11:20–11:25",
+     "barUp": false,
+     "volX": 0.62,
+     "armed": false,
+     "paused": false
+    }
+   ]
+  },
+  {
+   "day": "2026-11-23",
+   "through": "11:16",
+   "spy": {
+    "open": 724.295,
+    "high": 727.975,
+    "low": 713.57,
+    "last": 723.74,
+    "rangePct": 2.02,
+    "dayPct": -0.08
+   },
+   "volume": {
+    "first20minBarAvg": 94388,
+    "laterBarAvg": 33763,
+    "ratio": 2.8,
+    "byHour": {
+     "9": {
+      "bars": 3,
+      "busy": 0,
+      "armed": 0,
+      "medianVolX": 0.67
+     },
+     "10": {
+      "bars": 12,
+      "busy": 0,
+      "armed": 0,
+      "medianVolX": 0.58
+     },
+     "11": {
+      "bars": 4,
+      "busy": 0,
+      "armed": 0,
+      "medianVolX": 0.36
+     }
+    }
+   },
+   "headlines": 716,
+   "minutes": {
+    "window": 86,
+    "paused": 0,
+    "up": 83,
+    "down": 3,
+    "flat": 0,
+    "armedUp": 0,
+    "armedDown": 0
+   },
+   "pauses": [],
+   "pausedBy": [],
+   "pauseHeadlines": [],
+   "armedBars": [],
+   "signalsNow": [],
+   "signalsBefore": [
+    {
+     "side": "call",
+     "level": 719.11,
+     "px": 720.45,
+     "t": "9:50",
+     "vwap": 718.09,
+     "bar": "9:45–9:50",
+     "barUp": true,
+     "volX": 0.71,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 720.45,
+     "px": 720.59,
+     "t": "9:55",
+     "vwap": 718.18,
+     "bar": "9:50–9:55",
+     "barUp": true,
+     "volX": 0.62,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 721.54,
+     "px": 722.21,
+     "t": "10:00",
+     "vwap": 718.44,
+     "bar": "9:55–10:00",
+     "barUp": true,
+     "volX": 0.67,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 722.22,
+     "px": 722.7,
+     "t": "10:05",
+     "vwap": 718.77,
+     "bar": "10:00–10:05",
+     "barUp": true,
+     "volX": 0.77,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 722.7,
+     "px": 722.73,
+     "t": "10:13",
+     "vwap": 718.9,
+     "bar": "10:05–10:10",
+     "barUp": false,
+     "volX": 0.46,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 722.73,
+     "px": 723.1,
+     "t": "10:15",
+     "vwap": 719.04,
+     "bar": "10:10–10:15",
+     "barUp": true,
+     "volX": 0.41,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 724.5,
+     "px": 725.73,
+     "t": "10:20",
+     "vwap": 719.35,
+     "bar": "10:15–10:20",
+     "barUp": true,
+     "volX": 0.68,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 726.34,
+     "px": 727.12,
+     "t": "10:25",
+     "vwap": 719.68,
+     "bar": "10:20–10:25",
+     "barUp": true,
+     "volX": 0.57,
+     "armed": false,
+     "paused": false
+    },
+    {
+     "side": "call",
+     "level": 727.17,
+     "px": 727.39,
+     "t": "10:30",
+     "vwap": 720.03,
+     "bar": "10:25–10:30",
+     "barUp": false,
+     "volX": 0.66,
+     "armed": false,
+     "paused": false
+    }
+   ]
+  }
+ ],
+ "quotesNow": {
+  "at": "2026-11-23T16:16:33.476Z",
+  "etTime": "11:16",
+  "spy": 723.16,
+  "call": [
+   {
+    "contract": "SPY261124C00723000",
+    "expiry": "2026-11-24",
+    "strike": 723,
+    "bid": 6.13,
+    "ask": 6.19,
+    "spreadPct": 0.97,
+    "ageSec": 1,
+    "botWouldSkip": false
+   },
+   {
+    "contract": "SPY261124C00724000",
+    "expiry": "2026-11-24",
+    "strike": 724,
+    "bid": 5.71,
+    "ask": 5.77,
+    "spreadPct": 1.04,
+    "ageSec": 1,
+    "botWouldSkip": false
+   },
+   {
+    "contract": "SPY261124C00722000",
+    "expiry": "2026-11-24",
+    "strike": 722,
+    "bid": 6.82,
+    "ask": 6.87,
+    "spreadPct": 0.73,
+    "ageSec": 0,
+    "botWouldSkip": false
+   }
+  ],
+  "put": [
+   {
+    "contract": "SPY261124P00723000",
+    "expiry": "2026-11-24",
+    "strike": 723,
+    "bid": 5.8,
+    "ask": 5.86,
+    "spreadPct": 1.02,
+    "ageSec": 0,
+    "botWouldSkip": false
+   },
+   {
+    "contract": "SPY261124P00724000",
+    "expiry": "2026-11-24",
+    "strike": 724,
+    "bid": 6.32,
+    "ask": 6.37,
+    "spreadPct": 0.78,
+    "ageSec": 0,
+    "botWouldSkip": false
+   },
+   {
+    "contract": "SPY261124P00722000",
+    "expiry": "2026-11-24",
+    "strike": 722,
+    "bid": 5.56,
+    "ask": 5.67,
+    "spreadPct": 1.94,
+    "ageSec": 0,
+    "botWouldSkip": false
+   }
+  ]
+ }
+}
